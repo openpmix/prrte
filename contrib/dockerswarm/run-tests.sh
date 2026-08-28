@@ -1993,6 +1993,39 @@ test_runtime() {
             && ok "...and a later job could publish that key again" \
             || bad "a reclaimed key could not be republished: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
 
+        # PMIX_PERSIST_FIRST_READ, and the handover it exists for.  The
+        # criterion is the FIRST ACCESS and nothing else, so an item
+        # published for a reader that has not started yet must survive its
+        # publisher -- ds_purge used to take it at any horizon, which made
+        # this impossible and is issue #2733.  The two jobs never overlap,
+        # which is the point: predecessor exits, successor reads.
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.pers.hand gen1 first-read 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.pers.hand' \
+            && ok "a PERSIST_FIRST_READ key was published by a job that then ended" \
+            || bad "the first-read publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 5
+
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.pers.hand 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.pers.hand gen1' \
+            && ok "a later job read what its predecessor left for it" \
+            || bad "an unread FIRST_READ key went with its publisher's job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # ...and the read is what removed it.  Retention and consumption are
+        # different halves: the first half above must not have been bought
+        # by making the key permanent.
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.pers.hand 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.pers.hand' \
+            && bad "a FIRST_READ key survived the read that answered it: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "...and the read consumed it, so a second lookup finds nothing"
+
+        # which leaves the name free for the successor's own generation --
+        # the whole reason a handover uses FIRST_READ rather than a key it
+        # would then have to unpublish.
+        out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.pers.hand gen2 0" 2>&1)
+        echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
+            && ok "...and the successor could publish its own value under that name" \
+            || bad "the consumed key was not free to republish: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+
         banner "runtime/data_server: LOCAL-range data is reclaimed from the daemon holding it"
         # THE case that only exists with more than one node.  A LOCAL-range
         # publish never reaches the HNP: pmix_server_pub.c routes it to

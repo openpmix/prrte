@@ -58,10 +58,18 @@ bool prte_data_server_expires_by(pmix_persistence_t persist,
     }
     switch (persist) {
     case PMIX_PERSIST_FIRST_READ:
+        /* No lifetime ending takes this one.  Its criterion is the first
+         * access and nothing else: an item published for a reader that has
+         * not started yet is exactly what FIRST_READ is for, and the
+         * publisher's own departure is not what the publisher asked to have
+         * it removed by - PROC and APP are how one says that.  Taking it
+         * here silently discarded a handover between one generation of a job
+         * and the next, which is the one conforming way to pass a name
+         * across a DVM that outlives both (issue #2733). */
+        return false;
     case PMIX_PERSIST_PROC:
-        /* the shortest lifetimes: over by the time any lifetime we are
-         * told about has ended.  FIRST_READ is normally consumed by the
-         * read that answers it - this is what becomes of one nobody read */
+        /* the shortest lifetime we are ever told about: over by the time
+         * any of them has ended */
         return true;
     case PMIX_PERSIST_APP:
         return (PMIX_PERSIST_APP == horizon || PMIX_PERSIST_SESSION == horizon);
