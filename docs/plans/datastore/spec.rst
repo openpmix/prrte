@@ -671,7 +671,8 @@ later than asked for, never shorter, and not the default.
    * - ``SESSION``
      - done
      - Purged at reservation teardown, selected by the session id
-       recorded at publish.
+       recorded at publish; covered end to end in the swarm's
+       ``test_session`` phase.
    * - Retention timeout
      - done
      - ``prte_data_server_timeout``, default 300 s; one idle sweep per
