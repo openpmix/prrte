@@ -2175,6 +2175,83 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: data that names no lifetime expires when idle"
+    # PMIX_PERSIST_INDEF is "retain until specifically deleted", and only its
+    # publisher may delete it -- so in a DVM that outlives the publisher it is
+    # a permanent allocation made by a process that no longer exists, and a
+    # job that publishes a few and exits leaves the store larger forever.  The
+    # retention timeout is what bounds it, and PMIX_PERSIST_FIRST_READ is
+    # bounded the same way when the read it waits for never comes.
+    #
+    # It is an IDLE timeout, not a lifetime: a rendezvous name in active use
+    # must not be pulled out from under its readers.  Both halves are asserted
+    # here, which is why the DVM is given a short one.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start_mca 'node1:2,node2:2,node3:2' '--prtemca prte_data_server_timeout 25'; then
+        bad "could not start a DVM for the retention-timeout test"
+    else
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.idle forever indef 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.idle' \
+            && ok "a PERSIST_INDEF key was published by a job that then ended" \
+            || bad "the indef publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # read it repeatedly across more than the timeout.  Each read restarts
+        # the clock, so a key in use survives a window it would not survive
+        # idle -- which is the difference between an idle timeout and a
+        # lifetime, and the whole reason the clock is per-item.
+        # Four reads, ~8s of sleep apiece plus however long a prun takes to
+        # get a process running -- so the gaps stay well inside the 25s
+        # timeout while the LAST read lands well outside it.  Both halves of
+        # that matter: if the reads were too close together the case would
+        # pass without ever showing the clock restart.
+        n=0
+        for i in 1 2 3 4; do
+            sleep 8
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.idle 15" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.idle forever' && n=$((n+1))
+        done
+        [ "$n" = 4 ] \
+            && ok "...and being read kept it alive well past the 25s timeout" \
+            || bad "a key in active use was expired under its readers ($n/4 reads found it)"
+
+        # ...and now nobody reads it.  The sweep runs every timeout/4, so an
+        # item is gone within a sweep interval of falling idle past 25s.
+        sleep 40
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.idle 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.idle' \
+            && bad "an idle PERSIST_INDEF key was never reclaimed: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "...and went once it had been idle past the timeout"
+
+        # the same bound on the other persistence that names no lifetime: a
+        # FIRST_READ item whose reader never arrives.  Job A publishes for a
+        # job B the user then decides not to run.
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.unread waiting first-read 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.unread' \
+            && ok "a PERSIST_FIRST_READ key was published for a reader that never comes" \
+            || bad "the first-read publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 40
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.unread 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.unread' \
+            && bad "an unread FIRST_READ key was never reclaimed: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "...and it too went once the timeout had passed"
+
+        # the control: a persistence that DOES name a lifetime is not
+        # touched by the timeout, however long it sits idle.  Its publisher
+        # was promised that retention and is entitled to it.
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.notidle kept session 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.notidle' \
+            && ok "a PERSIST_SESSION key was published beside them" \
+            || bad "the session publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 40
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.notidle 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.notidle kept' \
+            && ok "...and the timeout left it alone, idle or not" \
+            || bad "the sweep took data whose lifetime had not ended: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "runtime/data_server: PMIX_RANGE_LOCAL data does not leave its node"
     # A LOCAL-range publish is not sent to the HNP at all: the daemon routes
     # it to its OWN data server instance (pmix_server_pub.c picks

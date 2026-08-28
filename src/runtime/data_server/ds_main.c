@@ -82,6 +82,26 @@ int prte_data_server_init(void)
         pmix_output_set_verbosity(prte_data_store.output, prte_data_store.verbosity);
     }
 
+    /* How long a published item that names no lifetime is kept.
+     *
+     * PMIX_PERSIST_INDEF is "retain until specifically deleted" and only
+     * its publisher may delete it, so in a DVM that outlives the publisher
+     * it is a permanent allocation made by a process that no longer exists.
+     * A PMIX_PERSIST_FIRST_READ item nobody reads is the same shape: its
+     * criterion is a read that never comes.  Five minutes is chosen for the
+     * case the timeout exists to bound - a job publishes a name for its
+     * successor and the successor is never run - so it is a rendezvous
+     * window rather than a storage lifetime, and a site whose handovers
+     * take longer should raise it. */
+    prte_data_store.timeout = 300;
+    (void) pmix_mca_base_var_register("prte", "prte", "data", "server_timeout",
+                                      "Seconds of idleness after which published data that names no "
+                                      "lifetime (PMIX_PERSIST_INDEF, or a PMIX_PERSIST_FIRST_READ "
+                                      "item nobody read) is removed from the datastore; 0 disables",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_data_store.timeout);
+    prte_data_store.sweep_active = false;
+
     PMIX_CONSTRUCT(&prte_data_store.store, pmix_pointer_array_t);
     if (PMIX_SUCCESS != (rc = pmix_pointer_array_init(&prte_data_store.store, 1, INT_MAX, 1))) {
         PMIX_ERROR_LOG(rc);
@@ -108,6 +128,13 @@ void prte_data_server_finalize(void)
         return;
     }
     initialized = false;
+
+    /* the sweep holds no reference to anything, but leaving it armed
+     * leaves libevent holding a pointer into a store we are tearing down */
+    if (prte_data_store.sweep_active) {
+        prte_event_evtimer_del(&prte_data_store.sweep_ev);
+        prte_data_store.sweep_active = false;
+    }
 
     for (i = 0; i < prte_data_store.store.size; i++) {
         data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_store.store, i);
@@ -535,6 +562,7 @@ static void construct(prte_data_object_t *ptr)
     ptr->persistence = PMIX_PERSIST_NSPACE;
     ptr->app_idx = UINT32_MAX;
     ptr->session_id = UINT32_MAX;
+    ptr->last_access = time(NULL);
     PMIX_CONSTRUCT(&ptr->info, pmix_list_t);
 }
 

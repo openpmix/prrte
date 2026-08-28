@@ -419,6 +419,9 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
      * the DVM.  UINT32_MAX matches no purge. */
     resolve_publisher(data);
 
+    /* the clock the retention timeout reads starts now */
+    data->last_access = time(NULL);
+
     /* the values we keep were copied into the data object above, so the
      * unpacked array has done its job - it used to be freed only on the
      * unpack-failure path, which leaked it on every successful publish */
@@ -473,6 +476,10 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
     // add this data to our store
     data->index = pmix_pointer_array_add(&prte_data_store.store, data);
 
+    /* an INDEF or unread FIRST_READ item is the only thing the retention
+     * timeout applies to, so the sweep runs only while the store holds one */
+    prte_ds_arm_sweep();
+
     pmix_output_verbose(1, prte_data_store.output,
                         "%s data server: checking for pending requests",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -522,6 +529,10 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
                     ds3 = PMIX_NEW(prte_info_item_t);
                     PMIX_INFO_XFER(&ds3->info, &ds1->info);
                     pmix_list_append(&answers, &ds3->super);
+                    /* it was of use to somebody, so the retention timeout
+                     * starts again from here.  Both places that answer a
+                     * lookup have to do this - the other is ds_lookup.c */
+                    data->last_access = time(NULL);
                     // if the persistence is "first read", then remove this info
                     if (PMIX_PERSIST_FIRST_READ == data->persistence) {
                         pmix_list_remove_item(&data->info, &ds1->super);

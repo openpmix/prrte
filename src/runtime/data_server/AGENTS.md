@@ -419,6 +419,32 @@ the **built-in** data server — the usual case — was never told a job had
 ended at all; nothing was reclaimed from it short of the DVM shutting down,
 and `PERSIST_APP` and `PERSIST_PROC` both behaved as `PERSIST_INDEF`.
 
+**Two persistences name no lifetime, and a timeout is what bounds them.**
+`PMIX_PERSIST_INDEF` is "retained until specifically deleted" and only its
+publisher may delete it, so in a DVM that outlives the publisher it is a
+permanent allocation made by a process that no longer exists;
+`PMIX_PERSIST_FIRST_READ` is the same shape when the read it waits for never
+comes. `prte_data_server_timeout` (default 300 s) removes either once it has
+been **idle** that long — `last_access` is stamped at publish and restamped
+by every lookup that returns one of the item's keys, in *both* places that
+answer a lookup (`ds_lookup.c`, and `ds_publish.c` where a publish satisfies
+a parked request).
+
+Idle rather than a lifetime, deliberately: a rendezvous name in active use
+must not be pulled out from under its readers. Nothing else is swept — a
+persistence that names a lifetime has a criterion a running system reaches,
+and cutting it short would break the retention its publisher was promised
+while it is still alive to rely on it.
+
+One sweep event serves the whole store (`ds_purge.c`), armed only while the
+store holds something the timeout applies to and disarmed when it does not.
+The interval is `timeout / 4`, bounded to [1 s, 60 s], which is what makes
+"removed no earlier than the timeout, and normally within a sweep interval
+after it" a bound worth stating. A timer per item would be exact, at the
+cost of an armed libevent timer per published item and a re-arm on every
+read; the parked-lookup timeout in `ds_lookup.c` is per-request because a
+request is a one-shot with a caller waiting on it, which is not this case.
+
 The object's default is `PMIX_PERSIST_NSPACE`, and PMIx adds none of its
 own before handing a publish to the host, so the value in `ds_main.c`'s
 constructor is the one that governs. It is deliberately **not** the
@@ -543,6 +569,13 @@ rather than the relay, that a parked `PMIX_WAIT` lookup in one client is woken
 by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
+
+The swarm covers the timeout with `--prtemca prte_data_server_timeout` set
+to a few seconds — no debug-only knob and no `PRTE_ENABLE_DEBUG` build. Note
+that a `prun` takes seconds to get a process running, so a case that reads a
+key repeatedly to show the clock restarting has to leave room for that in
+both directions: gaps comfortably inside the timeout, and a last read
+comfortably outside it, or the case passes without showing anything.
 
 **Not covered:** the `SESSION` horizon end to end, which needs a
 reservation torn down under a persistent DVM with data published inside it;
