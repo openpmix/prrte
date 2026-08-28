@@ -312,6 +312,11 @@ typedef struct {
     char *app;
     /** Number of copies of this process that are to be launched */
     int32_t num_procs;
+    /** How many of them have terminated.  Counted only at the master, which
+     * is the only process that sees every proc of the job stop, and used to
+     * decide when this APPLICATION - as distinct from the job - is over.
+     * Not packed: a daemon has no use for it. */
+    int32_t num_terminated;
     /** Array of pointers to the proc objects for procs of this app_context
      * NOTE - not always used
      */

@@ -2026,6 +2026,41 @@ test_runtime() {
             && ok "...and the successor could publish its own value under that name" \
             || bad "the consumed key was not free to republish: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
 
+        banner "runtime/data_server: an application ending is not its job ending"
+        # PMIX_PERSIST_APP means the publishing process's APPLICATION - one
+        # app context - and an MPMD job's applications all share the single
+        # namespace assigned to the job.  They need not terminate together,
+        # so the app horizon and the namespace horizon are different moments
+        # and only a multi-app job can tell them apart.  (MPI hides this by
+        # requiring its apps to end together; that is an MPI rule.)
+        #
+        # One job, three apps.  Two publish and exit at once; the third
+        # holds the job open.  While it runs, the first app's APP data must
+        # be gone and its NSPACE data must not.
+        PRUN_BG /tmp/ds-mpmd.out \
+            "--host node2:1 -n 1 $DS persist prte.test.mp.app gone app 0 : --host node2:1 -n 1 $DS persist prte.test.mp.ns kept nspace 0 : --host node3:1 -n 1 $DS publish prte.test.mp.live alive session 30"
+        sleep 14
+        out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.mp.live 15" 2>&1)
+        if ! echo "$out" | grep -q '^FOUND prte.test.mp.live'; then
+            skp "the MPMD job never got running; the app-horizon case is skipped"
+        else
+            ok "an MPMD job is running with one app still alive"
+            out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.mp.app 15" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.mp.app' \
+                && bad "PERSIST_APP data outlived its application: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+                || ok "the PERSIST_APP key went when its own application ended"
+            out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.mp.ns 15" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.mp.ns kept' \
+                && ok "...and the PERSIST_NSPACE key beside it did not" \
+                || bad "NSPACE data went at the app horizon: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        # ...and once the whole job is over, the namespace key goes too
+        sleep 25
+        out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.mp.ns 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.mp.ns' \
+            && bad "PERSIST_NSPACE data outlived its namespace: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "the PERSIST_NSPACE key went when the last app ended"
+
         banner "runtime/data_server: a later job may take back its user's own name"
         # Removal is owned by the publishing USER, not the publishing
         # process.  It used to be the process - namespace AND rank - which

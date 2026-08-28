@@ -27,6 +27,23 @@ so nobody spends the effort a second time.
 Runtime behavior
 ----------------
 
+**A daemon is never told that an application has terminated.**  The data
+store honors ``PMIX_PERSIST_APP`` at the application it names — the master
+counts each app's terminations and purges when the last one ends
+(``prte_state_base_purge_app``) — but only for its own store.  A
+``PMIX_RANGE_LOCAL`` publish lives in the store of the *daemon* that relayed
+it, and no message tells that daemon an application is over; it learns of a
+process exiting (it reaps the child) and of a namespace ending
+(``PRTE_DAEMON_DVM_CLEANUP_JOB_CMD``), and nothing in between.  So a local-range
+item published with an explicit ``APP`` persistence is held until its
+namespace ends, which is later than asked for but never shorter.
+
+Deferred rather than designed around: it needs a new notification, it affects
+only local-range publishes that name ``APP`` explicitly — not the default,
+which is ``PMIX_PERSIST_NSPACE`` — and no reported problem depends on it.  See
+``docs/plans/datastore/`` for the specification and the design the rest of
+that work follows.
+
 **``ras/flux`` has no ``modify()``.**  It returns ``PMIX_ERR_NOT_SUPPORTED``
 (``src/mca/ras/flux/ras_flux_module.c``), so the elastic extend/release
 surface exists for SLURM only.  Everything above the component is

@@ -516,6 +516,13 @@ static void track_procs(int fd, short argc, void *cbdata)
         PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_RECORDED);
         PRTE_FLAG_UNSET(pdata, PRTE_PROC_FLAG_ALIVE);
         pdata->state = state;
+
+        /* Whatever this proc published PMIX_RANGE_LOCAL lives in OUR store,
+         * because that range never leaves the daemon that relayed it - so
+         * this is the only place its PMIX_PERSIST_PROC data can be
+         * reclaimed.  A call rather than a message, and free when nothing
+         * was ever published. */
+        prte_state_base_purge_proc(proc);
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
@@ -620,7 +627,6 @@ static void job_teardown(int fd, short argc, void *cbdata)
     prte_job_map_t *map;
     prte_node_t *node;
     prte_app_context_t *app;
-    pmix_proc_t target;
     int32_t index;
     int i;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
@@ -681,20 +687,18 @@ static void job_teardown(int fd, short argc, void *cbdata)
         prte_state_base_check_fds(jdata);
     }
 
-    /* Tell OUR OWN data server that the procs of this job that we hosted
-     * have gone, so it can drop the local-range data they published - see
-     * the same call in state_base_fns.c for why this is not gated on an
-     * external server.
-     *
-     * Deliberately not the DVM-wide purge.  This runs when THIS daemon's
+    /* Nothing to tell the data server here.  This runs when THIS daemon's
      * local procs of the job have terminated (num_terminated ==
-     * num_local_procs), which says nothing about the rest of the job; the
-     * master says when the namespace is over.  The DVM-wide form used to be
-     * sent from here, so on a multi-node job the first node to finish its
-     * share purged the whole namespace's data out of the master's store
-     * while other nodes were still publishing into it. */
-    PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
-    prte_state_base_notify_local_data_server(&target);
+     * num_local_procs), which is not a lifetime ending: the job may still
+     * be running on every other node.  Each of those procs was purged at
+     * the PROC horizon as it died, and the namespace horizon is the
+     * master's to declare - it arrives as PRTE_DAEMON_DVM_CLEANUP_JOB_CMD
+     * when the job is over everywhere.
+     *
+     * The DVM-wide purge used to be sent from here, so on a multi-node job
+     * the first node to finish its share purged the whole namespace's data
+     * out of the MASTER's store while other nodes were still publishing
+     * into it. */
 
     /* The resources are back, but the JOB OBJECT STAYS until the DVM says
      * the job is over everywhere - prted_comm.c's DVM_CLEANUP_JOB.

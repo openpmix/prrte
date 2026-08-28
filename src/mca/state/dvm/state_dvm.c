@@ -883,14 +883,13 @@ static void check_complete_resume(int fd, short args, void *cbdata)
         return;
     }
 
-    /* Tell the data server the job is over, so it can drop what this
-     * namespace published that was not to outlive it.  This used to be an
-     * open-coded copy of prte_state_base_notify_data_server(), sent only
-     * when an external data server was configured; the built-in one - the
-     * usual case - was therefore never told a job had ended, and nothing
-     * was ever reclaimed from it short of the DVM shutting down. */
-    pname.rank = PMIX_RANK_WILDCARD;
-    prte_state_base_notify_data_server(&pname);
+    /* Tell the data server the namespace is over, so it can drop what this
+     * job published that was not to outlive it.  This used to be an
+     * open-coded copy of the same call, sent only when an external data
+     * server was configured; the built-in one - the usual case - was
+     * therefore never told a job had ended, and nothing was ever reclaimed
+     * from it short of the DVM shutting down. */
+    prte_state_base_purge_nspace(jdata->nspace);
 
 release:
     /* Release the resources used by this job. Since some errmgrs may want

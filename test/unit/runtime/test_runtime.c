@@ -1157,11 +1157,20 @@ static int test_data_server_objects(void)
           PMIX_RANK_UNDEF == obj->owner.rank && 0 == strlen(obj->owner.nspace));
     CHECK("ds: a new data object defaults to session range",
           PMIX_RANGE_SESSION == obj->range);
-    /* the Standard's default, and the one that governs: PMIx adds no
-     * persistence of its own before handing a publish to the host */
-    CHECK("ds: a new data object defaults to app persistence",
-          PMIX_PERSIST_APP == obj->persistence);
+    /* PMIx adds no persistence of its own before handing a publish to the
+     * host, so the constructor's value is the one that governs.  It is
+     * deliberately NOT the Standard's default of PMIX_PERSIST_APP: APP
+     * means the publishing process's APPLICATION, and an MPMD job's
+     * applications need not end together, so applying that literally would
+     * shorten the retention every unmarked publish has been getting.
+     * NSPACE is that same lifetime, said out loud. */
+    CHECK("ds: a new data object defaults to nspace persistence",
+          PMIX_PERSIST_NSPACE == obj->persistence);
     CHECK("ds: a new data object has no uid", UINT32_MAX == obj->uid);
+    /* neither of the two lifetimes a proc name cannot express is known
+     * until a publisher is resolved against its own job */
+    CHECK("ds: a new data object has no application", UINT32_MAX == obj->app_idx);
+    CHECK("ds: a new data object has no session", UINT32_MAX == obj->session_id);
     PMIX_RELEASE(obj);
 
     req = PMIX_NEW(prte_data_req_t);
@@ -1212,7 +1221,31 @@ static int test_data_server_persistence(void)
     CHECK("persist: INDEF stays at the APP horizon",
           !prte_data_server_expires_by(PMIX_PERSIST_INDEF, PMIX_PERSIST_APP));
 
+    /* a namespace ended - every application of one job */
+    CHECK("persist: PROC goes at the NSPACE horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_PROC, PMIX_PERSIST_NSPACE));
+    CHECK("persist: APP goes at the NSPACE horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_APP, PMIX_PERSIST_NSPACE));
+    CHECK("persist: NSPACE goes at the NSPACE horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_NSPACE, PMIX_PERSIST_NSPACE));
+    CHECK("persist: SESSION stays at the NSPACE horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_NSPACE));
+    CHECK("persist: INDEF stays at the NSPACE horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_INDEF, PMIX_PERSIST_NSPACE));
+
+    /* ...and one application of it ending does NOT take the job's own data.
+     * This is the distinction the NSPACE policy exists for: an MPMD job's
+     * apps share a namespace and need not end together. */
+    CHECK("persist: NSPACE stays at the APP horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_NSPACE, PMIX_PERSIST_APP));
+    CHECK("persist: NSPACE stays at the PROC horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_NSPACE, PMIX_PERSIST_PROC));
+    CHECK("persist: no horizon takes NSPACE",
+          prte_data_server_expires_by(PMIX_PERSIST_NSPACE, PMIX_PERSIST_INVALID));
+
     /* the session ended */
+    CHECK("persist: NSPACE goes at the SESSION horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_NSPACE, PMIX_PERSIST_SESSION));
     CHECK("persist: SESSION goes at the SESSION horizon",
           prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_SESSION));
     CHECK("persist: APP goes at the SESSION horizon",
@@ -1233,6 +1266,8 @@ static int test_data_server_persistence(void)
           !prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_APP));
     CHECK("persist: FIRST_READ stays at the SESSION horizon",
           !prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_SESSION));
+    CHECK("persist: FIRST_READ stays at the NSPACE horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_NSPACE));
 
     return failures;
 }

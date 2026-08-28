@@ -45,6 +45,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/base/base.h"
+#include "src/mca/state/base/base.h"
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -1252,6 +1253,18 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
     if (NULL == session || session == prte_default_session) {
         return;
     }
+
+    /* The session is over: drop what the jobs that ran in it published to
+     * last exactly this long.  It has to happen here rather than at any
+     * job's end, because that is the whole meaning of PMIX_PERSIST_SESSION
+     * - the data outlives the job that published it - and there is nothing
+     * later that would know to look.  Each item carries the session id it
+     * was published under, which is what selects: by now the publishing
+     * jobs are gone and there may be no namespace left to name.
+     *
+     * The default session is excluded above, and rightly: it ends when the
+     * DVM does, which takes the store with it. */
+    prte_state_base_purge_session(session->session_id);
 
     /* if the nodes are being returned to the scheduler, collect the daemon
      * ranks of the member nodes BEFORE detaching so the DVM can shrink them

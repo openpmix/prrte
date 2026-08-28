@@ -385,26 +385,28 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
-/* Tell the data server that a job has ended, so it can drop the published
- * data that was not to outlive it.
+/* Tell an EXTERNAL data server - one living in another DVM - that a
+ * lifetime has ended, so it can drop the published data that was not to
+ * outlive it.
  *
- * The lifetime that ended is named in the message: PMIX_PERSIST_APP, since
- * the target is a whole namespace.  Without it the server cannot tell this
- * from an explicit "remove everything I published" and would take data the
- * publisher asked to keep for the session.
+ * Our own store needs no message: prte_data_server_purge_local() is a call,
+ * and the store that has to act is always one this process already holds.
+ * The far end is the exception, because it is reached over a PMIx tool
+ * connection that only the master holds.
  *
- * PMIX_PERSIST_PROC data is therefore reclaimed at job granularity rather
- * than when its individual publisher exits - later than the Standard's
- * "until the publishing process terminates", but a message per terminating
- * process is not a cost this path can carry at scale. */
-static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target)
+ * The lifetime that ended is named in the message, and the two horizons
+ * that a pmix_proc_t cannot express on its own carry a qualifier beside it:
+ * which application, or which session.  Without the horizon the server
+ * cannot tell this from an explicit "remove everything I published" and
+ * would take data the publisher asked to keep. */
+static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target,
+                       pmix_persistence_t persist, uint32_t qualifier)
 {
     pmix_data_buffer_t *buf;
-    pmix_info_t horizon;
-    pmix_persistence_t persist = PMIX_PERSIST_APP;
+    pmix_info_t directives[2];
     int rc, room = -1;
     uint8_t cmd = PRTE_PMIX_PURGE_PROC_CMD;
-    size_t ninfo;
+    size_t n, ninfo;
 
     PMIX_DATA_BUFFER_CREATE(buf);
 
@@ -432,17 +434,24 @@ static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target
         return;
     }
 
-    /* one directive: the lifetime that just ended */
+    /* the lifetime that just ended, and what it needs to say beyond a
+     * process name */
     ninfo = 1;
-    rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return;
+    PMIX_INFO_LOAD(&directives[0], PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
+    if (PMIX_PERSIST_APP == persist) {
+        PMIX_INFO_LOAD(&directives[1], PRTE_PURGE_APP_IDX, &qualifier, PMIX_UINT32);
+        ninfo = 2;
+    } else if (PMIX_PERSIST_SESSION == persist) {
+        PMIX_INFO_LOAD(&directives[1], PMIX_SESSION_ID, &qualifier, PMIX_UINT32);
+        ninfo = 2;
     }
-    PMIX_INFO_LOAD(&horizon, PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
-    rc = PMIx_Data_pack(NULL, buf, &horizon, 1, PMIX_INFO);
-    PMIX_INFO_DESTRUCT(&horizon);
+    rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, directives, (int32_t) ninfo, PMIX_INFO);
+    }
+    for (n = 0; n < ninfo; n++) {
+        PMIX_INFO_DESTRUCT(&directives[n]);
+    }
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
@@ -455,72 +464,68 @@ static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target
     }
 }
 
-void prte_state_base_notify_data_server(pmix_proc_t *target)
+/* A lifetime ended: tell every store that has to act on it.
+ *
+ * There are two, and between them they already know everything these rules
+ * need.  A daemon's store holds only the PMIX_RANGE_LOCAL items its own
+ * local clients published, and the daemon reaps those clients itself; the
+ * master's store holds everything else, and the master tracks every
+ * process, application, namespace and session in the DVM.  So each store is
+ * purged by the process that owns it, with a call rather than a message -
+ * which is what makes the PROC horizon affordable, since that one fires
+ * once per terminating process.
+ *
+ * The one thing that does need a message is an EXTERNAL data server, which
+ * lives in another DVM and is reachable only over the PMIx tool connection
+ * the master holds.  A daemon never relays: its own store is local-range
+ * data, which never leaves this DVM.
+ */
+static void purge_data(pmix_proc_t *target, pmix_persistence_t horizon,
+                       uint32_t qualifier)
 {
-    /* Is the global store our own object?  Only on the master, and only
-     * when no external data server was configured - with one, our store
-     * still holds our local-range data while the global one lives in
-     * another DVM entirely. */
-    bool global_is_ours = PRTE_PROC_IS_MASTER && (NULL == prte_data_server_uri);
+    prte_data_server_purge_local(target, horizon, qualifier);
 
-    /* The global store, which always answers at the master's rank: it is
-     * the master's own store, or the master is the one holding the PMIx
-     * connection to an external data server, which is not addressable over
-     * the RML at all.
-     *
-     * Deliberately unconditional.  This used to be skipped whenever OUR
-     * OWN clients had never used the data server - a test that is right
-     * about our local store and wrong about this one, since the global
-     * store serves the whole DVM and its data is published by processes
-     * anywhere in it.  On the master, which is usually where the global
-     * store lives and where this call now comes from, that guard is true
-     * exactly when the publishers were on other nodes - so nothing was
-     * reclaimed in the one arrangement that needs it. */
-    send_purge(PRTE_PROC_MY_HNP->rank, PRTE_RML_TAG_DATA_SERVER, target);
-
-    /* ...and OUR OWN store, when that is a different object.  A
-     * PMIX_RANGE_LOCAL publish never leaves the daemon that relayed it -
-     * pmix_server_pub.c routes it to PRTE_PROC_MY_NAME - and every daemon
-     * runs prte_data_server_init(), so what a local-range publish leaves
-     * behind is reclaimable only from here.  Purging just the global store
-     * reclaimed everything EXCEPT local-range data, which a single-node run
-     * cannot show: there the two stores are one object.
-     *
-     * Here the "nobody local to us published" test IS right: a store that
-     * only its own daemon's clients can reach is empty until one of them
-     * uses it.
-     *
-     * The tag is what keeps this one at home: a daemon pointed at an
-     * external data server relays what arrives on the ordinary tag, so a
-     * purge of our own store addressed to ourselves would be forwarded to
-     * a DVM that does not hold the data and cannot act on it. */
-    if (!global_is_ours &&
-        !PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
-        send_purge(PRTE_PROC_MY_NAME->rank, PRTE_RML_TAG_DATA_SERVER_LOCAL, target);
+    if (NULL != prte_data_server_uri && PRTE_PROC_IS_MASTER) {
+        send_purge(PRTE_PROC_MY_HNP->rank, PRTE_RML_TAG_DATA_SERVER, target,
+                   horizon, qualifier);
     }
 }
 
-void prte_state_base_notify_local_data_server(pmix_proc_t *target)
+void prte_state_base_purge_proc(pmix_proc_t *proc)
 {
-    /* same guard as above: with no local client having published or looked
-     * anything up, this daemon's store cannot be holding anything */
-    if (PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
-        return;
-    }
+    purge_data(proc, PMIX_PERSIST_PROC, UINT32_MAX);
+}
 
-    /* OUR store, and nobody else's.  A daemon reaches this when the procs
-     * of a job that IT hosted have all terminated - which is not a lifetime
-     * ending: the job may still be running on every other node.  Sending
-     * the DVM-wide purge from here took the whole namespace's data out of
-     * the MASTER's store the moment the first node finished its share, so a
-     * process still running elsewhere could lose what it published before
-     * its own application, or even its own process, had ended.
-     *
-     * The one store a daemon may act on at that moment is its own: it holds
-     * only PMIX_RANGE_LOCAL items published by local clients, every one of
-     * which has now gone.  The namespace horizon belongs to the master,
-     * which reaches it through state_dvm.c when the job ends everywhere. */
-    send_purge(PRTE_PROC_MY_NAME->rank, PRTE_RML_TAG_DATA_SERVER_LOCAL, target);
+void prte_state_base_purge_app(prte_job_t *jdata, prte_app_idx_t idx)
+{
+    pmix_proc_t target;
+
+    /* an application is not a process, and it is not a namespace either:
+     * every app of a job shares the job's namespace, so the target names
+     * them all and the index says which one ended */
+    PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
+    purge_data(&target, PMIX_PERSIST_APP, (uint32_t) idx);
+}
+
+void prte_state_base_purge_nspace(pmix_nspace_t nspace)
+{
+    pmix_proc_t target;
+
+    PMIX_LOAD_PROCID(&target, nspace, PMIX_RANK_WILDCARD);
+    purge_data(&target, PMIX_PERSIST_NSPACE, UINT32_MAX);
+}
+
+void prte_state_base_purge_session(uint32_t session_id)
+{
+    pmix_proc_t target;
+
+    /* A session outlives the jobs that ran in it, and their job objects: by
+     * the time it ends there may be no namespace left to name.  So the
+     * target admits anybody - an empty namespace is a wildcard to
+     * PMIX_CHECK_PROCID - and the session id recorded on each item at
+     * publish is what selects. */
+    PMIX_LOAD_PROCID(&target, NULL, PMIX_RANK_WILDCARD);
+    purge_data(&target, PMIX_PERSIST_SESSION, session_id);
 }
 
 /* A proc reported a state and we hold no job object to account it against.
@@ -653,8 +658,8 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     prte_proc_state_t state;
     prte_job_t *jdata;
     prte_proc_t *pdata;
+    prte_app_context_t *app;
     int i;
-    pmix_proc_t target;
     pmix_rank_t threshold;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
@@ -815,6 +820,29 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             goto cleanup;
         }
+        /* This proc's own published data goes now.  A call, not a message:
+         * the store is this process's own, and a store nothing was ever
+         * published into answers immediately - which is what makes a purge
+         * per terminating process affordable. */
+        prte_state_base_purge_proc(proc);
+
+        /* ...and if that was the last process of its APPLICATION, so does
+         * what the application published.  An app is not a job: an MPMD
+         * job's apps share the one namespace assigned to the job and need
+         * not end together, so this is the only place the app horizon can
+         * be seen at all.  (MPI hides that by requiring its apps to
+         * terminate together, which is an MPI rule and not a general one.) */
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps,
+                                                                 pdata->app_idx);
+        if (NULL != app) {
+            app->num_terminated++;
+            if (app->num_terminated == app->num_procs &&
+                PRTE_APP_STATE_COMPLETED != app->state) {
+                app->state = PRTE_APP_STATE_COMPLETED;
+                prte_state_base_purge_app(jdata, pdata->app_idx);
+            }
+        }
+
         /* track job status */
         jdata->num_terminated++;
         if (jdata->num_terminated == jdata->num_procs) {
@@ -822,14 +850,13 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             if (prte_state_base.run_fdcheck) {
                 prte_state_base_check_fds(jdata);
             }
-            /* tell the data server the job is over, so it can drop what
-             * this namespace published that was not to outlive it.  This
+            /* tell the data server the namespace is over, so it can drop
+             * what this job published that was not to outlive it.  This
              * used to be done only when an external data server was
              * configured, which left the built-in one - the usual case -
              * never told a job had ended, so nothing was ever reclaimed
              * from it short of the DVM shutting down */
-            PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
-            prte_state_base_notify_data_server(&target);
+            prte_state_base_purge_nspace(jdata->nspace);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
         }
     }

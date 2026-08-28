@@ -629,6 +629,7 @@ static void prte_app_context_construct(prte_app_context_t *app_context)
     app_context->idx = 0;
     app_context->app = NULL;
     app_context->num_procs = 0;
+    app_context->num_terminated = 0;
     PMIX_CONSTRUCT(&app_context->procs, pmix_pointer_array_t);
     pmix_pointer_array_init(&app_context->procs, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 16);
     app_context->state = PRTE_APP_STATE_UNDEF;
