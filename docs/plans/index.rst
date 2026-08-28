@@ -14,3 +14,4 @@ Detailed implementation plans for in-progress and upcoming features.
    ft_group/index.rst
    scalable_collectives/index.rst
    cross_dvm_data_server/index.rst
+   datastore/index.rst
