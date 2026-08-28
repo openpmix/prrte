@@ -7604,6 +7604,98 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "elastic DVM: a reservation torn down under a live job"
+    # Tearing a reservation down RELEASES the prte_session_t: teardown
+    # deregisters it from prte_sessions, which puts it beyond every later
+    # sweep, so teardown is the only place left that can reclaim it. That is
+    # safe only because prte_job_t::session and ::target_sessions are counted
+    # references -- and this is the case that proves it has to be, because it
+    # is the one where a job is still running in a reservation at the moment
+    # the reservation goes away.
+    #
+    # The shape: the elastic client grows a reservation and holds it open
+    # with a short job of its own, a SECOND job from a different namespace is
+    # spawned into that reservation by --alloc-id, and then the client exits.
+    # Its exit terminates the owning namespace, which fires the reservation's
+    # inheritance disposition -- teardown -- while the second job is still
+    # running. That job then has to run to completion and retire normally,
+    # and retiring is precisely when the master reads jdata->session again
+    # (state_dvm's release path removes the job from session->jobs and hands
+    # the session to prte_pmix_server_session_job_terminated). With the
+    # job-side pointer borrowed rather than counted, that read is of freed
+    # memory and it takes the HNP with it.
+    #
+    # Gated on PMIX_CAP_TOOL_FINALIZED for the same reason the departing-tool
+    # case above is: without it the host is never told the tool went, the
+    # disposition never runs, no teardown ever happens, and every assertion
+    # below would pass without having tested anything.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start an elastic DVM for the reservation-teardown test"
+    elif ! pmix_cap PMIX_CAP_TOOL_FINALIZED; then
+        skp "teardown under a live job (PMIx predates PMIX_CAP_TOOL_FINALIZED)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        RUN 'rm -f /tmp/resv-own.out /tmp/resv-late.out' >/dev/null 2>&1
+        # the owner's own job is what keeps the reservation alive long enough
+        # to spawn into; it has to outlast that spawn and no longer
+        RUN_BG /tmp/resv-own.out "timeout 120 elastic grow node2:2,node3:2 -- sleep 20"
+        for _ in $(seq 1 40); do
+            RUN 'grep -q "^>>> SPAWNED" /tmp/resv-own.out' >/dev/null 2>&1 && break
+            sleep 2
+        done
+        aid=$(RUN 'sed -n "s/^>>> ALLOC_ID //p" /tmp/resv-own.out' | tr -d '\r')
+        if [ -z "$aid" ]; then
+            bad "no allocation id from the background grow: $(RUN 'tr "\n" " " < /tmp/resv-own.out' | tail -c 200)"
+        else
+            ok "the grow handed back an allocation id ($aid)"
+            # a job in the reservation from a namespace that does NOT own it,
+            # long enough to outlive the owner
+            RUN_BG /tmp/resv-late.out \
+                "{ timeout 120 prun --alloc-id $aid -np 1 sleep 45; echo LATE-JOB-RC=\$?; }"
+            sleep 8
+            RUN 'pgrep -x prun >/dev/null' \
+                && ok "a second namespace is running in the reservation" \
+                || bad "the second job never started: $(RUN 'tr "\n" " " < /tmp/resv-late.out' | tail -c 200)"
+
+            # wait for the owner to finish and exit - that is the teardown
+            for _ in $(seq 1 40); do
+                RUN 'pgrep -x elastic >/dev/null' >/dev/null 2>&1 || break
+                sleep 2
+            done
+            RUN 'pgrep -x elastic >/dev/null' >/dev/null 2>&1 \
+                && bad "the owning tool never exited, so no teardown happened" \
+                || ok "the owning tool exited, tearing its reservation down"
+            sleep 3
+            RUN 'pgrep -x prte >/dev/null' \
+                && ok "the HNP survived a teardown under a live job" \
+                || bad "the HNP died when the reservation was torn down"
+
+            # the job has to reach its own end, and be accounted for there
+            for _ in $(seq 1 40); do
+                RUN 'grep -q LATE-JOB-RC /tmp/resv-late.out' >/dev/null 2>&1 && break
+                sleep 2
+            done
+            RUN 'grep -q "^LATE-JOB-RC=0" /tmp/resv-late.out' >/dev/null 2>&1 \
+                && ok "the job outlived its reservation and completed" \
+                || bad "the job did not complete cleanly: $(RUN 'tr "\n" " " < /tmp/resv-late.out' | tail -c 200)"
+            RUN 'pgrep -x prte >/dev/null' \
+                && ok "the HNP survived the job's termination" \
+                || bad "the HNP died retiring a job whose session had gone"
+
+            # and the nodes came back to the general pool, which is what the
+            # disposition asked for - so the DVM is still usable afterwards
+            out=$(RUN 'timeout 60 prun --host node2:1,node3:1 -np 2 --map-by node hostname' 2>&1)
+            [ "$(echo "$out" | grep -cE '^node[23]$')" = 2 ] \
+                && ok "the released nodes are usable from the general pool" \
+                || bad "the DVM did not survive usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        fi
+        RUN 'pkill -x elastic' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: grow AFTER a shrink completes (phase-two event)"
     # A grow launches a daemon onto every node that lacks one -- which after a
     # shrink includes the shrunk node, since releasing the reservation reverts

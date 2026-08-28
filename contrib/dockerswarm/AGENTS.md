@@ -513,6 +513,19 @@ section for where each half lives.
 > through the reservation too, since the only namespace allowed to name it no
 > longer exists. `run-tests.sh` skips the cases that assert the released-pool
 > behavior when the capability is absent (`pmix_cap`).
+>
+> **A job spawned into the reservation can outlive it, and that is the case
+> worth knowing about.** The disposition fires when the *owning* namespace
+> terminates, so a `prun --alloc-id` job from a different namespace is still
+> running at the moment its session is torn down — and teardown *releases*
+> the `prte_session_t`, because deregistering it puts the object beyond every
+> later sweep. What keeps that from handing the surviving job a dangling
+> pointer is that `prte_job_t::session` is a counted reference. The failure,
+> if it ever stops being one, does not show up at the teardown: it shows up
+> when that job *retires*, because retiring is where the master reads
+> `jdata->session` again. "elastic DVM: a reservation torn down under a live
+> job" is that case, and its assertions are ordered to say which of the two
+> moments went wrong.
 
 **Shrink** (`elastic shrink node3`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, plus a **"PRRTE has lost communication with a remote
