@@ -398,6 +398,11 @@ prte_session_t *prte_get_session_object_from_refid(const char *refid)
     return NULL;
 }
 
+/* Monotonic, never reused: a released session's slot is handed to the next
+ * one registered, so position in prte_sessions says nothing about age. Every
+ * session is registered exactly once, so stamping here covers every path. */
+static uint32_t prte_session_acquisitions = 0;
+
 int prte_set_session_object(prte_session_t *session)
 {
     prte_session_t *session_ptr;
@@ -430,6 +435,7 @@ int prte_set_session_object(prte_session_t *session)
         session->index = save;
         pmix_pointer_array_set_item(prte_sessions, save, session);
     }
+    session->acquisition = ++prte_session_acquisitions;
     return PRTE_SUCCESS;
 }
 
@@ -1060,6 +1066,7 @@ static void session_con(prte_session_t *s)
     PMIX_LOAD_PROCID(&s->requestor, NULL, PMIX_RANK_INVALID);
     s->owner_uid = PRTE_INVALID_UID;
     s->inheritance = PRTE_INHERIT_DEFAULT_VALUE;
+    s->acquisition = 0;
 }
 static void session_des(prte_session_t *s)
 {

@@ -924,14 +924,19 @@ static void _query(int sd, short args, void *cbdata)
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
-                if (NULL != allocprop && !PMIx_Check_key(allocprop, PMIX_ALLOC_RELEASABLE)) {
-                    ret = PMIX_ERR_NOT_FOUND;
-                    goto done;
-                }
                 PMIX_INFO_LIST_START(proplist);
-                /* If we added the session dynamically to extend the DVM, we can release it fully */
-                releasable = PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC);
-                PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_RELEASABLE, &releasable, PMIX_BOOL);
+                rc = PMIX_SUCCESS;
+                /* a named property selects it; naming none returns all */
+                if (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_RELEASABLE)) {
+                    /* If we added the session dynamically to extend the DVM, we can release it fully */
+                    releasable = PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC);
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_RELEASABLE, &releasable, PMIX_BOOL);
+                }
+                if (PMIX_SUCCESS == rc &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_SEQUENCE))) {
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_SEQUENCE,
+                                       &session->acquisition, PMIX_UINT32);
+                }
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_INFO_LIST_RELEASE(proplist);
@@ -939,6 +944,10 @@ static void _query(int sd, short args, void *cbdata)
                 }
                 PMIX_INFO_LIST_CONVERT(rc, proplist, &dry);
                 PMIX_INFO_LIST_RELEASE(proplist);
+                if (PMIX_ERR_EMPTY == rc) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     goto done;
