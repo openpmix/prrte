@@ -296,7 +296,11 @@ scan, so the gate has to sit between that scan and
 `PMIX_PERSIST_FIRST_READ` removes an item from `data->info` as soon as it is
 returned. Both `ds_lookup` (returning from the store) and `ds_publish`
 (satisfying a parked request) implement it, and both then have to notice
-that an object whose `info` list is now empty must leave the store.
+that an object whose `info` list is now empty must leave the store —
+`ds_lookup` did not, so an item read by an ordinary lookup stayed in the
+store as an empty shell, matching nothing and removed only by a purge.
+`data` there is the loop variable of the scan over the store, so nothing may
+touch it after the drop; the `break` is what makes that safe.
 
 A lookup carrying `PMIX_WAIT` that cannot be fully satisfied is parked on
 `prte_data_store.pending` with **only the keys it is still missing**. When a
@@ -444,6 +448,54 @@ after it" a bound worth stating. A timer per item would be exact, at the
 cost of an armed libevent timer per published item and a re-arm on every
 read; the parked-lookup timeout in `ds_lookup.c` is per-request because a
 request is a one-shot with a caller waiting on it, which is not this case.
+
+## The cap: per user, and nobody else's data
+
+Retention alone leaves the store unbounded — a job publishes what it likes
+and exits, and what it published outlives it. `prte_data_server_max_size`
+(default 16 MiB) bounds that, **per publishing uid**, and eviction never
+crosses a uid boundary: a user who floods the store evicts only their own
+data. Without that scoping the cap is an abuse primitive in its own right,
+since publishing junk in bulk becomes a way to push somebody else's
+rendezvous name out.
+
+`prte_ds_usage_t` holds one running byte total per uid, on a list in the
+store — as many records as there are users publishing here, which is a small
+number. Three rules keep it honest:
+
+- **Every removal goes through `prte_ds_drop()`.** There are seven paths —
+  the duplicate drop, an unpublish, a `FIRST_READ` read that empties an item
+  (in *both* places that answer a lookup), each purge horizon, the expiry
+  sweep, and eviction itself — and one that forgets to uncharge leaves a uid
+  unable to publish anything ever again. That is why it is one function and
+  not a line repeated seven times.
+- **Every shrink calls `prte_ds_charge()`.** An item that loses a key to a
+  `FIRST_READ` read is smaller than what its publisher is charged for.
+- **The cap gate runs last**, after the duplicate scan and the directive
+  scan, immediately before `pmix_pointer_array_add()`. It is the only gate
+  that *modifies* the store, so a publish that is going to be refused must
+  not have cost anybody their data on the way — which is also why a publish
+  larger than the whole cap is refused before anything is evicted, rather
+  than emptying the user's store and failing anyway
+  (`PMIX_ERR_OUT_OF_RESOURCE`).
+
+Eviction takes the uid's own least-recently-used item, by the same clock the
+retention timeout reads, and ignores persistence — a user's own data is that
+user's own to budget. A per-uid list in LRU order would make the choice
+O(1); it is deliberately not built, because the store is a
+`pmix_pointer_array_t` whose objects are reached by index on several paths
+and a second membership is another thing every removal path has to keep in
+step. The scan runs only when a uid is at its cap. If a store is ever
+*measured* spending real time there, the list is the answer.
+
+The first eviction for a uid emits a `show_help` warning
+(`help-prte-data-server.txt`) naming the limit and the parameter that raises
+it: eviction is the store protecting itself, not a policy anyone asked for.
+A reader whose item was evicted gets `PMIX_ERR_NOT_FOUND` and cannot tell
+that from a key nobody published — which is deliberate, since a publisher
+cannot distinguish eviction from a reader that never arrived either.
+
+## Persistence and the default
 
 The object's default is `PMIX_PERSIST_NSPACE`, and PMIx adds none of its
 own before handing a publish to the host, so the value in `ds_main.c`'s

@@ -45,6 +45,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/data_server/ds.h"
@@ -102,6 +103,21 @@ int prte_data_server_init(void)
                                       &prte_data_store.timeout);
     prte_data_store.sweep_active = false;
 
+    /* The most one PUBLISHING USER may hold in this store.
+     *
+     * Per uid, and eviction never crosses a uid boundary, because a blanket
+     * "replace the oldest" is an abuse primitive in its own right: junk
+     * published in bulk would be a way to push somebody else's rendezvous
+     * name out of the store.  What a user floods, a user loses. */
+    prte_data_store.max_size = 16777216;
+    (void) pmix_mca_base_var_register("prte", "prte", "data", "server_max_size",
+                                      "Maximum bytes of published data one datastore will hold for "
+                                      "any one uid; reaching it evicts that uid's least recently "
+                                      "used items.  0 disables the cap",
+                                      PMIX_MCA_BASE_VAR_TYPE_SIZE_T,
+                                      &prte_data_store.max_size);
+    PMIX_CONSTRUCT(&prte_data_store.usage, pmix_list_t);
+
     PMIX_CONSTRUCT(&prte_data_store.store, pmix_pointer_array_t);
     if (PMIX_SUCCESS != (rc = pmix_pointer_array_init(&prte_data_store.store, 1, INT_MAX, 1))) {
         PMIX_ERROR_LOG(rc);
@@ -144,6 +160,7 @@ void prte_data_server_finalize(void)
     }
     PMIX_DESTRUCT(&prte_data_store.store);
     PMIX_LIST_DESTRUCT(&prte_data_store.pending);
+    PMIX_LIST_DESTRUCT(&prte_data_store.usage);
 }
 
 void prte_data_server(int status, pmix_proc_t *sender,
@@ -532,6 +549,158 @@ pmix_status_t prte_data_server_check_search_range(prte_data_req_t *req,
                         &data->owner, &data->proxy);
 }
 
+/* ------------------------------------------------------------------ *
+ * Per-uid accounting, and the cap it exists to enforce.
+ * ------------------------------------------------------------------ */
+
+static prte_ds_usage_t *usage_for(uint32_t uid, bool create)
+{
+    prte_ds_usage_t *u;
+
+    PMIX_LIST_FOREACH(u, &prte_data_store.usage, prte_ds_usage_t) {
+        if (u->uid == uid) {
+            return u;
+        }
+    }
+    if (!create) {
+        return NULL;
+    }
+    u = PMIX_NEW(prte_ds_usage_t);
+    u->uid = uid;
+    pmix_list_append(&prte_data_store.usage, &u->super);
+    return u;
+}
+
+/* What one value costs us.
+ *
+ * An accounting figure rather than a malloc total: what matters is that it
+ * is monotone in what the publisher stored, so that a publisher cannot
+ * evade the cap by choosing a type.  Strings and byte objects are measured
+ * because they are the two a publisher can make arbitrarily large;
+ * everything else is charged the size of the union that holds it. */
+static size_t value_size(const pmix_value_t *val)
+{
+    switch (val->type) {
+    case PMIX_STRING:
+        return (NULL == val->data.string) ? 0 : strlen(val->data.string) + 1;
+    case PMIX_BYTE_OBJECT:
+    case PMIX_COMPRESSED_STRING:
+    case PMIX_COMPRESSED_BYTE_OBJECT:
+        return val->data.bo.size;
+    default:
+        return sizeof(pmix_value_t);
+    }
+}
+
+static size_t item_size(prte_data_object_t *data)
+{
+    prte_info_item_t *ds;
+    /* the object itself, its accessor lists, and the fixed cost of the slot
+     * it occupies - a publisher of many tiny keys costs us more than the
+     * bytes in them */
+    size_t total = sizeof(prte_data_object_t);
+
+    total += (data->nauids + data->nagids) * sizeof(uint32_t);
+    PMIX_LIST_FOREACH(ds, &data->info, prte_info_item_t) {
+        total += strlen(ds->info.key) + 1 + value_size(&ds->info.value);
+    }
+    return total;
+}
+
+void prte_ds_charge(prte_data_object_t *data)
+{
+    prte_ds_usage_t *u = usage_for(data->uid, true);
+
+    /* replace what it was charged before, which is zero for an item being
+     * stored for the first time and the old size for one that has shrunk */
+    u->bytes -= data->nbytes;
+    data->nbytes = item_size(data);
+    u->bytes += data->nbytes;
+}
+
+void prte_ds_drop(prte_data_object_t *data)
+{
+    prte_ds_usage_t *u = usage_for(data->uid, false);
+
+    if (NULL != u) {
+        u->bytes -= data->nbytes;
+        if (0 == u->bytes) {
+            /* this uid is holding nothing; it will get a fresh record, and
+             * a fresh warning, if it ever publishes again */
+            pmix_list_remove_item(&prte_data_store.usage, &u->super);
+            PMIX_RELEASE(u);
+        }
+    }
+    if (0 <= data->index) {
+        pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
+    }
+    PMIX_RELEASE(data);
+}
+
+/* The publishing uid's own least-recently-used item, by the same clock the
+ * retention timeout reads.  A per-uid list in that order would make this
+ * O(1), and is deliberately not built: the store is a pointer array whose
+ * objects are reached by index on several paths, so a second membership
+ * would be another thing every removal path has to keep in step.  This scan
+ * runs only when a uid is at its cap. */
+static prte_data_object_t *oldest_of(uint32_t uid)
+{
+    prte_data_object_t *data, *found = NULL;
+    int k;
+
+    for (k = 0; k < prte_data_store.store.size; k++) {
+        data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_store.store, k);
+        if (NULL == data || data->uid != uid) {
+            continue;
+        }
+        if (NULL == found || data->last_access < found->last_access) {
+            found = data;
+        }
+    }
+    return found;
+}
+
+bool prte_ds_make_room(prte_data_object_t *data)
+{
+    prte_ds_usage_t *u;
+    prte_data_object_t *victim;
+    size_t need = item_size(data);
+
+    if (0 == prte_data_store.max_size) {
+        return true;
+    }
+    /* A publish larger than the whole cap cannot be made to fit, and
+     * evicting on its behalf would cost this user everything it holds and
+     * still fail.  Refuse it before touching anything. */
+    if (need > prte_data_store.max_size) {
+        return false;
+    }
+    u = usage_for(data->uid, true);
+    while ((u->bytes + need) > prte_data_store.max_size) {
+        victim = oldest_of(data->uid);
+        if (NULL == victim) {
+            /* nothing of this uid's left to take: the accounting and the
+             * store disagree, which is a bug rather than a full store */
+            PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return false;
+        }
+        if (!u->warned) {
+            u->warned = true;
+            prte_show_help("help-prte-data-server.txt", "datastore:evicting", true,
+                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) data->uid,
+                           (unsigned long) prte_data_store.max_size);
+        }
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: evicting %s data from %s to stay within %lu bytes",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIx_Persistence_string(victim->persistence),
+                            PMIX_NAME_PRINT(&victim->owner),
+                            (unsigned long) prte_data_store.max_size);
+        prte_ds_drop(victim);
+    }
+    return true;
+}
+
 // CLASS INSTANCE
 static void construct(prte_data_object_t *ptr)
 {
@@ -563,6 +732,7 @@ static void construct(prte_data_object_t *ptr)
     ptr->app_idx = UINT32_MAX;
     ptr->session_id = UINT32_MAX;
     ptr->last_access = time(NULL);
+    ptr->nbytes = 0;
     PMIX_CONSTRUCT(&ptr->info, pmix_list_t);
 }
 
@@ -610,6 +780,16 @@ PMIX_CLASS_INSTANCE(prte_data_req_t,
                     pmix_list_item_t,
                     rqcon, rqdes);
 
+
+static void ucon(prte_ds_usage_t *p)
+{
+    p->uid = UINT32_MAX;
+    p->bytes = 0;
+    p->warned = false;
+}
+PMIX_CLASS_INSTANCE(prte_ds_usage_t,
+                    pmix_list_item_t,
+                    ucon, NULL);
 
 PMIX_CLASS_INSTANCE(prte_data_cleanup_t,
                     pmix_list_item_t,

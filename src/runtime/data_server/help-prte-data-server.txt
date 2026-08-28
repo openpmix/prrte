@@ -1,0 +1,32 @@
+# -*- text -*-
+#
+# Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English help file for PRRTE's publish/lookup datastore.
+#
+[datastore:evicting]
+
+The datastore has reached the limit on how much published data it will
+hold for one user, and is discarding that user's least recently used
+data to make room for new publications.
+
+   Daemon:     %s
+   User (uid): %lu
+   Limit:      %lu bytes
+
+Published data is discarded oldest-first, and only data belonging to the
+user that reached the limit -- no other user's data is affected.  A
+process that looks up a discarded key is told the key was not found, and
+cannot distinguish that from a key nobody published.
+
+Raise the limit with the "prte_data_server_max_size" MCA parameter, or
+set it to 0 to remove it entirely:
+
+   prte --prtemca prte_data_server_max_size 33554432 ...
+
+This warning is printed once per user per daemon.

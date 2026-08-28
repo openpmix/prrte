@@ -670,8 +670,9 @@ document still describes as *intended* from what it now describes as
      - ``prte_data_server_timeout``, default 300 s; one idle sweep per
        store, armed only while something it applies to is held.
    * - Per-uid storage cap
-     - to do
-     - ``prte_data_server_max_size``, default 16 MiB per uid.
+     - done
+     - ``prte_data_server_max_size``, default 16 MiB per uid; eviction
+       confined to that uid's own least-recently-used items.
 
 Decisions taken
 ---------------
