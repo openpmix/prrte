@@ -681,11 +681,20 @@ static void job_teardown(int fd, short argc, void *cbdata)
         prte_state_base_check_fds(jdata);
     }
 
-    /* tell the data server the job is over, so it can drop what this
-     * namespace published that was not to outlive it - see the same call
-     * in state_base_fns.c for why this is not gated on an external server */
+    /* Tell OUR OWN data server that the procs of this job that we hosted
+     * have gone, so it can drop the local-range data they published - see
+     * the same call in state_base_fns.c for why this is not gated on an
+     * external server.
+     *
+     * Deliberately not the DVM-wide purge.  This runs when THIS daemon's
+     * local procs of the job have terminated (num_terminated ==
+     * num_local_procs), which says nothing about the rest of the job; the
+     * master says when the namespace is over.  The DVM-wide form used to be
+     * sent from here, so on a multi-node job the first node to finish its
+     * share purged the whole namespace's data out of the master's store
+     * while other nodes were still publishing into it. */
     PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
-    prte_state_base_notify_data_server(&target);
+    prte_state_base_notify_local_data_server(&target);
 
     /* The resources are back, but the JOB OBJECT STAYS until the DVM says
      * the job is over everywhere - prted_comm.c's DVM_CLEANUP_JOB.
