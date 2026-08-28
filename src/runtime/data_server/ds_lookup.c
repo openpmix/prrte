@@ -277,6 +277,11 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                                         "%s data server: adding %s to data from %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ds1->info.key,
                                         PRTE_NAME_PRINT(&data->owner));
+                    /* it was of use to somebody, so the retention timeout
+                     * starts again from here.  Both places that answer a
+                     * lookup have to do this - the other is ds_publish.c,
+                     * where a publish satisfies a parked request */
+                    data->last_access = time(NULL);
                     if (PMIX_PERSIST_FIRST_READ == data->persistence) {
                         pmix_list_remove_item(&data->info, &ds1->super);
                         PMIX_RELEASE(ds1);

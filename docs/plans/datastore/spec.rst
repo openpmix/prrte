@@ -666,8 +666,9 @@ document still describes as *intended* from what it now describes as
      - Purged at reservation teardown, selected by the session id
        recorded at publish.
    * - Retention timeout
-     - to do
-     - ``prte_data_server_timeout``, default 300 s.
+     - done
+     - ``prte_data_server_timeout``, default 300 s; one idle sweep per
+       store, armed only while something it applies to is held.
    * - Per-uid storage cap
      - to do
      - ``prte_data_server_max_size``, default 16 MiB per uid.

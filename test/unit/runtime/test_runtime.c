@@ -1171,6 +1171,10 @@ static int test_data_server_objects(void)
      * until a publisher is resolved against its own job */
     CHECK("ds: a new data object has no application", UINT32_MAX == obj->app_idx);
     CHECK("ds: a new data object has no session", UINT32_MAX == obj->session_id);
+    /* the retention timeout reads this, and PMIX_NEW does not zero what it
+     * hands back - an unstamped item would be arbitrarily old or arbitrarily
+     * young depending on the heap */
+    CHECK("ds: a new data object has a stamped access time", 0 != obj->last_access);
     PMIX_RELEASE(obj);
 
     req = PMIX_NEW(prte_data_req_t);

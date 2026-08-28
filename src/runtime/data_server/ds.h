@@ -72,6 +72,13 @@ typedef struct {
      * matches no purge, which is the right answer for both. */
     uint32_t app_idx;
     uint32_t session_id;
+    /* When this item was last of use to anybody: its publish time,
+     * restamped by every lookup that returns one of its keys.  Two
+     * persistences name no lifetime at all - PMIX_PERSIST_INDEF, and a
+     * PMIX_PERSIST_FIRST_READ item nobody reads - and this is what bounds
+     * them.  An idle timeout rather than a lifetime, so that a rendezvous
+     * name in active use is never pulled out from under its readers. */
+    time_t last_access;
     /* and the values themselves - we store them as a list
      * because we may (if persistence is set to "first-read")
      * remove them upon read */
@@ -122,6 +129,15 @@ typedef struct {
     pmix_list_t pending;
     int output;
     int verbosity;
+    /* seconds of idleness after which an item that names no lifetime is
+     * removed; 0 disables the timeout entirely */
+    int timeout;
+    /* one sweep event for the whole store, armed only while it holds
+     * something the timeout applies to.  A timer per item would be exact,
+     * at the cost of an armed libevent timer per published item and a
+     * re-arm on every read. */
+    prte_event_t sweep_ev;
+    bool sweep_active;
 } prte_data_store_t;
 
 extern prte_data_store_t prte_data_store;
@@ -157,6 +173,12 @@ PRTE_EXPORT pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
  * the status the retrieval rules ask for. */
 PRTE_EXPORT pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
                                                         prte_data_object_t *data);
+
+/* Arm the expiry sweep if this store now holds something the retention
+ * timeout applies to and no sweep is running.  Cheap to call on every
+ * publish: it returns at once when the timeout is disabled or the sweep is
+ * already armed. */
+PRTE_EXPORT void prte_ds_arm_sweep(void);
 
 /* Has data with this persistence outlived the lifetime that just ended?
  *

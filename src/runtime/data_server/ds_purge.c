@@ -86,6 +86,101 @@ bool prte_data_server_expires_by(pmix_persistence_t persist,
     }
 }
 
+/* Does the retention timeout apply to this item?
+ *
+ * Two persistences name no lifetime, so no horizon reclaims them and
+ * nothing else would: PMIX_PERSIST_INDEF is retained until specifically
+ * deleted, and only its publisher may delete it; PMIX_PERSIST_FIRST_READ is
+ * consumed by a read that may never come.  Everything else has a criterion
+ * a running system reaches, and cutting one short would break the retention
+ * its publisher was promised while it is still alive to rely on it. */
+static bool timeout_applies(prte_data_object_t *data)
+{
+    return (PMIX_PERSIST_INDEF == data->persistence ||
+            PMIX_PERSIST_FIRST_READ == data->persistence);
+}
+
+static void sweep(int sd, short args, void *cbdata);
+
+/* Interval between sweeps: often enough that "no earlier than the timeout,
+ * and normally within a sweep interval after it" is a bound worth stating,
+ * rare enough that an idle store costs nothing to keep. */
+static void arm(void)
+{
+    struct timeval tv;
+    int interval = prte_data_store.timeout / 4;
+
+    if (1 > interval) {
+        interval = 1;
+    } else if (60 < interval) {
+        interval = 60;
+    }
+    tv.tv_sec = interval;
+    tv.tv_usec = 0;
+    prte_event_evtimer_set(prte_event_base, &prte_data_store.sweep_ev, sweep, NULL);
+    prte_data_store.sweep_active = true;
+    prte_event_evtimer_add(&prte_data_store.sweep_ev, &tv);
+}
+
+void prte_ds_arm_sweep(void)
+{
+    int k;
+    prte_data_object_t *data;
+
+    if (0 >= prte_data_store.timeout || prte_data_store.sweep_active) {
+        return;
+    }
+    for (k = 0; k < prte_data_store.store.size; k++) {
+        data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_store.store, k);
+        if (NULL != data && timeout_applies(data)) {
+            arm();
+            return;
+        }
+    }
+}
+
+/* Remove what has gone stale, and stop sweeping once nothing is left that
+ * could.  Runs on the progress thread inside the event loop, like every
+ * other operation on this store, so it needs no locking. */
+static void sweep(int sd, short args, void *cbdata)
+{
+    prte_data_object_t *data;
+    time_t now = time(NULL);
+    bool more = false;
+    int k;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args, cbdata);
+
+    prte_data_store.sweep_active = false;
+    if (0 >= prte_data_store.timeout) {
+        /* the parameter is read once at init, so this cannot change under
+         * us - but a disabled timeout must not leave a sweep running */
+        return;
+    }
+
+    for (k = 0; k < prte_data_store.store.size; k++) {
+        data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_store.store, k);
+        if (NULL == data || !timeout_applies(data)) {
+            continue;
+        }
+        if ((now - data->last_access) < prte_data_store.timeout) {
+            more = true;
+            continue;
+        }
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: %s data from %s expired after %ld idle seconds",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIx_Persistence_string(data->persistence),
+                            PMIX_NAME_PRINT(&data->owner),
+                            (long) (now - data->last_access));
+        pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
+        PMIX_RELEASE(data);
+    }
+
+    if (more) {
+        arm();
+    }
+}
+
 /* Does this item belong to the lifetime that just ended?
  *
  * The target says whose data is in question - a process, or with
