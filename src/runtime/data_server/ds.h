@@ -155,7 +155,12 @@ PRTE_EXPORT pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
  * spelled out rather than derived.  A horizon of PMIX_PERSIST_INVALID means
  * no lifetime ended and the caller asked for everything, which is what an
  * explicit PMIx_Unpublish(NULL, ...) means: a publisher taking back all of
- * its own data regardless of how long it had asked for it to be kept. */
+ * its own data regardless of how long it had asked for it to be kept.
+ *
+ * Two persistences are removed by NO horizon.  PMIX_PERSIST_INDEF is
+ * retained until specifically deleted, and PMIX_PERSIST_FIRST_READ until
+ * the read that consumes it - neither criterion is a lifetime, so neither
+ * is met by one ending. */
 PRTE_EXPORT bool prte_data_server_expires_by(pmix_persistence_t persist,
                                              pmix_persistence_t horizon);
 

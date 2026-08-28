@@ -1191,11 +1191,12 @@ static int test_data_server_persistence(void)
     CHECK("persist: no horizon takes SESSION",
           prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_INVALID));
 
+    CHECK("persist: no horizon takes FIRST_READ",
+          prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_INVALID));
+
     /* a process ended */
     CHECK("persist: PROC goes at the PROC horizon",
           prte_data_server_expires_by(PMIX_PERSIST_PROC, PMIX_PERSIST_PROC));
-    CHECK("persist: an unread FIRST_READ goes at the PROC horizon",
-          prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_PROC));
     CHECK("persist: APP stays at the PROC horizon",
           !prte_data_server_expires_by(PMIX_PERSIST_APP, PMIX_PERSIST_PROC));
     CHECK("persist: SESSION stays at the PROC horizon",
@@ -1219,6 +1220,19 @@ static int test_data_server_persistence(void)
     /* the one value no lifetime reclaims */
     CHECK("persist: INDEF stays at the SESSION horizon",
           !prte_data_server_expires_by(PMIX_PERSIST_INDEF, PMIX_PERSIST_SESSION));
+
+    /* ...and the other one.  FIRST_READ's criterion is the first access,
+     * which no lifetime ending satisfies: an item published for a reader
+     * that has not started yet must survive its publisher, or a handover
+     * from one generation of a job to the next cannot work at all.  A
+     * publisher wanting its data gone when it goes away says PROC or APP.
+     * This is issue #2733, and every horizon used to take it. */
+    CHECK("persist: FIRST_READ stays at the PROC horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_PROC));
+    CHECK("persist: FIRST_READ stays at the APP horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_APP));
+    CHECK("persist: FIRST_READ stays at the SESSION horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_SESSION));
 
     return failures;
 }

@@ -282,10 +282,21 @@ caddy (`req->timeout` in `pmix_server_pub.c`) and went no further.
 **`PMIX_PERSISTENCE` is enforced by `ds_purge`, and only because the state
 machine tells it a lifetime ended.** The purge command carries the horizon
 that was reached as a `PMIX_PERSISTENCE` directive, and `expires_by()`
-decides what that takes: `FIRST_READ` and `PROC` at any horizon, `APP` at
-`APP` or `SESSION`, `INDEF` never. The values are *not* a numeric ladder —
-`PMIX_PERSIST_INDEF` is 0 and outlives all of them — so the ordering is
-spelled out rather than compared.
+decides what that takes: `PROC` at any horizon, `APP` at `APP` or
+`SESSION`, `INDEF` and `FIRST_READ` never. The values are *not* a numeric
+ladder — `PMIX_PERSIST_INDEF` is 0 and outlives all of them — so the
+ordering is spelled out rather than compared.
+
+`FIRST_READ` is in that list of what no horizon takes, and it took
+issue #2733 to get there. Its criterion is the first access and nothing
+else, so an item published for a reader that has not started yet is not
+the publisher's to lose when the publisher's job ends — `PROC` and `APP`
+are how a publisher says "remove this when I go away". Purging it made
+the one conforming handover between successive generations of a job
+impossible: the successor found nothing. The cost of not purging it is an
+unread item that nothing expires on its own, which is what `INDEF`
+already carries; a retention timeout for both is planned (see
+`docs/plans/datastore/`).
 
 A purge with **no** horizon (`PMIX_PERSIST_INVALID`) means an explicit
 `PMIx_Unpublish(NULL, ...)`: a live publisher taking back everything it
