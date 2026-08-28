@@ -94,13 +94,22 @@ Three things follow, and each is load-bearing:
 - **Only the master attaches.** Every other daemon relays to it over the RML
   exactly as it does for a local store, so a DVM holds one connection however
   many daemons it has. At the master itself the RML send is a send to self.
-- **The requesting process is carried in `PMIX_REQUESTOR`.** Otherwise the far
-  end attributes the operation to the relaying daemon's *tool* identity, and
+- **The requesting process is carried in `PMIX_REQUESTOR`, and its uid and
+  gid in `prte.pub.ruid` / `prte.pub.rgid`.** Otherwise the far end
+  attributes the operation to the relaying daemon's *tool* identity, and
   every ownership rule — who may unpublish, what `PMIX_RANGE_NAMESPACE`
   admits, what a job-end purge takes — is answered about the wrong process.
-  `prte_ds_check_requestor()` honors the claim **only from a tool**; an
-  application process making one is trying to act under a peer's identity, and
-  the claim is dropped.
+  The uid half matters for the same reason and is newer: PMIx appends the
+  *relay's* `PMIX_USERID` and `PMIX_GRPID` to the call the relay makes, so
+  without a separate claim the far end would store the item under the
+  relaying daemon's user and test every later removal against it. They are
+  PRRTE-private keys rather than a second `PMIX_USERID` precisely because
+  PMIx adds its own, and two entries under one key make the answer depend on
+  array order. `prte_ds_check_requestor()` reads all three in one pass and
+  honors them **only from a tool**; an application process making the claim
+  is trying to act under a peer's identity, and it is dropped. Call it
+  *after* your own directive scan, or the relay's `PMIX_USERID` lands on top
+  of the claim.
 - **The primary server must be named per operation.** PMIx sends a tool's
   client-side call to whichever attached server is currently primary, and a
   master may also be attached to a scheduler. `prte_pmix_set_primary_server()`
@@ -187,10 +196,30 @@ range at all.
 
 `ds_unpublish` applies neither rule. **An owner may unpublish what it
 published on any range**, and the range the unpublish itself names does not
-narrow that. The test is that the requesting process *is* the owner — a
-stronger check than comparing uids, because a process identity is stamped by
-its own PMIx server rather than asserted by the caller (or, for a relay,
-claimed in `PMIX_REQUESTOR` and honored only from a tool).
+narrow that.
+
+**The owner is the publishing USER**, not the publishing process:
+`prte_data_server_owns()` compares the requestor's effective uid against the
+one recorded at publish, and the gid where both are known (either side
+reading `UINT32_MAX` degrades the test to uid alone, exactly as the read
+rule does). The same predicate scopes `PRTE_PUBLISH_REPLACE`.
+
+It used to be the process — namespace *and* rank — which sounds stricter and
+is, in the way that made it useless: a process takes no data with it when it
+exits, so an item published by a job that had ended was removable by nobody
+at all. Its own user's next job could read it, could not publish over it
+(that is a duplicate) and could not remove it, so the name was wedged for
+the life of the DVM. A predecessor that *died* before it could unpublish is
+the case that matters, and it is the one a checkpoint/restart handover hits.
+Keying on the user moves no boundary that matters: nothing here crosses
+between users, and there is still no administrative override.
+
+**Ownership is not access, in either direction.** A `PMIX_ACCESS_USERIDS`
+list widens who may *read* an item and confers no removal; and the sharper
+case, a publisher whose own accessor list excludes it may still remove what
+it cannot read, because it owns it. `prte_data_server_owns()` reads
+`data->uid` and `data->gid` and never touches `auids`/`agids`, which is what
+keeps those two questions apart.
 
 Gating removal on the read rule is exactly the confusion this section
 exists to prevent: it left a `PMIX_RANGE_RM` or `PMIX_RANGE_CUSTOM` item
@@ -249,6 +278,11 @@ colliding item belongs to somebody else the publish is refused whether or
 not the directive was given, so it is a republish and never a way to take a
 live name away. Only the republished keys go; an object holding others keeps
 them.
+
+"Own" here is the same `prte_data_server_owns()` the removal rule uses — the
+publishing **user**. It has to be: once a same-uid process may unpublish a
+key and then publish its own, the two-step is available anyway, and refusing
+the one-step form would only make the same outcome take two calls.
 
 Everything those checks read — the owner (which `PMIX_REQUESTOR` may have
 replaced), the range, the uid and gid — is final only *after* the directive
@@ -477,14 +511,13 @@ by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
 
-**Not covered:** `PMIX_PERSIST_FIRST_READ` end-to-end, the duplicate-key and
-`PRTE_PUBLISH_REPLACE` paths, and the lifecycle side of `ds_purge` (which is
-driven by job termination rather than by a client call) — in particular that
-a `PERSIST_APP` item is gone once its job ends while a `PERSIST_SESSION` one
-is not, which needs two jobs under one persistent DVM. Access
-permissions are covered only with the harness running as a single user, so
-what the swarm proves is that a list naming *somebody else* keeps us out —
-not that a genuinely different uid gets in.
+**Not covered:** anything that needs a second *user*. The harness runs as
+one uid in every container, so what the swarm can show of the ownership rule
+is the same-user half — a later job taking back its predecessor's name, and
+replacing it in one publish. That a different uid is refused is unit-tested
+(`test_data_server_ownership`) and nowhere else. Access permissions have the
+same limit: the swarm proves that a list naming *somebody else* keeps us
+out, not that a genuinely different uid gets in.
 
 A note on the partial-lookup case, because it took both code bases to make
 it work. PRRTE returning the status *and* the values it found is only half

@@ -1478,12 +1478,80 @@ static int test_data_server_search_range(void)
  * another DVM attached to us as a tool (see ds_relay.c); an application
  * process making the same claim is trying to publish - or unpublish - under
  * a peer's identity, so the claim has to be dropped rather than honored. */
+/* Who may REMOVE an item.  Ownership is the publishing user, which is a
+ * different question from access - see the two directions asserted below. */
+static int test_data_server_ownership(void)
+{
+    int failures = 0;
+    prte_data_object_t *data;
+
+    data = PMIX_NEW(prte_data_object_t);
+    PMIX_LOAD_PROCID(&data->owner, "publisher.job", 2);
+    data->uid = 500;
+    data->gid = 20;
+
+    CHECK("owns: the publishing uid and gid may remove",
+          prte_data_server_owns(500, 20, data));
+
+    /* The point of keying on the user rather than the process: the
+     * publisher itself is gone, and a later job of the same user - a
+     * different namespace entirely - has to be able to take the name back.
+     * There is no process identity in this call at all. */
+    CHECK("owns: another process of the same user may remove",
+          prte_data_server_owns(500, 20, data));
+
+    CHECK("owns: a different uid may not remove",
+          !prte_data_server_owns(501, 20, data));
+    CHECK("owns: a different gid may not remove",
+          !prte_data_server_owns(500, 21, data));
+
+    /* The gid took an openpmix change to be handed over at all, and where
+     * it is missing both sides read UINT32_MAX.  Degrade to uid alone
+     * rather than locking the owner out of its own data. */
+    CHECK("owns: an unknown requestor gid degrades to uid alone",
+          prte_data_server_owns(500, UINT32_MAX, data));
+    data->gid = UINT32_MAX;
+    CHECK("owns: an unknown stored gid degrades to uid alone",
+          prte_data_server_owns(500, 20, data));
+    CHECK("owns: ...and the uid still has to match",
+          !prte_data_server_owns(501, 20, data));
+
+    /* An identity we do not have is not an identity that matches: two
+     * unknowns comparing equal would let anybody remove anybody's data. */
+    data->uid = UINT32_MAX;
+    CHECK("owns: an unknown stored uid matches nobody",
+          !prte_data_server_owns(UINT32_MAX, UINT32_MAX, data));
+    CHECK("owns: ...not even a real uid",
+          !prte_data_server_owns(500, 20, data));
+    data->uid = 500;
+    CHECK("owns: an unknown requestor uid owns nothing",
+          !prte_data_server_owns(UINT32_MAX, 20, data));
+
+    /* Ownership and access are different questions.  An accessor list
+     * widens who may READ and confers no removal; and the sharper case,
+     * an owner whose own list excludes it may still remove what it cannot
+     * read.  Both are asserted here by the absence of any accessor list
+     * from this predicate at all: it reads data->uid and data->gid, never
+     * data->auids or data->agids. */
+    data->auids = (uint32_t *) malloc(sizeof(uint32_t));
+    data->auids[0] = 501;
+    data->nauids = 1;
+    CHECK("owns: a uid on the accessor list still may not remove",
+          !prte_data_server_owns(501, 20, data));
+    CHECK("owns: an owner its own accessor list excludes may still remove",
+          prte_data_server_owns(500, 20, data));
+
+    PMIX_RELEASE(data);
+    return failures;
+}
+
 static int test_data_server_requestor(void)
 {
     int failures = 0;
     prte_job_t *toolj, *appj;
     pmix_proc_t owner, behalf;
-    pmix_info_t info;
+    pmix_info_t info[3];
+    uint32_t uid, gid, claim;
 
     reset_globals();
 
@@ -1497,35 +1565,65 @@ static int test_data_server_requestor(void)
 
     /* a tool may act for somebody else */
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
-    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    prte_ds_check_requestor(&owner, &info);
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
     CHECK("requestor: a tool's claim is honored", PMIX_CHECK_PROCID(&owner, &behalf));
-    PMIX_INFO_DESTRUCT(&info);
+    PMIX_INFO_DESTRUCT(&info[0]);
 
     /* an application process may not */
     PMIX_LOAD_PROCID(&owner, "some.app", 1);
-    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    prte_ds_check_requestor(&owner, &info);
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
     CHECK("requestor: an application's claim is refused",
           PMIX_CHECK_NSPACE(owner.nspace, "some.app") && 1 == owner.rank);
-    PMIX_INFO_DESTRUCT(&info);
+    PMIX_INFO_DESTRUCT(&info[0]);
 
     /* neither may a namespace we have never heard of - a job object is what
      * says what the caller is, and without one there is nothing to trust */
     PMIX_LOAD_PROCID(&owner, "unknown.job", 4);
-    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    prte_ds_check_requestor(&owner, &info);
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
     CHECK("requestor: an unknown namespace's claim is refused",
           PMIX_CHECK_NSPACE(owner.nspace, "unknown.job"));
-    PMIX_INFO_DESTRUCT(&info);
+    PMIX_INFO_DESTRUCT(&info[0]);
 
     /* a directive of the wrong type is ignored rather than dereferenced */
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
-    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, "not-a-procid", PMIX_STRING);
-    prte_ds_check_requestor(&owner, &info);
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, "not-a-procid", PMIX_STRING);
+    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
     CHECK("requestor: a mistyped directive is ignored",
           PMIX_CHECK_NSPACE(owner.nspace, "relay.tool"));
-    PMIX_INFO_DESTRUCT(&info);
+    PMIX_INFO_DESTRUCT(&info[0]);
+
+    /* The identity a relay claims includes the uid and gid, and has to:
+     * ownership is decided by the publishing user, and what PMIx appends to
+     * a relayed request is the RELAYING daemon's identity, not the
+     * originating process's. */
+    claim = 4242;
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = 7; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
+    CHECK("requestor: a tool's claimed uid is honored", 4242 == uid);
+    CHECK("requestor: a tool's claimed gid is honored", 4242 == gid);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[2]);
+
+    /* ...and an application process claiming a uid is refused it, which is
+     * the half that matters: a uid it could assert is a uid whose published
+     * data it could remove */
+    PMIX_LOAD_PROCID(&owner, "some.app", 1);
+    uid = 7; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 2);
+    CHECK("requestor: an application's claimed uid is refused", 7 == uid);
+    CHECK("requestor: an application's claimed gid is refused", 9 == gid);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
 
     reset_globals();
     return failures;
@@ -1828,6 +1926,7 @@ int main(void)
     failures += test_data_server_range();
     failures += test_data_server_search_range();
     failures += test_data_server_access();
+    failures += test_data_server_ownership();
     failures += test_data_server_requestor();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();

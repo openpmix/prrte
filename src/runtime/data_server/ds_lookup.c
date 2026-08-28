@@ -204,11 +204,12 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                 wait = true;
             } else if (PMIx_Check_key(info[n].key, PMIX_RANGE)) {
                 range = info[n].value.data.range;
-            } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
-                /* a relay looking up on behalf of a process in its own DVM */
-                prte_ds_check_requestor(&requestor, &info[n]);
             }
         }
+        /* a relay looking up on behalf of a process in its own DVM.  After
+         * the scan: the uid PMIx appended is the RELAY's, and the access
+         * rules have to be answered about the process actually asking. */
+        prte_ds_check_requestor(&requestor, &uid, &gid, info, ninfo);
         /* ignore anything else for now */
         PMIX_INFO_FREE(info, ninfo);
     }

@@ -199,7 +199,12 @@ static size_t count_duplicates(prte_data_req_t *rq, prte_data_object_t *data,
                                     PMIx_Data_range_string(data->range),
                                     PMIX_NAME_PRINT(&dptr->owner));
                 ndups++;
-                if (!PMIX_CHECK_PROCID(&data->owner, &dptr->owner)) {
+                /* Whose name is this?  Ownership is the publishing USER, so
+                 * a later job of the same user is republishing rather than
+                 * seizing - which is the point: unpublish-then-publish is
+                 * open to it either way, and refusing the one-step form
+                 * would only make the same outcome take two calls. */
+                if (!prte_data_server_owns(rq->uid, rq->gid, dptr)) {
                     *foreign = true;
                 }
             }
@@ -224,7 +229,7 @@ static void drop_prior(prte_data_req_t *rq, prte_data_object_t *data)
         if (NULL == dptr) {
             continue;
         }
-        if (!PMIX_CHECK_PROCID(&data->owner, &dptr->owner)) {
+        if (!prte_data_server_owns(rq->uid, rq->gid, dptr)) {
             continue;
         }
         if (!same_data_range(rq, dptr, data->range)) {
@@ -336,9 +341,14 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             ret = load_ids(&info[n].value, &data->auids, &data->nauids);
         } else if (PMIx_Check_key(info[n].key, PMIX_ACCESS_GRPIDS)) {
             ret = load_ids(&info[n].value, &data->agids, &data->nagids);
-        } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
-            /* a relay publishing on behalf of a process in its own DVM */
-            prte_ds_check_requestor(&data->owner, &info[n]);
+        } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR) ||
+                   PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_UID) ||
+                   PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_GID)) {
+            /* a relay publishing on behalf of a process in its own DVM.
+             * Applied below, once this scan has finished - see
+             * prte_ds_check_requestor().  Skipped here so it is not stored
+             * as published data. */
+            continue;
         } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REPLACE)) {
             /* the publisher is updating something it published itself */
             replace = PMIX_INFO_TRUE(&info[n]);
@@ -357,6 +367,12 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             return ret;
         }
     }
+    /* Now let a relay's claimed identity override what PMIx told us about
+     * the caller, which for a relayed request is the relaying daemon's own
+     * tool identity.  After the scan, so the relay's PMIX_USERID cannot
+     * land on top of the claim. */
+    prte_ds_check_requestor(&data->owner, &data->uid, &data->gid, info, ninfo);
+
     /* the values we keep were copied into the data object above, so the
      * unpacked array has done its job - it used to be freed only on the
      * unpack-failure path, which leaked it on every successful publish */
