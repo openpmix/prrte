@@ -275,8 +275,10 @@ static void drop_prior(prte_data_req_t *rq, prte_data_object_t *data)
             }
         }
         if (0 == pmix_list_get_size(&dptr->info)) {
-            pmix_pointer_array_set_item(&prte_data_store.store, dptr->index, NULL);
-            PMIX_RELEASE(dptr);
+            prte_ds_drop(dptr);
+        } else {
+            /* it kept some keys and lost others: recharge the difference */
+            prte_ds_charge(dptr);
         }
     }
 }
@@ -473,8 +475,24 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
     }
     PMIX_DESTRUCT(&rq);
 
+    /* Room for it, within what this publisher's uid may hold - evicting
+     * that uid's own oldest items if need be, and refusing outright if the
+     * item could not fit in an empty store.  Last of the gates, because it
+     * is the only one that MODIFIES the store: a publish that is going to
+     * be refused must not have cost anybody their data on the way. */
+    if (!prte_ds_make_room(data)) {
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: refusing publish from %s - larger than "
+                            "the whole per-uid limit",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIX_NAME_PRINT(&data->owner));
+        PMIX_RELEASE(data);
+        return PMIX_ERR_OUT_OF_RESOURCE;
+    }
+
     // add this data to our store
     data->index = pmix_pointer_array_add(&prte_data_store.store, data);
+    prte_ds_charge(data);
 
     /* an INDEF or unread FIRST_READ item is the only thing the retention
      * timeout applies to, so the sweep runs only while the store holds one */
@@ -660,9 +678,11 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         }
         if (0 == pmix_list_get_size(&data->info)) {
             // all the data was removed, so we no longer need this entry
-            pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
-            PMIX_RELEASE(data);
+            prte_ds_drop(data);
             data = NULL;
+        } else {
+            /* it shrank: what its publisher is charged has to follow */
+            prte_ds_charge(data);
         }
         if (complete_resolved) {
             // completely resolved this pending request, so remove it

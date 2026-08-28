@@ -172,8 +172,7 @@ static void sweep(int sd, short args, void *cbdata)
                             PMIx_Persistence_string(data->persistence),
                             PMIX_NAME_PRINT(&data->owner),
                             (long) (now - data->last_access));
-        pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
-        PMIX_RELEASE(data);
+        prte_ds_drop(data);
     }
 
     if (more) {
@@ -222,8 +221,7 @@ static void purge_store(const pmix_proc_t *target, pmix_persistence_t horizon,
         if (!purge_takes(data, target, horizon, qualifier)) {
             continue;
         }
-        pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
-        PMIX_RELEASE(data);
+        prte_ds_drop(data);
     }
 }
 

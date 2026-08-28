@@ -285,6 +285,26 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                     if (PMIX_PERSIST_FIRST_READ == data->persistence) {
                         pmix_list_remove_item(&data->info, &ds1->super);
                         PMIX_RELEASE(ds1);
+                        /* An item that has given up its last key is no
+                         * longer holding anything, and has to leave the
+                         * store rather than sit in it empty.  The publish
+                         * side has always done this where it satisfies a
+                         * parked request; here the object was left behind,
+                         * so a FIRST_READ item that was read by an ordinary
+                         * lookup stayed in the store as an empty shell -
+                         * matching nothing, answering nothing, and removed
+                         * only by a purge.
+                         *
+                         * "data" is the loop variable of the enclosing scan
+                         * over the store, so nothing may touch it after
+                         * this; the break below is what makes that safe. */
+                        if (0 == pmix_list_get_size(&data->info)) {
+                            prte_ds_drop(data);
+                            data = NULL;
+                        } else {
+                            /* it shrank: recharge what is left of it */
+                            prte_ds_charge(data);
+                        }
                     }
                     pmix_list_append(&answers, &rinfo->super);
                     // can only find it once - keys are required to be globally unique

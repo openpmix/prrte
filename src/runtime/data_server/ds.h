@@ -79,6 +79,11 @@ typedef struct {
      * them.  An idle timeout rather than a lifetime, so that a rendezvous
      * name in active use is never pulled out from under its readers. */
     time_t last_access;
+    /* what this item is charged against its publisher's uid, in bytes.
+     * Recomputed whenever the item shrinks - a PMIX_PERSIST_FIRST_READ
+     * lookup removes one of its keys - so a uid's total tracks what it is
+     * actually holding. */
+    size_t nbytes;
     /* and the values themselves - we store them as a list
      * because we may (if persistence is set to "first-read")
      * remove them upon read */
@@ -107,6 +112,25 @@ typedef struct {
 PMIX_CLASS_DECLARATION(prte_data_req_t);
 
 
+/* What one uid is holding in this store.  The cap is applied per
+ * publishing user and eviction never crosses a uid boundary, so a user who
+ * floods the store evicts only their own data - without that, publishing
+ * junk in bulk is a way to push somebody else's rendezvous name out.
+ * There are as many of these as there are users publishing to one store,
+ * which is a small number; a list keeps the lookup, the increment and the
+ * decrement in one obvious place. */
+typedef struct {
+    pmix_list_item_t super;
+    uint32_t uid;
+    size_t bytes;
+    /* whether this uid has already been told it is evicting.  Eviction is
+     * the store protecting itself rather than a policy anyone asked for, so
+     * it is reported - once, not once per item. */
+    bool warned;
+} prte_ds_usage_t;
+PMIX_CLASS_DECLARATION(prte_ds_usage_t);
+
+
 /* define a container for data object cleanups */
 typedef struct {
     pmix_list_item_t super;
@@ -132,6 +156,10 @@ typedef struct {
     /* seconds of idleness after which an item that names no lifetime is
      * removed; 0 disables the timeout entirely */
     int timeout;
+    /* per-uid byte totals; see prte_ds_usage_t */
+    pmix_list_t usage;
+    /* the most one uid may hold in this store, in bytes; 0 disables */
+    size_t max_size;
     /* one sweep event for the whole store, armed only while it holds
      * something the timeout applies to.  A timer per item would be exact,
      * at the cost of an armed libevent timer per published item and a
@@ -173,6 +201,27 @@ PRTE_EXPORT pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
  * the status the retrieval rules ask for. */
 PRTE_EXPORT pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
                                                         prte_data_object_t *data);
+
+/* Charge an item to its publisher's uid, or recharge one that has shrunk.
+ * Measures the item, replaces whatever it was charged before, and adjusts
+ * the uid's running total.  Call it once when the item is stored, and
+ * again whenever its info list loses a key. */
+PRTE_EXPORT void prte_ds_charge(prte_data_object_t *data);
+
+/* Take an item out of the store: uncharge it, clear its slot, release it.
+ *
+ * EVERY removal path has to go through this, or a uid's total drifts up
+ * until it can publish nothing.  There are seven of them - the duplicate
+ * drop, an unpublish, a FIRST_READ read that empties an item (in both
+ * places that answer a lookup), each purge horizon, the expiry sweep, and
+ * eviction - which is exactly why it is one function. */
+PRTE_EXPORT void prte_ds_drop(prte_data_object_t *data);
+
+/* Make room for an item about to be stored, evicting the publishing uid's
+ * OWN least-recently-used items until it fits.  Returns false when the item
+ * could not fit in an empty store, in which case nothing was evicted: a
+ * publish that cannot succeed must not cost anybody their data. */
+PRTE_EXPORT bool prte_ds_make_room(prte_data_object_t *data);
 
 /* Arm the expiry sweep if this store now holds something the retention
  * timeout applies to and no sweep is running.  Cheap to call on every

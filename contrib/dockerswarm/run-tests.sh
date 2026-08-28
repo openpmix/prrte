@@ -2252,6 +2252,57 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: a store bounds what one user may hold"
+    # Retention alone leaves the store unbounded: a job can publish as much
+    # as it likes and exit, and what it published outlives it.  The cap is
+    # what bounds that, and it is applied PER PUBLISHING UID with eviction
+    # confined to that uid's own items -- because a blanket "replace the
+    # oldest" is an abuse primitive in its own right, letting junk published
+    # in bulk push somebody else's rendezvous name out of the store.
+    #
+    # The cap here is small enough that two items cannot both be held, which
+    # is what makes the outcome deterministic rather than a race with
+    # whatever else the DVM has published.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start_mca 'node1:2,node2:2,node3:2' '--prtemca prte_data_server_max_size 4096'; then
+        bad "could not start a DVM for the storage-cap test"
+    else
+        big=$(printf 'x%.0s' $(seq 1 1500))
+        huge=$(printf 'y%.0s' $(seq 1 5000))
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.cap.first $big session 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.cap.first' \
+            && ok "a large key was published within the cap" \
+            || bad "the first capped publish was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.cap.second $big session 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.cap.second' \
+            && ok "...and a second one, which cannot fit beside it" \
+            || bad "the second capped publish was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.cap.first 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.cap.first' \
+            && bad "the cap was not enforced: both keys are still there" \
+            || ok "the older key was evicted to make room"
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.cap.second 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.cap.second' \
+            && ok "...and the newer one is what the store kept" \
+            || bad "eviction took the wrong item: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # A publish too large for the whole cap can never fit, so evicting on
+        # its behalf would cost this user everything it holds and still fail.
+        # It is refused before anything is touched.
+        out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.cap.huge $huge 0" 2>&1)
+        echo "$out" | grep -q 'STATUS PMIX_ERR_OUT_OF_RESOURCE' \
+            && ok "a publish larger than the whole cap was refused" \
+            || bad "an unfittable publish was not refused: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.cap.second 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.cap.second' \
+            && ok "...and it evicted nothing on its way to being refused" \
+            || bad "a refused publish cost the store data: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "runtime/data_server: PMIX_RANGE_LOCAL data does not leave its node"
     # A LOCAL-range publish is not sent to the HNP at all: the daemon routes
     # it to its OWN data server instance (pmix_server_pub.c picks

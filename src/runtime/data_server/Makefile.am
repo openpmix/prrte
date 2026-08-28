@@ -22,6 +22,9 @@
 
 # This makefile.am does not stand on its own - it is included from src/runtime/Makefile.am
 
+EXTRA_DIST += \
+        runtime/data_server/help-prte-data-server.txt
+
 headers += \
         runtime/data_server/prte_data_server.h \
         runtime/data_server/ds.h

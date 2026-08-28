@@ -196,8 +196,10 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             }
             /* if all the data has been removed, then remove the object */
             if (0 == pmix_list_get_size(&data->info)) {
-                pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
-                PMIX_RELEASE(data);
+                prte_ds_drop(data);
+            } else {
+                /* some keys went and others stayed: recharge what is left */
+                prte_ds_charge(data);
             }
         }
     }
