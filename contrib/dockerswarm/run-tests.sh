@@ -3386,6 +3386,59 @@ test_session() {
             && ok "the terminated reservation gave its node back" \
             || bad "expected 4 usable nodes after terminate, saw $n: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
 
+        banner "session: tearing one down reclaims what its jobs published"
+        # PMIX_PERSIST_SESSION is "retain until the session terminates", and
+        # PRRTE's session is the ALLOCATION the publisher was running within.
+        # Nothing else reclaims such an item: no job-end horizon takes it, and
+        # its publisher is gone.  This is the only place the horizon can be
+        # seen at all -- it needs a reservation that is torn down while the
+        # DVM lives on, which one job, or one session, cannot show.
+        #
+        # The publisher runs INSIDE the reservation, which is what gives its
+        # data a session to belong to: the job carries PRTE_JOB_SESSION_ID and
+        # the datastore records it against each item at publish.
+        if ! RUN "test -x $DS"; then
+            skp "dataserver client not installed -- the session-horizon case is skipped"
+        else
+            # a key published from OUTSIDE any reservation, which the teardown
+            # below must leave alone.  Same persistence, different session --
+            # so what separates them is the session id and nothing else.
+            out=$(PRUN "--host node1:1 -n 1 $DS persist prte.test.sess.other kept session 0" 2>&1)
+            echo "$out" | grep -q '^PUBLISHED prte.test.sess.other' \
+                && ok "a SESSION key was published outside any reservation" \
+                || bad "the control publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            out=$(RUN "timeout 60 $SESSCTL instantiate 4244 --hosts node4:2 --np 1 \
+                           -- $DS persist prte.test.sess.inside kept session 200" 2>&1)
+            echo "$out" | grep -q PMIX_SUCCESS \
+                && ok "session 4244 instantiated with a publisher inside it" \
+                || bad "instantiate failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            sleep 8
+
+            out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.sess.inside 15" 2>&1)
+            if ! echo "$out" | grep -q '^FOUND prte.test.sess.inside kept'; then
+                skp "the in-session publisher never published; the horizon case is skipped"
+            else
+                ok "...and what it published is there while the session stands"
+                out=$(RUN "timeout 60 $SESSCTL terminate 4244" 2>&1)
+                echo "$out" | grep -q PMIX_SUCCESS \
+                    && ok "session 4244 terminated on request" \
+                    || bad "terminate failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                sleep 6
+                out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.sess.inside 15" 2>&1)
+                echo "$out" | grep -q '^FOUND prte.test.sess.inside' \
+                    && bad "SESSION data outlived its session: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+                    || ok "...and it went when the session was torn down"
+                # the control: the purge names one session, and takes only its
+                # data.  Without the session id on each item this key would
+                # have gone with it, since it is the same persistence.
+                out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.sess.other 15" 2>&1)
+                echo "$out" | grep -q '^FOUND prte.test.sess.other kept' \
+                    && ok "...while another session's key beside it was untouched" \
+                    || bad "the teardown took data belonging to another session: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            fi
+        fi
+
         banner "session: an unknown session and a conflicting request are refused"
         out=$(RUN "timeout 60 $SESSCTL pause 9999" 2>&1)
         echo "$out" | grep -q PMIX_ERR_NOT_FOUND \

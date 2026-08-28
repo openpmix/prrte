@@ -629,9 +629,19 @@ key repeatedly to show the clock restarting has to leave room for that in
 both directions: gaps comfortably inside the timeout, and a last read
 comfortably outside it, or the case passes without showing anything.
 
-**Not covered:** the `SESSION` horizon end to end, which needs a
-reservation torn down under a persistent DVM with data published inside it;
-and anything that needs a second *user*. The harness runs as
+The `SESSION` horizon lives in the **`test_session`** phase rather than
+this one, because that is where the tooling is: a reservation is
+instantiated with the publisher running inside it (which is what gives its
+data a session to belong to — the job carries `PRTE_JOB_SESSION_ID`), the
+key is read back while the session stands, and it is gone once
+`sessionctrl terminate` tears the reservation down. Its control is a key of
+the *same* persistence published outside any reservation, which must
+survive: what separates the two is the session id recorded on each item and
+nothing else. Nothing but the session purge can remove either — no job-end
+horizon takes `SESSION` data, and the sweep does not touch it — so the case
+cannot pass by accident.
+
+**Not covered:** anything that needs a second *user*. The harness runs as
 one uid in every container, so what the swarm can show of the ownership rule
 is the same-user half — a later job taking back its predecessor's name, and
 replacing it in one publish. That a different uid is refused is unit-tested
