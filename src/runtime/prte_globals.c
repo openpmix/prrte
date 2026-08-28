@@ -439,6 +439,25 @@ int prte_set_session_object(prte_session_t *session)
     return PRTE_SUCCESS;
 }
 
+void prte_set_job_session(prte_job_t *jdata, prte_session_t *session)
+{
+    prte_session_t *old;
+
+    if (NULL == jdata || jdata->session == session) {
+        return;
+    }
+    /* retain BEFORE releasing: the two may be the same object reached by
+     * different paths, and dropping the last reference first would free it */
+    old = jdata->session;
+    if (NULL != session) {
+        PMIX_RETAIN(session);
+    }
+    jdata->session = session;
+    if (NULL != old) {
+        PMIX_RELEASE(old);
+    }
+}
+
 prte_proc_t *prte_get_proc_object(const pmix_proc_t *proc)
 {
     prte_job_t *jdata;
@@ -826,12 +845,25 @@ static void prte_job_destruct(prte_job_t *job)
     if (NULL != job->traces) {
         PMIx_Argv_free(job->traces);
     }
-    /* target_sessions holds borrowed session pointers - free only the array */
+    /* Both the primary session and every target carry a counted reference -
+     * see prte_job_t::session.  Dropping them here is what finally reclaims a
+     * reservation that was torn down while this job was still running in it:
+     * teardown deregisters the session and gives up the registry's reference,
+     * and the last job to let go is what frees the object. */
     if (NULL != job->target_sessions) {
+        for (n = 0; n < (int) job->num_target_sessions; n++) {
+            if (NULL != job->target_sessions[n]) {
+                PMIX_RELEASE(job->target_sessions[n]);
+            }
+        }
         free(job->target_sessions);
         job->target_sessions = NULL;
     }
     job->num_target_sessions = 0;
+    if (NULL != job->session) {
+        PMIX_RELEASE(job->session);
+        job->session = NULL;
+    }
     PMIX_DESTRUCT(&job->cli);
 }
 

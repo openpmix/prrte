@@ -107,26 +107,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**A torn-down reservation leaks its session object.**
-``prte_ras_base_teardown_reservation`` (``src/mca/ras/base/ras_base_allocate.c``)
-gives a reservation's nodes back, drops its owners and its retained owner
-job, and removes it from ``prte_sessions`` so nothing can look it up or
-target it again — but it does not release the ``prte_session_t`` itself, and
-deregistering it also puts it beyond ``prte_finalize``'s sweep over that
-array, which is the only thing that would have reclaimed it.  Releasing it
-there is not safe as things stand: ``prte_job_t::session`` and
-``::target_sessions`` are borrowed pointers taken without a reference, so a
-job still running in the reservation — the reason the object is kept in the
-first place — would be left holding a dangling one.  The leak is one small
-object per reservation ever torn down, which an elastic DVM does once per
-grow, so it is bounded by the DVM's lifetime and by how much it grows.
-Fixing it properly means deciding who owns a session: either those job-side
-pointers become counted references, or teardown clears them (and the mapper's
-session filtering has to be correct for a job whose session has gone).  The
-one consequence that *was* fixable in isolation has been: the session's time
-limit is now disarmed at teardown, so a stale timer can no longer terminate
-jobs on a reservation that no longer exists.
-
 **``register_nspace()`` checks the list it is building, not the entries it
 puts in it.**  ``prte_pmix_server_register_nspace``
 (``src/prted/pmix/pmix_server_register_fns.c``) makes roughly forty

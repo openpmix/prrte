@@ -165,7 +165,7 @@ static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
 {
     char *p, *start, saved;
     prte_session_t *s, **tlist = NULL, *primary = NULL;
-    size_t ntl = 0;
+    size_t ntl = 0, ntk;
     bool done = false;
 
     start = target_str;
@@ -228,10 +228,16 @@ static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
         start = p + 1;
     }
 
+    /* Take the job's counted reference on each target only now that the set is
+     * final: every failure exit above frees a list nothing has retained yet,
+     * so there is nothing for those paths to give back. */
+    for (ntk = 0; ntk < ntl; ntk++) {
+        PMIX_RETAIN(tlist[ntk]);
+    }
     jdata->target_sessions = tlist;
     jdata->num_target_sessions = ntl;
     /* primary session: first targeted, or default if only invalid was named */
-    jdata->session = (NULL != primary) ? primary : prte_default_session;
+    prte_set_job_session(jdata, (NULL != primary) ? primary : prte_default_session);
     return PRTE_SUCCESS;
 }
 
@@ -824,7 +830,7 @@ moveon:
          * the parent's child list and the global job pool), so the error
          * paths below must NOT free it out from under them */
         own_jdata = false;
-        jdata->session = session;
+        prte_set_job_session(jdata, session);
         pmix_pointer_array_add(jdata->session->jobs, jdata);
 
         /* get the parent's job object */

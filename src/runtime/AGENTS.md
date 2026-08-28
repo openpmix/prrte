@@ -118,11 +118,11 @@ This is the part that bites. The rules, and the reason for each:
 | `job->procs[]`, `job->apps[]` | yes | the job owns them |
 | `node->procs[]`, `node->daemon` | yes | the node owns them |
 | `proc->node` | **no** — borrowed | retaining it would close a cycle with `node->procs`/`node->daemon`; neither side could ever reach zero, so nothing would be freed. `prte_node_destruct` clears the backpointer on every proc it knows about, so a proc that outlives its node points at NULL rather than at freed memory. |
-| `node->session` | **no** — borrowed | same reason, against `session->nodes`. `prte_ras_base_release_allocation` clears it when a reservation is torn down. |
+| `node->session` | **no** — borrowed | same reason, against `session->nodes`. `prte_ras_base_teardown_reservation` clears it when a reservation is torn down, and `session_des` clears it on every node it still holds. |
 | `session->nodes[]` | yes | a reservation withholds its nodes |
 | `session->jobs[]` | **no** — borrowed | a job's lifetime is governed by the global job pool, not by the session it ran in |
 | `session->owner_job` | yes | |
-| `job->target_sessions[]` | **no** — borrowed | owned via `prte_set_session_object`; the destructor frees only the array |
+| `job->session`, `job->target_sessions[]` | yes | a reservation is torn down while the jobs that ran in it may still be alive, and teardown deregisters the session — putting it out of reach of every later sweep. So the registry cannot be the last owner, and the job side has to keep the object valid for as long as it can read it. Set with `prte_set_job_session()`; `prte_job_destruct` releases the primary and every target. No cycle: `session->jobs[]` borrows. |
 | `node->topology` | yes | a topology outlives any one node pointing at it |
 | `map->nodes[]` | yes | `prte_job_map_destruct` releases every node it holds — so anything that *puts* a node in a map must retain it |
 
@@ -302,8 +302,15 @@ exits first — but it is the only trace such a hang leaves.
 ## Session teardown at finalize
 
 `prte_finalize` releases the sessions, and the node pool goes with them.
-Three constraints fix the order, and all three have to hold:
+Four constraints fix the order, and all four have to hold:
 
+0. **Jobs before the sessions.** `job->session` and `job->target_sessions[]`
+   are counted references, so a session is not reclaimed until the last job
+   naming it has gone. Sweeping `prte_job_data` first is what makes the
+   session sweep the last word on every session — without it, constraint 2
+   below silently stops being true: `prte_default_session` would survive its
+   own release (the daemon job still names it) and the node pool would be
+   carried away later, by the job sweep, after `ras` had already closed.
 1. **Sessions before the pool.** A reservation holds a *counted* reference
    on each of its nodes, so it has to give those back while the nodes are
    still alive.

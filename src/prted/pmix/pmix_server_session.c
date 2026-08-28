@@ -687,6 +687,12 @@ static void reclaim_session(prte_session_t *session)
      * pointer to it */
     arm_session_timer(session, 0);
 
+    /* Hold the session across the teardown: teardown gives up the registry's
+     * reference, and for a reservation no job is left in - which is exactly
+     * when we are called - that can be the last one.  The completion report
+     * below still has to read the session's id and results. */
+    PMIX_RETAIN(session);
+
     /* Do the PRRTE-side teardown first, while we are on the thread that owns
      * these objects. Only then report completion, so the statement we make to
      * the scheduler - "all resources have been recovered" - is already true
@@ -694,6 +700,8 @@ static void reclaim_session(prte_session_t *session)
     prte_ras_base_teardown_reservation(session, returns_to_scheduler(session));
 
     prte_pmix_server_session_complete(session);
+
+    PMIX_RELEASE(session);
 }
 
 /* Terminate every job in the session. The session itself is reclaimed once
@@ -1224,9 +1232,10 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     return PMIX_OPERATION_IN_PROGRESS;
 
 error:
-    /* unwind the half-built session, returning any nodes it took */
+    /* Unwind the half-built session, returning any nodes it took.  Teardown
+     * deregisters it and drops the registry's reference, which - the session
+     * having never launched anything - is the only one it has. */
     prte_ras_base_teardown_reservation(session, false);
-    PMIX_RELEASE(session);
     return rc;
 }
 
@@ -1342,10 +1351,11 @@ static pmix_status_t apply_to_all(prte_pmix_server_req_t *req,
     if (NULL == prte_sessions) {
         return PMIX_ERR_NOT_FOUND;
     }
-    /* Terminating a session can remove it from the array from under this
-     * walk.  That is safe as written: removal only NULLs the slot (the object
-     * itself survives for as long as we hold it), and the array never
-     * shrinks, so re-reading ->size each time is correct. */
+    /* Terminating a session removes it from the array from under this walk,
+     * and may free the object with it.  That is safe as written because the
+     * walk re-reads the slot from the array on every iteration and never
+     * touches `session` again after handing it to apply_to_session; the array
+     * itself never shrinks, so re-reading ->size each time is correct. */
     for (i = 0; i < prte_sessions->size; i++) {
         session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
         if (NULL == session || session == prte_default_session) {
