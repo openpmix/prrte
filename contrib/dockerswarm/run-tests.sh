@@ -2026,6 +2026,63 @@ test_runtime() {
             && ok "...and the successor could publish its own value under that name" \
             || bad "the consumed key was not free to republish: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
 
+        banner "runtime/data_server: a later job may take back its user's own name"
+        # Removal is owned by the publishing USER, not the publishing
+        # process.  It used to be the process - namespace AND rank - which
+        # sounds strict and is: a process takes no data with it when it
+        # exits, so an item published by a job that has ended was removable
+        # by nobody at all.  Its own user's next job could read it, could
+        # not publish over it (that is a duplicate) and could not remove it,
+        # so the name was wedged for the life of the DVM.  A predecessor
+        # that DIED before it could unpublish is the case this exists for,
+        # and it is exactly the case a checkpoint/restart handover hits.
+        #
+        # The predecessor here published PERSIST_SESSION, so nothing else
+        # was ever going to reclaim it.
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.own kept session 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.own' \
+            && ok "a SESSION-persistence key was published by a job that then ended" \
+            || bad "the publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "--host node3:1 -n 1 $DS unpubonly prte.test.own 15" 2>&1)
+        echo "$out" | grep -q '^UNPUBLISHED prte.test.own PMIX_SUCCESS' \
+            && ok "a later job of the same user unpublished it" \
+            || bad "the unpublish was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q '^FOUND prte.test.own' \
+            && bad "the key survived an unpublish by its owner: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "...and the key is gone"
+        out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.own mine 0" 2>&1)
+        echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
+            && ok "...leaving the name free to publish under again" \
+            || bad "the freed name could not be reused: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+
+        # ...and the same ownership rule scopes prte.pub.replace, so the
+        # successor need not unpublish first.  Its predecessor's item is
+        # taken back by the publish itself.
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.hand.rp gen1 session 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.hand.rp' \
+            && ok "a second SESSION key was published by a job that then ended" \
+            || bad "the publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        # The replacing job stays alive for the read that follows it: what
+        # it publishes carries the DEFAULT persistence, which goes when its
+        # own job ends, and a lookup after that would be asking whether the
+        # replace worked long after the answer had been reclaimed.
+        PRUN_BG /tmp/ds-rp.out "--host node3:1 -n 1 $DS dup prte.test.hand.rp gen2 40 session replace"
+        sleep 10
+        RUN 'grep -q "STATUS PMIX_SUCCESS" /tmp/ds-rp.out' \
+            && ok "a later job replaced its predecessor's key in one publish" \
+            || bad "a same-user replace was refused: $(RUN 'cat /tmp/ds-rp.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.hand.rp 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.hand.rp gen2' \
+            && ok "...and the successor's value is what a lookup returns" \
+            || bad "the replace did not take effect: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q '^FOUND prte.test.hand.rp gen1' \
+            && bad "the predecessor's value survived the replace: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "...and the predecessor's value is not still there beside it"
+        # What must still be refused is a DIFFERENT USER, which this harness
+        # cannot produce -- every container runs as one uid.  That half is
+        # unit-tested (test_data_server_ownership in test/unit/runtime), and
+        # what passes here says only that the same-user cases work.
+
         banner "runtime/data_server: one node finishing does not purge the job's data"
         # A daemon reaches job_teardown() when ITS OWN local procs of a job
         # have terminated -- the gate is num_terminated == num_local_procs,

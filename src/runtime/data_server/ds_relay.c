@@ -254,8 +254,24 @@ static pmix_status_t load_directives(prte_ds_relay_t *cd,
                                      pmix_proc_t *requestor)
 {
     size_t n;
+    uint32_t uid = UINT32_MAX, gid = UINT32_MAX;
 
-    cd->ninfo = ninfo + 1;
+    /* The requester's own uid and gid are in the array we were handed -
+     * its PMIx server appended them.  Carry them across under our own keys
+     * as well, because PMIx will append the RELAY's identity to the call we
+     * are about to make and the far end has no way to tell the two apart
+     * otherwise.  Ownership over there is decided by the publishing user,
+     * so getting this wrong stores an item under the relaying daemon and
+     * answers every later removal about it. */
+    for (n = 0; n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
+            uid = info[n].value.data.uint32;
+        } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
+            gid = info[n].value.data.uint32;
+        }
+    }
+
+    cd->ninfo = ninfo + 3;
     PMIX_INFO_CREATE(cd->info, cd->ninfo);
     if (NULL == cd->info) {
         cd->ninfo = 0;
@@ -265,6 +281,8 @@ static pmix_status_t load_directives(prte_ds_relay_t *cd,
         PMIX_INFO_XFER(&cd->info[n], &info[n]);
     }
     PMIX_INFO_LOAD(&cd->info[ninfo], PMIX_REQUESTOR, requestor, PMIX_PROC);
+    PMIX_INFO_LOAD(&cd->info[ninfo + 1], PRTE_PUBLISH_REQ_UID, &uid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&cd->info[ninfo + 2], PRTE_PUBLISH_REQ_GID, &gid, PMIX_UINT32);
     return PMIX_SUCCESS;
 }
 

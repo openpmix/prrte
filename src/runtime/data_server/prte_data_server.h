@@ -57,6 +57,22 @@ BEGIN_C_DECLS
  */
 #define PRTE_PUBLISH_REPLACE     "prte.pub.replace"     // (bool) replace the caller's own prior publication of these keys
 
+/* The effective uid and gid of the process a RELAYED request is being made
+ * on behalf of, carried beside PMIX_REQUESTOR and honored under the same
+ * rule: only a tool may claim them.
+ *
+ * A cross-DVM request arrives under the relaying daemon's own tool
+ * identity, and PMIx appends that identity's PMIX_USERID and PMIX_GRPID to
+ * the array it hands us.  Ownership is decided by the publishing USER, so
+ * without these the far end would store an item under the relay's uid and
+ * test every later removal against it.  They are PRRTE-private keys rather
+ * than a second PMIX_USERID precisely because PMIx adds its own: two
+ * entries under one key would leave the reader guessing which came from
+ * where, and the answer would depend on array order.
+ */
+#define PRTE_PUBLISH_REQ_UID     "prte.pub.ruid"        // (uint32) effective uid of the process a relay is acting for
+#define PRTE_PUBLISH_REQ_GID     "prte.pub.rgid"        // (uint32) effective gid of the process a relay is acting for
+
 /* provide hooks to startup and finalize the data server */
 PRTE_EXPORT int prte_data_server_init(void);
 PRTE_EXPORT void prte_data_server_finalize(void);

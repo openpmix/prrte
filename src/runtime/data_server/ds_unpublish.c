@@ -133,18 +133,21 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             return rc;
         }
         /* Scan the directives for things we care about, which for a
-         * removal is only who is asking.  PMIX_RANGE and the caller's
-         * uid/gid say who may READ an item; an owner may take back what it
-         * published on any range, so neither is consulted here. */
+         * removal is who is asking - the identity the ownership test below
+         * is answered about.  PMIX_RANGE is not among them: an owner may
+         * take back what it published on any range, and the range named on
+         * the unpublish does not narrow that. */
         for (n = 0; n < ninfo; n++) {
-            if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
-                /* a relay unpublishing on behalf of a process in its own
-                 * DVM.  This must be honored before the ownership test
-                 * below, which is what says only the publisher may remove
-                 * an item. */
-                prte_ds_check_requestor(&rq.requestor, &info[n]);
+            if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
+                rq.uid = info[n].value.data.uint32;
+            } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
+                rq.gid = info[n].value.data.uint32;
             }
         }
+        /* a relay unpublishing on behalf of a process in its own DVM.
+         * After the scan, and before the ownership test below, which is
+         * what says only the owner may remove an item. */
+        prte_ds_check_requestor(&rq.requestor, &rq.uid, &rq.gid, info, ninfo);
         /* ignore anything else for now */
         PMIX_INFO_FREE(info, ninfo);
     }
@@ -157,13 +160,20 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             if (NULL == data) {
                 continue;
             }
-            /* only the publishing process may remove its own data - a
-             * stronger test than comparing uids, and the one that matters:
-             * a process identity is stamped by its own PMIx server (or, for
-             * a relay, claimed in PMIX_REQUESTOR and honored only from a
-             * tool), not asserted by the caller */
-            if (!PMIX_CHECK_NSPACE(rq.requestor.nspace, data->owner.nspace) ||
-                rq.requestor.rank != data->owner.rank) {
+            /* Published data is owned by the USER that published it, and
+             * only its owner may remove it.
+             *
+             * The test used to be the publishing PROCESS - namespace and
+             * rank both.  That is stricter than it looks: a process takes
+             * no data with it when it exits, so an item published by a job
+             * that has ended, or that died before it could unpublish, was
+             * removable by nobody at all.  Its own user's next job could
+             * read it, could not replace it (that is a duplicate) and could
+             * not remove it, so the name was wedged for the life of the
+             * DVM.  Keying on the uid is what lets a user clean up after
+             * itself, and it moves no boundary that matters: nothing here
+             * crosses between users. */
+            if (!prte_data_server_owns(rq.uid, rq.gid, data)) {
                 continue;
             }
             /* Ownership is the whole rule for removal, and the test above

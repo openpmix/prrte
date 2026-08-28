@@ -125,16 +125,17 @@ void prte_ds_purge(pmix_proc_t *sender,
             goto done;
         }
         for (n = 0; n < ninfo; n++) {
-            if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
-                /* a relay purging on behalf of a process in its own DVM.
-                 * Without this the purge would take everything the relay
-                 * itself owns - which is everything it ever published. */
-                prte_ds_check_requestor(&requestor, &info[n]);
-            } else if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
+            if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
                 /* a lifetime ended, and this is which one */
                 horizon = info[n].value.data.persist;
             }
         }
+        /* A relay purging on behalf of a process in its own DVM.  Without
+         * this the purge would take everything the relay itself owns -
+         * which is everything it ever published.  This one asks about the
+         * process alone: a purge names whose data goes, and no uid enters
+         * into it. */
+        prte_ds_check_requestor(&requestor, NULL, NULL, info, ninfo);
         PMIX_INFO_FREE(info, ninfo);
     }
 

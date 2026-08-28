@@ -45,12 +45,23 @@
  * instance rather than to the HNP (see pmix_server_pub.c), so it is only
  * reachable by a lookup carrying the same range.
  *
- *   dataserver dup <key> <value> [seconds] [range]
+ *   dataserver dup <key> <value> [seconds] [range] [replace]
  *       Publish and print "STATUS <status>" whatever happens, without
  *       failing the process.  For the duplicate-key case, where the
  *       expected outcome IS an error: a key already published on the same
- *       range by ANOTHER process must come back
- *       PMIX_ERR_DUPLICATE_KEY.
+ *       range by ANOTHER USER must come back PMIX_ERR_DUPLICATE_KEY.
+ *
+ *       A trailing "replace" adds prte.pub.replace, which takes back a
+ *       prior publication of the key instead of failing.  It is scoped to
+ *       the publishing USER, so this is how a successor job publishes over
+ *       a name its predecessor left behind.
+ *
+ *   dataserver unpubonly <key> [seconds] [range]
+ *       Unpublish a key this process did not publish, then look it up.
+ *       Prints "UNPUBLISHED <key> <status>".  Removal is owned by the
+ *       publishing USER, so a later job of the same user may take back a
+ *       name whose publisher has exited - which nothing else can do, and
+ *       without which such a name is wedged for the life of the DVM.
  *
  *   dataserver republish <key> [seconds] [range]
  *       One process, three publishes of the same key on the same range.
@@ -97,6 +108,7 @@
  * the reply goes back out through another.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -341,6 +353,47 @@ static int do_unpublish(const char *key, int seconds, const char *pubrange,
     return 0;
 }
 
+/* Unpublish a key this process did NOT publish, then look it up.
+ *
+ * Published data is owned by the USER that published it, so a later job of
+ * the same user - a different namespace entirely - may take back a name its
+ * predecessor left behind.  Nothing else can: the publishing process has
+ * exited, and until this was so the name was wedged for the life of the
+ * DVM, readable and unremovable.
+ *
+ * Prints "UNPUBLISHED <key> <status>" and then whatever the lookup finds,
+ * and exits 0 either way, since a refusal is a result to report rather
+ * than a reason to tear the job down. */
+static int do_unpubonly(const char *key, int seconds, const char *rangestr)
+{
+    pmix_status_t rc;
+    pmix_info_t info[1];
+    pmix_data_range_t range = parse_range(rangestr);
+    char *keys[2] = {NULL, NULL};
+
+    rc = PMIx_Init(&myproc, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Init: %s\n", PMIx_Error_string(rc));
+        return 1;
+    }
+    keys[0] = (char *) key;
+    if (NULL == rangestr) {
+        rc = PMIx_Unpublish(keys, NULL, 0);
+    } else {
+        PMIX_INFO_LOAD(&info[0], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+        rc = PMIx_Unpublish(keys, info, 1);
+        PMIX_INFO_DESTRUCT(&info[0]);
+    }
+    printf("UNPUBLISHED %s %s\n", key, PMIx_Error_string(rc));
+    fflush(stdout);
+
+    keys[0] = (char *) key;
+    (void) lookup_keys(keys, 1, seconds, false, rangestr);
+
+    PMIx_Finalize(NULL, 0);
+    return 0;
+}
+
 static pmix_persistence_t parse_persist(const char *s)
 {
     if (NULL == s) {
@@ -365,11 +418,12 @@ static pmix_persistence_t parse_persist(const char *s)
  * the duplicate-key case EXPECTS an error, and exiting non-zero would have
  * PRRTE tear the job down and bury the STATUS line under an abort banner. */
 static int do_dup(const char *key, const char *value, int seconds,
-                  const char *rangestr)
+                  const char *rangestr, bool replace)
 {
     pmix_status_t rc;
-    pmix_info_t info[2];
+    pmix_info_t info[3];
     pmix_data_range_t range = parse_range(rangestr);
+    size_t ninfo = 2;
 
     rc = PMIx_Init(&myproc, NULL, 0);
     if (PMIX_SUCCESS != rc) {
@@ -378,9 +432,20 @@ static int do_dup(const char *key, const char *value, int seconds,
     }
     PMIX_INFO_LOAD(&info[0], key, value, PMIX_STRING);
     PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
-    rc = PMIx_Publish(info, 2);
+    if (replace) {
+        /* take back a prior publication of this key rather than being
+         * refused as a duplicate.  Owner-scoped, where the owner is the
+         * publishing USER - so this is the cross-JOB case: the predecessor
+         * has exited and its successor is publishing over the name. */
+        PMIX_INFO_LOAD(&info[2], "prte.pub.replace", NULL, PMIX_BOOL);
+        ninfo = 3;
+    }
+    rc = PMIx_Publish(info, ninfo);
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_INFO_DESTRUCT(&info[1]);
+    if (replace) {
+        PMIX_INFO_DESTRUCT(&info[2]);
+    }
     printf("STATUS %s\n", PMIx_Error_string(rc));
     fflush(stdout);
     sleep(seconds);
@@ -495,11 +560,12 @@ int main(int argc, char **argv)
                 "       %s lookupwait <key> [secs] [range]\n"
                 "       %s lookup2 <key1> <key2> [secs]\n"
                 "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n"
-                "       %s dup <key> <value> [secs] [range]\n"
+                "       %s dup <key> <value> [secs] [range] [replace]\n"
+                "       %s unpubonly <key> [secs] [range]\n"
                 "       %s republish <key> [secs] [range]\n"
                 "       %s persist <key> <value> <persistence> [secs] [range]\n",
                 argv[0], argv[0], argv[0], argv[0], argv[0], argv[0], argv[0],
-                argv[0]);
+                argv[0], argv[0]);
         return 2;
     }
 
@@ -547,7 +613,16 @@ int main(int argc, char **argv)
             return 2;
         }
         return do_dup(argv[2], argv[3], (5 > argc) ? 0 : atoi(argv[4]),
-                      (6 > argc) ? NULL : argv[5]);
+                      (6 > argc) ? NULL : argv[5],
+                      (7 > argc) ? false : (0 == strcmp(argv[6], "replace")));
+    }
+    if (0 == strcmp(argv[1], "unpubonly")) {
+        if (3 > argc) {
+            fprintf(stderr, "unpubonly needs a key\n");
+            return 2;
+        }
+        return do_unpubonly(argv[2], (4 > argc) ? 20 : atoi(argv[3]),
+                            (5 > argc) ? NULL : argv[4]);
     }
     if (0 == strcmp(argv[1], "republish")) {
         if (3 > argc) {

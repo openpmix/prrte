@@ -258,11 +258,29 @@ report:
 
 }
 
-void prte_ds_check_requestor(pmix_proc_t *owner, const pmix_info_t *info)
+void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
+                             const pmix_info_t info[], size_t ninfo)
 {
     prte_job_t *jdata;
+    const pmix_info_t *proc = NULL, *ruid = NULL, *rgid = NULL;
+    size_t n;
 
-    if (PMIX_PROC != info->value.type || NULL == info->value.data.proc) {
+    /* The whole claim is read in one pass, and applied after the caller's
+     * own scan, because the two overlap: PMIx appends the RELAY's
+     * PMIX_USERID and PMIX_GRPID to every request it hands us, so a claimed
+     * uid honored mid-scan would be overwritten by the relay's own a few
+     * entries later.  Which of the two won would be a question about array
+     * order, which is no way to decide an identity. */
+    for (n = 0; n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
+            proc = &info[n];
+        } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_UID)) {
+            ruid = &info[n];
+        } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_GID)) {
+            rgid = &info[n];
+        }
+    }
+    if (NULL == proc && NULL == ruid && NULL == rgid) {
         return;
     }
 
@@ -271,24 +289,59 @@ void prte_ds_check_requestor(pmix_proc_t *owner, const pmix_info_t *info)
      * reissues the operation its own client asked for.  Anything else
      * claiming it is a process trying to publish - or unpublish - under
      * somebody else's name, so the claim is simply dropped and the
-     * operation proceeds under the caller's own identity. */
+     * operation proceeds under the caller's own identity.
+     *
+     * That covers the uid and gid as well, and has to: removal is decided
+     * by the publishing user, so a process able to assert a uid could
+     * remove anything that user published. */
     jdata = prte_get_job_data_object(owner->nspace);
     if (NULL == jdata || !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: %s is not a tool - ignoring its "
-                            "claim to act for %s",
+                            "claim to act for another process",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_NAME_PRINT(owner),
-                            PMIX_NAME_PRINT(info->value.data.proc));
+                            PRTE_NAME_PRINT(owner));
         return;
     }
 
-    pmix_output_verbose(1, prte_data_store.output,
-                        "%s data server: %s is acting for %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(owner),
-                        PMIX_NAME_PRINT(info->value.data.proc));
-    PMIX_XFER_PROCID(owner, info->value.data.proc);
+    if (NULL != proc && PMIX_PROC == proc->value.type && NULL != proc->value.data.proc) {
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: %s is acting for %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(owner),
+                            PMIX_NAME_PRINT(proc->value.data.proc));
+        PMIX_XFER_PROCID(owner, proc->value.data.proc);
+    }
+    /* A purge asks about the process alone and passes no place to put
+     * these, so a claim it does not need is simply not read. */
+    if (NULL != uid && NULL != ruid && PMIX_UINT32 == ruid->value.type) {
+        *uid = ruid->value.data.uint32;
+    }
+    if (NULL != gid && NULL != rgid && PMIX_UINT32 == rgid->value.type) {
+        *gid = rgid->value.data.uint32;
+    }
+}
+
+bool prte_data_server_owns(uint32_t uid, uint32_t gid, prte_data_object_t *data)
+{
+    /* An identity we do not have is not an identity that matches.  PMIx
+     * hands us the uid of every publish, lookup and unpublish, so this is
+     * a case that should not arise - and if it does, two unknowns comparing
+     * equal would let anybody remove anybody's data. */
+    if (UINT32_MAX == uid || UINT32_MAX == data->uid) {
+        return false;
+    }
+    if (uid != data->uid) {
+        return false;
+    }
+    /* The gid is the weaker half: it took an openpmix change to be handed
+     * over at all, and where it is missing both sides read UINT32_MAX.
+     * Degrade to uid alone there rather than locking the owner out - the
+     * same degradation the read rule makes. */
+    if (UINT32_MAX == gid || UINT32_MAX == data->gid) {
+        return true;
+    }
+    return (gid == data->gid);
 }
 
 /* One range rule, applied in both directions.
