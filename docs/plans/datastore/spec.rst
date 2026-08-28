@@ -634,7 +634,14 @@ Where the implementation stands
 
 Kept current as the work lands, so that a reader can tell what this
 document still describes as *intended* from what it now describes as
-*true*.  The build order is in :doc:`impl-plan`.
+*true*.  The build order is in :doc:`impl-plan`, and what a *user* needs
+to know is in :doc:`/how-things-work/publish-lookup`.
+
+Everything specified here is implemented, with one deliberate exception
+recorded in ``docs/todo.rst``: no message tells a daemon that an
+application has terminated, so a ``PMIX_RANGE_LOCAL`` item published with
+an explicit ``APP`` persistence is held until its namespace ends —
+later than asked for, never shorter, and not the default.
 
 .. list-table::
    :header-rows: 1

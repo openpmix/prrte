@@ -107,9 +107,12 @@ Phase 6 — documentation
 -----------------------
 
 The two MCA parameters and the retention rules belong in the user-facing
-RST under ``docs/``, not only in this plan.  The deferred app
-notification goes in ``docs/todo.rst`` in prose, as that file is the
-single reference for outstanding work.
+RST under ``docs/``, not only in this plan:
+:doc:`/how-things-work/publish-lookup` is the page a user reads about the
+datastore, and most of what it said about retention and removal is
+changed by this work.  The deferred app notification goes in
+``docs/todo.rst`` in prose, as that file is the single reference for
+outstanding work.
 
 In parallel: PMIx
 -----------------
