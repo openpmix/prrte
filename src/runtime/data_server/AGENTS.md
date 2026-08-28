@@ -333,6 +333,25 @@ nothing was ever reclaimed from it short of the DVM shutting down, and
 function itself had always routed correctly for the built-in case; its own
 callers were what gated it out.
 
+**A daemon does not send that one.** `state_prted.c`'s `job_teardown()`
+runs when the procs of a job that *this daemon hosted* have terminated —
+`num_terminated == num_local_procs` — which says nothing about the rest of
+the job. It calls `prte_state_base_notify_local_data_server()`, which
+purges this daemon's own store alone. Sending the DVM-wide form from there
+meant the first node to finish its share purged the entire namespace's
+`APP` and `PROC` data out of the **master's** store, so a process still
+running on another node could lose what it had published before its own
+application, or even its own process, had ended.
+
+The master's own send is therefore unconditional. It used to be skipped
+when `prte_pmix_server_globals.server.nspace` was unset — "nobody local to
+us has used the data server" — which is a true statement about *our* store
+and a false one about the global store, whose publishers are anywhere in
+the DVM. On the master that guard is satisfied exactly when the publishing
+processes ran on other nodes, which is the arrangement that most needs the
+purge; it went unnoticed only because the daemons were each sending the
+DVM-wide purge as well.
+
 `PMIX_PERSIST_PROC` is therefore reclaimed at **job** granularity rather
 than when its individual publisher exits. That is later than the Standard's
 "until the publishing process terminates", and it is deliberate: a message

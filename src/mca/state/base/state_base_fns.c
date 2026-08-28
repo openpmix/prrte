@@ -457,35 +457,70 @@ static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target
 
 void prte_state_base_notify_data_server(pmix_proc_t *target)
 {
-    pmix_rank_t global;
+    /* Is the global store our own object?  Only on the master, and only
+     * when no external data server was configured - with one, our store
+     * still holds our local-range data while the global one lives in
+     * another DVM entirely. */
+    bool global_is_ours = PRTE_PROC_IS_MASTER && (NULL == prte_data_server_uri);
 
-    /* if nobody local to us published anything, then we can ignore this */
-    if (PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
-        return;
-    }
+    /* The global store, which always answers at the master's rank: it is
+     * the master's own store, or the master is the one holding the PMIx
+     * connection to an external data server, which is not addressable over
+     * the RML at all.
+     *
+     * Deliberately unconditional.  This used to be skipped whenever OUR
+     * OWN clients had never used the data server - a test that is right
+     * about our local store and wrong about this one, since the global
+     * store serves the whole DVM and its data is published by processes
+     * anywhere in it.  On the master, which is usually where the global
+     * store lives and where this call now comes from, that guard is true
+     * exactly when the publishers were on other nodes - so nothing was
+     * reclaimed in the one arrangement that needs it. */
+    send_purge(PRTE_PROC_MY_HNP->rank, PRTE_RML_TAG_DATA_SERVER, target);
 
-    /* The global store.  An external data server is not addressable over
-     * the RML - only the master holds the PMIx connection to it - so the
-     * request goes to the master, which relays it. */
-    global = (NULL == prte_data_server_uri) ? prte_pmix_server_globals.server.rank
-                                            : PRTE_PROC_MY_HNP->rank;
-    send_purge(global, PRTE_RML_TAG_DATA_SERVER, target);
-
-    /* ...and OUR OWN store, which is a different one on every daemon but
-     * the master.  A PMIX_RANGE_LOCAL publish never leaves the daemon that
-     * relayed it - pmix_server_pub.c routes it to PRTE_PROC_MY_NAME - and
-     * every daemon runs prte_data_server_init(), so what a local-range
-     * publish leaves behind is reclaimable only from here.  Purging just
-     * the global store reclaimed everything EXCEPT local-range data, which
-     * a single-node run cannot show: there the two stores are one object.
+    /* ...and OUR OWN store, when that is a different object.  A
+     * PMIX_RANGE_LOCAL publish never leaves the daemon that relayed it -
+     * pmix_server_pub.c routes it to PRTE_PROC_MY_NAME - and every daemon
+     * runs prte_data_server_init(), so what a local-range publish leaves
+     * behind is reclaimable only from here.  Purging just the global store
+     * reclaimed everything EXCEPT local-range data, which a single-node run
+     * cannot show: there the two stores are one object.
+     *
+     * Here the "nobody local to us published" test IS right: a store that
+     * only its own daemon's clients can reach is empty until one of them
+     * uses it.
      *
      * The tag is what keeps this one at home: a daemon pointed at an
      * external data server relays what arrives on the ordinary tag, so a
      * purge of our own store addressed to ourselves would be forwarded to
      * a DVM that does not hold the data and cannot act on it. */
-    if (global != PRTE_PROC_MY_NAME->rank) {
+    if (!global_is_ours &&
+        !PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
         send_purge(PRTE_PROC_MY_NAME->rank, PRTE_RML_TAG_DATA_SERVER_LOCAL, target);
     }
+}
+
+void prte_state_base_notify_local_data_server(pmix_proc_t *target)
+{
+    /* same guard as above: with no local client having published or looked
+     * anything up, this daemon's store cannot be holding anything */
+    if (PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
+        return;
+    }
+
+    /* OUR store, and nobody else's.  A daemon reaches this when the procs
+     * of a job that IT hosted have all terminated - which is not a lifetime
+     * ending: the job may still be running on every other node.  Sending
+     * the DVM-wide purge from here took the whole namespace's data out of
+     * the MASTER's store the moment the first node finished its share, so a
+     * process still running elsewhere could lose what it published before
+     * its own application, or even its own process, had ended.
+     *
+     * The one store a daemon may act on at that moment is its own: it holds
+     * only PMIX_RANGE_LOCAL items published by local clients, every one of
+     * which has now gone.  The namespace horizon belongs to the master,
+     * which reaches it through state_dvm.c when the job ends everywhere. */
+    send_purge(PRTE_PROC_MY_NAME->rank, PRTE_RML_TAG_DATA_SERVER_LOCAL, target);
 }
 
 /* A proc reported a state and we hold no job object to account it against.

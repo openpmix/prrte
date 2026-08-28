@@ -2026,6 +2026,28 @@ test_runtime() {
             && ok "...and the successor could publish its own value under that name" \
             || bad "the consumed key was not free to republish: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
 
+        banner "runtime/data_server: one node finishing does not purge the job's data"
+        # A daemon reaches job_teardown() when ITS OWN local procs of a job
+        # have terminated -- the gate is num_terminated == num_local_procs,
+        # not the whole job.  It used to send the DVM-wide purge from there,
+        # so on a job spanning nodes the first node to finish its share took
+        # the entire namespace's PERSIST_APP and PERSIST_PROC data out of the
+        # MASTER's store while the rest of the job was still running.
+        #
+        # One MPMD job, two nodes: node3's app exits at once, node2's stays
+        # alive holding a published key.  A third job then has to be able to
+        # read it.  node3's app does a lookup of its own before exiting
+        # because the purge is skipped entirely on a daemon whose clients
+        # never used the data server at all -- without it the case would pass
+        # for the wrong reason.
+        PRUN_BG /tmp/ds-span.out \
+            "--host node2:1 -n 1 $DS publish prte.test.span alive session 45 : --host node3:1 -n 1 $DS lookup prte.test.span 0"
+        sleep 15
+        out=$(PRUN "--host node1:1 -n 1 $DS lookup prte.test.span 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.span alive' \
+            && ok "a key published on node2 survived node3 finishing its share" \
+            || bad "one node's completion purged the running job's data: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
         banner "runtime/data_server: LOCAL-range data is reclaimed from the daemon holding it"
         # THE case that only exists with more than one node.  A LOCAL-range
         # publish never reaches the HNP: pmix_server_pub.c routes it to
