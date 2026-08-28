@@ -1779,6 +1779,85 @@ static int test_spawn_alloc(void)
     return failures;
 }
 
+
+/* A reservation torn down while a job is still running in it.
+ *
+ * Teardown deregisters the session, which puts it beyond every later sweep
+ * over prte_sessions - so teardown is the only place left that can give the
+ * registry's reference back, and it has to.  That is safe only because the
+ * job-side pointers into a session are counted: the job that is still
+ * running in the reservation holds its own reference, and the object stays
+ * valid for as long as anything can read it.  Both halves are checked here,
+ * because either one alone is a defect - without the release the object
+ * leaks once per reservation ever torn down, and without the job's reference
+ * the release hands a running job a dangling pointer. */
+static int test_teardown_reservation(void)
+{
+    int failures = 0;
+    prte_session_t *s;
+    prte_job_t *jdata;
+    prte_node_t *nd;
+    int idx;
+
+    s = PMIX_NEW(prte_session_t);
+    s->session_id = 4242;
+    s->alloc_refid = strdup("prte-unit-test.4242");
+    s->flags |= PRTE_SESSION_FLAG_RESERVED;
+    CHECK("teardown/register", PRTE_SUCCESS == prte_set_session_object(s));
+    idx = s->index;
+    CHECK("teardown/registry holds the only reference",
+          1 == s->super.obj_reference_count);
+
+    /* a reservation withholds nodes: give it one, counted, with the
+     * backpointer that is what actually withholds it */
+    nd = PMIX_NEW(prte_node_t);
+    nd->name = strdup("prte-unit-test-reserved");
+    nd->state = PRTE_NODE_STATE_UP;
+    nd->slots = 1;
+    nd->index = pmix_pointer_array_add(prte_node_pool, nd);
+    nd->session = s;
+    PMIX_RETAIN(nd);
+    pmix_pointer_array_add(s->nodes, nd);
+
+    /* a job running in the reservation */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "prte-unit-test-resv-job");
+    prte_set_job_session(jdata, s);
+    CHECK("teardown/job takes a reference", 2 == s->super.obj_reference_count);
+    CHECK("teardown/job names the session", s == jdata->session);
+    pmix_pointer_array_add(s->jobs, jdata);
+
+    /* our own handle, so the object can still be inspected afterwards */
+    PMIX_RETAIN(s);
+
+    prte_ras_base_teardown_reservation(s, false);
+
+    CHECK("teardown/deregistered", -1 == s->index);
+    CHECK("teardown/not findable", NULL == prte_get_session_object(4242));
+    CHECK("teardown/slot cleared",
+          NULL == pmix_pointer_array_get_item(prte_sessions, idx));
+    CHECK("teardown/node back in the general pool", NULL == nd->session);
+    CHECK("teardown/no longer reserved",
+          0 == (s->flags & PRTE_SESSION_FLAG_RESERVED));
+    /* the registry's reference is gone; the job's and ours remain */
+    CHECK("teardown/registry reference given back",
+          2 == s->super.obj_reference_count);
+    CHECK("teardown/job can still read its session",
+          4242 == jdata->session->session_id);
+
+    /* the running job is now the only thing keeping the object alive */
+    PMIX_RELEASE(jdata);
+    CHECK("teardown/job gives its reference back",
+          1 == s->super.obj_reference_count);
+
+    /* and dropping ours is what frees it - nothing else is left to */
+    PMIX_RELEASE(s);
+
+    pmix_pointer_array_set_item(prte_node_pool, nd->index, NULL);
+    PMIX_RELEASE(nd);
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1830,6 +1909,7 @@ int main(void)
     failures += test_activate_hosts();
     failures += test_activate_nodes();
     failures += test_spawn_alloc();
+    failures += test_teardown_reservation();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */

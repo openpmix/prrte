@@ -498,7 +498,7 @@ elastic-DVM or PMIx_Allocation code:
 | `prte_ras_base_complete_request()` | The heavy reservation router. For `PMIX_ALLOC_NEW`/`EXTEND` it resolves the destination `prte_session_t` (honoring `PMIX_ALLOC_TARGET`/`SHARE`/`INHERITANCE`/`ID`/`REQ_ID`), parses `PMIX_ALLOC_NODE_LIST`, inserts the nodes, and attaches them to the reservation (`add_nodes_to_session`). For `PMIX_ALLOC_RELEASE` it tears down a named reservation or xcasts a `PRTE_DAEMON_SHRINK_CMD`. Marks `PRTE_JOB_EXTEND_DVM` and re-launches daemons for grows. |
 | `prte_ras_base_release_allocation()` | Session-destruct hook: cycles modules whose `release_allocation` matches `session->alloc_module`. |
 | `prte_ras_base_shrink_complete()` | Offers a drained `prte_shrink_campaign_t` to every module's `shrink_complete`. |
-| `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, and — if `return_to_scheduler` — shrink its daemon-carrying nodes out of the DVM. |
+| `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, release the registry's reference on it, and — if `return_to_scheduler` — shrink its daemon-carrying nodes out of the DVM. |
 | `prte_ras_base_check_reservations_on_term()` | On namespace termination, fire each reservation's inheritance disposition (`PMIX_ALLOC_INHERIT_NONE`/`CHILD`/`CHILD_DEFAULT`/`DEFAULT`). |
 
 ### A request's directives arrive from a client and are typed by a client
@@ -530,15 +530,17 @@ types; a PMIx older than that refuses the documented spelling.
 ### What a failed request must leave behind
 
 - **A `PMIX_ALLOC_NEW` that fails after `ras_base_prepare_grow()` created its
-  reservation unwinds it** (`prte_ras_base_teardown_reservation` +
-  `PMIX_RELEASE`, exactly as `pmix_server_session.c` unwinds a half-built
-  session). Otherwise the requester is told the request failed, never learns
-  the allocation id, and can therefore never release a reservation that is
-  still registered and still holding a reference on the owner job. Nodes an
-  earlier `PMIX_ALLOC_NODE_LIST` already contributed stay in the pool — a
-  pool index is a `PMIX_NODEID` and is never reused — and revert to the
-  general pool still marked `PRTE_NODE_STATE_ADDED`, so the next grow adopts
-  them, which is the right answer for nodes the allocator did grant.
+  reservation unwinds it** (`prte_ras_base_teardown_reservation`, exactly as
+  `pmix_server_session.c` unwinds a half-built session — teardown drops the
+  registry's reference, which for a reservation that never launched anything
+  is the only one it has). Otherwise the requester is told the request failed,
+  never learns the allocation id, and can therefore never release a
+  reservation that is still registered and still holding a reference on the
+  owner job. Nodes an earlier `PMIX_ALLOC_NODE_LIST` already contributed stay
+  in the pool — a pool index is a `PMIX_NODEID` and is never reused — and
+  revert to the general pool still marked `PRTE_NODE_STATE_ADDED`, so the
+  next grow adopts them, which is the right answer for nodes the allocator
+  did grant.
 - **A request that parked the DVM must give it back.**
   `prte_ras_base_add_hosts()` clears `prte_dvm_ready` and its caller parks the
   requesting job in `prte_cache`; only the grow's `VM_READY` re-entry
@@ -563,24 +565,34 @@ types; a PMIx older than that refuses the documented spelling.
   The guard lives in `ras_base_send_dvm_shrink`, which is the one place every
   caller passes through.
 
-### Tearing a reservation down does not free it
+### Tearing a reservation down releases it — which is why the job side counts
 
 `prte_ras_base_teardown_reservation()` gives the nodes back, drops the owners
-and the retained owner job, disarms the session's time limit, and removes the
-session from `prte_sessions` — but it does **not** release the
-`prte_session_t`. It cannot: `prte_job_t::session` and `::target_sessions`
-are borrowed pointers taken without a reference, so a job still running in
-the reservation would be left holding a dangling one. Deregistering also puts
-the object beyond `prte_finalize`'s sweep over `prte_sessions`, so it is
-genuinely leaked, one small object per reservation ever torn down. `docs/todo.rst`
-records what fixing it properly needs. Disarming the timer *is* done here and
-is load-bearing: the limit is on a lifetime that has just ended, and a timer
-left armed fires `session_timeout_cb()` on a reservation that no longer
-exists and terminates whatever jobs are still recorded in `session->jobs`.
+and the retained owner job, disarms the session's time limit, removes the
+session from `prte_sessions`, **and releases it**. The release has to happen
+here: deregistering puts the object beyond `prte_finalize`'s sweep over
+`prte_sessions`, so nothing later would ever reclaim it.
 
-The two callers that *can* release — `pmix_server_session.c`'s `error:` path
-and the grow unwind above — do so because the session they are discarding was
-built moments earlier and no job has ever seen it.
+That is only safe because the job-side pointers into a session —
+`prte_job_t::session` and every entry of `::target_sessions` — are **counted**
+references (`prte_set_job_session()` takes them; `prte_job_destruct` gives
+them back). A reservation is routinely torn down while jobs are still running
+in it: `prte_ras_base_check_reservations_on_term()` fires the disposition when
+the *owning* namespace terminates, and jobs spawned into the reservation by
+someone else can still be alive. Those jobs keep the object valid for as long
+as they can read it, and the last one to go is what frees it. Both halves are
+pinned by `test_teardown_reservation()` in `test/unit/ras/test_ras.c`.
+
+Two consequences worth knowing. The release is conditioned on the session
+still being registered, which makes teardown idempotent — a second teardown
+drops no second reference. And a caller that reads the session *after*
+teardown must hold its own reference across the call: `reclaim_session()` does
+exactly that, because it still has to report completion to the scheduler.
+
+Disarming the timer is load-bearing for the same lifetime reason: the limit is
+on a lifetime that has just ended, and a timer left armed fires
+`session_timeout_cb()` on a reservation that no longer exists and terminates
+whatever jobs are still recorded in `session->jobs`.
 
 **A reservation requested by a tool lives and dies with that tool**, and
 that hangs on the daemon being told when the tool goes. It is not a child,

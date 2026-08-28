@@ -1332,17 +1332,25 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
     session->timeout.tv_sec = 0;
     session->timeout.tv_usec = 0;
 
-    /* Deregister so the reservation can no longer be looked up / targeted.
-     * The session OBJECT is deliberately not released: prte_job_t::session
-     * and ::target_sessions are borrowed pointers, so a job still running in
-     * this reservation would be left holding a dangling one.  That leaks the
-     * object - deregistering also puts it out of reach of prte_finalize's
-     * sweep over prte_sessions, which is the only thing that would have
-     * reclaimed it.  See "a torn-down reservation leaks its session object"
-     * in docs/todo.rst for what fixing it properly needs. */
+    /* Deregister so the reservation can no longer be looked up or targeted,
+     * and give up the reference the registry held.  Deregistering also puts
+     * the object out of reach of prte_finalize's sweep over prte_sessions,
+     * so this is the only thing left that can reclaim it - which is why the
+     * release has to happen here rather than being left for later.
+     *
+     * It is safe to let the object go because the job-side pointers into it
+     * are counted: a job still running in this reservation - the very case
+     * that used to make releasing it impossible - holds its own reference,
+     * and the object survives until the last such job is destroyed.  See
+     * prte_job_t::session and prte_set_job_session().
+     *
+     * Conditioning this on the session still being registered is what makes
+     * the call idempotent: a second teardown of the same reservation drops
+     * no second reference. */
     if (0 <= session->index) {
         pmix_pointer_array_set_item(prte_sessions, session->index, NULL);
         session->index = -1;
+        PMIX_RELEASE(session);
     }
 
     if (return_to_scheduler && NULL != ranks && 0 < m) {
@@ -1866,8 +1874,10 @@ unwind:
      * PRTE_NODE_STATE_ADDED, so the next grow brings them into the DVM, which
      * is the right answer for a node the allocator did grant us. */
     if (created) {
+        /* teardown deregisters the reservation and drops the registry's
+         * reference with it, which is the only one a never-launched
+         * reservation has */
         prte_ras_base_teardown_reservation(dest, false);
-        PMIX_RELEASE(dest);
     }
 }
 

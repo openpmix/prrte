@@ -122,6 +122,55 @@ int prte_finalize(void)
      * function, so this just gives the trackers back. */
     prte_worker_pool_finalize();
 
+    /* Release the jobs before the sessions they ran in.  prte_job_t::session
+     * and ::target_sessions are COUNTED references (a reservation is torn
+     * down while its jobs may still be alive, so the job side has to keep
+     * the object valid), which means a session is not reclaimed until the
+     * last job pointing at it has gone.  Sweeping the job pool first is what
+     * makes the session sweep below the last word on every session - in
+     * particular it is what keeps prte_default_session's release the thing
+     * that carries the node pool away, as the comment there says.
+     *
+     * Nodes survive this loop regardless: the pool holds its own reference on
+     * every one of them, so a job map releasing its nodes here cannot be the
+     * last word on any of them. */
+    for (n = 0; n < prte_job_data->size; n++) {
+        jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, n);
+        if (NULL == jdata) {
+            continue;
+        }
+        // Empty the children list before any job object is destroyed: a job
+        // released while still linked into another job's children list trips
+        // the list-item assert. Each entry carries the reference taken when
+        // it was appended, so removing it means releasing it - the job pool
+        // still holds the reference that keeps the child alive until this
+        // loop reaches it.
+        PMIX_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t)
+        {
+            pmix_list_remove_item(&jdata->children, &child_jdata->super);
+            PMIX_RELEASE(child_jdata);
+        }
+        /* clean up any app contexts as they refcount the jdata object */
+        for (i=0; i < jdata->apps->size; i++) {
+            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+            if (NULL != app) {
+                pmix_pointer_array_set_item(jdata->apps, i, NULL);
+                PMIX_RELEASE(app);
+            }
+        }
+        // clean up any procs
+        for (i=0; i < jdata->procs->size; i++) {
+            p = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, i);
+            if (NULL != p) {
+                pmix_pointer_array_set_item(jdata->procs, i, NULL);
+                PMIX_RELEASE(p);
+            }
+        }
+        pmix_pointer_array_set_item(prte_job_data, n, NULL);
+        PMIX_RELEASE(jdata);
+    }
+    PMIX_RELEASE(prte_job_data);
+
     /* Tear the sessions down, and with them the node pool.
      *
      * Order matters in three ways. A reservation holds a COUNTED reference on
@@ -184,43 +233,6 @@ int prte_finalize(void)
     if (PRTE_PROC_IS_MASTER) {
         (void) pmix_mca_base_framework_close(&prte_ras_base_framework);
     }
-
-    for (n = 0; n < prte_job_data->size; n++) {
-        jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, n);
-        if (NULL == jdata) {
-            continue;
-        }
-        // Empty the children list before any job object is destroyed: a job
-        // released while still linked into another job's children list trips
-        // the list-item assert. Each entry carries the reference taken when
-        // it was appended, so removing it means releasing it - the job pool
-        // still holds the reference that keeps the child alive until this
-        // loop reaches it.
-        PMIX_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t)
-        {
-            pmix_list_remove_item(&jdata->children, &child_jdata->super);
-            PMIX_RELEASE(child_jdata);
-        }
-        /* clean up any app contexts as they refcount the jdata object */
-        for (i=0; i < jdata->apps->size; i++) {
-            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
-            if (NULL != app) {
-                pmix_pointer_array_set_item(jdata->apps, i, NULL);
-                PMIX_RELEASE(app);
-            }
-        }
-        // clean up any procs
-        for (i=0; i < jdata->procs->size; i++) {
-            p = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, i);
-            if (NULL != p) {
-                pmix_pointer_array_set_item(jdata->procs, i, NULL);
-                PMIX_RELEASE(p);
-            }
-        }
-        pmix_pointer_array_set_item(prte_job_data, n, NULL);
-        PMIX_RELEASE(jdata);
-    }
-    PMIX_RELEASE(prte_job_data);
 
     for (n = 0; n < prte_node_topologies->size; n++) {
         topo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, n);

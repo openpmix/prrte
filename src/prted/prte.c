@@ -1698,7 +1698,7 @@ static int prep_singleton(const char *name)
     }
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, nspace);
-    jdata->session = prte_default_session;
+    prte_set_job_session(jdata, prte_default_session);
     rc = prte_set_job_data_object(jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
