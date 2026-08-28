@@ -292,6 +292,9 @@ typedef struct{
      * the struct compiles against a PMIx that lacks the type; defaults to the
      * value of PMIX_ALLOC_INHERIT_DEFAULT. */
     uint8_t inheritance;
+    /* Order in which this DVM acquired its allocations, from 1; 0 until the
+     * session is registered. Served as PMIX_ALLOC_SEQUENCE. */
+    uint32_t acquisition;
 } prte_session_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_session_t);
 
