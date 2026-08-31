@@ -122,15 +122,6 @@ job registered with a key silently missing.  What would settle it properly
 is not forty checks but an accumulator — one status the adds fold into,
 tested once — which is a change to the macro, not to this file.
 
-**A client registration that fails is logged and the launch continues.**
-``register_nspace()`` calls ``PMIx_server_register_client`` for each proc it
-is about to host and, on an error, logs it and carries on.  The proc's
-``PMIx_Init`` will then be refused by our own PMIx server, which the
-application sees as an obscure failure some way downstream rather than as
-the launch failure it is.  Failing the whole job on it would be the honest
-alternative and is not obviously right either — the observed failure modes
-are out-of-memory — so it is recorded rather than changed.
-
 **``PRTE_JOB_NSPACE_REGISTERED`` is written and never read.**  Both
 registration paths in ``pmix_server_register_fns.c`` set it, and nothing in
 the tree consults it.  Either something should — the obvious candidate is

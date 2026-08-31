@@ -263,16 +263,50 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                         PMIX_LOAD_PROCID(&nm->name, pptr->name.nspace, pptr->name.rank);
                         pmix_list_append(&local_procs, &nm->super);
                         if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
-                            /* Go ahead and register this client.  The PMIx library
-                             * serializes registration requests, so this one is
-                             * ordered ahead of the register_nspace below however
-                             * long either takes - which is why neither has to be
-                             * waited for here, and why this one being fire-and-
-                             * forget does not race the namespace it belongs to. */
+                            /* Go ahead and register this client.  Handing it no
+                             * callback asks for the blocking form: PMIx runs the
+                             * registration on its own progress thread and returns
+                             * here when it is done, so the status below is the
+                             * registration's own and the rank is on record before
+                             * the register_nspace at the bottom tells PMIx how
+                             * many to expect. */
                             ret = PMIx_server_register_client(&pptr->name, uid, gid,
                                                               (void*)pptr, NULL, NULL);
+                            /* A rank we already hold is not a failure - it is
+                             * the state we wanted.  A daemon registers a given
+                             * namespace once (dmodex_req()'s wildcard arm is
+                             * what keeps that true), but "once" is not "once
+                             * successfully": the failure exit below abandons
+                             * this loop with the ranks ahead of it already
+                             * registered and the job never marked registered,
+                             * so a later wildcard get re-runs the whole
+                             * registration and meets every one of them again.
+                             * PMIx must refuse a second add of a rank - a
+                             * duplicate entry in its rank list puts that list
+                             * permanently past nlocalprocs, so all_registered
+                             * is never set and every collective involving the
+                             * namespace hangs - and reports it as a hard
+                             * error, so treating it as fatal here would fail a
+                             * registration that is in fact fine. */
+                            if (PMIX_ERR_DUPLICATE_KEY == ret) {
+                                ret = PMIX_SUCCESS;
+                            }
                             if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+                                /* Anything else means our own PMIx server will
+                                 * refuse this proc's PMIx_Init, so forking it
+                                 * would only move the failure to where nobody
+                                 * can read it: the application sees an obscure
+                                 * error some way downstream of a launch that
+                                 * appeared to succeed.  Fail the registration
+                                 * instead.  The launch path (job_reg_join, in
+                                 * odls) turns that into NEVER_LAUNCHED, which is
+                                 * what it is. */
                                 PMIX_ERROR_LOG(ret);
+                                PMIx_Argv_free(micro);
+                                micro = NULL;
+                                PMIX_INFO_LIST_RELEASE(info);
+                                rc = prte_pmix_convert_status(ret);
+                                goto errout;
                             }
                         }
                     }

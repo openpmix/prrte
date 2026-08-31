@@ -443,6 +443,58 @@ static void ls_cbunc(pmix_status_t status, void *cbdata)
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
 }
 
+/* Fail every proc of this job that was ours to launch.
+ *
+ * Activating PRTE_JOB_STATE_NEVER_LAUNCHED is not enough on its own.  What
+ * the prted errmgr sends the HNP is the state of this daemon's local
+ * children of that job, and children left in whatever state they were
+ * unpacked in read at the HNP as "nothing wrong here" - the job then never
+ * completes and the tool that asked for it waits forever with nothing
+ * logged anywhere (that is what made #2616 present as a silent hang).  The
+ * same states are what this daemon's own failed_start() looks for when it
+ * retires the procs out of prte_local_children, so without them they sit
+ * there forever and the daemon's termination accounting waits on procs that
+ * do not exist.
+ *
+ * The master reports to nobody and already holds the authoritative job
+ * object, so this is for the daemons only.
+ */
+static void fail_local_procs(prte_job_t *jdata, int rc)
+{
+    prte_proc_t *pptr;
+    int32_t nlocal = 0;
+    int n;
+
+    if (PRTE_PROC_IS_MASTER || NULL == jdata || NULL == jdata->procs) {
+        return;
+    }
+
+    for (n = 0; n < jdata->procs->size; n++) {
+        pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, n);
+        if (NULL == pptr || pptr->parent != PRTE_PROC_MY_NAME->rank) {
+            continue;
+        }
+        pptr->state = PRTE_PROC_STATE_FAILED_TO_START;
+        pptr->exit_code = rc;
+        /* nothing was forked and no stdio was ever opened for it, so the
+         * two things the lifecycle waits on are complete by definition */
+        PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_IOF_COMPLETE);
+        PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_WAITPID);
+        if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_LOCAL)) {
+            /* the report walks prte_local_children, so a proc we never
+             * got as far as adding would otherwise go unmentioned */
+            PMIX_RETAIN(pptr);
+            PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_LOCAL);
+            pmix_pointer_array_add(prte_local_children, pptr);
+        }
+        ++nlocal;
+    }
+    /* keep the count that the termination accounting compares against in
+     * step with the list we just completed - a caller that abandoned the
+     * loop which normally maintains it may have left it short */
+    jdata->num_local_procs = nlocal;
+}
+
 /* join point for the nspace registrations - once they have all
  * reported, proceed with the local support setup and launch.
  * Executes on the PRRTE progress thread */
@@ -459,6 +511,7 @@ static void job_reg_join(prte_odls_jcaddy_t *cd)
     if (PMIX_SUCCESS != cd->rstatus) {
         /* report an error back to the HNP so we don't just hang
          * while it waits to hear that our local procs launched */
+        fail_local_procs(cd->jdata, prte_pmix_convert_status(cd->rstatus));
         PRTE_ACTIVATE_JOB_STATE(cd->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(cd);
         return;
@@ -475,6 +528,7 @@ static void job_reg_join(prte_odls_jcaddy_t *cd)
                                               ls_cbunc, cd);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
+            fail_local_procs(cd->jdata, prte_pmix_convert_status(ret));
             PRTE_ACTIVATE_JOB_STATE(cd->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
             PMIX_RELEASE(cd);
             return;
@@ -1151,44 +1205,12 @@ REPORT_ERROR:
      * were told to launch) or that job - never one of the prior jobs
      * decoded above, which use their own variable. A NULL here is
      * survivable: the prted errmgr falls back to the daemon job. */
-    /* We have to report an error back to the HNP so we don't just hang.
-     * Activating the job state is not enough on its own: what the errmgr
-     * sends the HNP is the state of this daemon's local children of that
-     * job, and a child list we failed to build has none - or has them in
-     * whatever state they were unpacked in, which the HNP reads as "nothing
-     * wrong here". The job then never completes and the tool that asked for
-     * it waits forever with nothing logged anywhere (that is what made
-     * #2616 present as a silent hang). So first fail every proc that was
-     * ours to launch, which is what gives the HNP something to act on.
-     * The master reports to nobody and already holds the authoritative
-     * job object, so this is for the daemons only. */
-    if (!PRTE_PROC_IS_MASTER && NULL != jdata && NULL != jdata->procs) {
-        int32_t nlocal = 0;
-        for (n = 0; n < jdata->procs->size; n++) {
-            pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, n);
-            if (NULL == pptr || pptr->parent != PRTE_PROC_MY_NAME->rank) {
-                continue;
-            }
-            pptr->state = PRTE_PROC_STATE_FAILED_TO_START;
-            pptr->exit_code = rc;
-            /* nothing was forked and no stdio was ever opened for it, so the
-             * two things the lifecycle waits on are complete by definition */
-            PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_IOF_COMPLETE);
-            PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_WAITPID);
-            if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_LOCAL)) {
-                /* the report walks prte_local_children, so a proc we never
-                 * got as far as adding would otherwise go unmentioned */
-                PMIX_RETAIN(pptr);
-                PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_LOCAL);
-                pmix_pointer_array_add(prte_local_children, pptr);
-            }
-            ++nlocal;
-        }
-        /* keep the count that the termination accounting compares against in
-         * step with the list we just completed - we abandoned the loop that
-         * normally maintains it */
-        jdata->num_local_procs = nlocal;
-    }
+    /* We have to report an error back to the HNP so we don't just hang:
+     * a child list we failed to build has no local children to report, or
+     * has them in whatever state they were unpacked in. Fail every proc
+     * that was ours to launch, which is what gives the HNP something to
+     * act on. */
+    fail_local_procs(jdata, rc);
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     return rc;
 }

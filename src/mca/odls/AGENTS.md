@@ -332,8 +332,21 @@ Runs **on every daemon** (including the HNP). This is the mirror image of
     progress thread*:
     `prte_pmix_server_register_nspace` thread-shifts before calling back.
     That is what makes the unlocked `pending` bookkeeping safe.
-- On any failure it activates `PRTE_JOB_STATE_NEVER_LAUNCHED` so the HNP
-  doesn't hang waiting for a daemon that silently died.
+- On any failure it calls `fail_local_procs()` and then activates
+  `PRTE_JOB_STATE_NEVER_LAUNCHED` so the HNP doesn't hang waiting for a
+  daemon that silently died. **The activation alone is not enough**, which
+  is why the two are always paired: what the prted errmgr sends the HNP is
+  the *state of this daemon's local children* of that job, so children left
+  in whatever state they were unpacked in read at the HNP as "nothing wrong
+  here" — and `failed_start()` only retires procs it finds already marked
+  `PRTE_PROC_STATE_FAILED_TO_START`, so without the marking they sit in
+  `prte_local_children` forever and this daemon's own termination accounting
+  waits on procs that do not exist. `fail_local_procs()` marks them, sets
+  `PRTE_PROC_FLAG_IOF_COMPLETE` and `PRTE_PROC_FLAG_WAITPID` (nothing was
+  forked and no stdio was ever opened, so both are complete by definition),
+  adds any that never reached `prte_local_children`, and resets
+  `num_local_procs` to match. It is a no-op on the master, which reports to
+  nobody and holds the authoritative job object.
 - **`jdata` at the `REPORT_ERROR` label must be the job we were told to
   launch, or NULL.** The prior-jobs loop that used to sit at the top of this
   function decoded *other* jobs, and reused `jdata` to do it — so a failure
