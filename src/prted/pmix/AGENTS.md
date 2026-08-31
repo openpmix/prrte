@@ -683,6 +683,59 @@ hazards. Four things about it that are not local to any one arm:
 
 ## Info-array expansion
 
+### A daemon must not answer out of state it does not have
+
+A prted holds the *identity* half of the DVM's node table and nothing
+else. The nidmap ships node names, aliases, daemon vpids and pool slots
+(see [`src/util/nidmap.c`](../../util/nidmap.c)) — never `slots`,
+`slots_max`, `slots_inuse` or node `state`, because every writer of those
+runs only on the master: the `ras` components, the hostfile and
+`dash_host` parsers, `plm_base_setup_virtual_machine()`. `prte_sessions`
+on a prted likewise holds the default session and nothing more. An arm
+that reads either on a daemon gets a default-constructed **zero, returned
+as `PMIX_SUCCESS`** — a wrong answer no caller can tell from a right one.
+The rank that happens to land on the master gets the truth; every other
+rank gets nothing, silently.
+
+So such an arm does not read that state directly. It goes through
+`prte_get_allocated_nodes()`, `prte_get_allocation_session()` or
+`prte_get_allocation_sessions()`
+([`src/runtime/prte_globals.c`](../../runtime/prte_globals.c)), which
+succeed on the master and return `PRTE_ERR_NOT_AUTHORITATIVE` anywhere
+else. An arm that gets that back jumps to the `defer:` label at the foot
+of the key loop; at `done:` the deferred keys go to the master on
+`PRTE_RML_TAG_QUERY`, and its reply is merged into the results gathered
+locally, so the client sees one answer covering every key it asked for.
+
+**The decision is made by the read, never by a list of keys.** Which keys
+need the master is not knowable in advance, and a written-down list goes
+stale the first time someone adds one — silently, because the stale case
+returns a plausible zero rather than failing. Which *reads* cannot be
+satisfied locally is exactly the three accessors above, and that is
+enforced where it is used. A key added tomorrow that reads capacity is
+relayed with no edit here; one that reads only what the nidmap and the
+launch message already deliver stays local with no edit either.
+[`test/unit/check_query_authority.py`](../../../test/unit/check_query_authority.py)
+fails `make check` if this file reaches that state any other way.
+
+Deferral is per **key**, not per query and not per request, because the
+things a daemon must answer for *itself* can arrive in the same
+`PMIx_Query_info` as a key only the master can answer: `PMIX_HWLOC_XML_V1`
+and `_V2` export this node's topology, an unqualified `PMIX_SERVER_URI` is
+this daemon's own URI, and `PMIX_QUERY_LOCAL_PROC_TABLE` means the procs
+this daemon is hosting. Relaying a whole query would answer those about
+the master.
+
+The master answers with the same `_query()`: `pmix_server_query_request()`
+rebuilds a caddy and posts it, and there nothing defers, so it completes
+locally. The relay uses the tracker pattern described under
+[The relay pattern](#the-relay-pattern), and carries the *original*
+requestor so the master defaults the query to the right job rather than to
+the asking daemon. `contrib/dockerswarm`'s `slotinfo` client is the
+regression test: on one node every rank is on the master, and the bug
+cannot be seen at all.
+
+
 Several relays add an entry (usually `PMIX_REQUESTOR`) to an info array
 before passing it on. The idiom is three steps and all three are
 required:
