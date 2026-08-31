@@ -370,6 +370,54 @@ prte_session_t *prte_get_session_object_from_id(const char *id)
     return NULL;
 }
 
+/* See the block comment in prte_globals.h.  These three are the gate between
+ * code that wants allocation state and the fact that only the master has it. */
+int prte_get_allocated_nodes(const char *allocid, pmix_pointer_array_t **nodes)
+{
+    prte_session_t *session;
+
+    *nodes = NULL;
+    if (!PRTE_PROC_IS_MASTER) {
+        return PRTE_ERR_NOT_AUTHORITATIVE;
+    }
+    if (NULL == allocid) {
+        *nodes = prte_node_pool;
+        return PRTE_SUCCESS;
+    }
+    session = prte_get_session_object_from_id(allocid);
+    if (NULL == session) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    *nodes = session->nodes;
+    return PRTE_SUCCESS;
+}
+
+int prte_get_allocation_session(const char *allocid, prte_session_t **session)
+{
+    *session = NULL;
+    if (!PRTE_PROC_IS_MASTER) {
+        return PRTE_ERR_NOT_AUTHORITATIVE;
+    }
+    if (NULL == allocid) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *session = prte_get_session_object_from_id(allocid);
+    if (NULL == *session) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_get_allocation_sessions(pmix_pointer_array_t **sessions)
+{
+    *sessions = NULL;
+    if (!PRTE_PROC_IS_MASTER) {
+        return PRTE_ERR_NOT_AUTHORITATIVE;
+    }
+    *sessions = prte_sessions;
+    return PRTE_SUCCESS;
+}
+
 prte_session_t *prte_get_session_object_from_refid(const char *refid)
 {
     prte_session_t *session;
