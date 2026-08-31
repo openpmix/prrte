@@ -650,6 +650,18 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/peerinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # slotinfo: every rank asks its own daemon how big the allocation
+            # is.  The answer is a property of the DVM, so every rank must get
+            # the same one -- but slot counts and node state are written only
+            # on the master and the nidmap does not ship them, so a daemon
+            # answering out of its own node pool reports zero and reports it
+            # as success.  Needs ranks on daemons other than the master to
+            # show up at all, which is why it lives here.
+            echo ">>>> slotinfo (allocation query relay) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/slotinfo \
+                /prrte-src/contrib/dockerswarm/slotinfo.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # Open MPI, if a checkout was bind-mounted.  This is the only
             # thing in the harness that produces a modex an application
             # actually reads back: every other client here puts data because

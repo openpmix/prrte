@@ -2550,6 +2550,8 @@ test_runtime() {
 PT=/opt/prte/prte/bin/proctable
 # ...and the client that asks a peer where it is, for the same reason.
 PI=/opt/prte/prte/bin/peerinfo
+# ...and the client that asks its own daemon how big the allocation is.
+SI=/opt/prte/prte/bin/slotinfo
 
 # Cross-check one peerinfo run.  Every rank prints a SELF line about itself
 # and a PEER line about each of the others, in the same field order, so the
@@ -2871,6 +2873,67 @@ test_pmix() {
             bad "the check fails with the derivation off, so it is not testing the derivation: $(echo "$mism" | head -2 | tr '\n' ' ' | tail -c 400)"
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "prted: an allocation query is answered the same on every node"
+    # PMIX_NUM_SLOTS and PMIX_QUERY_AVAILABLE_SLOTS describe the DVM, so every
+    # rank must get the same answer whichever daemon it asked.  They cannot be
+    # answered from a prted's own state: the nidmap ships node names, aliases,
+    # daemon vpids and pool slots and nothing else, so slots, slots_max,
+    # slots_inuse and node state are all still at their constructed defaults
+    # on every daemon but the master.  Answering there returns zero -- and
+    # returns it as PMIX_SUCCESS, so the client cannot tell.  The daemon now
+    # relays such keys to the master and merges the reply with what it could
+    # answer itself.
+    #
+    # The assertion is a cross-check rather than a spot value for the same
+    # reason as the peer lookups above: the failure is not "no answer" but a
+    # plausible wrong one.  One rank per node, and every rank has to agree.
+    cleanup_swarm
+    if ! RUN "test -x $SI"; then
+        skp "slotinfo client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the allocation-query test"
+        cleanup_swarm
+    else
+        out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $SI" 2>&1)
+        n=$(echo "$out" | tr -d '\r' | grep -c '^SLOTS ')
+        [ "$n" = 4 ] \
+            && ok "all 4 ranks got an answer for PMIX_NUM_SLOTS" \
+            || bad "$n of 4 ranks were answered: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+        # the run must actually span nodes or the case is vacuous - a single
+        # node would put every rank on the master and never relay anything
+        hosts=$(echo "$out" | tr -d '\r' | awk '$1=="SLOTS" {print $2}' | sort -u | grep -c '^node')
+        [ "${hosts:-0}" -ge 2 ] \
+            && ok "...from $hosts different nodes (so daemons other than the master answered)" \
+            || bad "the job did not span nodes -- this case would be vacuous"
+        # zero is the shape of the bug: a daemon reading its own node pool
+        n=$(echo "$out" | tr -d '\r' | awk '$1=="SLOTS" && $3+0==0 {c++} END {print c+0}')
+        [ "$n" = 0 ] \
+            && ok "...and no rank was told the allocation has zero slots" \
+            || bad "$n rank(s) were told zero slots: $(echo "$out" | tr -d '\r' | grep '^SLOTS ' | tr '\n' ' ' | tail -c 300)"
+        # ...and they must agree, which is what says the relayed answer is the
+        # master's own rather than each daemon's guess
+        n=$(echo "$out" | tr -d '\r' | awk '$1=="SLOTS" {print $3}' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 1 ] \
+            && ok "...and every rank was given the same number" \
+            || bad "ranks disagree about the slot count: $(echo "$out" | tr -d '\r' | grep '^SLOTS ' | tr '\n' ' ' | tail -c 300)"
+        # the second key in the same query - a request that mixes keys has to
+        # come back whole, not just the half the master answered
+        n=$(echo "$out" | tr -d '\r' | grep -c '^AVAIL ')
+        [ "$n" = 4 ] \
+            && ok "...and the other key in the same query was answered too" \
+            || bad "$n of 4 ranks got PMIX_QUERY_AVAILABLE_SLOTS: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+        n=$(echo "$out" | tr -d '\r' | awk '$1=="AVAIL" {print $3}' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 1 ] \
+            && ok "...consistently" \
+            || bad "ranks disagree about the available slots: $(echo "$out" | tr -d '\r' | grep '^AVAIL ' | tr '\n' ' ' | tail -c 300)"
+        n=$(echo "$out" | tr -d '\r' | grep -c '^ERROR ')
+        [ "$n" = 0 ] \
+            && ok "...and no rank reported a query failure" \
+            || bad "$n rank(s) failed the query: $(echo "$out" | tr -d '\r' | grep '^ERROR ' | tr '\n' ' ' | tail -c 300)"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
     fi
     cleanup_swarm
 
