@@ -558,9 +558,57 @@ in there with a *side effect* has to be idempotent, or it repeats at that
 rate. The process sets are the case: appending the registry entry again
 duplicated the pset in every query answer and took a reference on the job
 object that nothing would give back, so that append is now guarded by a
-lookup. Client registration is not, and does not need to be — the daemon
-that takes this second path hosts no procs of the job, so the loop that
-registers them does not run.
+lookup.
+
+### A daemon registers a namespace exactly once
+
+That is the invariant, and `dmodex_req()`'s wildcard arm is what enforces
+it. **Do not assume the caller that gets there hosts none of the job's
+procs.** PMIx sends the host a `PMIX_RANK_WILDCARD` `direct_modex` on two
+quite different grounds (`pmix_server_get.c`): it holds nothing at all for
+the namespace, *or* it holds the namespace but the **reserved** key asked
+for came back empty from its own store. Only the first is ours to fix. The
+second reaches the daemon that forked the asking client as readily as any
+other, because PRRTE does not publish every reserved job-level key — a
+`PMIx_Get` of `PMIX_NUM_SLOTS` from an ordinary app is enough, and on a
+one-node `prterun -n 2` it produced a *second* `register_nspace()` on the
+HNP with both of its own ranks coming back `PMIX_ERR_DUPLICATE_KEY`.
+
+Re-registering cannot help: it assembles and stores the identical data from
+the same job object, so a key that was not in it the first time is not in
+it now, and the client waits through the whole thing to be told
+`NOT_FOUND` anyway. So the arm answers `PMIX_ERR_NOT_FOUND` directly when
+the job is already registered, which is what `PRTE_JOB_NSPACE_REGISTERED`
+is for — the attribute that until now was written and never read.
+
+**It is set when the registration *completes*, not when we finish
+assembling it** (`_nspace_reg_done`, which is why the registration caddy
+holds a reference on the job). "Registered" has to mean *PMIx has our
+answer*; a request arriving mid-flight would otherwise be told `NOT_FOUND`
+about data that was seconds from landing. That window is instead the one
+place a namespace can still be registered twice, which is why the client
+loop keeps `PMIX_ERR_DUPLICATE_KEY` as a tolerated status — PMIx must
+refuse a second add of a rank (a duplicate entry in its rank list puts that
+list permanently past `nlocalprocs`, so `all_registered` is never set and
+every collective involving the namespace hangs) and reports it as a hard
+error.
+
+**None of this is the lazy-procdata derivation.** That answers a request for
+a *per-proc* placement key (`prte_pmix_server_derivable_key()` — rank,
+appnum, nodeid, hostname, cpuset, locality) out of the job object, and it is
+asked for with a *specific* rank, so it arrives at the proc-level arm below.
+It never comes through the wildcard arm, and the wildcard arm has nothing to
+derive.
+
+**A client we cannot register is a launch failure, not a log line.** Every
+other status from `PMIx_server_register_client` aborts the registration and
+returns an error. Forking a proc our own PMIx server will refuse at
+`PMIx_Init` only moves the failure to where nobody can read it — the
+application sees an obscure error some way downstream of a launch that
+appeared to succeed. Returning the error puts it where it belongs:
+`job_reg_join()` in `odls` fails this daemon's procs and activates
+`PRTE_JOB_STATE_NEVER_LAUNCHED`, and the tool's `PMIx_Spawn` returns
+`PMIX_ERR_JOB_FAILED_TO_LAUNCH`.
 
 ### A binding we were not sent is not a binding of "none"
 
