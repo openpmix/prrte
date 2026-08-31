@@ -228,6 +228,7 @@ enum {
     PRTE_ERR_SLURM_SHRINK_FAILURE = (PRTE_ERR_BASE - 155),
     PRTE_ERR_PRELOAD_CONFLICT = (PRTE_ERR_BASE - 156),
     PRTE_ERR_SLURM_UPDATE_FAILURE = (PRTE_ERR_BASE - 157),
+    PRTE_ERR_NOT_AUTHORITATIVE = (PRTE_ERR_BASE - 158),
 
     /* Not an error code.  Nothing returns it, nothing tests for it, and
      * prte_strerror() deliberately has no case for it: it is one past the
@@ -249,7 +250,7 @@ enum {
      * it evaluated to PRTE_SUCCESS.  This one has consumers, and a test
      * that notices when it lies.
      */
-    PRTE_ERR_MAX = (PRTE_ERR_BASE - 158)
+    PRTE_ERR_MAX = (PRTE_ERR_BASE - 159)
 };
 
 END_C_DECLS

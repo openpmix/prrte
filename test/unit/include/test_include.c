@@ -155,8 +155,8 @@ static int test_error_code_numbering(void)
      * must not itself be one. The check that it is not stale -- that the
      * offset just inside it is a real, named code -- needs prte_strerror()
      * and lives in test/unit/util; here we only pin the arithmetic. */
-    CHECK("the bound is below the last code", PRTE_ERR_MAX < PRTE_ERR_SLURM_UPDATE_FAILURE);
-    CHECK("the bound is one past the end", (PRTE_ERR_MAX + 1) == PRTE_ERR_SLURM_UPDATE_FAILURE);
+    CHECK("the bound is below the last code", PRTE_ERR_MAX < PRTE_ERR_NOT_AUTHORITATIVE);
+    CHECK("the bound is one past the end", (PRTE_ERR_MAX + 1) == PRTE_ERR_NOT_AUTHORITATIVE);
 
     /* PRTE_ERROR must NOT be PMIX_ERROR any more. They were both -1, which
      * made a PRRTE code handed to PMIx unconverted invisible in the one
