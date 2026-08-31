@@ -51,6 +51,8 @@ static int fence_sig_unpack(pmix_data_buffer_t *buffer,
 static void check_complete(prte_grpcomm_fence_t *coll);
 static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op);
 static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op);
+static bool fence_sig_same(prte_grpcomm_fence_signature_t *a,
+                           prte_grpcomm_fence_signature_t *b);
 static void relcb(void *cbdata);
 static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st);
 static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body);
@@ -97,6 +99,179 @@ bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
         return true;
     }
     return (coll->op == incoming);
+}
+
+/* Two signatures name the same collective when they name the same procs in
+ * the same order. This is the comparison get_tracker() has always made
+ * inline; the generation memo needs the same one, so it is named once. */
+static bool fence_sig_same(prte_grpcomm_fence_signature_t *a,
+                           prte_grpcomm_fence_signature_t *b)
+{
+    if (a->sz != b->sz) {
+        return false;
+    }
+    if (0 == a->sz) {
+        return true;
+    }
+    if (NULL == a->signature || NULL == b->signature) {
+        return (a->signature == b->signature);
+    }
+    return (0 == memcmp(a->signature, b->signature, a->sz * sizeof(pmix_proc_t)));
+}
+
+/* ------------------------------------------------------------------ *
+ * Telling one round over a signature from the next.
+ *
+ * A fence signature is only its participant list, so nothing about a
+ * contribution says which round it belongs to.  In the ordinary flow that
+ * costs nothing, because a daemon converges only once everything it expects
+ * has arrived and so nothing *can* arrive afterwards.  But abort_fence_op()
+ * ends a fence early - on a PMIX_TIMEOUT, and on a participant lost with a
+ * failed daemon - and a contribution still climbing the tree then reaches a
+ * daemon whose tracker the release already retired.  Without a round number
+ * fence_recv() builds a fresh tracker for it, and the *next* fence over those
+ * same participants finds that tracker, inherits its nreported and its
+ * bucket, and can converge early carrying the previous round's data.
+ *
+ * The group collective solves its version of this with a memo of released
+ * operations, and that cannot be copied here: a group is forgotten when a
+ * local client starts another of the same name, and a daemon relaying a fence
+ * for its subtree has no local client, so the entry would never be forgotten
+ * there and the next fence's legitimate contribution would be dropped - a
+ * hang in place of a wrong answer.  So this is a counter rather than a memo,
+ * and what it counts is releases.
+ * ------------------------------------------------------------------ */
+
+static prte_grpcomm_fence_memo_t *fence_gen_find(prte_grpcomm_fence_signature_t *sig)
+{
+    prte_grpcomm_fence_memo_t *memo;
+
+    PMIX_LIST_FOREACH(memo, &prte_grpcomm_globals.fence_generations,
+                      prte_grpcomm_fence_memo_t) {
+        if (fence_sig_same(sig, memo->sig)) {
+            return memo;
+        }
+    }
+    return NULL;
+}
+
+uint32_t prte_grpcomm_fence_gen_next(prte_grpcomm_fence_signature_t *sig)
+{
+    prte_grpcomm_fence_memo_t *memo = fence_gen_find(sig);
+
+    if (NULL == memo) {
+        return PRTE_GRPCOMM_FENCE_GEN_UNKNOWN;
+    }
+    return memo->next_generation;
+}
+
+bool prte_grpcomm_fence_gen_is_stale(prte_grpcomm_fence_signature_t *sig, uint32_t gen)
+{
+    uint32_t next;
+
+    /* a contribution that names no round makes no claim to be from an old
+     * one either - see the UNKNOWN commentary in fence_recv() */
+    if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == gen) {
+        return false;
+    }
+    next = prte_grpcomm_fence_gen_next(sig);
+    if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == next) {
+        return false;
+    }
+    return (gen < next);
+}
+
+void prte_grpcomm_fence_gen_record(prte_grpcomm_fence_signature_t *sig, uint32_t gen)
+{
+    prte_grpcomm_fence_memo_t *memo;
+
+    if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == gen) {
+        return;
+    }
+
+    memo = fence_gen_find(sig);
+    if (NULL != memo) {
+        /* Adopt rather than increment.  A daemon grown into the DVM after k
+         * fences have run has counted none of them, and incrementing would
+         * leave it one behind for ever; taking the released generation from
+         * the wire puts it in step after its first fence instead.  The test
+         * is written so a release that arrives out of order cannot walk the
+         * counter backwards. */
+        if (memo->next_generation < gen + 1) {
+            memo->next_generation = gen + 1;
+        }
+        return;
+    }
+
+    /* Bounded, and evicting the oldest is safe in the way that matters: an
+     * entry only has to outlive the messages still in flight for its own
+     * fence.  Losing one early does not corrupt anything - it returns that
+     * signature to the behaviour this whole mechanism replaced, where a
+     * straggler is indistinguishable from the next round. */
+    while (PRTE_GRPCOMM_FENCE_MEMO_MAX <=
+           pmix_list_get_size(&prte_grpcomm_globals.fence_generations)) {
+        memo = (prte_grpcomm_fence_memo_t *)
+            pmix_list_remove_first(&prte_grpcomm_globals.fence_generations);
+        /* answers NULL for an empty list, and the loop bound is the only
+         * thing claiming this one is not - screen it rather than hand a NULL
+         * to the reference count */
+        if (NULL == memo) {
+            break;
+        }
+        PMIX_RELEASE(memo);
+    }
+
+    memo = PMIX_NEW(prte_grpcomm_fence_memo_t);
+    if (NULL == memo) {
+        return;
+    }
+    memo->sig = PMIX_NEW(prte_grpcomm_fence_signature_t);
+    if (NULL == memo->sig) {
+        PMIX_RELEASE(memo);
+        return;
+    }
+    memo->sig->sz = sig->sz;
+    if (0 < sig->sz) {
+        PMIX_PROC_CREATE(memo->sig->signature, sig->sz);
+        if (NULL == memo->sig->signature) {
+            PMIX_RELEASE(memo);
+            return;
+        }
+        memcpy(memo->sig->signature, sig->signature, sig->sz * sizeof(pmix_proc_t));
+    }
+    memo->next_generation = gen + 1;
+    pmix_list_append(&prte_grpcomm_globals.fence_generations, &memo->super);
+}
+
+/* The generation rides the wire beside the operation, and is checked on
+ * arrival rather than only derived locally.  Deriving alone is not enough:
+ * every participant does take part in every fence over a set, so counting
+ * retirements agrees across daemons that have been present throughout - but a
+ * daemon added by an elastic grow has counted none of them, and would
+ * originate 0 while everyone else is at k. */
+static int fence_gen_pack(pmix_data_buffer_t *bkt, uint32_t gen)
+{
+    pmix_status_t rc;
+
+    rc = PMIx_Data_pack(NULL, bkt, &gen, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    return PRTE_SUCCESS;
+}
+
+static int fence_gen_unpack(pmix_data_buffer_t *buffer, uint32_t *gen)
+{
+    int32_t cnt = 1;
+    pmix_status_t rc;
+
+    rc = PMIx_Data_unpack(NULL, buffer, gen, &cnt, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    return PRTE_SUCCESS;
 }
 
 /* The operation rides every contribution as a byte of its own rather than as
@@ -251,6 +426,15 @@ static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
     prc = PMIx_Data_pack(NULL, reply, &st, 1, PMIX_INT32);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    /* An abort is a release like any other and has to say which round it
+     * ends - it is in fact the release that makes stragglers possible at
+     * all, since it is what ends a fence with contributions still climbing. */
+    rc = fence_gen_pack(reply, coll->generation);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
@@ -489,6 +673,15 @@ static void fence(int sd, short args, void *cbdata)
         goto done;
     }
 
+    /* ...and which round of it */
+    rc = fence_gen_pack(relay, coll->generation);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        st = prte_pmix_convert_rc(rc);
+        goto done;
+    }
+
     // pack the info structs
     rc = PMIx_Data_pack(NULL, relay, &cd->ninfo, 1, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
@@ -617,6 +810,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     prte_grpcomm_fence_signature_t *sig = NULL;
     prte_grpcomm_fence_t *coll;
     prte_grpcomm_fence_op_t op;
+    uint32_t gen;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
@@ -656,6 +850,41 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         return;
     }
 
+    /* Which operation and which round this contribution belongs to.  Both are
+     * read before the tracker is looked up, because whether we want a tracker
+     * at all depends on the round. */
+    rc = fence_op_unpack(buffer, &op);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
+        return;
+    }
+    rc = fence_gen_unpack(buffer, &gen);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
+        return;
+    }
+
+    /* A contribution from a round we have already released.  This is the
+     * straggler abort_fence_op() makes possible: its fence was ended early,
+     * the release retired our tracker, and this was still climbing the tree.
+     *
+     * Dropping it here, before get_tracker(), is the whole point.  Creating a
+     * tracker for it and then discarding the message would leave exactly the
+     * wreck this mechanism exists to prevent - a tracker carrying a stale
+     * contribution that the *next* fence over these participants would find,
+     * inherit, and converge early on. */
+    if (prte_grpcomm_fence_gen_is_stale(sig, gen)) {
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm fence dropping a contribution from "
+                             "generation %u (now at %u)",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) gen,
+                             (unsigned) prte_grpcomm_fence_gen_next(sig)));
+        PMIX_RELEASE(sig);
+        return;
+    }
+
     /* check for the tracker and create it if not found */
     if (NULL == (coll = get_tracker(sig, true))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -663,6 +892,36 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         return;
     }
     PMIX_RELEASE(sig);
+
+    /* Settle the tracker's round against what just arrived.
+     *
+     * UNKNOWN on either side is silence rather than a claim: a daemon with no
+     * memo entry for these participants has never released a fence over them,
+     * which is the ordinary state of one grown into the DVM after the job
+     * started.  It cannot stamp 0 - that names a round long since released,
+     * and its contribution would be dropped by every daemon that had been
+     * present for it.  Adopting a higher generation is the same move
+     * fence_recv makes for a recovery epoch it has not caught up with. */
+    if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN != gen &&
+        (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == coll->generation ||
+         coll->generation < gen)) {
+        coll->generation = gen;
+    }
+
+    if (!prte_grpcomm_fence_op_merge(coll, op)) {
+        /* The participants asked for different collectives.  Report it and
+         * carry on: the contribution still has to be counted or the fence
+         * never converges, and it is convergence that carries the failure
+         * back out to every participant through the release.  This is the
+         * same treatment a non-success PMIX_LOCAL_COLLECTIVE_STATUS gets, and
+         * the status is deliberately the one PMIx answers for the local form
+         * of the same disagreement. */
+        prte_show_help("help-prte-grpcomm.txt", "fence-op-mismatch", true,
+                       prte_process_info.nodename);
+        if (PMIX_SUCCESS == coll->status) {
+            coll->status = PMIX_ERR_INVALID_ARG;
+        }
+    }
 
     /* Identify which child subtree this came from, and drop it whole if that
      * subtree has already been heard from - see the matching note in the group
@@ -684,28 +943,6 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         }
         if (pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
             return;
-        }
-    }
-
-    /* which operation this contribution belongs to, and whether it agrees
-     * with everything else this tracker has heard */
-    rc = fence_op_unpack(buffer, &op);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return;
-    }
-    if (!prte_grpcomm_fence_op_merge(coll, op)) {
-        /* The participants asked for different collectives.  Report it and
-         * carry on: the contribution still has to be counted or the fence
-         * never converges, and it is convergence that carries the failure
-         * back out to every participant through the release.  This is the
-         * same treatment a non-success PMIX_LOCAL_COLLECTIVE_STATUS gets, and
-         * the status is deliberately the one PMIx answers for the local form
-         * of the same disagreement. */
-        prte_show_help("help-prte-grpcomm.txt", "fence-op-mismatch", true,
-                       prte_process_info.nodename);
-        if (PMIX_SUCCESS == coll->status) {
-            coll->status = PMIX_ERR_INVALID_ARG;
         }
     }
 
@@ -891,6 +1128,16 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
             PMIX_DATA_BUFFER_RELEASE(reply);
             return;
         }
+        /* Which round is being ended.  Carrying it down as well as up is what
+         * lets a daemon that has not been present for every fence over these
+         * participants - one grown into the DVM - adopt the true number
+         * instead of counting from its own arrival. */
+        rc = fence_gen_pack(reply, coll->generation);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
         /* A barrier's release is the signature and the status: there is
          * nothing gathered to hand back, and saying so by sending nothing is
          * what lets every daemon's release path skip the unload and PMIx skip
@@ -928,6 +1175,12 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
      * operation like any other - this is the merged answer for our whole
      * subtree, which is what our parent has to agree with */
     rc = fence_op_pack(reply, coll->op);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    rc = fence_gen_pack(reply, coll->generation);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -1013,6 +1266,7 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
     prte_grpcomm_fence_signature_t *sig = NULL;
     prte_grpcomm_fence_t *coll;
     pmix_byte_object_t bo;
+    uint32_t gen;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_globals.output,
@@ -1034,6 +1288,21 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
         PMIX_RELEASE(sig);
         return;
     }
+
+    /* Which round this release ends, and remember it.
+     *
+     * This happens whether or not we hold a tracker.  A daemon with no
+     * participants of its own still needs the count, because it may relay for
+     * a subtree in a later round and has to be able to recognize a straggler
+     * from this one.  It is also what a daemon grown into the DVM adopts
+     * instead of counting rounds from its own arrival. */
+    rc = fence_gen_unpack(buffer, &gen);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
+        return;
+    }
+    prte_grpcomm_fence_gen_record(sig, gen);
 
     /* check for the tracker - it is not an error if not
      * found as that just means we are not involved
@@ -1128,6 +1397,11 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
         PMIX_PROC_CREATE(coll->sig->signature, coll->sig->sz);
         memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
     }
+    /* Which round this is.  The memo answers UNKNOWN if we have never
+     * released a fence over these participants, and that is not the same as
+     * zero: it means we have no claim to make, and the first contribution to
+     * name a generation will settle it. */
+    coll->generation = prte_grpcomm_fence_gen_next(coll->sig);
     pmix_list_append(&prte_grpcomm_globals.fence_ops, &coll->super);
 
     /* now get the daemons involved */

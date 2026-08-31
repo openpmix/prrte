@@ -566,33 +566,58 @@ gathers the *local* contributions, then deletes it the instant the request
 is handed to the host — deliberately, so a late host answer cannot reach a
 tracker it already released.
 
-**A contribution can outlive the release that ended its fence, and nothing
-here can tell that from the next round.**  A fence signature is only its
-participant list — no round, no sequence number, nothing on the wire that
-distinguishes one fence over a set of procs from the next.  In the normal
-flow that costs nothing, because a daemon converges only when everything it
-expects has arrived, so nothing *can* arrive afterwards.  But
-`abort_fence_op()` ends a fence early — on a `PMIX_TIMEOUT`, and on a
-participant lost to a failed daemon — and a contribution still climbing the
-tree then reaches a daemon whose tracker the release already retired.
-`fence_recv()` builds a new tracker for it, and the next fence over those
-same participants *finds* that tracker, inherits its `nreported` and its
-bucket, and can converge early carrying the previous round's data.
+**A contribution can outlive the release that ended its fence, and a
+generation on the wire is what tells that from the next round.**  A fence
+signature is only its participant list, so nothing about a contribution says
+which round it belongs to.  In the normal flow that costs nothing, because a
+daemon converges only when everything it expects has arrived, so nothing
+*can* arrive afterwards.  But `abort_fence_op()` ends a fence early — on a
+`PMIX_TIMEOUT`, and on a participant lost to a failed daemon — and a
+contribution still climbing the tree then reaches a daemon whose tracker the
+release already retired.  Without a round number `fence_recv()` builds a new
+tracker for it, and the next fence over those same participants *finds* that
+tracker, inherits its `nreported` and its bucket, and converges early
+carrying the previous round's data.
 
-**Do not fix this by copying `completed_group_ops`.**  The group memo works
-because a group is keyed by `groupID` + operation and `group()` drops the
-memo entry when a local client starts one.  A daemon relaying a fence for
-its subtree has no local client and would never drop the entry, so the next
-fence's legitimate contribution would be discarded — a hang, which is worse
-than the wrong answer it was meant to prevent.  On a pure relay a straggler
-and a new round are genuinely the same message, and a fence has no
-originator to stamp a round id: this is the same "every participant must
-reach the same answer independently" problem the withdrawn lateral fence
-ran into.  What would work is a per-signature *release count* — each daemon
-counts releases seen for a signature, stamps contributions with it, drops
-anything stamped lower — which is the recovery epoch's mechanism scoped to a
-signature.  That is a wire change and needs the dockerswarm harness; see
-[`docs/todo.rst`](../../docs/todo.rst).
+**It is a counter, not a memo, and that is why `completed_group_ops` could
+not be copied.**  The group memo works because a group is keyed by `groupID`
++ operation and `group()` drops the entry when a local client starts one.  A
+daemon relaying a fence for its subtree has no local client and would never
+drop it, so the next fence's legitimate contribution would be discarded — a
+hang, worse than the wrong answer it was meant to prevent.  What works is a
+per-signature *release count*: `prte_grpcomm_globals.fence_generations` holds
+one `prte_grpcomm_fence_memo_t` per signature giving the number of the **next**
+fence over it, one past the last released here.
+
+The rules, and each earns its place:
+
+- **The count is driven by releases**, and `prte_grpcomm_fence_gen_record()`
+  **adopts** the released generation rather than incrementing.
+- **Every contribution is stamped** with its tracker's generation, and the
+  **release carries one too** — up *and* down, so a daemon can learn a number
+  it never counted.
+- **`fence_recv()` screens before `get_tracker()`.**  A stamp below what we
+  expect is dropped there, deliberately ahead of building anything: creating
+  a tracker and then discarding the message would leave exactly the wreck the
+  mechanism exists to prevent.
+- **`PRTE_GRPCOMM_FENCE_GEN_UNKNOWN` is silence, not round zero**, and it is
+  the load-bearing case.  A daemon grown into the DVM after the job started
+  has released none of the earlier rounds; if it stamped 0 every daemon that
+  had been present would drop its contribution as ancient and the fence would
+  hang — precisely what the generation exists to prevent.  So it says nothing,
+  is accepted into the current round, and adopts the true number from the
+  release.  Deriving the count locally is *not* sufficient on its own, which
+  is why it is checked on arrival rather than only counted; Slurm's `kvs_seq`
+  carries it in both directions for the same reason.
+- **The memo is bounded** (`PRTE_GRPCOMM_FENCE_MEMO_MAX`).  Eviction is a
+  graceful loss: that signature returns to the pre-generation behaviour, where
+  a straggler and a new round are indistinguishable.  It does not corrupt
+  anything, and an entry only has to outlive its own fence's in-flight
+  messages.
+
+The other half of this was already in place: `0d9dde1c8a` retires the tracker
+*before* delivering, at both sites, because a client may fence again over the
+same participants the moment the callback returns.
 
 **A release with no local callback still has data to free.** A daemon
 holding a tracker only because it relayed for its subtree has no `cbfunc`

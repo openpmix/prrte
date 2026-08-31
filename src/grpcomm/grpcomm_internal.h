@@ -69,6 +69,17 @@ typedef struct {
     // as the first contribution to a brand-new operation and build a tracker
     // that nothing will ever complete or delete.
     pmix_list_t completed_group_ops;
+    // How many fences over each signature this daemon has released - list of
+    // prte_grpcomm_fence_memo_t, capped at PRTE_GRPCOMM_FENCE_MEMO_MAX. This
+    // is what tells a straggler from the next round: a fence signature is
+    // only its participant list, so without a per-round number on the wire a
+    // contribution that outlived the release which ended its fence is
+    // indistinguishable from the first contribution to the next fence over
+    // the same procs. Unlike completed_group_ops this is a counter rather
+    // than a memo of "already done", because a fence has no local client
+    // whose arrival could forget the entry - see the commentary in
+    // grpcomm_fence.c.
+    pmix_list_t fence_generations;
     // The collective recovery epoch for this daemon. A daemon failure
     // invalidates every in-flight rollup, because how many contributions each
     // daemon expects is derived from the routing tree. Recovery is a
@@ -86,6 +97,13 @@ typedef struct {
 } prte_grpcomm_globals_t;
 
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
+#define PRTE_GRPCOMM_FENCE_MEMO_MAX 64
+
+/* "No round number is known here." Distinct from generation 0, which is a
+ * real round: a daemon that has never taken part in a fence over a signature
+ * must be able to say so, because 0 would be read as a round already long
+ * released and its contribution dropped. */
+#define PRTE_GRPCOMM_FENCE_GEN_UNKNOWN UINT32_MAX
 
 typedef struct {
     pmix_list_item_t super;
@@ -139,6 +157,18 @@ typedef struct {
     size_t sz;
 } prte_grpcomm_fence_signature_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_fence_signature_t);
+
+/* What this daemon remembers about a signature once its fence is over: the
+ * number of the NEXT fence over those participants, which is one past the
+ * last generation released here. It has to outlive the tracker, because the
+ * whole point is to recognize something that arrives after the tracker is
+ * gone. */
+typedef struct {
+    pmix_list_item_t super;
+    prte_grpcomm_fence_signature_t *sig;
+    uint32_t next_generation;
+} prte_grpcomm_fence_memo_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_fence_memo_t);
 
 typedef struct {
     pmix_object_t super;
@@ -196,6 +226,11 @@ typedef struct {
     // rather than re-derived, so that a participant that disagrees can be
     // caught saying so instead of quietly running the other collective.
     prte_grpcomm_fence_op_t op;
+    // Which round over this signature this tracker is. Seeded from the memo
+    // when the tracker is built, adopted from the first contribution to name
+    // one when the memo had nothing to say, and stamped on everything this
+    // daemon sends for the fence. PRTE_GRPCOMM_FENCE_GEN_UNKNOWN until known.
+    uint32_t generation;
     /* collection bucket */
     pmix_data_buffer_t bucket;
     /* participating daemons */
@@ -382,6 +417,25 @@ prte_grpcomm_fence_op_t prte_grpcomm_fence_op_from_info(const pmix_info_t info[]
 PRTE_EXPORT
 bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
                                  prte_grpcomm_fence_op_t incoming);
+
+/* The number of the next fence over this signature - one past the last
+ * generation released here - or PRTE_GRPCOMM_FENCE_GEN_UNKNOWN if this daemon
+ * has never released one. Exported so the unit test can drive it. */
+PRTE_EXPORT
+uint32_t prte_grpcomm_fence_gen_next(prte_grpcomm_fence_signature_t *sig);
+
+/* Record that generation `gen` over this signature has been released here, so
+ * the next one is gen+1. Adopts rather than increments, which is what puts a
+ * daemon that joined the DVM late - and so counted none of the earlier rounds
+ * - in step with everyone else after its first fence. Exported for the test. */
+PRTE_EXPORT
+void prte_grpcomm_fence_gen_record(prte_grpcomm_fence_signature_t *sig, uint32_t gen);
+
+/* Is a contribution stamped `gen` one this daemon has already released?  Only
+ * a stamp strictly below what we are expecting is stale; UNKNOWN never is,
+ * because it carries no claim about a round at all.  Exported for the test. */
+PRTE_EXPORT
+bool prte_grpcomm_fence_gen_is_stale(prte_grpcomm_fence_signature_t *sig, uint32_t gen);
 
 /* group functions */
 PRTE_EXPORT extern

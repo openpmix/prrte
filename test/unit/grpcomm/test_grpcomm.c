@@ -959,6 +959,116 @@ static int test_fence_operation(void)
     return failures;
 }
 
+#if PRTE_TEST_GRPCOMM_INTERNALS
+/* Build a throwaway signature naming one proc, so the tests below have
+ * distinct collectives to talk about without a job to resolve them against. */
+static void gen_sig(prte_grpcomm_fence_signature_t *sig, const char *nspace,
+                    pmix_rank_t rank)
+{
+    PMIX_CONSTRUCT(sig, prte_grpcomm_fence_signature_t);
+    sig->sz = 1;
+    PMIX_PROC_CREATE(sig->signature, 1);
+    PMIX_LOAD_PROCID(&sig->signature[0], nspace, rank);
+}
+#endif
+
+/*
+ * Telling one round over a signature from the next.
+ *
+ * A fence signature is only its participant list, so a contribution that
+ * outlived the release ending its fence is otherwise indistinguishable from
+ * the first contribution to the next fence over the same procs - and the
+ * second one converges early on the first one's data.  What makes that
+ * reachable is abort_fence_op(), which ends a fence while contributions are
+ * still climbing the tree.
+ *
+ * The counter is driven by releases, and UNKNOWN is load-bearing: it is the
+ * state of a daemon grown into the DVM after the job started, which has
+ * released none of the earlier rounds.  It must not be confused with round 0,
+ * which every other daemon has long since retired.
+ */
+static int test_fence_generation(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_grpcomm_fence_signature_t a, b;
+    size_t i;
+
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_generations, pmix_list_t);
+    gen_sig(&a, "gen-nspace-a", PMIX_RANK_WILDCARD);
+    gen_sig(&b, "gen-nspace-b", PMIX_RANK_WILDCARD);
+
+    /* Nothing released yet.  The answer is "no claim", not zero - a daemon
+     * that has never taken part cannot assert that round 0 is behind it. */
+    CHECK("gen: an unseen signature is UNKNOWN",
+          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_next(&a));
+    CHECK("gen: and nothing is stale against it",
+          !prte_grpcomm_fence_gen_is_stale(&a, 0));
+    CHECK("gen: ...including a high generation",
+          !prte_grpcomm_fence_gen_is_stale(&a, 7));
+
+    /* An UNKNOWN stamp is silence, never staleness.  This is what a
+     * newly-grown daemon sends, and dropping it would hang the fence it is
+     * legitimately joining. */
+    prte_grpcomm_fence_gen_record(&a, 4);
+    CHECK("gen: an UNKNOWN stamp is never stale",
+          !prte_grpcomm_fence_gen_is_stale(&a, PRTE_GRPCOMM_FENCE_GEN_UNKNOWN));
+
+    /* Recording a release moves us to the next round. */
+    CHECK("gen: releasing 4 puts the next fence at 5",
+          5 == prte_grpcomm_fence_gen_next(&a));
+    CHECK("gen: round 4 is now stale", prte_grpcomm_fence_gen_is_stale(&a, 4));
+    CHECK("gen: as is anything below it",
+          prte_grpcomm_fence_gen_is_stale(&a, 0));
+    CHECK("gen: but the round we are on is not",
+          !prte_grpcomm_fence_gen_is_stale(&a, 5));
+    CHECK("gen: nor is one ahead of us",
+          !prte_grpcomm_fence_gen_is_stale(&a, 6));
+
+    /* Adopt, do not increment.  A daemon that missed rounds must be able to
+     * jump straight to the true number rather than count from its arrival. */
+    prte_grpcomm_fence_gen_record(&a, 20);
+    CHECK("gen: a release adopts its generation rather than incrementing",
+          21 == prte_grpcomm_fence_gen_next(&a));
+
+    /* ...and a release that arrives out of order cannot walk it backwards,
+     * which would un-stale contributions already correctly dropped. */
+    prte_grpcomm_fence_gen_record(&a, 6);
+    CHECK("gen: an out-of-order release does not move it back",
+          21 == prte_grpcomm_fence_gen_next(&a));
+
+    /* Signatures are independent - a fence over other procs is another
+     * collective entirely, and must not inherit this one's count. */
+    CHECK("gen: a different signature is untouched",
+          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_next(&b));
+
+    /* The memo is bounded.  Eviction is a graceful loss - that signature
+     * returns to the old behaviour - but the list must not grow without end
+     * on a long-lived DVM that fences over many different proc sets. */
+    for (i = 0; i < PRTE_GRPCOMM_FENCE_MEMO_MAX + 8; i++) {
+        prte_grpcomm_fence_signature_t t;
+        char ns[PMIX_MAX_NSLEN + 1];
+        snprintf(ns, sizeof(ns), "gen-fill-%zu", i);
+        gen_sig(&t, ns, PMIX_RANK_WILDCARD);
+        prte_grpcomm_fence_gen_record(&t, 0);
+        PMIX_DESTRUCT(&t);
+    }
+    CHECK("gen: the memo stays bounded",
+          PRTE_GRPCOMM_FENCE_MEMO_MAX >=
+              pmix_list_get_size(&prte_grpcomm_globals.fence_generations));
+
+    PMIX_DESTRUCT(&a);
+    PMIX_DESTRUCT(&b);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_generations);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_generations, pmix_list_t);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_generation\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -988,6 +1098,7 @@ int main(void)
 #endif
     failures += test_group_directives();
     failures += test_fence_operation();
+    failures += test_fence_generation();
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
     failures += test_recovery_epoch();
