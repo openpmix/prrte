@@ -448,6 +448,9 @@ const char *prte_strerror(int errnum)
     case PRTE_ERR_SLURM_UPDATE_FAILURE:
         retval = "Request to update Slurm job failed";
         break;
+    case PRTE_ERR_NOT_AUTHORITATIVE:
+        retval = "This process does not hold the authoritative copy of the requested data";
+        break;
     default:
         retval = "Unknown error";
     }
