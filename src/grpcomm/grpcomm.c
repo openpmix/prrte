@@ -44,7 +44,8 @@ prte_grpcomm_globals_t prte_grpcomm_globals = {
     .output = -1,
     .context_id = UINT32_MAX,
     .fence_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_ops),
-    .group_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.group_ops)
+    .group_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.group_ops),
+    .fence_generations = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_generations)
 };
 
 prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
@@ -95,6 +96,7 @@ int prte_grpcomm_init(void)
     PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_generations, pmix_list_t);
 
     /* xcast receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
@@ -127,6 +129,7 @@ void prte_grpcomm_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.group_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_generations);
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);

@@ -107,11 +107,27 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_group_signature_t,
                     pmix_object_t,
                     sgcon, sgdes);
 
+static void mcon(prte_grpcomm_fence_memo_t *p)
+{
+    p->sig = NULL;
+    p->next_generation = 0;
+}
+static void mdes(prte_grpcomm_fence_memo_t *p)
+{
+    if (NULL != p->sig) {
+        PMIX_RELEASE(p->sig);
+    }
+}
+PMIX_CLASS_INSTANCE(prte_grpcomm_fence_memo_t,
+                    pmix_list_item_t,
+                    mcon, mdes);
+
 static void ccon(prte_grpcomm_fence_t *p)
 {
     p->sig = NULL;
     p->status = PMIX_SUCCESS;
     p->op = PRTE_GRPCOMM_FENCE_OP_UNKNOWN;
+    p->generation = PRTE_GRPCOMM_FENCE_GEN_UNKNOWN;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
     p->dmns = NULL;
     p->ndmns = 0;
