@@ -131,6 +131,16 @@ typedef struct {
     pmix_info_cbfunc_t infocbfunc;
     void *cbdata;
     void *rlcbdata;
+    /* A PMIx query relayed to the DVM master because this daemon does not
+     * hold the state it asks for - see pmix_server_queries.c.  On the asking
+     * daemon these carry the client's caddy, the results already gathered
+     * locally (a PMIx info list the master's reply is merged into), and the
+     * number of keys the client asked for, which is what partial success is
+     * measured against.  On the master, qcaddy holds the caddy whose unpacked
+     * query array must be freed once the answer has been sent. */
+    void *qcaddy;
+    void *qresults;
+    size_t nkeys;
 } prte_pmix_server_req_t;
 PMIX_CLASS_DECLARATION(prte_pmix_server_req_t);
 
@@ -430,6 +440,16 @@ PRTE_EXPORT extern void pmix_server_notify(int status, pmix_proc_t *sender,
 PRTE_EXPORT extern void pmix_server_tconn_return(int status, pmix_proc_t *sender,
                                                  pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                                  void *cbdata);
+
+/* A query a daemon cannot answer, relayed to the DVM master, and the answer
+ * coming back - see the block comment in pmix_server_queries.c */
+PRTE_EXPORT extern void pmix_server_query_request(int status, pmix_proc_t *sender,
+                                                  pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                                  void *cbdata);
+
+PRTE_EXPORT extern void pmix_server_query_resp(int status, pmix_proc_t *sender,
+                                               pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                               void *cbdata);
 
 PRTE_EXPORT extern int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
                                                       pmix_op_cbfunc_t cbfunc, void *cbdata);

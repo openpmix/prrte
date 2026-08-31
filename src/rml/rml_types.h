@@ -228,6 +228,18 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
  * which is where it is held - see src/prted/pmix/pmix_server_connect.c */
 #define PRTE_RML_TAG_CONNECTED            83
 
+/* A PMIx query a daemon cannot answer, on its way to the DVM master, and the
+ * master's answer coming back.  A prted holds only the identity half of the
+ * node pool - the nidmap ships names, aliases, daemon vpids and pool slots,
+ * never slot counts or node state - and holds no session but the default
+ * one, so a query that reads either has to be asked where those live.  See
+ * pmix_server_queries.c.  Distinct from PRTE_RML_TAG_SCHED, which is the
+ * scheduler command channel: a query is not a scheduler request, and
+ * pmix_server_sched() demultiplexes on a command byte a query has no value
+ * for. */
+#define PRTE_RML_TAG_QUERY                85
+#define PRTE_RML_TAG_QUERY_RESP           86
+
 #define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)
