@@ -4599,6 +4599,72 @@ test_grpcomm() {
 
     test_grpcomm_invite
     test_grpcomm_ft
+    test_fence_straggler
+}
+
+test_fence_straggler() {
+    local out n
+
+    banner "grpcomm: a straggler from an aborted fence is not the next round"
+    # A fence signature is only its participant list, so nothing about a
+    # contribution says which round it belongs to.  That costs nothing while a
+    # daemon converges only once everything it expects has arrived -- but
+    # abort_fence_op() ends a fence early, on a PMIX_TIMEOUT or a lost
+    # participant, and a contribution still climbing the tree then reaches a
+    # daemon whose tracker the release already retired.  Without a round
+    # number fence_recv() builds a fresh tracker for it, and the NEXT fence
+    # over those same participants finds that tracker, inherits its nreported
+    # and its bucket, and can converge early carrying the previous round's
+    # data.
+    #
+    # That window is a timing accident no test can arrange from outside, which
+    # is why grpcomm_fence_delay_ms exists and why it is compiled in rather
+    # than hidden behind a debug build.  Daemon vpid 2 holds its contribution
+    # for 8s; the fence carries a 3s deadline, so the controller ends it
+    # without that daemon; the held contribution then lands at ~8s, by which
+    # time the SECOND fence is in flight -- exactly on top of the tracker it
+    # must not join.
+    cleanup_swarm
+    if ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1' \
+            '--prtemca grpcomm_fence_delay_ms 8000 --prtemca grpcomm_fence_delay_vpid 2'; then
+        bad "could not start a DVM for the fence straggler test"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FENCER collect --timeout 3 --twice" 2>&1)
+
+    # First: the window has to have actually opened.  If the first fence
+    # SUCCEEDED then nothing was aborted, no contribution was left in flight,
+    # and everything below would pass without testing anything at all.
+    n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_ERR_TIMEOUT')
+    [ "$n" = 4 ] \
+        && ok "the deadline ended the first fence without the held-back daemon" \
+        || bad "$n of 4 ranks saw the first fence time out -- the straggler window never opened: $(echo "$out" | grep 'FENCER collect' | tr '\n' ' ' | tail -c 250)"
+
+    # ...and now the assertion this exists for.
+    n=$(echo "$out" | grep -c 'FENCER second rank .* rc PMIX_SUCCESS')
+    [ "$n" = 4 ] \
+        && ok "...and the next fence over the same participants completed" \
+        || bad "$n of 4 ranks completed the second fence: $(echo "$out" | grep 'FENCER second' | tr '\n' ' ' | tail -c 250)"
+
+    # Converging is not enough: a fence that inherited the previous round's
+    # bucket converges too, and answers with data it never gathered.
+    n=$(echo "$out" | grep -c 'peers-bad 0')
+    [ "$n" = 4 ] \
+        && ok "...carrying every peer's contribution, not the aborted round's" \
+        || bad "$n of 4 ranks got a complete modex from the second fence: $(echo "$out" | grep 'peers-' | tr '\n' ' ' | tail -c 250)"
+
+    RUN 'pgrep -x prte' >/dev/null 2>&1 \
+        && ok "...and the DVM survived the aborted fence" \
+        || bad "the HNP died over the aborted fence"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
 }
 
 # A group formed by INVITATION, asking for a context id.
