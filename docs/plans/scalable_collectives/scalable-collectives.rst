@@ -1315,6 +1315,25 @@ when the movements were written are true now:
   ``MCA_BTL_FLAGS_SINGLE_ADD_PROCS``, and remote procs materialise on first
   use.  Exactly one non-optional reserved key names an off-node proc, and
   PMIx derives it and its neighbours from the node and proc maps.
+* **The direct-modex path has now been seen repairing an incomplete fence,
+  accidentally and under controlled conditions.**  While building the fence
+  straggler regression test (2026-08-31), a deliberately broken second fence
+  failed to deliver one daemon's contribution to the other three.  With an
+  ordinary ``PMIx_Get`` every rank read every peer's key back and reported a
+  complete modex; with ``PMIX_OPTIONAL`` on the same Get, in the same build
+  and the same workload, three of four ranks reported the key missing.  The
+  fence had genuinely lost it, and the on-demand resolution fetched it
+  correctly without the application noticing.
+
+  That is a narrow demonstration - four ranks, one key, the owning daemon
+  alive and its data committed - and it says nothing about cost.  But it is
+  direct evidence for the thing Level 2 depends on: that a fence which does
+  not deliver everything is *recoverable* rather than fatal, which is exactly
+  the failure class ``answer_from_job()`` closed.  It also means any test
+  asserting that a collective delivered something must use ``PMIX_OPTIONAL``,
+  or it is testing the runtime's ability to find the data by any means rather
+  than the collective's.
+
 * The crossover has been measured, and it favours on-demand once the per-rank
   contribution is kilobytes rather than tens of bytes — and the win grows with
   ``N``, because collecting is ``O(N)`` a daemon while resolving is
@@ -1882,10 +1901,30 @@ Revised after the sweep, which moved two items and deleted one.
    the enabling step for the two-radix release and for any exchange schedule
    that comes later.
 #. **Land the fence sequence number standalone**, on tree-only code, and
-   settle its elastic-join rule (see below).  The retire-before-deliver half
-   is already merged as ``0d9dde1c8a``.  Cheap, reviewable in isolation, and it
-   takes the defect that killed the movements off the critical path of
-   anything that comes later.
+   settle its elastic-join rule (see below).  **DONE.**  Each daemon now keeps,
+   per signature, the number of the next fence over it — one past the last
+   generation released here — stamps every contribution with it, and drops a
+   contribution stamped below what it expects.  The screen runs *before*
+   ``get_tracker()``: building a tracker for a straggler and then discarding
+   the message would leave exactly the wreck the mechanism exists to prevent.
+   The retire-before-deliver half was already merged as ``0d9dde1c8a``.
+
+   **The elastic-join rule is settled, and deriving the count locally is not
+   enough.**  A daemon added by a grow has released none of the earlier rounds;
+   if it stamped 0, every daemon that had been present would drop its
+   contribution as ancient and the fence would hang — the very failure the
+   number exists to prevent.  So a daemon with no entry stamps a distinct
+   ``UNKNOWN`` rather than 0, which is silence rather than a claim about a
+   round and is accepted into whatever round is current; and the release
+   carries the generation it ends, which the recipient **adopts** rather than
+   increments.  That is what puts a joiner in step after its first fence
+   instead of leaving it permanently one behind, and it is why the number is
+   carried in both directions and checked on arrival — the robustness this
+   document already noted in Slurm's ``kvs_seq``.
+
+   The memo is bounded.  Evicting an entry is a graceful loss: that signature
+   returns to the pre-generation behaviour, where a straggler and a new round
+   are indistinguishable.
 #. **Hold the radix and the pipelined release.**  Both target the byte term,
    which does not dominate until ~140 KB of total modex, and the radix half is
    now measured as neutral-to-harmful.  Chunking ``xcast`` is still right for
