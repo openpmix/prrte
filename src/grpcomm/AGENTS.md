@@ -510,18 +510,24 @@ is the hook the elastic DVM-shrink path uses.
 thread-shifts to the static `fence()` handler.
 
 1. **`fence` handler.** Computes the signature, gets-or-creates the
-   tracker, packs signature + info + payload, and **sends it to itself** on
+   tracker, names the operation from the directives, packs signature +
+   operation + info + payload, and **sends it to itself** on
    `PRTE_RML_TAG_FENCE` — funnelling the local contribution through the
-   same receive path everything else uses.
+   same receive path everything else uses.  A barrier packs no payload.
 2. **`fence_recv`.** Checks the epoch, unpacks the signature, finds the
-   tracker, merges info (`PMIX_TIMEOUT` takes the max; a non-success
-   `PMIX_LOCAL_COLLECTIVE_STATUS` is sticky), copies the payload into
-   `coll->bucket`, bumps `nreported`. At `nreported == nexpected`:
+   tracker, merges the operation (see *Two operations* below), merges info
+   (`PMIX_TIMEOUT` takes the max; a non-success `PMIX_LOCAL_COLLECTIVE_STATUS`
+   is sticky), copies the payload into `coll->bucket` **if this is an
+   allgather**, bumps `nreported` either way. At `nreported == nexpected`:
    - **HNP:** broadcast the result via `prte_grpcomm_release_bcast`.
    - **non-HNP:** forward the bucket up to `PRTE_PROC_MY_PARENT`.
 3. **`fence_release`.** Finds the tracker (missing tracker == "I had no
    local participants", not an error) and fires `coll->cbfunc` to hand the
    gathered data back to the PMIx server. Removes and releases the tracker.
+   A barrier is handed a NULL payload rather than an empty one, which is what
+   tells PMIx to skip its store outright. The release message itself does not
+   carry the operation and does not need to: a daemon only reaches this path
+   by holding a tracker, and a tracker knows which collective it is.
 
 **`create_dmns()`'s answer is a pair, and NULL means two different
 things.** A signature naming the daemon job is "every daemon in the DVM",
@@ -611,12 +617,62 @@ ends it with `PMIX_ERR_LOST_CONNECTION`. Note the difference from a group
 construct, which *can* complete on survivors when asked: a fence has no
 equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
 
+### Two operations, one movement
+
+**`PMIX_COLLECT_DATA` names the operation, and nothing else may.** False or
+absent is a **barrier**; true is an **allgather**. `prte_grpcomm_fence_op_from_info()`
+reads it out of the info array PMIx hands to the upcall, `fence()` records it
+on the tracker, and every contribution carries it as a byte of its own ahead
+of the info array — `fence_op_pack()` / `fence_op_unpack()`.
+
+**Do not derive it from the payload.** The bytes vary from daemon to daemon
+while the operation must not: a participant with nothing to publish is fully a
+participant in an allgather, and since PMIx learned to contribute only what
+changed, a zero-byte contribution is the ordinary case for any fence after the
+first rather than a degenerate one. Deriving the operation from the payload
+would have daemons disagree about which collective they are in, and a fence
+has no originator to settle it — the same failure that withdrew the lateral
+movements. The directive is safe precisely because it is a property of the
+*call*: every participant passes the same value, and PMIx has already forced
+the local participants to agree before the upcall (disagreement there becomes
+`PMIX_COLLECT_INVALID` and the fence is refused locally).
+
+**What the operation gates is the payload, in three places** — the
+contribution `fence()` packs, the bucket `tree_gather_answer()` sends up or
+broadcasts, and the unload `fence_release()` performs. It gates *nothing*
+about participation: `nreported`, `reported_slots` and `self_reported` are
+counted, never weighed, so an empty contribution advances the rollup exactly
+as far as a large one. That is the invariant that lets an allgather stay an
+allgather when a participant has nothing to add, and any future exchange
+schedule will depend on it.
+
+**A barrier has no data path at all.** PMIx still builds a blob for one — a
+lone `PMIX_COLLECT_NO` flag byte, compressed and wrapped — but it never leaves
+the node: rolling one of those up from every daemon and broadcasting the
+concatenation back to all of them spends the whole round trip on bytes that
+say only "there is nothing here". The receiving side wants it no more than we
+do, because PMIx skips its store outright when the host returns no data, where
+a present-but-empty payload makes it walk the blobs to find that out.
+
+**A disagreement is reported, not resolved.** `prte_grpcomm_fence_op_merge()`
+adopts on the first answer and requires agreement after that; a mismatch emits
+`help-prte-grpcomm.txt`'s `fence-op-mismatch` and makes `coll->status` sticky
+at `PMIX_ERR_INVALID_ARG` — the status PMIx itself answers for the local form
+of the same user error — which the rollup carries to the controller and the
+release carries back out to every participant. The contribution is still
+counted: convergence is what delivers the failure, so refusing to count it
+would hang instead. **This check is load-bearing rather than belt-and-braces.**
+PMIx compares a collect-flag byte per contribution inside `store_modex` and
+raises `collection-mismatch`, but a barrier no longer puts anything on the wire
+for it to compare, so PRRTE is now the only thing that can see the two answers
+together.
+
 ### One movement: rollup and release
 
 A fence rolls its contributions **up the routing tree** to the controller,
-which broadcasts the gathered result back down. Barrier and modex travel the
-same way; nothing reads `PMIX_COLLECT_DATA` to decide, and no movement id is
-on the wire.
+which broadcasts the gathered result back down. Both operations travel that
+way — the operation decides what rides along, not where it goes — and no
+movement id is on the wire.
 
 The seam that a different movement would use is still visible in the shape of
 the code — `tree_gather_converged()` / `_contribute()` / `_answer()` are

@@ -111,6 +111,7 @@ static void ccon(prte_grpcomm_fence_t *p)
 {
     p->sig = NULL;
     p->status = PMIX_SUCCESS;
+    p->op = PRTE_GRPCOMM_FENCE_OP_UNKNOWN;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
     p->dmns = NULL;
     p->ndmns = 0;
