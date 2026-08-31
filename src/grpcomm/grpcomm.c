@@ -83,6 +83,36 @@ void prte_grpcomm_register(void)
                                "grpcomm_base_verbose 1.",
                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_grpcomm_globals.enable_timing);
+
+    /* Fault injection for the fence's round discriminator.  Holding one
+     * daemon's contribution back, while a PMIX_TIMEOUT ends the fence without
+     * it, is what puts a contribution on the wire for a round that is already
+     * over - the straggler the generation exists to recognize.  Nothing else
+     * can arrange that window: it is otherwise a timing accident.
+     *
+     * Compiled in always, on purpose.  See src/grpcomm/AGENTS.md. */
+    prte_grpcomm_globals.joined_late = false;
+    prte_grpcomm_globals.joined_late_known = false;
+
+    prte_grpcomm_globals.fence_delay_ms = 0;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "fence_delay_ms",
+                               "Hold this daemon's own fence contribution back "
+                               "by this many milliseconds before sending it. "
+                               "Fault injection for the fence's round handling; "
+                               "0 (the default) sends immediately.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.fence_delay_ms);
+
+    /* -1 means "whichever daemon this is", which is what a per-node MCA file
+     * wants; a vpid names one daemon in a DVM-wide setting, which is what a
+     * test driving the whole DVM from one command line wants. */
+    prte_grpcomm_globals.fence_delay_vpid = -1;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "fence_delay_vpid",
+                               "Restrict grpcomm_fence_delay_ms to the daemon "
+                               "with this vpid. -1 (the default) delays on "
+                               "every daemon that reads the parameter.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.fence_delay_vpid);
 }
 
 /**

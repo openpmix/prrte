@@ -155,12 +155,41 @@ static prte_grpcomm_fence_memo_t *fence_gen_find(prte_grpcomm_fence_signature_t 
     return NULL;
 }
 
+void prte_grpcomm_fence_note_join(bool late)
+{
+    /* The first wireup settles it.  A later one describes a DVM this daemon
+     * is already part of and says nothing about how it got here. */
+    if (prte_grpcomm_globals.joined_late_known) {
+        return;
+    }
+    prte_grpcomm_globals.joined_late = late;
+    prte_grpcomm_globals.joined_late_known = true;
+}
+
+uint32_t prte_grpcomm_fence_gen_baseline(void)
+{
+    /* A daemon added to a running DVM cannot claim round 0: every daemon that
+     * has been present is past it, and would drop a 0 as ancient.  It says it
+     * does not know instead, which a receiver takes into whatever round is
+     * current - safe precisely because a joiner has no earlier round over
+     * this signature to have straggled from, so its first contribution cannot
+     * be one.  One contribution per signature, then it has a real number. */
+    if (prte_grpcomm_globals.joined_late) {
+        return PRTE_GRPCOMM_FENCE_GEN_UNKNOWN;
+    }
+    /* ...and a daemon that has been here since the start says 0, which is
+     * what bootstraps the counter. Without this nothing ever establishes a
+     * first round, every contribution is stamped UNKNOWN for ever, and the
+     * whole mechanism is inert. */
+    return 0;
+}
+
 uint32_t prte_grpcomm_fence_gen_next(prte_grpcomm_fence_signature_t *sig)
 {
     prte_grpcomm_fence_memo_t *memo = fence_gen_find(sig);
 
     if (NULL == memo) {
-        return PRTE_GRPCOMM_FENCE_GEN_UNKNOWN;
+        return prte_grpcomm_fence_gen_baseline();
     }
     return memo->next_generation;
 }
@@ -598,6 +627,47 @@ void prte_grpcomm_fence_fault_handler(const prte_rml_recovery_status_t* status)
     }
 }
 
+/* Fault injection: carry a held-back contribution across the delay timer.
+ * Plain storage rather than a reference-counted object - it lives from the
+ * moment the timer is armed until it fires, exactly once, and nothing else
+ * ever looks at it. Zeroed on allocation because the embedded event must
+ * start clean. */
+typedef struct {
+    prte_event_t ev;
+    pmix_data_buffer_t *framed;
+} fence_delay_caddy_t;
+
+static void fence_delay_fire(int sd, short args, void *cbdata)
+{
+    fence_delay_caddy_t *dc = (fence_delay_caddy_t *) cbdata;
+    int rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:fence releasing the held-back contribution",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, dc->framed, PRTE_RML_TAG_FENCE);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(dc->framed);
+    }
+    free(dc);
+}
+
+/* Should this daemon hold its contribution back?  Only when a delay was asked
+ * for and either no vpid was named or this is the one named. */
+static bool fence_should_delay(void)
+{
+    if (0 >= prte_grpcomm_globals.fence_delay_ms) {
+        return false;
+    }
+    if (0 > prte_grpcomm_globals.fence_delay_vpid) {
+        return true;
+    }
+    return ((pmix_rank_t) prte_grpcomm_globals.fence_delay_vpid
+            == PRTE_PROC_MY_NAME->rank);
+}
+
 static void fence(int sd, short args, void *cbdata)
 {
     prte_pmix_fence_caddy_t *cd = (prte_pmix_fence_caddy_t *) cbdata;
@@ -609,6 +679,7 @@ static void fence(int sd, short args, void *cbdata)
     pmix_status_t st = PMIX_SUCCESS;
     pmix_data_buffer_t *relay, *framed, bkt;
     pmix_byte_object_t bo;
+    struct timeval tv;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -763,12 +834,40 @@ static void fence(int sd, short args, void *cbdata)
                          "%s grpcomm:fence sending to ourself",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, framed,
-                  PRTE_RML_TAG_FENCE);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(framed);
-        st = prte_pmix_convert_rc(rc);
+    if (fence_should_delay()) {
+        /* Hold it back, so that a fence ended without it - by a PMIX_TIMEOUT,
+         * or by losing a participant - has this contribution still on the
+         * wire when its release lands. That is the straggler the generation
+         * has to recognize, and it is otherwise unreachable from a test.
+         *
+         * The entry point already answered PRTE_SUCCESS, so nothing upstream
+         * is waiting on this send; if the fence is aborted meanwhile our own
+         * participants are completed by the release, exactly as they would be
+         * for a contribution genuinely lost in the network. */
+        fence_delay_caddy_t *dc = (fence_delay_caddy_t *) calloc(1, sizeof(*dc));
+        if (NULL == dc) {
+            PMIX_DATA_BUFFER_RELEASE(framed);
+            st = PMIX_ERR_NOMEM;
+            goto done;
+        }
+        dc->framed = framed;
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:fence holding its contribution back %d ms",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             prte_grpcomm_globals.fence_delay_ms));
+        tv.tv_sec = prte_grpcomm_globals.fence_delay_ms / 1000;
+        tv.tv_usec = (prte_grpcomm_globals.fence_delay_ms % 1000) * 1000;
+        prte_event_evtimer_set(prte_event_base, &dc->ev, fence_delay_fire, dc);
+        PMIX_POST_OBJECT(dc);
+        prte_event_evtimer_add(&dc->ev, &tv);
+    } else {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, framed,
+                      PRTE_RML_TAG_FENCE);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(framed);
+            st = prte_pmix_convert_rc(rc);
+        }
     }
 
 done:

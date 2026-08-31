@@ -262,6 +262,11 @@ static void init_complete(int sd, short args, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
+/* Whether any DVM-ready broadcast has gone out yet.  The first one describes
+ * a DVM starting up; every later one follows a grow, and the daemons reading
+ * it for the first time are the ones the grow added. */
+static bool first_vm_ready = true;
+
 static void vm_ready(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -271,6 +276,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     prte_proc_t *dmn;
     int32_t v;
     uint32_t epoch;
+    bool grown;
     pmix_value_t *val, *sval;
     pmix_status_t ret;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -332,6 +338,39 @@ static void vm_ready(int fd, short args, void *cbdata)
              * notice still in flight will also reach the new daemon, which is
              * routable by now, and the epoch is adopted by highest value seen
              * so the two orders agree. */
+            /* ...and whether the daemons reading this for the FIRST time
+             * joined a DVM that was already running collectives.
+             *
+             * A fence's round number is per-signature and is bootstrapped
+             * locally: a daemon with no record for a signature takes it as
+             * round 0.  That is right for a daemon present from the start and
+             * wrong for one a grow added, which would stamp 0 while every
+             * other participant is at some k and have its contribution
+             * dropped as ancient - hanging the fence.
+             *
+             * What travels is a flag rather than a count, and deliberately: a
+             * count would be stale on arrival, because this master goes on
+             * answering fences over other signatures while the grow completes,
+             * and there is no moment at which a number handed over here is
+             * still true.  The flag is always true when it is true.  It says
+             * only "you do not know your round numbers, so ask rather than
+             * assume", and a joiner stops needing it the moment it sees its
+             * first release for a signature.
+             *
+             * Broadcast to everyone, like the epoch, and harmless there: the
+             * receiver keeps the first answer it is given, so a daemon that
+             * has been through a wireup already is unaffected by this one. */
+            grown = !first_vm_ready;
+            first_vm_ready = false;
+            rc = PMIx_Data_pack(NULL, &buf, &grown, 1, PMIX_BOOL);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_RELEASE(caddy);
+                return;
+            }
+
             epoch = prte_grpcomm_current_epoch();
             rc = PMIx_Data_pack(NULL, &buf, &epoch, 1, PMIX_UINT32);
             if (PMIX_SUCCESS != rc) {
