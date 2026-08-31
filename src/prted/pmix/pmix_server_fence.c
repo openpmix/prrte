@@ -274,6 +274,34 @@ static void dmodex_req(int sd, short args, void *cbdata)
         return;
     }
 
+    /* Device distances for a proc we do not host are not something this
+     * DVM can answer, and saying so is better than looking for them.
+     *
+     * They are computed against the topology of the node the proc runs on.
+     * PRRTE collects topologies at the HNP only - a daemon's node pool
+     * carries its own topology against every entry (prte_util_decode_nidmap,
+     * "always default to homogeneous") - so no daemon but the hosting one
+     * has the hardware to measure, and shipping every node's topology to
+     * every daemon to change that is a real cost for a question almost
+     * nobody asks about somebody else's process.
+     *
+     * NOT_SUPPORTED rather than NOT_FOUND: the key is not missing from a
+     * store that might yet fill, it is a question this runtime does not
+     * answer for a remote proc.  Without this the request would go out on
+     * the wire to the hosting daemon, which publishes the key to its own
+     * PMIx server but cannot hand it back - a direct modex reply carries
+     * only what the process itself PUT (PMIX_REMOTE scope) - so the asker
+     * would wait for a round trip and then be told NOT_FOUND anyway, or
+     * park until the proc commits something it may never commit. */
+    if (NULL != req->key && PMIx_Check_key(req->key, PMIX_DEVICE_DISTANCES)) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s DMODX REQ FOR %s:%u DEVICE DISTANCES - NOT SUPPORTED",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            req->tproc.nspace, req->tproc.rank);
+        prc = PMIX_ERR_NOT_SUPPORTED;
+        goto callback;
+    }
+
     /* if they are asking about a specific proc, then fetch it */
     proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, req->tproc.rank);
     if (NULL == proct) {
@@ -306,8 +334,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
      * shrink - can still be said to have been placed where it was placed, and
      * that is an answer eager publication would have had in hand.  Requiring
      * a live daemon here would turn it into a failure. */
-    if (prte_pmix_server_globals.lazy_procdata && !refresh_cache &&
-        prte_pmix_server_derivable_key(req->key) &&
+    if (!refresh_cache && prte_pmix_server_derivable_key(req->key) &&
         /* ...but not a binding we do not hold.  The launch message scatters
          * the cpusets, so a NULL one on a proc we do not host means "never
          * sent", not "not bound", and answering either way would be a
@@ -429,11 +456,15 @@ callback:
 
 /* ---- deriving a remote proc's data instead of fetching it -------------
  *
- * With prte_pmix_server_globals.lazy_procdata set, register_nspace publishes
- * per-proc data only for the procs this daemon hosts.  Everything it would
- * have published about the others is still right here, in the job object the
- * launch message built, so a request for one of them is answered from local
- * memory rather than by asking the daemon that hosts it.
+ * A request for one of the placement keys is answered out of the job object
+ * the launch message built, rather than by asking the daemon that hosts the
+ * proc.  What reaches this path is what register_nspace could not publish -
+ * above all the binding, which the launch message scatters, so a daemon holds
+ * one only for the procs it forks.
+ *
+ * There is no switch for this.  Deriving what we can and asking the wire for
+ * the rest is simply what the daemon does; a knob would only offer a slower
+ * way to get the same answer.
  *
  * These are exactly the keys PRRTE is the *authority* for - the placement and
  * binding it decided when it mapped the job.  Anything else a proc holds was
