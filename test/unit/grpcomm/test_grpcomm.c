@@ -166,6 +166,10 @@ static int test_classes(void)
     prte_grpcomm_fence_t *fc = PMIX_NEW(prte_grpcomm_fence_t);
     CHECK("fence trk sig NULL", NULL == fc->sig);
     CHECK("fence trk status SUCCESS", PMIX_SUCCESS == fc->status);
+    /* a fresh tracker has not been told which collective it is in - and
+     * UNKNOWN has to be distinct from "barrier", or the first contribution
+     * to arrive would find its operation already decided for it */
+    CHECK("fence trk op UNKNOWN", PRTE_GRPCOMM_FENCE_OP_UNKNOWN == fc->op);
     CHECK("fence trk dmns NULL", NULL == fc->dmns);
     CHECK("fence trk ndmns 0", 0 == fc->ndmns);
     CHECK("fence trk nexpected 0", 0 == fc->nexpected);
@@ -848,6 +852,113 @@ static int test_recovery_epoch(void)
     return failures;
 }
 
+/*
+ * Which operation a fence runs is named by PMIX_COLLECT_DATA and by nothing
+ * else.  Both halves of that are pinned here: the classifier, which reads the
+ * directive out of a caller's info array, and the merge, which is how a daemon
+ * decides whether an arriving contribution agrees with what it already knows.
+ *
+ * Note what the classifier's signature does not take: a payload.  A fence's
+ * operation cannot be inferred from whether a participant contributed bytes,
+ * because the bytes vary from daemon to daemon while the operation must not -
+ * a participant with nothing to publish is fully a participant in an
+ * allgather, and since PMIx learned to contribute only what changed that is
+ * the ordinary case rather than a corner one.  Deriving the operation from the
+ * payload would have daemons disagree about which collective they are running,
+ * and a fence has no originator to settle it.
+ */
+static int test_fence_operation(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    pmix_info_t info[2];
+    prte_grpcomm_fence_t *coll;
+    bool flag;
+    int tmo = 30;
+
+    /* No directives at all.  The caller asked to synchronize and said nothing
+     * else, and that is a barrier - the absence of the flag has to mean the
+     * same as the flag being false, because a caller wanting a plain barrier
+     * has no reason to pass anything. */
+    CHECK("op: no directives is a barrier",
+          PRTE_GRPCOMM_FENCE_OP_BARRIER == prte_grpcomm_fence_op_from_info(NULL, 0));
+
+    flag = true;
+    PMIX_INFO_LOAD(&info[0], PMIX_COLLECT_DATA, &flag, PMIX_BOOL);
+    CHECK("op: collect true is an allgather",
+          PRTE_GRPCOMM_FENCE_OP_ALLGATHER == prte_grpcomm_fence_op_from_info(info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+
+    flag = false;
+    PMIX_INFO_LOAD(&info[0], PMIX_COLLECT_DATA, &flag, PMIX_BOOL);
+    CHECK("op: collect false is a barrier",
+          PRTE_GRPCOMM_FENCE_OP_BARRIER == prte_grpcomm_fence_op_from_info(info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+
+    /* Present with no value.  PMIx's convention is that the bare presence of
+     * an attribute means true, and this has to read it the same way PMIx's own
+     * fence does or a caller that set the flag that way would silently be
+     * given a barrier and then find its data missing. */
+    PMIX_INFO_LOAD(&info[0], PMIX_COLLECT_DATA, NULL, PMIX_BOOL);
+    CHECK("op: a valueless collect flag is still true",
+          PRTE_GRPCOMM_FENCE_OP_ALLGATHER == prte_grpcomm_fence_op_from_info(info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+
+    /* An unrelated directive names no operation and must not be mistaken for
+     * one; and the flag is still found when it is not the first entry. */
+    PMIX_INFO_LOAD(&info[0], PMIX_TIMEOUT, &tmo, PMIX_INT);
+    CHECK("op: an unrelated directive leaves it a barrier",
+          PRTE_GRPCOMM_FENCE_OP_BARRIER == prte_grpcomm_fence_op_from_info(info, 1));
+    flag = true;
+    PMIX_INFO_LOAD(&info[1], PMIX_COLLECT_DATA, &flag, PMIX_BOOL);
+    CHECK("op: the flag is found past the first entry",
+          PRTE_GRPCOMM_FENCE_OP_ALLGATHER == prte_grpcomm_fence_op_from_info(info, 2));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+
+    /* The merge.  A tracker that has heard nothing adopts; one that has heard
+     * something requires agreement. */
+    coll = PMIX_NEW(prte_grpcomm_fence_t);
+    CHECK("merge: an unknown tracker adopts",
+          prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_ALLGATHER));
+    CHECK("merge: and records what it adopted",
+          PRTE_GRPCOMM_FENCE_OP_ALLGATHER == coll->op);
+    CHECK("merge: the same answer again agrees",
+          prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_ALLGATHER));
+    /* An arrival that names no operation tells us nothing, so it cannot
+     * disagree with anything either - it must not be read as a barrier. */
+    CHECK("merge: an unknown arrival cannot disagree",
+          prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_UNKNOWN));
+    CHECK("merge: and does not disturb what was recorded",
+          PRTE_GRPCOMM_FENCE_OP_ALLGATHER == coll->op);
+    /* The disagreement this whole mechanism exists to catch.  It has to be
+     * caught here because it is otherwise invisible: a barrier now puts
+     * nothing on the wire, so PMIx's own per-blob collect-flag comparison
+     * never sees the two answers together. */
+    CHECK("merge: the opposite operation disagrees",
+          !prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_BARRIER));
+    CHECK("merge: and a disagreement changes nothing",
+          PRTE_GRPCOMM_FENCE_OP_ALLGATHER == coll->op);
+    PMIX_RELEASE(coll);
+
+    /* the same, adopting the other way round, so neither operation is
+     * privileged by the order the tests happen to run in */
+    coll = PMIX_NEW(prte_grpcomm_fence_t);
+    CHECK("merge: an unknown tracker adopts a barrier too",
+          prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_BARRIER));
+    CHECK("merge: barrier recorded",
+          PRTE_GRPCOMM_FENCE_OP_BARRIER == coll->op);
+    CHECK("merge: an allgather against a barrier disagrees",
+          !prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_ALLGATHER));
+    PMIX_RELEASE(coll);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_operation\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -876,6 +987,7 @@ int main(void)
     failures += test_member_departed();
 #endif
     failures += test_group_directives();
+    failures += test_fence_operation();
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
     failures += test_recovery_epoch();

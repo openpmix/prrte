@@ -164,6 +164,27 @@ typedef struct {
 } prte_grpcomm_group_signature_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_group_signature_t);
 
+/* Which of the two operations a fence is running.
+ *
+ * PMIX_COLLECT_DATA names it, and nothing else may: the directive is a
+ * property of the *call*, so every participant passes the same value, while
+ * the payload is a property of what the local procs happened to publish and
+ * differs from daemon to daemon.  Deriving the operation from the bytes would
+ * therefore have daemons disagree about which collective they are in, and a
+ * fence has no originator to settle it - which is the failure class that
+ * withdrew the lateral movements (see docs/plans/scalable_collectives/).
+ *
+ * That distinction stopped being academic when PMIx learned to contribute
+ * only what changed: a participant with nothing new to say contributes zero
+ * bytes to an allgather it is fully a member of.
+ *
+ * UNKNOWN is "no contribution has said yet", not a third operation. */
+typedef enum {
+    PRTE_GRPCOMM_FENCE_OP_UNKNOWN = 0,
+    PRTE_GRPCOMM_FENCE_OP_BARRIER,
+    PRTE_GRPCOMM_FENCE_OP_ALLGATHER
+} prte_grpcomm_fence_op_t;
+
 /* Internal component object for tracking ongoing
  * allgather operations */
 typedef struct {
@@ -171,6 +192,10 @@ typedef struct {
     /* collective's signature */
     prte_grpcomm_fence_signature_t *sig;
     pmix_status_t status;
+    // Which operation this is. Carried on the wire by every contribution
+    // rather than re-derived, so that a participant that disagrees can be
+    // caught saying so instead of quietly running the other collective.
+    prte_grpcomm_fence_op_t op;
     /* collection bucket */
     pmix_data_buffer_t bucket;
     /* participating daemons */
@@ -338,6 +363,25 @@ void prte_grpcomm_fence_fault_handler(const prte_rml_recovery_status_t* status);
 PRTE_EXPORT
 prte_grpcomm_fence_t *prte_grpcomm_fence_get_tracker(prte_grpcomm_fence_signature_t *sig,
                                                             bool create);
+
+/* Which operation this fence's directives ask for.  Only PMIX_COLLECT_DATA is
+ * consulted: true is an allgather, false is a barrier, and so is its absence -
+ * a caller that said nothing asked for synchronization and nothing else.
+ * Never answers UNKNOWN.  Exported so the unit test can drive it. */
+PRTE_EXPORT
+prte_grpcomm_fence_op_t prte_grpcomm_fence_op_from_info(const pmix_info_t info[],
+                                                        size_t ninfo);
+
+/* Fold an arriving contribution's operation into the tracker's, adopting it if
+ * the tracker has not heard one yet.  Returns false if the two disagree, which
+ * means the participants asked for different collectives - a user error the
+ * fence cannot resolve, and one that has to be caught here because it is
+ * otherwise invisible: a barrier now puts nothing on the wire for PMIx's own
+ * per-blob collect-flag check to compare.  Exported so the unit test can drive
+ * it; the caller is what reports the disagreement. */
+PRTE_EXPORT
+bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
+                                 prte_grpcomm_fence_op_t incoming);
 
 /* group functions */
 PRTE_EXPORT extern

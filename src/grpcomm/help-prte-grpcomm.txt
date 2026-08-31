@@ -1,0 +1,28 @@
+# -*- text -*-
+#
+# Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English help file for PRTE's DVM-wide collectives.
+#
+[fence-op-mismatch]
+
+Participants in a fence asked for different operations. A fence is a
+barrier when PMIX_COLLECT_DATA is false or absent, and an allgather when
+it is true, and every participant must ask for the same one:
+
+   Node reporting the disagreement: %s
+
+This is an error in the application or in the library calling
+PMIx_Fence: the directive is part of the collective's definition, so
+passing different values from different participants asks the runtime
+for two collectives at once. The fence has been failed rather than
+completed with a result that only some participants would recognize.
+
+Note that a participant contributing no data is NOT this error. An
+allgather over participants that happen to have nothing to publish is
+still an allgather, and is expected — only the directive decides.

@@ -49,6 +49,8 @@ static int fence_sig_pack(pmix_data_buffer_t *bkt,
 static int fence_sig_unpack(pmix_data_buffer_t *buffer,
                             prte_grpcomm_fence_signature_t **sig);
 static void check_complete(prte_grpcomm_fence_t *coll);
+static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op);
+static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op);
 static void relcb(void *cbdata);
 static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st);
 static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body);
@@ -59,6 +61,83 @@ static bool tree_gather_converged(prte_grpcomm_fence_t *coll);
 static int  tree_gather_contribute(prte_grpcomm_fence_t *coll,
                                    pmix_data_buffer_t *payload);
 static void tree_gather_answer(prte_grpcomm_fence_t *coll);
+
+/* PMIX_COLLECT_DATA is the whole of the classification, and its absence is a
+ * barrier: a caller that named no directive asked to synchronize and nothing
+ * more.  PMIx resolves the flag across a daemon's *local* participants before
+ * it ever reaches us - disagreement there becomes PMIX_COLLECT_INVALID and the
+ * fence is refused locally - so what arrives here is one answer per daemon,
+ * and this is where the DVM-wide agreement gets tested. */
+prte_grpcomm_fence_op_t prte_grpcomm_fence_op_from_info(const pmix_info_t info[],
+                                                        size_t ninfo)
+{
+    size_t n;
+
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_COLLECT_DATA)) {
+            if (PMIX_INFO_TRUE(&info[n])) {
+                return PRTE_GRPCOMM_FENCE_OP_ALLGATHER;
+            }
+            return PRTE_GRPCOMM_FENCE_OP_BARRIER;
+        }
+    }
+    return PRTE_GRPCOMM_FENCE_OP_BARRIER;
+}
+
+bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
+                                 prte_grpcomm_fence_op_t incoming)
+{
+    /* an arrival that names no operation tells us nothing, so it cannot
+     * disagree with anything either */
+    if (PRTE_GRPCOMM_FENCE_OP_UNKNOWN == incoming) {
+        return true;
+    }
+    if (PRTE_GRPCOMM_FENCE_OP_UNKNOWN == coll->op) {
+        coll->op = incoming;
+        return true;
+    }
+    return (coll->op == incoming);
+}
+
+/* The operation rides every contribution as a byte of its own rather than as
+ * one more optional directive, because unlike the timeout and the collective
+ * status it is not optional: every contribution has an operation, and a reader
+ * that has to cope with its absence cannot tell "barrier" from "nobody said". */
+static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op)
+{
+    uint8_t val = (uint8_t) op;
+    pmix_status_t rc;
+
+    rc = PMIx_Data_pack(NULL, bkt, &val, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    return PRTE_SUCCESS;
+}
+
+static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op)
+{
+    uint8_t val;
+    int32_t cnt = 1;
+    pmix_status_t rc;
+
+    rc = PMIx_Data_unpack(NULL, buffer, &val, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    /* screen it before it is compared: a value no release ever assigned would
+     * otherwise agree with nothing and disagree with nothing, and be taken for
+     * a mismatch by every daemon that saw it - which reports a user error for
+     * what is a corrupt message */
+    if (PRTE_GRPCOMM_FENCE_OP_BARRIER != (prte_grpcomm_fence_op_t) val &&
+        PRTE_GRPCOMM_FENCE_OP_ALLGATHER != (prte_grpcomm_fence_op_t) val) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *op = (prte_grpcomm_fence_op_t) val;
+    return PRTE_SUCCESS;
+}
 
 /* Work out how many contributions this daemon has to collect for a fence:
  * one per child subtree holding a participant, plus our own if we are one.
@@ -373,6 +452,18 @@ static void fence(int sd, short args, void *cbdata)
     coll->cbfunc = cd->cbfunc;
     coll->cbdata = cd->cbdata;
 
+    /* Name the operation from the directives our own participants gave, and
+     * fold it in the same way an arriving contribution's would be - this
+     * daemon is a participant like any other, and if it is the second one to
+     * reach a tracker its answer has to agree with the first. */
+    if (!prte_grpcomm_fence_op_merge(coll,
+                                     prte_grpcomm_fence_op_from_info(cd->info, cd->ninfo))) {
+        prte_show_help("help-prte-grpcomm.txt", "fence-op-mismatch", true,
+                       prte_process_info.nodename);
+        if (PMIX_SUCCESS == coll->status) {
+            coll->status = PMIX_ERR_INVALID_ARG;
+        }
+    }
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
                          "%s grpcomm: fence",
@@ -382,6 +473,15 @@ static void fence(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(relay);
     /* pack the signature */
     rc = fence_sig_pack(relay, coll->sig);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        st = prte_pmix_convert_rc(rc);
+        goto done;
+    }
+
+    /* say which operation this contribution belongs to */
+    rc = fence_op_pack(relay, coll->op);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
@@ -407,18 +507,35 @@ static void fence(int sd, short args, void *cbdata)
         }
     }
 
-    /* pass along the payload */
-    PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
-    bo.bytes = cd->data;
-    bo.size = cd->ndata;
-    PMIx_Data_embed(&bkt, &bo);
-    rc = PMIx_Data_copy_payload(relay, &bkt);
-    PMIX_DATA_BUFFER_DESTRUCT(&bkt);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(relay);
-        st = rc;
-        goto done;
+    /* Pass along the payload - for an allgather, and only for one.
+     *
+     * A barrier has no data path at all: PMIx still hands us a blob for one
+     * (a lone PMIX_COLLECT_NO flag byte, compressed and wrapped), and rolling
+     * one of those up from every daemon and broadcasting the concatenation
+     * back to all of them is the entire round trip spent on bytes that say
+     * only "there is nothing here".  The receiving side wants it no more than
+     * we do - PMIx skips its store outright when the host returns no data,
+     * where a present-but-empty payload makes it walk the blobs to find that
+     * out.
+     *
+     * An allgather packs its payload unconditionally, including when this
+     * daemon has nothing to say.  A participant with an empty contribution is
+     * still a participant: it is counted in nexpected, it must report, and
+     * with PMIx contributing only what changed an empty block is the ordinary
+     * case for any fence after the first rather than a degenerate one. */
+    if (PRTE_GRPCOMM_FENCE_OP_ALLGATHER == coll->op) {
+        PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
+        bo.bytes = cd->data;
+        bo.size = cd->ndata;
+        PMIx_Data_embed(&bkt, &bo);
+        rc = PMIx_Data_copy_payload(relay, &bkt);
+        PMIX_DATA_BUFFER_DESTRUCT(&bkt);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(relay);
+            st = rc;
+            goto done;
+        }
     }
 
     /* Keep our own contribution so a fault can replay it: recovery resets
@@ -499,6 +616,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     pmix_info_t *info = NULL;
     prte_grpcomm_fence_signature_t *sig = NULL;
     prte_grpcomm_fence_t *coll;
+    prte_grpcomm_fence_op_t op;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
@@ -569,6 +687,28 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         }
     }
 
+    /* which operation this contribution belongs to, and whether it agrees
+     * with everything else this tracker has heard */
+    rc = fence_op_unpack(buffer, &op);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        return;
+    }
+    if (!prte_grpcomm_fence_op_merge(coll, op)) {
+        /* The participants asked for different collectives.  Report it and
+         * carry on: the contribution still has to be counted or the fence
+         * never converges, and it is convergence that carries the failure
+         * back out to every participant through the release.  This is the
+         * same treatment a non-success PMIX_LOCAL_COLLECTIVE_STATUS gets, and
+         * the status is deliberately the one PMIx answers for the local form
+         * of the same disagreement. */
+        prte_show_help("help-prte-grpcomm.txt", "fence-op-mismatch", true,
+                       prte_process_info.nodename);
+        if (PMIX_SUCCESS == coll->status) {
+            coll->status = PMIX_ERR_INVALID_ARG;
+        }
+    }
+
     // unpack the info structs
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
@@ -631,12 +771,20 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     }
 
     /* Absorb the payload - the remainder of the message after the info
-     * structs - into the bucket. */
-    rc = tree_gather_contribute(coll, buffer);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_INFO_FREE(info, ninfo);
-        return;
+     * structs - into the bucket.  A barrier put none there, and asking for it
+     * anyway would be asking a fully-consumed buffer for its remainder.
+     *
+     * Note what is *not* conditional: the accounting below.  Participation is
+     * counted, never weighed, so a contribution of zero bytes advances the
+     * rollup exactly as far as a large one does.  That is what lets an
+     * allgather stay an allgather when a participant has nothing to add. */
+    if (PRTE_GRPCOMM_FENCE_OP_ALLGATHER == coll->op) {
+        rc = tree_gather_contribute(coll, buffer);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_INFO_FREE(info, ninfo);
+            return;
+        }
     }
     PMIX_INFO_FREE(info, ninfo);
 
@@ -743,11 +891,19 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
             PMIX_DATA_BUFFER_RELEASE(reply);
             return;
         }
-        rc = PMIx_Data_copy_payload(reply, &coll->bucket);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            return;
+        /* A barrier's release is the signature and the status: there is
+         * nothing gathered to hand back, and saying so by sending nothing is
+         * what lets every daemon's release path skip the unload and PMIx skip
+         * its store.  The operation is not on this message because it does
+         * not need to be - a daemon only reaches its release path by holding
+         * a tracker, and a tracker knows which collective it is. */
+        if (PRTE_GRPCOMM_FENCE_OP_BARRIER != coll->op) {
+            rc = PMIx_Data_copy_payload(reply, &coll->bucket);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                return;
+            }
         }
         /* xcast copies the payload, so the buffer is still ours to free */
         (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
@@ -762,6 +918,16 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
 
     PMIX_DATA_BUFFER_CREATE(reply);
     rc = fence_sig_pack(reply, coll->sig);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+
+    /* the aggregate travels as a contribution like any other, so it names its
+     * operation like any other - this is the merged answer for our whole
+     * subtree, which is what our parent has to agree with */
+    rc = fence_op_pack(reply, coll->op);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -803,11 +969,13 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
         }
     }
 
-    rc = PMIx_Data_copy_payload(reply, &coll->bucket);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+    if (PRTE_GRPCOMM_FENCE_OP_BARRIER != coll->op) {
+        rc = PMIx_Data_copy_payload(reply, &coll->bucket);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
     }
 
     /* stamp it with the epoch it belongs to, so a parent that has already
@@ -875,13 +1043,25 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* unload the buffer. An aborted fence carries no gathered data, so an
+    /* Unload the buffer. An aborted fence carries no gathered data, so an
      * empty or unreadable payload is expected there - do not let that
-     * overwrite the status the controller sent, which is the whole message. */
+     * overwrite the status the controller sent, which is the whole message.
+     *
+     * A barrier is not asked at all.  Its release legitimately carries nothing
+     * on the success path too, so an unload that objected to an empty buffer
+     * would turn every barrier into a failure; and there is nothing to gain by
+     * asking, because handing PMIx a NULL payload is what tells it to skip the
+     * store rather than walk a bucket to discover it is empty.  The test is
+     * written so that only a positively-known barrier is skipped: a tracker
+     * still at UNKNOWN never heard a contribution, which is a released fence
+     * this daemon merely relayed for, and taking the old path there costs
+     * nothing. */
     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    rc = PMIx_Data_unload(buffer, &bo);
-    if (PMIX_SUCCESS != rc && PMIX_SUCCESS == ret) {
-        ret = rc;
+    if (PRTE_GRPCOMM_FENCE_OP_BARRIER != coll->op) {
+        rc = PMIx_Data_unload(buffer, &bo);
+        if (PMIX_SUCCESS != rc && PMIX_SUCCESS == ret) {
+            ret = rc;
+        }
     }
 
     /* Retire the tracker BEFORE delivering, not after. This fence is over the
