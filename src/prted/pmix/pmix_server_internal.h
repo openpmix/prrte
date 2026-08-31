@@ -673,7 +673,6 @@ typedef struct {
      * them through the direct-modex upcall.  Registering every proc in the job
      * on every daemon costs a table that grows with the total process count on
      * a node that will run a fixed slice of it. */
-    bool lazy_procdata;
     pmix_list_t psets;
     pmix_list_t groups;
     /* assemblages formed by PMIx_Connect - see prte_pmix_server_connection_t.

@@ -539,20 +539,6 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.allow_client_clones);
 
-    /* Publish per-proc data only for the procs we host, and derive the rest on
-     * demand.  Every daemon registering a PMIx entry for every proc in the job
-     * is a table that grows with the job while the work on the node does not;
-     * the placement it describes is derivable here from the job object, so the
-     * direct-modex upcall can answer for a proc we do not host without any
-     * wire traffic.  See derive_proc_data() in pmix_server_fence.c. */
-    prte_pmix_server_globals.lazy_procdata = true;
-    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "lazy_procdata",
-                                      "Publish per-proc data to the local PMIx server only "
-                                      "for procs this daemon hosts, deriving data for other "
-                                      "procs on demand",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_pmix_server_globals.lazy_procdata);
-
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",

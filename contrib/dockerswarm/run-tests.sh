@@ -2586,7 +2586,7 @@ peerinfo_mismatches() {
 }
 
 test_pmix() {
-    local out rc n hosts undef peers lazyout eagerout mism a b vrb
+    local out rc n hosts undef peers lazyout mism a vrb
 
     banner "pmix: the queried proc table carries a real state for every proc"
     # PMIX_QUERY_PROC_TABLE is the only caller of prte_pmix_convert_state(),
@@ -2800,11 +2800,13 @@ test_pmix() {
     # It matters because of what the daemon may legitimately not have
     # published.  Registering a PMIx entry for every proc in the job, on every
     # daemon, builds a table that grows with the whole job on a node that runs
-    # a fixed slice of it, so prte_pmix_lazy_procdata publishes only the procs
-    # this daemon hosts and derives the rest from its own job object when
-    # somebody asks.  The derivation is reached through the direct-modex
-    # up-call, which is a path no single-host run has: on one node every proc
-    # is local and there is nothing to derive.
+    # a fixed slice of it.  Publishing only the procs this daemon hosts was
+    # tried and closed (docs/todo.rst); what remains is the derivation, which
+    # answers out of this daemon's own job object for the keys it does hold
+    # and which the eager registration cannot publish -- above all the
+    # binding, which the launch message scatters.  The derivation is reached
+    # through the direct-modex up-call, which is a path no single-host run
+    # has: on one node every proc is local and there is nothing to derive.
     #
     # The assertion is a cross-check rather than a spot value, because the
     # interesting failure is not "no answer" but "a plausible wrong answer" --
@@ -2853,6 +2855,28 @@ test_pmix() {
             && ok "...including every peer's binding, which off-node had to be fetched" \
             || bad "$n of 56 peer lookups came back with a binding"
 
+        # ...and the one reserved key that must NOT be answered for a peer
+        # elsewhere.  Device distances are measured against the topology of
+        # the node the proc runs on, and a daemon holds only its own -- the
+        # HNP collects every node's, no daemon receives anybody else's.  So
+        # a daemon that answered would be handing back distances computed
+        # from ITS hardware and labelled with somebody else's rank, which is
+        # worse than a refusal because it is plausible.  The request is
+        # refused outright rather than sent on a round trip that cannot
+        # answer it.  Nothing is asserted about a peer on this same node:
+        # the daemon published those at registration and the question never
+        # leaves the local server, and whether any device of the configured
+        # types exists at all is a property of the machine.
+        n=$(echo "$lazyout" | tr -d '\r' | awk '$1 == "DIST" && $4 == "remote" {c++} END {print c+0}')
+        a=$(echo "$lazyout" | tr -d '\r' | awk '$1 == "DIST" && $4 == "remote" && $5 != "PMIX_ERR_NOT_SUPPORTED" {c++} END {print c+0}')
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "no rank asked an off-node peer for its device distances -- the refusal went untested"
+        elif [ "${a:-0}" -eq 0 ]; then
+            ok "...and all $n requests for an off-node peer's device distances were refused as unsupported"
+        else
+            bad "$a of $n off-node device-distance requests were not refused: $(echo "$lazyout" | tr -d '\r' | awk '$1 == "DIST" && $4 == "remote" && $5 != "PMIX_ERR_NOT_SUPPORTED"' | head -3 | tr '\n' ' ')"
+        fi
+
         # Note what that comparison already is: a SELF line is what the
         # proc's OWN daemon published about it -- which a daemon does for
         # its own procs either way -- while the PEER lines about it are what
@@ -2861,17 +2885,14 @@ test_pmix() {
         # two separate runs would not be: a second job has a different
         # PMIX_GLOBAL_RANK offset, so the tables legitimately differ.
         #
-        # The same job with the derivation off is therefore a control on the
-        # client rather than a second reading: it must pass here too, or a
-        # failure above says nothing about the derivation.
-        eagerout=$(PRUN "$peers --prtemca prte_pmix_lazy_procdata 0 $PI" 2>&1)
-        mism=$(peerinfo_mismatches "$eagerout")
-        n=$(echo "$eagerout" | grep -c '^PEERFAIL')
-        if [ -z "$mism" ] && [ "$n" = 0 ]; then
-            ok "eager publication (prte_pmix_lazy_procdata 0) passes the same check"
-        else
-            bad "the check fails with the derivation off, so it is not testing the derivation: $(echo "$mism" | head -2 | tr '\n' ' ' | tail -c 400)"
-        fi
+        # There used to be a second reading here with the derivation
+        # switched off, as a control on the client.  The switch is gone --
+        # deriving what we can and asking the wire for the rest is what the
+        # daemon does, and the parameter only ever controlled the requesting
+        # side, so "off" meant "fetch the same answer over the wire".  The
+        # control that remains is the one below: the daemon has to say it
+        # derived something, or the compare above is passing on eagerly
+        # published data and proves nothing.
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm
@@ -2959,12 +2980,14 @@ test_pmix() {
         [ "$n" = 0 ] \
             && ok "...and none of the lookups failed" \
             || bad "$n lookups failed while the derivation was in use"
-        # ...and with it off, nothing may claim to have derived anything.
-        out=$(RUN "timeout -k 5 150 prterun --host node1:2,node2:2,node3:2,node4:2 \
-                     -n 8 --map-by node $vrb --prtemca prte_pmix_lazy_procdata 0 $PI" 2>&1)
-        echo "$out" | grep -q 'ANSWERED LOCALLY' \
-            && bad "the derivation ran even though prte_pmix_lazy_procdata was 0" \
-            || ok "prte_pmix_lazy_procdata 0 turns the derivation off completely"
+        # ...and the one key no daemon can derive is refused rather than
+        # sent on a round trip that cannot answer it.  Device distances are
+        # measured against the topology of the node the proc runs on, and a
+        # daemon holds only its own.
+        n=$(echo "$out" | grep -c 'DEVICE DISTANCES - NOT SUPPORTED')
+        [ "${n:-0}" -gt 0 ] \
+            && ok "...and $n requests for a remote proc's device distances were refused by the daemon" \
+            || bad "no daemon refused a device-distance request -- either peerinfo stopped asking or the refusal moved"
     fi
     cleanup_swarm
 }

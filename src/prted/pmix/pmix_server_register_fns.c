@@ -734,7 +734,26 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                 }
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
                 free(tmp);
-                if (0 != prte_pmix_server_globals.generate_dist) {
+                /* Device distances, but only for a proc we host.
+                 *
+                 * These are computed against the topology of the node the
+                 * proc runs on, and a daemon does not have one for any node
+                 * but its own: PRRTE collects topologies at the HNP, and
+                 * prte_util_decode_nidmap() hands every node in a daemon's
+                 * pool a retained reference to that daemon's OWN topology,
+                 * "always default to homogeneous as that is the most common
+                 * scenario".  So computing this for a proc we do not host
+                 * measures our hardware and labels it as that proc's -
+                 * correct by accident on a homogeneous cluster and silently
+                 * wrong on any other.  (The HNP is the exception, holding
+                 * the real topology of every node, but answering there and
+                 * nowhere else is a worse contract than not answering.)
+                 *
+                 * A get for someone else's is refused with NOT_SUPPORTED by
+                 * dmodex_req(), rather than being left to fail as though the
+                 * data were merely missing. */
+                if (0 != prte_pmix_server_globals.generate_dist &&
+                    PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
                     /* compute the device distances for this proc */
                     topo.topology = node->topology->topo;
                     devinfo[1].value.data.string = node->name;

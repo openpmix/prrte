@@ -898,7 +898,8 @@ takes more off this traffic than aggregating it ever would have.
 **Lazy proc-data registration: the withholding half.**  The *deriving*
 half is in: ``dmodex_req`` answers a request for one of the placement keys
 out of ``jdata->procs[rank]`` rather than going to the hosting daemon
-(``prte_pmix_lazy_procdata``, on by default).  The *withholding* half is not,
+(unconditionally — the MCA parameter that used to gate it is gone, having
+only ever controlled the requesting side).  The *withholding* half is not,
 and not by omission from the design — the commit that landed the derivation
 does not touch ``pmix_server_register_fns.c`` at all.  That file's per-proc
 loop still emits a ``PMIX_PROC_INFO_ARRAY`` for **every** proc in the job on
@@ -919,8 +920,7 @@ anyone spends effort on the other half.  Measured with
 job where it is — at eight ranks over four nodes, with
 ``--prtemca prte_pmix_server_verbose 2``, the twenty-four peer lookups split
 six answered by the derivation and eighteen by a wire round trip to the
-hosting daemon; with ``prte_pmix_lazy_procdata 0`` it is zero and
-twenty-four.  Every one of the six is on the master, and every one is for
+hosting daemon.  Every one of the six is on the master, and every one is for
 ``PMIX_RANK``.  That is the only key PMIx never has: it consumes the rank
 entry as the array's identifier rather than storing it.  Everything else the
 eager registration publishes is found locally and never reaches the

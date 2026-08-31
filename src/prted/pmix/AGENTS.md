@@ -477,27 +477,50 @@ treatment.
 
 `prte_pmix_server_register_nspace()` hands its local PMIx server a
 `PMIX_PROC_INFO_ARRAY` for **every** proc of a job — rank, global rank,
-app rank, appnum, local and node rank, node id, hostname and, for the procs
-it hosts, cpuset and the locality string generated from it. Every daemon,
-for the whole job. That is a table proportional to the job on a node that
-will only ever run its own slice of it, and `prte_hostname_cutoff` — which
-drops one field of it above a thousand nodes — is the record of that wall
-having been met once already.
+app rank, appnum, local and node rank, node id, hostname, parent id and,
+for the procs it hosts, cpuset, the locality string generated from it, and
+the device distances. Every daemon, for the whole job. That is a table
+proportional to the job on a node that will only ever run its own slice of
+it, and `prte_hostname_cutoff` — which drops one field of it above a
+thousand nodes — is the record of that wall having been met once already.
 
-**Only the two location keys are withheld today, and for a different
-reason** (the cpuset scatter, below). `prte_pmix_lazy_procdata` — on by
-default — switches on the *deriving* half of the narrowing: when PMIx asks
-for one of the placement keys through the `direct_modex` upcall,
-`dmodex_req()` answers out of `jdata->procs[rank]` rather than going to the
-hosting daemon. The *withholding* half is **not** in: the per-proc loop
-here still emits an array for every proc of the job on every daemon, so the
-derivation almost never fires — everything the eager registration published
-is found locally first. Do not read the paragraphs below as a description
-of a daemon that publishes only its own procs; they describe the rules any
-such narrowing must keep to, and
-[`docs/todo.rst`](../../../docs/todo.rst) carries the measurement of what
-the derivation is worth as it stands and what the other half would cost.
-Four things about the derivation are load bearing:
+**What is withheld is withheld because this daemon does not have it, never
+to make the table smaller.** Three keys, on two grounds. The cpuset and the
+locality string come from the binding, which the launch message *scatters*,
+so a daemon holds one only for the procs it forks (below). The device
+distances are measured against the node's topology, and a daemon has only
+its own — `prte_util_decode_nidmap()` hands every node in its pool that one,
+"always default to homogeneous" — so computing them for a proc it does not
+host would measure its own hardware and label it as somebody else's.
+
+That last one is the same hazard *A daemon must not answer out of state it
+does not have* describes for the query arms, and it is worth knowing why the
+remedy differs. There, a key the daemon cannot answer is **relayed** to the
+master, which does hold the state. Here it is **refused**, even though the
+master likewise holds every node's real topology — because this is a
+`direct_modex` for one proc's data rather than a query, and an answer
+available only through the master would make the same `PMIx_Get` succeed or
+fail depending on which daemon the asker happens to be running under. A
+uniform `PMIX_ERR_NOT_SUPPORTED` is a better contract than one that is right
+on one node in the DVM.
+
+Everything else in the array is published for every proc on every daemon,
+and **that is deliberate**. Narrowing it — publishing only the procs a
+daemon hosts and deriving the rest — was tried, measured and closed; see
+[`docs/todo.rst`](../../../docs/todo.rst), which carries the reasoning and
+the numbers. The short version is that PMIx rebuilds most of the per-rank
+table from the node and proc maps whether PRRTE publishes the arrays or
+not, so the withholding removes a handful of keys and not the table. Do not
+read the paragraphs below as a description of a daemon that publishes only
+its own procs.
+
+The *deriving* half is unconditional and is what makes the three withheld
+keys answerable: when PMIx asks for a placement key through the
+`direct_modex` upcall, `dmodex_req()` answers out of `jdata->procs[rank]`
+rather than going to the hosting daemon. There is no MCA parameter for it
+— there was, and it controlled only the requesting side, which made "off"
+mean "ask the wire for the same answer". Four things about the derivation
+are load bearing:
 
 - **The key set is what PRRTE is the authority for, not what an app wants.**
   `derivable_key()` lists the placement and binding this DVM computed —
@@ -508,10 +531,22 @@ Four things about the derivation are load bearing:
 - **`derive_proc_data()` mirrors the per-proc section of
   `register_nspace()`.** A key added to one and not the other is a key
   that becomes a wire round trip (harmless, but a silent loss of the
-  point), or worse, one whose two spellings disagree. `PMIX_PARENT_ID` and
-  `PMIX_DEVICE_DISTANCES` are deliberately *not* derived: they are still
-  published by the daemon that hosts the proc, so a request for one falls
-  through to that daemon and is answered there.
+  point), or worse, one whose two spellings disagree. The two keys not in
+  the set are not in it for opposite reasons. `PMIX_PARENT_ID` needs no
+  derivation: every daemon publishes it for every proc, so a get for it is
+  answered locally and never reaches this path at all.
+  `PMIX_DEVICE_DISTANCES` *cannot* be derived — only the hosting daemon has
+  the topology to measure — so `dmodex_req()` refuses a request for a
+  remote proc's with `PMIX_ERR_NOT_SUPPORTED` rather than sending it on.
+  **Do not "fix" that by letting it fall through to the hosting daemon.**
+  That daemon publishes the key to its own PMIx server but cannot hand it
+  back: a direct modex reply carries only what the process itself PUT
+  (`PMIX_REMOTE` scope), so the asker pays a round trip to be told
+  `NOT_FOUND` — or parks until the proc commits something it may never
+  commit. `contrib/dockerswarm`'s `peerinfo` asks each of its peers for
+  the key and prints the status it got, so the refusal is asserted from
+  both ends: every off-node peer must come back `PMIX_ERR_NOT_SUPPORTED`,
+  and the daemon must be seen saying it refused.
 - **The answer is a packed blob of `pmix_kval_t`, not a bare success.**
   PMIx stores a modex reply itself, and for a specific rank it stores it
   under `PMIX_REMOTE` — which is where the re-satisfy after a reply then

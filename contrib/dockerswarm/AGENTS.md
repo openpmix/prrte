@@ -56,7 +56,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
 | `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
 | `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
-| `peerinfo.c` | A bare PMIx client in which every rank asks **every other rank of its own job** where it is (`peerinfo` in the install): rank, app rank, local/node rank, node id, hostname, cpuset, locality string. The only client here that reads a *peer's* reserved keys, and so the only one that reaches the daemon's derive-on-demand path — everything else either reads back what it put itself or asks about the job. Drives `derive_proc_data()` in `src/prted/pmix/pmix_server_fence.c`. See §20. |
+| `peerinfo.c` | A bare PMIx client in which every rank asks **every other rank of its own job** where it is (`peerinfo` in the install): rank, app rank, local/node rank, node id, hostname, cpuset, locality string — and device distances, the one key an off-node peer must be *refused*. The only client here that reads a *peer's* reserved keys, and so the only one that reaches the daemon's derive-on-demand path — everything else either reads back what it put itself or asks about the job. Drives `derive_proc_data()` in `src/prted/pmix/pmix_server_fence.c`. See §20. |
 | `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives grpcomm's `grp_release` on daemons that merely *received* the broadcast. See §15. |
 | `groupinv.c` | A bare PMIx client that forms a group by **invitation** and asks for a context id (`groupinv` in the install). The highest rank leads, so mapped by node the leader is never the HNP - which is the point: that method runs no collective, so its leader asks for the id through job control and only the HNP holds the pool, so the request has to be relayed. Drives `PRTE_PMIX_GROUP_CTXID` in `src/prted/pmix`. See §15. |
 | `envspawn.c` | A PMIx client that spawns a child job carrying one of every **envar directive** (`envspawn` in the install): SET/ADD/UNSET/PREPEND/APPEND, pinned to a named host, with the child reporting the environment it actually got into a file on its own node. Those directives have no command-line surface — they arrive only on a spawn request — and `odls` applies them on whichever daemon forks the process, so the child has to land somewhere the parent is not. Drives `prte_odls_base_process_envars`. |
@@ -1982,20 +1982,21 @@ prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
 
 ## 20. Asking a peer where it is (`peerinfo`, `test_pmix`)
 
-A daemon does not have to publish, to its local PMIx server, everything it
-knows about every proc of a job. `prte_pmix_lazy_procdata` publishes only
-the procs that daemon hosts and derives the rest out of its own job object
-when PMIx brings it a request — see
+A daemon publishes, to its local PMIx server, everything it knows about
+every proc of a job — but there are things it does not know about a proc it
+does not host, above all the binding, which the launch message scatters. It
+answers those out of its own job object when PMIx brings it a request; see
 [`src/prted/pmix/AGENTS.md`](../../src/prted/pmix/AGENTS.md), *What a daemon
-publishes, and what it derives*.
+publishes, and what it derives*. (Publishing *only* the procs a daemon hosts
+was tried, measured and closed — `docs/todo.rst`.)
 
 **Nothing else in this harness asks one rank about another rank.** Every
 other client either puts its own data and reads it back, or asks about the
 job rather than about a peer, and both are answered out of the local
 server's cache without the daemon ever being consulted. So the derivation
-could be switched on, the whole suite run green, and the path never once
-have executed — which is exactly what happened the first time it was
-written, and why the change sat unproven.
+could run the whole suite green and never once have executed — which is
+exactly what happened the first time it was written, and why the change sat
+unproven.
 
 Read that as a hole in the coverage and not as a finding about workloads.
 PRRTE is not one MPI's runtime; several programming libraries build on it,
@@ -2031,6 +2032,28 @@ so the assertion is a string compare — what rank *r* was told about rank
   about — which is what catches a derivation that walked to the wrong
   entry and produced a whole line of plausible values.
 
+`peerinfo` also asks every peer for its **device distances**, on a `DIST`
+line of its own carrying the *status* rather than a value:
+
+```
+DIST <myrank> <targetrank> self|local|remote <status>
+```
+
+That key is the one a daemon must refuse for a proc it does not host. Only
+the HNP collects topologies; `prte_util_decode_nidmap()` hands every daemon
+its own for every node in its pool, "always default to homogeneous". So a
+daemon that answered would measure **its** hardware and label the result
+with somebody else's rank — plausible, and wrong, which is worse than a
+refusal. Every `remote` line must read `PMIX_ERR_NOT_SUPPORTED`.
+
+Nothing is asserted about a `local` peer, deliberately: the daemon
+published those distances at registration and the question never leaves the
+local PMIx server, so what comes back says only whether the machine has a
+device of the configured types (`prte_pmix_generate_distances`, default
+`fabric,gpu,network`) — a fact about the container, not about PRRTE. Judge
+the status in the harness rather than in the client, for the same reason:
+`peerinfo` reports, `run-tests.sh` decides.
+
 A consistent table still cannot tell the two implementations apart, so a
 second case watches the daemon say it did the work:
 
@@ -2040,14 +2063,36 @@ prterun --host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node \
     /opt/prte/prte/bin/peerinfo 2>&1 | grep -c "ANSWERED LOCALLY"
 ```
 
-It must be **one per remote proc per daemon** — 24 for that command (four
-daemons, six remote procs each), *not* one per lookup: PMIx caches the
-modex reply, so the second rank on a node asking about the same peer never
-reaches the daemon at all. A count equal to the number of lookups would
-mean the caching is not working; a count of zero means the path did not
-run and everything above it proved nothing. `--leave-session-attached` is
-required, and for the same reason it is in §19: a daemonized `prted` has no
-stderr to read, so without it only the master's traces come back.
+**The number to expect is "some", and the case asserts only that.** What is
+fixed is the count one level down: `DMODX REQ FOR` on a placement key is
+**one per remote proc per daemon** — 24 for that command (four daemons, six
+remote procs each), *not* one per lookup, because PMIx caches the modex
+reply and the second rank on a node asking about the same peer never
+reaches the daemon at all. How many of those 24 are *derived* is not fixed,
+because a modex reply for a specific rank carries **every** key for that
+rank, so whichever key happens to be asked first about a given peer brings
+the rest with it and is the only one the daemon ever sees. The cpuset
+cannot be derived — it was scattered — so a peer whose cpuset is asked for
+first costs a wire fetch, while one whose rank is asked for first is
+answered out of the job object. Measured on that command: 24 requests, 6
+`ANSWERED LOCALLY` and 18 `pmix.cpuset` fetches. A count of **zero** is the
+failure — it means the path did not run and everything above it proved
+nothing.
+
+The same capture is where the other half of the device-distance check
+lives: `DEVICE DISTANCES - NOT SUPPORTED` must appear, because a
+client-side `PMIX_ERR_NOT_SUPPORTED` alone cannot say *who* produced it.
+Those are counted separately from the 24 above, and unlike the 24 the
+figure is **not** stable — two runs of the identical command gave 36 and
+29. A refused request stores nothing, so each rank re-asks rather than
+reading a cache, and what varies is how many of those land close enough
+together for `dmodex_req()`'s "has anyone already requested data for this
+target" loop to park one behind another. Assert that it is non-zero, never
+that it is a particular number.
+
+`--leave-session-attached` is required, and for the same reason it is in
+§19: a daemonized `prted` has no stderr to read, so without it only the
+master's traces come back.
 
 ## 21. Client churn against the PMIx server (`pmixloop`, `test_pmix_cycling`, `test_pmix_server_teardown`)
 

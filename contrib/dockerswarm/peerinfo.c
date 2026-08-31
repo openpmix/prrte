@@ -28,18 +28,18 @@
  * These are the keys PRRTE decided when it mapped the job - rank, app rank,
  * local and node rank, node id, hostname, cpuset, locality string.  Every
  * daemon used to publish all of them, for every proc in the job, to its
- * local PMIx server, which is a table that grows with the whole job on a
- * node that will only ever run its own slice of it.  A daemon can instead
- * publish only the procs it hosts and answer for the rest out of its own
- * job object when somebody asks, which is what prte_pmix_lazy_procdata
- * turns on.
+ * local PMIx server, and still does: publishing only the procs it hosts was
+ * tried and closed (docs/todo.rst).  What it cannot publish for a proc it
+ * does not host - the binding, which the launch message scatters - it
+ * answers out of its own job object when somebody asks, and this client is
+ * what asks.
  *
  * Nothing else in this harness ever asks one rank about another rank's
  * reserved keys.  Every other client here either puts its own data and
  * fetches it back, or asks about the job rather than about a peer, and
  * both of those are answered without the request ever reaching the daemon.
- * So the whole derive-on-demand path could be switched on, run the entire
- * suite green, and never once have executed.  This client is the shape of
+ * So the whole derive-on-demand path could run the entire suite green and
+ * never once have executed.  This client is the shape of
  * an MPI initialization - each rank asking where its peers are - and it is
  * the only thing here that drives a PMIx_Get for a reserved key of a proc
  * this daemon does not host.
@@ -48,6 +48,19 @@
  * one MPI's runtime, several programming libraries build on it, and what
  * any of them asks a peer for is not knowable from this tree - so read the
  * gap as missing coverage, not as evidence that these keys go unwanted.
+ *
+ * It also asks each peer for its device distances, and reports the status
+ * rather than the value.  That is the one reserved key a daemon must NOT
+ * answer for a proc it does not host - distances are measured against the
+ * topology of the node the proc runs on, and a daemon holds only its own -
+ * so an off-node peer has to come back refused rather than answered from
+ * the asking daemon's hardware.  The line is
+ *
+ *   DIST <myrank> <targetrank> self|local|remote <status>
+ *
+ * and the harness is what judges it, because what a LOCAL answer should
+ * contain is a property of the machine (whether it has a device of the
+ * configured types at all) rather than of PRRTE.
  *
  * Run it with --map-by node so the peers are genuinely elsewhere; on one
  * node every answer comes out of the local publication and the interesting
@@ -175,6 +188,25 @@ static void describe(pmix_proc_t *target, char *out, size_t sz)
     }
 }
 
+/* Report - not judge - what came back when we asked `target` for its
+ * device distances.  Deliberately not routed through fetch(): a refusal is
+ * the RIGHT answer for an off-node peer, so counting it as a lookup failure
+ * would invert the test, and the value is a data array that has nothing to
+ * compare against a peer's own account of itself. */
+static void distances(pmix_proc_t *target, const char *rel)
+{
+    pmix_status_t rc;
+    pmix_value_t *val = NULL;
+
+    rc = PMIx_Get(target, PMIX_DEVICE_DISTANCES, NULL, 0, &val);
+    printf("DIST %u %u %s %s\n", myproc.rank, target->rank, rel,
+           PMIx_Error_string(rc));
+    fflush(stdout);
+    if (NULL != val) {
+        PMIX_VALUE_RELEASE(val);
+    }
+}
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
@@ -182,6 +214,7 @@ int main(int argc, char **argv)
     pmix_value_t *val = NULL;
     uint32_t jobsize = 0, r;
     char line[FIELD_MAX * 12];
+    char myhost[FIELD_MAX], peerhost[FIELD_MAX];
 
     (void) argc;
     (void) argv;
@@ -209,6 +242,12 @@ int main(int argc, char **argv)
     printf("SELF %u %s\n", myproc.rank, line);
     fflush(stdout);
 
+    /* which node I am on, so a peer can be called local or remote below.
+     * The refusal only applies to a proc this daemon does not host, and on
+     * a job that spans nodes both kinds are present. */
+    fetch(&myproc, PMIX_HOSTNAME, myhost, sizeof(myhost));
+    distances(&myproc, "self");
+
     for (r = 0; r < jobsize; r++) {
         if ((pmix_rank_t) r == myproc.rank) {
             continue;
@@ -227,6 +266,16 @@ int main(int argc, char **argv)
                    PMIX_RANK, line);
             fflush(stdout);
             ++nfail;
+        }
+        /* "unknown" rather than a guess when either hostname is absent:
+         * calling an unclassifiable peer local would quietly retire the
+         * off-node assertion, where an unknown leaves it with nothing to
+         * count and the case says so. */
+        fetch(&target, PMIX_HOSTNAME, peerhost, sizeof(peerhost));
+        if (0 == strcmp(myhost, "-") || 0 == strcmp(peerhost, "-")) {
+            distances(&target, "unknown");
+        } else {
+            distances(&target, (0 == strcmp(myhost, peerhost)) ? "local" : "remote");
         }
     }
 
