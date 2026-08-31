@@ -216,11 +216,33 @@ static void dmodex_req(int sd, short args, void *cbdata)
         return;
     }
     /* if this is a request for rank=WILDCARD, then they want the job-level data
-     * for this job. It was probably not stored locally because we aren't hosting
-     * any local procs. There is no need to request the data as we already have
+     * for this job.  There is no need to request the data as we already have
      * it - so just register the nspace so the local PMIx server gets it. The
-     * registration completes asynchronously */
+     * registration completes asynchronously.
+     *
+     * PMIx sends us this on two quite different grounds (pmix_server_get.c):
+     * it holds nothing at all for the namespace, or it holds the namespace
+     * but the RESERVED key asked for came back empty from its own store.
+     * Only the first is ours to fix.  If we have already registered this job
+     * with our PMIx server then it has everything we know, and assembling
+     * and registering the identical data a second time cannot produce a key
+     * that was not in it the first time - the client would wait through all
+     * of that to be told NOT_FOUND anyway.  Tell it now.
+     *
+     * A daemon registers a given namespace exactly once, and this is what
+     * makes that true: without the check, an ordinary PMIx_Get of a reserved
+     * job-level key PRRTE does not publish (PMIX_NUM_SLOTS, say) re-runs the
+     * whole registration - on the very daemon that forked the asking client,
+     * over procs it has already registered - once per such get. */
     if (PMIX_RANK_WILDCARD == req->tproc.rank) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED,
+                               NULL, PMIX_BOOL)) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s DMODX REQ FOR %s:WILDCARD - ALREADY REGISTERED",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace);
+            prc = PMIX_ERR_NOT_FOUND;
+            goto callback;
+        }
         /* ...but that registration is assembled from the job's map, and the
          * map is not always there.  It is created when the job is mapped and
          * released again the moment the job completes

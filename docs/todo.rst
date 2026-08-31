@@ -122,14 +122,6 @@ job registered with a key silently missing.  What would settle it properly
 is not forty checks but an accumulator — one status the adds fold into,
 tested once — which is a change to the macro, not to this file.
 
-**``PRTE_JOB_NSPACE_REGISTERED`` is written and never read.**  Both
-registration paths in ``pmix_server_register_fns.c`` set it, and nothing in
-the tree consults it.  Either something should — the obvious candidate is
-the wildcard direct-modex arm of ``dmodex_req``, which re-registers a
-namespace it may already have registered — or the attribute should go, along
-with its entry in ``src/util/attr.h``.  Leaving it is the third option and
-is what the code does today.
-
 **A session control addressed to every session answers with no session id.**
 ``apply_to_all`` (``src/prted/pmix/pmix_server_session.c``) applies the
 operation to each session the requestor controls and then builds one answer

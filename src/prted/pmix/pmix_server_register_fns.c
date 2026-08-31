@@ -68,6 +68,7 @@ typedef struct {
     pmix_op_cbfunc_t cbfunc;
     void *cbdata;
     pmix_status_t status;
+    prte_job_t *jdata;
 } prte_pmix_reg_caddy_t;
 static void regcon(prte_pmix_reg_caddy_t *p)
 {
@@ -76,11 +77,15 @@ static void regcon(prte_pmix_reg_caddy_t *p)
     p->cbfunc = NULL;
     p->cbdata = NULL;
     p->status = PMIX_SUCCESS;
+    p->jdata = NULL;
 }
 static void regdes(prte_pmix_reg_caddy_t *p)
 {
     if (NULL != p->pinfo) {
         PMIX_INFO_FREE(p->pinfo, p->ninfo);
+    }
+    if (NULL != p->jdata) {
+        PMIX_RELEASE(p->jdata);
     }
 }
 static PMIX_CLASS_INSTANCE(prte_pmix_reg_caddy_t, pmix_object_t, regcon, regdes);
@@ -94,6 +99,16 @@ static void _nspace_reg_done(int sd, short args, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
+
+    /* Mark the job registered only now that PMIx actually holds it.  This
+     * is what dmodex_req()'s wildcard arm reads to decide that a job-level
+     * key it is being asked for is one we do not have, rather than one we
+     * have not published yet - so it has to mean "PMIx has our answer",
+     * not "we have finished assembling it". */
+    if (PMIX_SUCCESS == cd->status && NULL != cd->jdata) {
+        prte_set_attribute(&cd->jdata->attributes, PRTE_JOB_NSPACE_REGISTERED,
+                           PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    }
 
     if (NULL != cd->cbfunc) {
         cd->cbfunc(cd->status, cd->cbdata);
@@ -147,10 +162,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     uint32_t ui32, *ui32_ptr;
     pmix_data_array_t *devarray;
     uint32_t nodesize;
-    prte_job_t *parent = NULL;
     pmix_device_distance_t *distances;
     size_t ndist;
     pmix_topology_t topo;
+    prte_job_t *parent = NULL;
     pmix_data_array_t darray, lparray;
     bool flag, *fptr, newpset;
 
@@ -562,10 +577,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_NAME, tmp, PMIX_STRING);
             /* Have we already recorded this one?  This function is not
              * called once per job: the wildcard arm of dmodex_req() calls it
-             * again every time a client asks a daemon that hosts none of the
-             * job's procs for job-level data the local server does not hold,
-             * which is once per such get.  The info arrays below have to be
-             * rebuilt each time - that is what the caller wants - but the
+             * again for a job-level key the local server does not hold, on
+             * any daemon - including one hosting the job's procs - though
+             * only until that arm marks the job registered.  The info arrays
+             * below have to be rebuilt each time it does call us, but the
              * registry entry is a per-job fact, and appending it again both
              * duplicated the pset in every query answer and took a reference
              * on the job object that nothing would ever give back. */
@@ -840,10 +855,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         PMIX_INFO_DESTRUCT(&devinfo[1]);
     }
 
-    /* mark the job as registered */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, PRTE_ATTR_LOCAL, NULL,
-                       PMIX_BOOL);
-
     /* add the local procs, if they are defined */
     if (0 < (nmsize = pmix_list_get_size(&local_procs))) {
         pmix_proc_t *procs_tmp;
@@ -884,6 +895,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     cd->ninfo = darray.size;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
+    /* held so the completion can mark it registered - the callers that do
+     * not wait for us have no reason to keep the job alive for our sake */
+    PMIX_RETAIN(jdata);
+    cd->jdata = jdata;
     ret = PMIx_server_register_nspace(pproc.nspace, jdata->num_local_procs,
                                       cd->pinfo, cd->ninfo, regcbfunc, cd);
     if (PMIX_SUCCESS != ret) {
@@ -1275,11 +1290,6 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
     PMIX_INFO_LIST_RELEASE(ilist);
 
 
-    /* mark the job as registered */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, PRTE_ATTR_LOCAL, NULL,
-                       PMIX_BOOL);
-
-
     /* register it */
     PMIX_INFO_LIST_CONVERT(ret, joblist, &darray);
     if (PMIX_SUCCESS != ret) {
@@ -1298,6 +1308,11 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
     rcd->ninfo = darray.size;
     rcd->cbfunc = cbfunc;
     rcd->cbdata = cbdata;
+    /* marked registered by the completion, for the same reason as above:
+     * the flag has to mean PMIx holds this namespace, not that we finished
+     * describing it */
+    PMIX_RETAIN(jdata);
+    rcd->jdata = jdata;
     ret = PMIx_server_register_nspace(cd->target.nspace, 1,
                                       rcd->pinfo, rcd->ninfo,
                                       regcbfunc, rcd);
