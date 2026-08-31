@@ -998,14 +998,39 @@ static int test_fence_generation(void)
     gen_sig(&a, "gen-nspace-a", PMIX_RANK_WILDCARD);
     gen_sig(&b, "gen-nspace-b", PMIX_RANK_WILDCARD);
 
-    /* Nothing released yet.  The answer is "no claim", not zero - a daemon
-     * that has never taken part cannot assert that round 0 is behind it. */
-    CHECK("gen: an unseen signature is UNKNOWN",
-          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_next(&a));
-    CHECK("gen: and nothing is stale against it",
+    /* Nothing released yet, on a daemon that has been here since the start.
+     * The answer is round 0, and that is what bootstraps the counter: if an
+     * unseen signature answered "no claim" instead, no first round would ever
+     * be established, every contribution would be stamped UNKNOWN for ever,
+     * and the whole mechanism would be inert. */
+    prte_grpcomm_fence_note_join(false);
+    CHECK("gen: an original daemon starts an unseen signature at 0",
+          0 == prte_grpcomm_fence_gen_next(&a));
+    CHECK("gen: round 0 is not stale before it has been released",
           !prte_grpcomm_fence_gen_is_stale(&a, 0));
-    CHECK("gen: ...including a high generation",
+    CHECK("gen: ...nor is a later one",
           !prte_grpcomm_fence_gen_is_stale(&a, 7));
+
+    /* ...and the same question on a daemon a grow added answers differently.
+     * It cannot claim 0 - every daemon that has been present is past it and
+     * would drop a 0 as ancient, hanging the fence - so it says it does not
+     * know, which a receiver takes into whatever round is current. */
+    prte_grpcomm_globals.joined_late_known = false;
+    prte_grpcomm_fence_note_join(true);
+    CHECK("gen: a daemon that joined late answers UNKNOWN instead",
+          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_baseline());
+    CHECK("gen: ...and that is what an unseen signature gives it",
+          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_next(&b));
+
+    /* The flag is settled by the FIRST wireup and never revised - a later one
+     * describes a DVM this daemon is already part of. */
+    prte_grpcomm_fence_note_join(false);
+    CHECK("gen: a later wireup does not revise how we joined",
+          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_baseline());
+
+    /* back to an original daemon for the rest */
+    prte_grpcomm_globals.joined_late_known = false;
+    prte_grpcomm_fence_note_join(false);
 
     /* An UNKNOWN stamp is silence, never staleness.  This is what a
      * newly-grown daemon sends, and dropping it would hang the fence it is
@@ -1039,8 +1064,10 @@ static int test_fence_generation(void)
 
     /* Signatures are independent - a fence over other procs is another
      * collective entirely, and must not inherit this one's count. */
+    /* ...and it moved only for the signature it was recorded against. b is
+     * still at its baseline rather than having inherited a's count. */
     CHECK("gen: a different signature is untouched",
-          PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == prte_grpcomm_fence_gen_next(&b));
+          0 == prte_grpcomm_fence_gen_next(&b));
 
     /* The memo is bounded.  Eviction is a graceful loss - that signature
      * returns to the old behaviour - but the list must not grow without end

@@ -600,15 +600,35 @@ The rules, and each earns its place:
   expect is dropped there, deliberately ahead of building anything: creating
   a tracker and then discarding the message would leave exactly the wreck the
   mechanism exists to prevent.
-- **`PRTE_GRPCOMM_FENCE_GEN_UNKNOWN` is silence, not round zero**, and it is
-  the load-bearing case.  A daemon grown into the DVM after the job started
-  has released none of the earlier rounds; if it stamped 0 every daemon that
-  had been present would drop its contribution as ancient and the fence would
-  hang — precisely what the generation exists to prevent.  So it says nothing,
-  is accepted into the current round, and adopts the true number from the
-  release.  Deriving the count locally is *not* sufficient on its own, which
-  is why it is checked on arrival rather than only counted; Slurm's `kvs_seq`
-  carries it in both directions for the same reason.
+- **The counter has to bootstrap, and that means round 0 must be a real
+  round.**  A daemon present since the DVM started takes "no entry for this
+  signature" as round 0 and stamps 0.  Without that nothing ever establishes
+  a first round: every contribution is stamped "unknown", nothing is ever
+  recognized as stale, and the mechanism is **inert** — which is exactly what
+  the first version of this did, and it passed every unit test while doing
+  nothing, because the tests drove the counter directly instead of through
+  the path that has to start it.
+
+- **`PRTE_GRPCOMM_FENCE_GEN_UNKNOWN` is for a daemon a grow added, and only
+  for one.**  It has released none of the earlier rounds, so it cannot claim
+  0 — every daemon that has been present is past it and would drop a 0 as
+  ancient, hanging the fence.  It says it does not know instead, which a
+  receiver takes into whatever round is current.  Safe because a joiner has
+  no earlier round over that signature to have straggled from, so its first
+  contribution cannot be one: the window is **one contribution per signature
+  per joiner**, and after its first release it holds a real number.
+
+- **Which of the two a daemon is, it is told rather than derives**
+  (`prte_grpcomm_fence_note_join()`), on the first wireup it receives, and
+  never revised afterwards — a later wireup describes a DVM it is already
+  part of.  What travels is a **flag, not a count**, and that is the whole
+  reason it works: a count would be stale on arrival, because the master goes
+  on answering fences over other signatures while the grow completes and
+  there is no moment at which a number handed over is still true.  A flag is
+  true exactly as long as it is true.  Deriving the count locally is not
+  sufficient on its own either, which is why it is checked on arrival rather
+  than only counted; Slurm's `kvs_seq` carries it in both directions for the
+  same reason.
 - **The memo is bounded** (`PRTE_GRPCOMM_FENCE_MEMO_MAX`).  Eviction is a
   graceful loss: that signature returns to the pre-generation behaviour, where
   a straggler and a new round are indistinguishable.  It does not corrupt
@@ -618,6 +638,35 @@ The rules, and each earns its place:
 The other half of this was already in place: `0d9dde1c8a` retires the tracker
 *before* delivering, at both sites, because a client may fence again over the
 same participants the moment the callback returns.
+
+**Reproducing the race.**  The window is a timing accident no test can
+arrange from outside, so `grpcomm_fence_delay_ms` (with
+`grpcomm_fence_delay_vpid`) holds one daemon's own contribution back.  Paired
+with a `PMIX_TIMEOUT` on the fence, the controller ends the round without
+that daemon and the held contribution lands afterwards — the straggler.  The
+knob is **compiled in always**, deliberately: a race hook that exists only
+under `PRTE_ENABLE_DEBUG` cannot reproduce a race on the build that shows it.
+`contrib/dockerswarm`'s *"a straggler from an aborted fence is not the next
+round"* case drives it, and it has been watched failing with the drop removed
+— a regression test for a race that has never been red proves nothing.
+
+**A test that asserts a collective *delivered* something must use
+`PMIX_OPTIONAL` on the readback.**  Without it a `PMIx_Get` for a key the
+fence did not carry falls through to a direct modex and fetches it from the
+owning daemon anyway; the value turns up and the assertion proves nothing.
+That cost two full build-and-run cycles of false green here.  (It is also a
+neat demonstration that the on-demand path works: the fence had genuinely
+lost the key and the application never noticed.)
+
+**Still open: the early contribution.**  `PRTE_RML_TAG_FENCE_RELEASE` is not
+in `xcast`'s `process_first` set, so a daemon forwards a release to its
+children *before* processing it itself.  A child can therefore be released,
+start the next round, and have its contribution reach the parent while the
+parent is still in the previous one.  Dropping is safe there but adopting the
+higher number onto the live tracker is **not** — it relabels a tracker whose
+bucket holds the previous round's data.  Handling that properly means keying
+trackers by `(signature, generation)` rather than by signature alone, which is
+the same identity a lateral movement would need.
 
 **A release with no local callback still has data to free.** A daemon
 holding a tracker only because it relayed for its subtree has no `cbfunc`

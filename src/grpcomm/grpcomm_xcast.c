@@ -1058,6 +1058,20 @@ static void process_wireup(pmix_data_buffer_t *msg){
      * after (see the epoch member of prte_rml_recovery_status_t).  Adopting is
      * by highest value seen, so a daemon already at or past this one is
      * unaffected and no in-flight notice can be undone by a late wireup. */
+    /* Whether we joined a DVM that was already running collectives - see the
+     * matching note where this is packed, and prte_grpcomm_fence_gen_baseline().
+     * Only the first wireup is honoured, so a daemon already in the DVM keeps
+     * the answer it was given when it arrived. */
+    bool grown = false;
+    int gcnt = 1;
+    ret = PMIx_Data_unpack(NULL, msg, &grown, &gcnt, PMIX_BOOL);
+    if(PMIX_SUCCESS != ret){
+       PMIX_ERROR_LOG(ret);
+       PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+       return;
+    }
+    prte_grpcomm_fence_note_join(grown);
+
     uint32_t epoch = 0;
     int ecnt = 1;
     ret = PMIx_Data_unpack(NULL, msg, &epoch, &ecnt, PMIX_UINT32);

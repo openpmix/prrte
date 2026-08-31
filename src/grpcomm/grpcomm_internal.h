@@ -94,6 +94,42 @@ typedef struct {
     // and the clock reads it needs sit directly in the broadcast path.
     // Set with the grpcomm_enable_timing MCA parameter.
     bool enable_timing;
+    // Fault injection: hold this daemon's own fence contribution back by
+    // delay_ms before sending it, on the daemon whose vpid is delay_vpid.
+    //
+    // This exists to make a race reachable that no test can otherwise
+    // provoke: abort_fence_op() ends a fence while contributions are still
+    // climbing the tree, and what arrives afterwards must be recognized as
+    // belonging to a round that is over rather than absorbed into the next
+    // one. Without a way to hold a contribution back, the window is a timing
+    // accident nobody can arrange.
+    //
+    // It ships, and is deliberately not compiled out of an optimized build:
+    // a race hook that only exists under PRTE_ENABLE_DEBUG cannot be used to
+    // reproduce a race on the build that shows it. Off unless asked for -
+    // delay_ms 0 costs one compare per fence.
+    int fence_delay_ms;
+    int fence_delay_vpid;
+    // Did this daemon join a DVM that had already been running collectives?
+    //
+    // It decides what "I have no round number for this signature" means, and
+    // the two readings are opposites. For a daemon present from the start it
+    // means round 0 has not happened yet, so it stamps 0 and the counter
+    // bootstraps. For one added by a grow it means the round is genuinely
+    // unknown - every daemon that has been present is at some k, and a 0 from
+    // this one would be read as ancient and dropped, hanging the fence.
+    //
+    // Told, not derived, because only the master can tell the two apart; and
+    // told as a *flag* rather than as a count, because a count would be stale
+    // by the time it arrived - the master goes on answering fences while the
+    // grow completes. A flag cannot go stale: it stays true exactly as long
+    // as it is true, and stops mattering the moment this daemon sees its
+    // first release for a signature and learns that signature's real number.
+    //
+    // Set from the first wireup this daemon receives and never revised: a
+    // later wireup describes a DVM this daemon is already part of.
+    bool joined_late;
+    bool joined_late_known;
 } prte_grpcomm_globals_t;
 
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
@@ -423,6 +459,18 @@ bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
  * has never released one. Exported so the unit test can drive it. */
 PRTE_EXPORT
 uint32_t prte_grpcomm_fence_gen_next(prte_grpcomm_fence_signature_t *sig);
+
+/* What this daemon stamps on a contribution for a signature it has no entry
+ * for: round 0 if it has been here since the start, UNKNOWN if it joined a
+ * DVM that was already running collectives. Exported so the unit test can
+ * drive both readings. */
+PRTE_EXPORT
+uint32_t prte_grpcomm_fence_gen_baseline(void);
+
+/* Record whether this daemon joined an already-running DVM. Called once, from
+ * the first wireup; later calls are ignored. Exported for the unit test. */
+PRTE_EXPORT
+void prte_grpcomm_fence_note_join(bool late);
 
 /* Record that generation `gen` over this signature has been released here, so
  * the next one is gen+1. Adopts rather than increments, which is what puts a
