@@ -176,6 +176,11 @@ typedef struct {
     // later wireup describes a DVM this daemon is already part of.
     bool joined_late;
     bool joined_late_known;
+    // Send a fence's release down the low-radix tree rather than the routing
+    // tree. Off by default: the tree we have is the one we know works, and
+    // there is no measurement yet that says which is better on hardware where
+    // the cost model's constants mean what it assumes.
+    bool low_radix_release;
 } prte_grpcomm_globals_t;
 
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
@@ -230,8 +235,22 @@ PRTE_EXPORT extern prte_grpcomm_globals_t prte_grpcomm_globals;
  * the result, with nothing to release - and because it is the only way the
  * unit test can see the release a controller would emit without standing up
  * an RML.  Production code sets this once, at startup, and never again. */
+/* Broadcast on a named tree. prte_grpcomm_xcast_nb is this with the routing
+ * tree, which is what almost every caller wants. */
+PRTE_EXPORT
+int prte_grpcomm_xcast_topo(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
+                            prte_grpcomm_topology_t topology,
+                            prte_grpcomm_xcast_complete_fn_t cbfunc,
+                            void *cbdata);
+
+/* The one seam every collective's release goes through - two sites in the
+ * fence, two in the group. Putting the tree choice here rather than at each
+ * of them is what stops the two collectives drifting into different methods
+ * for the same job. */
 typedef int (*prte_grpcomm_release_bcast_fn_t)(prte_rml_tag_t tag, pmix_data_buffer_t *msg);
 PRTE_EXPORT extern prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast;
+PRTE_EXPORT int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
+                                                  pmix_data_buffer_t *msg);
 
 
 /* Define collective signatures so we don't need to
