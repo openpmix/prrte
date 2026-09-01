@@ -635,6 +635,17 @@ prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name)
     return NULL;
 }
 
+/* Does not ask prte_check_host_is_local() about either name, though
+ * prte_quickmatch() and prte_node_match() below both do, and this used to as
+ * well. Every caller has already resolved local names before it gets here:
+ * hostfile_parse_line() and the dash-host parser rewrite any name answering
+ * to this host into prte_process_info.nodename as they read it, and
+ * prte_ras_base_node_insert() folds a locally-named node into the HNP's pool
+ * entry in a branch that never reaches the dedup loop calling this. So the
+ * check would find nothing - at the price of putting pmix_ifislocal(), which
+ * resolves addresses and appends to a process-global alias list, inside a
+ * loop that runs once per pool entry for every node inserted. Do not put it
+ * back; fix the caller that failed to normalize instead. */
 bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
 {
     size_t i, m;
