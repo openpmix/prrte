@@ -160,7 +160,7 @@ int main(int argc, char **argv)
         pmix_value_t *got = NULL;
         uint32_t universe = 0, r;
         int found = 0, missing = 0;
-        pmix_status_t rc2nd;
+        pmix_status_t rc1st, rc2nd;
 
         PMIX_LOAD_PROCID(&peer, me.nspace, PMIX_RANK_WILDCARD);
         if (PMIX_SUCCESS == PMIx_Get(&peer, PMIX_JOB_SIZE, NULL, 0, &got) &&
@@ -173,9 +173,22 @@ int main(int argc, char **argv)
                 continue;   /* only remote peers prove the collective ran */
             }
             PMIX_LOAD_PROCID(&peer, me.nspace, r);
-            snprintf(key, sizeof(key), "fencer.rank.%u", r);
-            got = NULL;
-            if (PMIX_SUCCESS == PMIx_Get(&peer, key, NULL, 0, &got) && NULL != got) {
+            /* PMIX_OPTIONAL here too, and for the reason spelled out at the
+             * second key below: without it this asks whether the runtime can
+             * find the value by any means - including fetching it from the
+             * owning daemon on demand - rather than whether the collective
+             * carried it.  A fence that delivered nothing at all would still
+             * satisfy an ordinary Get. */
+            {
+                pmix_info_t opt[1];
+                bool t = true;
+                PMIX_INFO_LOAD(&opt[0], PMIX_OPTIONAL, &t, PMIX_BOOL);
+                snprintf(key, sizeof(key), "fencer.rank.%u", r);
+                got = NULL;
+                rc1st = PMIx_Get(&peer, key, opt, 1, &got);
+                PMIX_INFO_DESTRUCT(&opt[0]);
+            }
+            if (PMIX_SUCCESS == rc1st && NULL != got) {
                 uint32_t v = 0;
                 PMIx_Value_get_number(got, &v, PMIX_UINT32);
                 if (v == r) {
