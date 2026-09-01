@@ -304,6 +304,12 @@ typedef struct {
     pmix_list_t posted_recvs;
     pmix_list_t unmatched_msgs;
     int radix;
+    // Radix of the tree a collective's release fans out over. Separate from
+    // `radix` above because the two trees want opposite values - fanout is
+    // free on the way up and is the entire cost on the way down - and
+    // defaulting to `radix` keeps today's behaviour until someone asks for
+    // something else.
+    int radix2;
     bool static_ports;
 
     // # daemons before failures
@@ -465,6 +471,15 @@ PRTE_EXPORT int prte_rml_route_lost(pmix_rank_t route);
 PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
 PRTE_EXPORT int prte_rml_get_subtree_index(pmix_rank_t target);
 PRTE_EXPORT bool prte_rml_is_node_up(pmix_rank_t node);
+
+/* This daemon's parent and children in the RELEASE tree - the low-radix tree
+ * (prte_rml_base.radix2) a collective fans its release out over, as distinct
+ * from the routing tree its rollup gathers on. Derived, never agreed: every
+ * daemon computes the same shape from inputs they already hold in step.
+ * Answers PRTE_ERR_NOT_FOUND for a rank outside the DVM. The caller frees
+ * the children array. */
+PRTE_EXPORT int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
+                                      pmix_rank_t **children, size_t *nchildren);
 
 #define PRTE_RML_ACTIVATE_MESSAGE(m)                                           \
     do {                                                                       \

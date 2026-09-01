@@ -288,6 +288,30 @@ void prte_rml_register(void)
         prte_rml_base.radix = 2;
     }
 
+    /* The radix of the second tree - the low one a release fans out over,
+     * beside the high one the rollup gathers on.  They want opposite values:
+     * a gathering daemon sends one aggregate however many children it has,
+     * while a broadcasting one sends a copy per child, so fanout is free
+     * going up and is the whole cost coming down.  See
+     * docs/plans/scalable_collectives/two-radix-release.rst.
+     *
+     * Defaulting it to the routing radix means the second tree is the same
+     * shape as the first until someone asks otherwise, which is what keeps
+     * the default behaviour exactly what it is today. */
+    prte_rml_base.radix2 = prte_rml_base.radix;
+    (void) pmix_mca_base_var_register("prte", "rml", "base", "radix2",
+                                      "Radix of the tree used to fan a "
+                                      "collective's release out (minimum 2). "
+                                      "Defaults to the routing tree's radix.",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_rml_base.radix2);
+    /* Same clamp and the same reason: the tree math divides by (radix - 1). */
+    if (2 > prte_rml_base.radix2) {
+        pmix_output(0, "PRRTE: release tree radix %d is invalid (minimum is 2)"
+                       " - using 2", prte_rml_base.radix2);
+        prte_rml_base.radix2 = 2;
+    }
+
     /* The ranks that had already departed the DVM when we were launched. Only
      * a launcher sets this, on the prted command line: a daemon started into a
      * DVM that has lost ranks has to know which they are BEFORE it computes its

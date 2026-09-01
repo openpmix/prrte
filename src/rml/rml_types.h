@@ -372,7 +372,7 @@ typedef struct {
 } prte_rml_recv_request_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recv_request_t);
 
-/* struct for traversing the routing tree - used internally */
+/* struct for traversing a radix tree - used internally */
 typedef struct {
     pmix_rank_t rank;
     pmix_rank_t depth; // depth of this rank in tree
@@ -381,6 +381,14 @@ typedef struct {
     pmix_rank_t base;  // rank the node was originally constructed as
                        //   note: used for going back down the tree after going
                        //   up, not necessarily related to failures
+    // Which tree this node belongs to, carried rather than read from a
+    // global. There is more than one radix tree over the daemons now - the
+    // routing tree the rollup gathers on, and the low-radix tree a release
+    // fans out over - and they want opposite radices. A node that knows its
+    // own means both can be walked in the same breath, with no mode to switch
+    // and nothing to get wrong if a walk of one is interleaved with a walk of
+    // the other.
+    pmix_rank_t radix;
 } prte_rml_routed_tree_node_t;
 
 /* Outcome of reconciling a peer's report of THIS daemon's ancestor list
