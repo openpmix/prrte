@@ -1,0 +1,48 @@
+# Constructors that do not account for every member of their own class.
+#
+# This is a record of what was already here when the check was written, not a
+# list of things that are fine.  Each line is a member whose constructor never
+# mentions it: harmless where zero is the intended default, a latent bug where
+# it is not, and impossible to tell apart without reading each one.
+#
+# The check fails on anything NOT listed here, so new omissions are caught
+# immediately.  It also fails on a line that no longer occurs, so that fixing
+# one obliges you to delete its line and the list can only shrink.
+#
+# Format: <path> <type>.<member>
+examples/server.c myxfer_t.caller
+src/mca/ess/base/ess_base_frame.c prte_ess_base_signal_t.signal
+src/mca/filem/raw/filem_raw_module.c prte_filem_raw_incoming_t.type
+src/mca/filem/raw/filem_raw_module.c prte_filem_raw_output_t.data
+src/mca/iof/base/iof_base_frame.c prte_iof_deliver_t.source
+src/mca/iof/base/iof_base_frame.c prte_iof_proc_t.name
+src/mca/iof/base/iof_base_frame.c prte_iof_read_event_t.tag
+src/mca/iof/base/iof_base_frame.c prte_iof_sink_t.name
+src/mca/iof/base/iof_base_frame.c prte_iof_sink_t.tag
+src/mca/odls/base/odls_base_frame.c prte_odls_launch_local_t.object
+src/mca/plm/ssh/plm_ssh_module.c prte_plm_ssh_caddy_t.argc
+src/prted/pmix/pmix_server.c prte_pmix_server_req_t.cycle
+src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_op_t.af_family
+src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_op_t.peer
+src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.name
+src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.recv_event
+src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.send_event
+src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.timer_event
+src/rml/relm/types.c prte_relm_msg_t.eviction_ev
+src/rml/rml.c prte_rml_posted_recv_t.buffer_data
+src/rml/rml.c prte_rml_posted_recv_t.cbfunc
+src/rml/rml.c prte_rml_posted_recv_t.peer
+src/rml/rml.c prte_rml_posted_recv_t.persistent
+src/rml/rml.c prte_rml_posted_recv_t.tag
+src/rml/rml.c prte_rml_recv_cb_t.name
+src/rml/rml.c prte_rml_recv_t.sender
+src/rml/rml.c prte_rml_recv_t.seq_num
+src/rml/rml.c prte_rml_recv_t.tag
+src/rml/rml.c prte_rml_send_t.dst
+src/rml/rml.c prte_rml_send_t.origin
+src/rml/rml.c prte_rml_send_t.status
+src/rml/rml.c prte_rml_send_t.tag
+src/runtime/prte_globals.c prte_topology_t.index
+src/runtime/prte_progress_threads.c prte_progress_tracker_t.block
+src/runtime/prte_progress_threads.c prte_progress_tracker_t.engine
+src/runtime/prte_wait.c prte_timer_t.tv

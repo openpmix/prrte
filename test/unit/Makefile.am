@@ -9,6 +9,11 @@ SUBDIRS = rmaps runtime errmgr ess event filem grpcomm hwloc include odls iof pl
 # check_static_init.pl is kept identical to the copy in PMIx
 # (test/unit/check_static_init.pl); fix one and copy it across rather
 # than letting the two drift.
-dist_check_SCRIPTS = check_static_init.pl check_query_authority.py
+dist_check_SCRIPTS = check_static_init.pl check_query_authority.py \
+                     check_ctor_coverage.py
 
-TESTS = check_static_init.pl check_query_authority.py
+# check_ctor_coverage.py reads its baseline from the source directory, so it
+# has to travel with the script rather than only being in the repository.
+EXTRA_DIST = ctor_coverage_baseline.txt
+
+TESTS = check_static_init.pl check_query_authority.py check_ctor_coverage.py
