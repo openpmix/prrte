@@ -4600,6 +4600,70 @@ test_grpcomm() {
     test_grpcomm_invite
     test_grpcomm_ft
     test_fence_straggler
+    test_fence_early_arrival
+}
+
+test_fence_early_arrival() {
+    local out n
+
+    banner "grpcomm: a contribution for the next round does not join this one"
+    # The other side of the round number, and the one a straggler test cannot
+    # reach.  A fence release is an xcast, and PRTE_RML_TAG_FENCE_RELEASE is
+    # not in the process_first set, so a daemon FORWARDS a release to its
+    # children before it processes the release itself.  In that gap a child is
+    # released, its clients open the next round, and its contribution arrives
+    # at a parent that still has the previous round open.
+    #
+    # Keyed by signature alone that contribution joins the round it is not
+    # part of: it lands in a bucket that is about to be discarded by the
+    # release, and the round it actually belonged to then waits for a
+    # contribution that has already been consumed.  The symptom is not wrong
+    # data, it is the SECOND fence never completing.
+    #
+    # The gap is microseconds wide in normal running, so widen it:
+    # grpcomm_release_delay_ms holds one daemon's own processing of the
+    # release back while its children get theirs on time.  radix 1 makes the
+    # tree a chain, so daemon 1 is an interior daemon with a real subtree
+    # below it rather than a leaf hanging off the HNP.
+    cleanup_swarm
+    if ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1' \
+            '--prtemca rml_base_radix 1 --prtemca grpcomm_release_delay_ms 5000 --prtemca grpcomm_release_delay_vpid 1'; then
+        bad "could not start a DVM for the fence early-arrival test"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FENCER collect --twice" 2>&1)
+
+    # The first fence has to have completed, or there was no release to run
+    # ahead of and nothing below tests anything.
+    n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+    [ "$n" = 4 ] \
+        && ok "the first fence completed despite the held-back release" \
+        || bad "$n of 4 ranks completed the first fence: $(echo "$out" | grep 'FENCER collect' | tr '\n' ' ' | tail -c 250)"
+
+    # ...and the assertion: the next round, whose contributions reached a
+    # daemon that had not caught up, still converges.
+    n=$(echo "$out" | grep -c 'FENCER second rank .* rc PMIX_SUCCESS')
+    [ "$n" = 4 ] \
+        && ok "...and the round that overtook it completed too" \
+        || bad "$n of 4 ranks completed the second fence: $(echo "$out" | grep 'FENCER second' | tr '\n' ' ' | tail -c 250)"
+
+    n=$(echo "$out" | grep -c 'peers-bad 0')
+    [ "$n" = 4 ] \
+        && ok "...with every peer's contribution intact" \
+        || bad "$n of 4 ranks got a complete modex: $(echo "$out" | grep 'peers-' | tr '\n' ' ' | tail -c 250)"
+
+    RUN 'pgrep -x prte' >/dev/null 2>&1 \
+        && ok "...and the DVM survived the overlap" \
+        || bad "the HNP died over the overlapping rounds"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
 }
 
 test_fence_straggler() {
