@@ -141,6 +141,12 @@ typedef struct {
  * released and its contribution dropped. */
 #define PRTE_GRPCOMM_FENCE_GEN_UNKNOWN UINT32_MAX
 
+/* The step a tree rollup runs at.  A rollup has exactly one - every
+ * participant contributes once and one release ends it - so this is the only
+ * value in use today.  A dissemination exchange numbers its steps from here
+ * and stamps them on the wire; see the tracker identity commentary below. */
+#define PRTE_GRPCOMM_FENCE_STEP_ROLLUP 0
+
 typedef struct {
     pmix_list_item_t super;
     char *groupID;
@@ -262,11 +268,28 @@ typedef struct {
     // rather than re-derived, so that a participant that disagrees can be
     // caught saying so instead of quietly running the other collective.
     prte_grpcomm_fence_op_t op;
-    // Which round over this signature this tracker is. Seeded from the memo
-    // when the tracker is built, adopted from the first contribution to name
-    // one when the memo had nothing to say, and stamped on everything this
-    // daemon sends for the fence. PRTE_GRPCOMM_FENCE_GEN_UNKNOWN until known.
+    // ---- the tracker's identity ----
+    //
+    // A tracker is identified by its signature AND its generation, not by the
+    // signature alone. Two rounds over the same participants can legitimately
+    // be live on one daemon at the same time: xcast forwards a release to a
+    // daemon's children before that daemon processes it, so a child can be
+    // released, start the next round, and have its contribution arrive while
+    // its parent is still in the previous one. Keyed by signature alone that
+    // contribution joins the wrong collective; keyed by both it gets a
+    // tracker of its own and each round accumulates separately.
+    //
+    // `step` is the third level, and is 0 everywhere today. A tree rollup has
+    // no steps - one contribution per participant, one release - so the pair
+    // is enough for it. A dissemination exchange (Bruck, recursive doubling,
+    // a ring) has log2(N) or N-1 *steps within one collective*, each carrying
+    // a different block, and a message from step i is not interchangeable
+    // with one from step j even at the same generation. Whoever adds such a
+    // movement stamps the step on the wire beside the generation and keys its
+    // trackers on all three; nothing else here has to change to accommodate
+    // it, which is the reason the field is here rather than added later.
     uint32_t generation;
+    uint32_t step;
     /* collection bucket */
     pmix_data_buffer_t bucket;
     /* participating daemons */
@@ -433,6 +456,8 @@ void prte_grpcomm_fence_fault_handler(const prte_rml_recovery_status_t* status);
  * list - if that cannot be done. Exported so the unit test can drive it. */
 PRTE_EXPORT
 prte_grpcomm_fence_t *prte_grpcomm_fence_get_tracker(prte_grpcomm_fence_signature_t *sig,
+                                                            uint32_t generation,
+                                                            uint32_t step,
                                                             bool create);
 
 /* Which operation this fence's directives ask for.  Only PMIX_COLLECT_DATA is

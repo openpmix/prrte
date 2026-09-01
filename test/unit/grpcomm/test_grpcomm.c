@@ -485,7 +485,7 @@ static int test_fence_tracker(void)
     sig.sz = 1;
     PMIX_PROC_CREATE(sig.signature, 1);
     PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    coll = prte_grpcomm_fence_get_tracker(&sig, true);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
     CHECK("tracker: a daemon-job fence resolves", NULL != coll);
     if (NULL != coll) {
         CHECK("tracker: every daemon means all of them, with no array",
@@ -493,21 +493,41 @@ static int test_fence_tracker(void)
         CHECK("tracker: expects our children plus ourselves",
               (size_t) prte_rml_base.n_children + 1 == coll->nexpected);
     }
-    /* the same signature must find that tracker rather than build a second */
-    again = prte_grpcomm_fence_get_tracker(&sig, true);
-    CHECK("tracker: the same signature returns the same tracker", again == coll);
+    /* the same signature AND round must find that tracker, not build a second */
+    again = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
+    CHECK("tracker: the same identity returns the same tracker", again == coll);
     CHECK("tracker: and does not add another",
           1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+
+    /* ...but the NEXT round over those same participants is a different
+     * collective and gets a tracker of its own.  Both are live at once on
+     * purpose: xcast hands a release to a daemon's children before that
+     * daemon processes it, so a child can open round 1 and reach us while we
+     * are still finishing round 0.  Keyed by signature alone the two would
+     * be the same tracker and the new round's data would land in the old
+     * round's bucket. */
+    again = prte_grpcomm_fence_get_tracker(&sig, 1, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
+    CHECK("tracker: a later round is a different collective", again != coll);
+    CHECK("tracker: ...and both are live at once",
+          2 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+    CHECK("tracker: ...each knowing which round it is",
+          NULL != again && 1 == again->generation && 0 == coll->generation);
+
+    /* the step is the third level of identity, and is where a dissemination
+     * exchange would separate the blocks of one collective from each other */
+    again = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP + 1, true);
+    CHECK("tracker: a different step is a different collective too",
+          again != coll && 3 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     PMIX_DESTRUCT(&sig);
 
     /* a signature naming nobody is refused rather than read as the "all
      * daemons" case above, which is what an empty nspace would otherwise
      * match */
     PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
-    coll = prte_grpcomm_fence_get_tracker(&sig, true);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
     CHECK("tracker: an empty signature is refused", NULL == coll);
     CHECK("tracker: and builds nothing",
-          1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+          3 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     PMIX_DESTRUCT(&sig);
 
     /* a signature we cannot resolve at all - no such job, and nothing has
@@ -516,12 +536,12 @@ static int test_fence_tracker(void)
     sig.sz = 1;
     PMIX_PROC_CREATE(sig.signature, 1);
     PMIX_LOAD_PROCID(&sig.signature[0], "fence-nosuchjob", 0);
-    coll = prte_grpcomm_fence_get_tracker(&sig, true);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
     CHECK("tracker: an unresolvable signature yields no tracker", NULL == coll);
     CHECK("tracker: and leaves no wreckage on the list",
-          1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+          3 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     /* ...so asking again is a fresh attempt, not a hand-back of the wreck */
-    coll = prte_grpcomm_fence_get_tracker(&sig, false);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, false);
     CHECK("tracker: nothing to find on a second look", NULL == coll);
     PMIX_DESTRUCT(&sig);
 
