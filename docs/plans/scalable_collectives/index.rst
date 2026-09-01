@@ -9,3 +9,4 @@ the lateral-movement experiment built, measured, and why it was withdrawn.
    :maxdepth: 2
 
    scalable-collectives.rst
+   two-radix-release.rst
