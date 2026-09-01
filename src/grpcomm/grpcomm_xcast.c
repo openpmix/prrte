@@ -67,10 +67,37 @@ typedef struct {
 } pending_completion_t;
 PMIX_CLASS_INSTANCE(pending_completion_t, pmix_list_item_t, NULL, NULL);
 
-/* internal signature used to uniquely track a particular xcast */
+/* An op's identity folded into a single pointer-sized value, and back.
+ *
+ * PRTE_RML_SEND_CB carries one void* to its completion callback, and the
+ * identity it has to carry is now a pair: an op id is unique only within its
+ * topology, so the id alone would find the wrong op - or the right id in the
+ * wrong tree - as soon as both trees are in use. Folding is safe because an
+ * op id is a counter that will not approach the top three bits of a pointer
+ * in any run that could also exhaust memory. */
+#define SIG_TO_CBDATA(sig) \
+    ((void *)(intptr_t)(((sig).op_id * PRTE_GRPCOMM_TOPO_COUNT) + (sig).topology))
+#define SIG_FROM_CBDATA(sig, cbd)                                             \
+    do {                                                                      \
+        size_t _v = (size_t)(intptr_t)(cbd);                                  \
+        (sig).topology =                                                      \
+            (prte_grpcomm_topology_t)(_v % PRTE_GRPCOMM_TOPO_COUNT);          \
+        (sig).op_id = _v / PRTE_GRPCOMM_TOPO_COUNT;                           \
+    } while(0)
+
+/* internal signature used to uniquely track a particular xcast
+ *
+ * The op id is unique within its topology, not across all of them - two trees
+ * numbering from one counter would each raise out-of-order on the other's
+ * traffic. So the topology is part of the identity rather than a property of
+ * the op, and it travels with the signature. */
 typedef struct {
-    size_t op_id;    // HNP's assigned collective ID, globally unique
+    prte_grpcomm_topology_t topology;
+    size_t op_id;    // controller's assigned ID, unique within the topology
 } signature_t;
+
+/* the reliability state of the tree a signature names */
+#define TREE_OF(sig) (XCAST.tree[(sig).topology])
 
 /* internal component object for tracking ongoing operations */
 typedef struct {
@@ -138,6 +165,12 @@ static void finish_op(op_t *op);
 static void drive_completions(void);
 // Give up on this op's exchange and get the payload the tree way
 static void tree_whole_forward(op_t *op);
+/* Who this daemon relays to, and who relays to it, in a given tree - see the
+ * definitions for why the two trees answer differently. */
+static void topo_children(prte_grpcomm_topology_t topo, pmix_rank_t **children,
+                          size_t *n, bool *owned);
+static size_t topo_n_children(prte_grpcomm_topology_t topo);
+static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo);
 
 
 // Pack the xcast message forwarded to our children.  Takes no destination:
@@ -298,10 +331,6 @@ void prte_grpcomm_xcast_recv(
     prte_rml_tag_t tag, void *cbdata
 ) {
     PRTE_HIDE_UNUSED_PARAMS(status,tag,cbdata);
-    if(!PRTE_PROC_IS_MASTER && sender->rank != PRTE_PROC_MY_PARENT->rank){
-        // Ignore messages from old parents
-        return;
-    }
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
                          "%s grpcomm:xcast:recv: with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -309,6 +338,16 @@ void prte_grpcomm_xcast_recv(
 
     signature_t sig;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
+
+    /* Ignore messages from old parents - but "parent" is a question about the
+     * tree this broadcast is travelling, which is why the signature has to be
+     * read first. A release arriving over the low-radix tree comes from that
+     * tree's parent, and on a routing tree of a different radix that daemon is
+     * a sibling or a cousin rather than a parent. Screening on the routing
+     * parent would discard every one of them. */
+    if(!PRTE_PROC_IS_MASTER && sender->rank != topo_parent(sig.topology)){
+        return;
+    }
 
     /* An op-id of zero is an originator relaying to the controller rather than
      * a forward down the tree; the controller stamps the real id below. The
@@ -329,7 +368,7 @@ void prte_grpcomm_xcast_recv(
     // it is excluded. This is safe because a daemon that has *ever* participated
     // has op_id_inited > 0, so a genuine ordering violation mid-stream is still
     // caught.
-    bool late_joiner = !PRTE_PROC_IS_MASTER && (0 == XCAST.op_id_inited);
+    bool late_joiner = !PRTE_PROC_IS_MASTER && (0 == TREE_OF(sig).op_id_inited);
 
     if(PRTE_PROC_IS_MASTER){
         if(sig.op_id){
@@ -337,20 +376,20 @@ void prte_grpcomm_xcast_recv(
             PRTE_ERROR_LOG( PRTE_ERR_DUPLICATE_MSG );
             return;
         }
-        sig.op_id = ++XCAST.op_id_inited;
+        sig.op_id = ++TREE_OF(sig).op_id_inited;
     }
     if(!sig.op_id){
         PRTE_ERROR_LOG( PRTE_ERR_NOT_INITIALIZED );
         return;
     }
-    if(sig.op_id > XCAST.op_id_inited){
-        XCAST.op_id_inited = sig.op_id;
+    if(sig.op_id > TREE_OF(sig).op_id_inited){
+        TREE_OF(sig).op_id_inited = sig.op_id;
     }
     if(late_joiner && sig.op_id > 1){
         // Catch up to just below this op: ops 1..op_id-1 are taken as complete,
         // and this op is processed in order as our first.
-        XCAST.op_id_completed = sig.op_id - 1;
-        XCAST.op_id_completed_at_promotion = sig.op_id - 1;
+        TREE_OF(sig).op_id_completed = sig.op_id - 1;
+        TREE_OF(sig).op_id_completed_at_promotion = sig.op_id - 1;
     }
 
     // If we marked our subtree as completed, but then were promoted, our
@@ -358,12 +397,12 @@ void prte_grpcomm_xcast_recv(
     // But ops complete in order, so if we have completed anything since our
     // promotion, we know our new subtree has also completed all the older ops
     bool assume_incomplete =
-        sig.op_id <= XCAST.op_id_completed_at_promotion
-        && XCAST.op_id_completed == XCAST.op_id_completed_at_promotion;
+        sig.op_id <= TREE_OF(sig).op_id_completed_at_promotion
+        && TREE_OF(sig).op_id_completed == TREE_OF(sig).op_id_completed_at_promotion;
 
     // If we're certain our subtree has already completed this, we can just ack
     bool complete = !assume_incomplete &&
-        sig.op_id <= XCAST.op_id_completed;
+        sig.op_id <= TREE_OF(sig).op_id_completed;
 
     pmix_rank_t ack_id;
     if(PMIX_SUCCESS != unpack_ack_id(buffer, &ack_id)) return;
@@ -474,14 +513,15 @@ void prte_grpcomm_xcast_ack(
     op_t* op = find_op(&sig);
 
     if(is_request){
-        if(sender->rank != PRTE_PROC_MY_PARENT->rank){
-            // Old message
+        if(sender->rank != topo_parent(sig.topology)){
+            // Old message, or one from a daemon that is our parent in some
+            // other tree than the one this op travels
             return;
         }
         if(NULL != op){
             // We'll send with the new id once we're done
             op->ack_id_up = ack_id;
-        } else if(sig.op_id <= XCAST.op_id_completed){
+        } else if(sig.op_id <= TREE_OF(sig).op_id_completed){
             // We've finished this one, ack now
             send_ack(&sig, ack_id);
         } else {
@@ -508,8 +548,13 @@ void prte_grpcomm_xcast_fault_handler(
     if(status->scope != PRTE_RML_FAULT_SCOPE_LOCAL) return;
 
     if(status->promoted){
-        XCAST.op_id_completed_at_promotion =
-            XCAST.op_id_completed;
+        /* A promotion grows our subtree in EVERY tree we relay on, so the
+         * completion information we hold is stale in each of them - this is
+         * per-daemon news, not per-op. */
+        for(int t = 0; t < PRTE_GRPCOMM_TOPO_COUNT; t++){
+            XCAST.tree[t].op_id_completed_at_promotion =
+                XCAST.tree[t].op_id_completed;
+        }
     }
     if(status->parent_changed || status->promoted || status->demoted){
         // Avoid confusing new parent by accidentally acking with
@@ -660,7 +705,7 @@ static void send_ack_msg(
          * failure there is our lifeline, which is the fault machinery's
          * business and not this op's. */
         PRTE_RML_SEND_CB(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK,
-                         forward_lost, (void*)(intptr_t) sig->op_id);
+                         forward_lost, SIG_TO_CBDATA(*sig));
     } else {
         PRTE_RML_SEND(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK);
     }
@@ -673,8 +718,13 @@ static void send_ack_msg(
 }
 
 static void send_ack(signature_t* sig, pmix_rank_t ack_id){
+    /* Up the tree this op travelled, not up the routing tree. An ack is a
+     * statement about coverage of one topology, and it is only meaningful to
+     * the daemon that is waiting on it in that same topology. */
+    pmix_rank_t up = topo_parent(sig->topology);
     if(PRTE_PROC_IS_MASTER) return;
-    send_ack_msg(sig, ack_id, false, PRTE_PROC_MY_PARENT->rank);
+    if(PMIX_RANK_INVALID == up) return;
+    send_ack_msg(sig, ack_id, false, up);
 }
 
 static void request_ack(pmix_rank_t from, signature_t* sig, pmix_rank_t ack_id){
@@ -708,11 +758,11 @@ static void drive_completions(void){
 static void finish_op(op_t* op) {
     send_ack(&op->sig, op->ack_id_up);
     pmix_list_remove_item(&XCAST.ops, &op->super);
-    if(op->sig.op_id > XCAST.op_id_completed_at_promotion){
-        if(op->sig.op_id != XCAST.op_id_completed+1){
+    if(op->sig.op_id > TREE_OF(op->sig).op_id_completed_at_promotion){
+        if(op->sig.op_id != TREE_OF(op->sig).op_id_completed+1){
             PRTE_ERROR_LOG( PRTE_ERR_OUT_OF_ORDER_MSG );
         } else {
-            XCAST.op_id_completed++;
+            TREE_OF(op->sig).op_id_completed++;
         }
     }
     process_msg(op); // If not already processed, process before releasing
@@ -749,6 +799,11 @@ static void finish_op(op_t* op) {
     }
 
 static int pack_sig(pmix_data_buffer_t* buffer, signature_t* sig){
+    /* The topology leads, because the op id that follows is only meaningful
+     * within it - the reader has to know which tree's sequence it is reading
+     * before the number means anything. */
+    uint8_t topo = (uint8_t) sig->topology;
+    DIRECT_XCAST_PACK(buffer, &topo,          PMIX_UINT8);
     DIRECT_XCAST_PACK(buffer, &sig->op_id,    PMIX_SIZE);
     return PMIX_SUCCESS;
 }
@@ -768,6 +823,16 @@ static int pack_bool(pmix_data_buffer_t* buffer, bool* boolean){
 }
 
 static int unpack_sig(pmix_data_buffer_t* buffer, signature_t* sig){
+    uint8_t topo = 0;
+    DIRECT_XCAST_UNPACK(buffer, &topo, PMIX_UINT8);
+    /* Screen it before it indexes anything: this value selects an array
+     * element and a tree to walk, and a value no release ever assigned would
+     * do both out of bounds. */
+    if(PRTE_GRPCOMM_TOPO_COUNT <= topo){
+        PRTE_ERROR_LOG( PRTE_ERR_BAD_PARAM );
+        return PRTE_ERR_BAD_PARAM;
+    }
+    sig->topology = (prte_grpcomm_topology_t) topo;
     DIRECT_XCAST_UNPACK(buffer, &sig->op_id, PMIX_SIZE);
     return PMIX_SUCCESS;
 }
@@ -815,7 +880,7 @@ static op_t* insert_forwarded_op(signature_t* sig) {
     op_t* op = PMIX_NEW(op_t);
     op->sig = *sig;
 
-    if(sig->op_id == XCAST.op_id_inited){
+    if(sig->op_id == TREE_OF(*sig).op_id_inited){
         pmix_list_append(&XCAST.ops, &op->super);
     } else {
         op_t* next_op = NULL;
@@ -856,28 +921,100 @@ static op_t* insert_forwarded_op(signature_t* sig) {
  * That is why pack_forward_msg takes no destination.  If a forward ever does
  * need to differ per child, this is the loop that has to go back to packing
  * inside it - the sharing is not an optimization the RML can make on its own. */
-static void tree_whole_forward(op_t* op){
-    pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
-    prte_rml_payload_t* payload;
-    size_t i;
-    bool any = false;
+/* Who this daemon relays to, and who relays to it, in a given tree.
+ *
+ * The routing tree's answer is already computed and cached - it is consulted
+ * on every message and repaired incrementally, so it has to be. The release
+ * tree's is derived on demand: it is consulted once per broadcast, and
+ * recomputing is cheaper than keeping a second cache correct across every
+ * repair. Both answers come from state every daemon holds in step, so no two
+ * daemons can disagree about either shape.
+ *
+ * The caller frees *children when it was allocated, which topo_children says
+ * by setting *owned. The routing tree hands back its cached array. */
+static void topo_children(prte_grpcomm_topology_t topo, pmix_rank_t **children,
+                          size_t *n, bool *owned)
+{
+    *owned = false;
+    if (PRTE_GRPCOMM_TOPO_RELEASE == topo) {
+        pmix_rank_t parent;
+        if (PRTE_SUCCESS != prte_rml_release_tree(PRTE_PROC_MY_NAME->rank,
+                                                  &parent, children, n)) {
+            *children = NULL;
+            *n = 0;
+            return;
+        }
+        *owned = (NULL != *children);
+        return;
+    }
+    *children = (pmix_rank_t *) prte_rml_base.children.array;
+    *n = prte_rml_base.children.size;
+}
 
-    for (i = 0; i < prte_rml_base.children.size; i++) {
+/* How many children this daemon actually has in a tree - the count a
+ * completion is measured against, and a statement about that tree alone. */
+static size_t topo_n_children(prte_grpcomm_topology_t topo)
+{
+    pmix_rank_t *children;
+    size_t i, n, live = 0;
+    bool owned;
+
+    if (PRTE_GRPCOMM_TOPO_ROUTING == topo) {
+        return (size_t) prte_rml_base.n_children;
+    }
+    topo_children(topo, &children, &n, &owned);
+    for (i = 0; i < n; i++) {
+        if (PMIX_RANK_INVALID != children[i]) {
+            live++;
+        }
+    }
+    if (owned) { free(children); }
+    return live;
+}
+
+static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo)
+{
+    if (PRTE_GRPCOMM_TOPO_RELEASE == topo) {
+        pmix_rank_t parent = PMIX_RANK_INVALID, *kids = NULL;
+        size_t n = 0;
+        if (PRTE_SUCCESS != prte_rml_release_tree(PRTE_PROC_MY_NAME->rank,
+                                                  &parent, &kids, &n)) {
+            return PMIX_RANK_INVALID;
+        }
+        if (NULL != kids) {
+            free(kids);
+        }
+        return parent;
+    }
+    return PRTE_PROC_MY_PARENT->rank;
+}
+
+static void tree_whole_forward(op_t* op){
+    pmix_rank_t* children;
+    prte_rml_payload_t* payload;
+    size_t i, nchildren;
+    bool any = false, owned = false;
+
+    topo_children(op->sig.topology, &children, &nchildren, &owned);
+
+    for (i = 0; i < nchildren; i++) {
         if (PMIX_RANK_INVALID != children[i]) {
             any = true;
             break;
         }
     }
     if (!any) {
+        if (owned) { free(children); }
         return;
     }
 
     payload = build_forward_payload(op);
     if (NULL == payload) {
+        if (owned) { free(children); }
         return;
     }
 
-    for (i = 0; i < prte_rml_base.children.size; i++) {
+    for (i = 0; i < nchildren; i++) {
         if (PMIX_RANK_INVALID == children[i]) {
             continue;
         }
@@ -887,6 +1024,7 @@ static void tree_whole_forward(op_t* op){
     /* every child that accepted the payload holds its own reference now; drop
      * ours, so the buffer dies with the last send rather than with this loop */
     PMIX_RELEASE(payload);
+    if (owned) { free(children); }
 }
 
 static void forward_op(op_t* op){
@@ -906,7 +1044,7 @@ static void forward_op(op_t* op){
     /* A daemon reports its subtree complete once it holds the payload and
      * all its children have reported. */
     op->replay_pending_parent = false;
-    op->nexpected = prte_rml_base.n_children;
+    op->nexpected = topo_n_children(op->sig.topology);
     op->nreported = 0;
 
     tree_whole_forward(op);
@@ -943,7 +1081,7 @@ static void forward_lost(int status, pmix_proc_t *peer,
     signature_t sig;
     op_t *op;
 
-    sig.op_id = (size_t) (intptr_t) cbdata;
+    SIG_FROM_CBDATA(sig, cbdata);
 
     /* keep the RML's own reporting: what a failed send means for the *daemon*
      * is the errmgr's call, and unchanged.  We only decide what it means for
@@ -1010,7 +1148,7 @@ static void forward_payload_to(op_t* op, prte_rml_payload_t* payload,
      * the op on precisely the paths that matter, so the callback has to be
      * able to look the op up and find it gone. */
     PRTE_RML_SEND_PAYLOAD_CB(rc, dest, payload, PRTE_RML_TAG_XCAST,
-                             forward_lost, (void *) (intptr_t) op->sig.op_id);
+                             forward_lost, SIG_TO_CBDATA(op->sig));
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -1192,7 +1330,13 @@ static void process_msg(op_t* op){
 
 static void op_con(op_t* p)
 {
+    /* Every field, because PMIX_NEW mallocs without zeroing - a member left
+     * out here is heap garbage that gets packed onto the wire. The topology
+     * was exactly that until the swarm refused the first broadcast of the
+     * run: TOPO_ROUTING is zero, but nothing was setting it to zero. */
     p->sig.op_id = 0;
+    p->sig.topology = PRTE_GRPCOMM_TOPO_ROUTING;
+
 
     p->processed = false;
     p->replay_pending_parent = false;
@@ -1223,9 +1367,11 @@ static void xcast_con(prte_grpcomm_xcast_t* p)
 {
     PMIX_CONSTRUCT(&p->ops, pmix_list_t);
     PMIX_CONSTRUCT(&p->pending_completions, pmix_list_t);
-    p->op_id_completed = 0;
-    p->op_id_completed_at_promotion = 0;
-    p->op_id_inited = 0;
+    for(int t = 0; t < PRTE_GRPCOMM_TOPO_COUNT; t++){
+        p->tree[t].op_id_completed = 0;
+        p->tree[t].op_id_completed_at_promotion = 0;
+        p->tree[t].op_id_inited = 0;
+    }
 }
 static void xcast_des(prte_grpcomm_xcast_t* p)
 {
