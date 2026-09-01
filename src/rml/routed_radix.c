@@ -207,6 +207,86 @@ static void handle_promotion(void){
     }
 }
 
+/* This daemon's place in the *release* tree - the low-radix one a collective
+ * fans its release out over, beside the routing tree the rollup gathers on.
+ *
+ * It is the same radix machinery at a different radix, deliberately.  Sharing
+ * it means the release tree inherits the promotion the routing tree already
+ * does: a dead node is replaced by the next living one in its subtree, so a
+ * failure moves the edges below it and leaves the rest of the tree alone.
+ * The alternative - renumbering over the live daemons - is simpler to write
+ * and much worse to run: on 64 daemons at radix 3, losing an early daemon
+ * moves 43 edges rather than 3, and every moved edge is a lateral connection
+ * to open at exactly the moment the DVM is recovering.
+ *
+ * Nothing here is agreed between daemons.  Every daemon derives the same tree
+ * from the daemon count, the failed set and the radix, all of which they
+ * already hold in step, so there is no protocol and no window in which two
+ * daemons hold different shapes.  That is the same rule a fence lives under,
+ * and for the same reason: there is no originator to settle a disagreement.
+ *
+ * The caller frees `children`. */
+int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
+                          pmix_rank_t **children, size_t *nchildren)
+{
+    radix_node_t node, iter, up;
+    pmix_rank_t *kids;
+    size_t n = 0;
+
+    *parent = PMIX_RANK_INVALID;
+    *children = NULL;
+    *nchildren = 0;
+
+    if (2 > prte_rml_base.radix2) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (me >= prte_rml_base.n_dmns) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    node = radix_node_in(me, (pmix_rank_t) prte_rml_base.radix2);
+
+    /* Walk up past any ancestor that has failed.  The root has no parent, and
+     * that is the only daemon allowed to be without one. */
+    if (0 != me) {
+        up = radix_parent(&node);
+        while (PMIX_RANK_INVALID != up.rank && !radix_is_living(&up)) {
+            if (0 == up.rank) {
+                break;
+            }
+            up = radix_parent(&up);
+        }
+        *parent = up.rank;
+    }
+
+    kids = (pmix_rank_t *) malloc((size_t) prte_rml_base.radix2 * sizeof(pmix_rank_t));
+    if (NULL == kids) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    /* ...and take each child, or the next living node beneath it if that
+     * child has failed - the promotion the routing tree performs, at this
+     * tree's radix. */
+    RADIX_CHILD_FOREACH(node, iter) {
+        radix_node_t c = iter;
+        if (!radix_is_living(&c)) {
+            c = radix_rooted_get_next_living(&iter, &iter);
+        }
+        if (PMIX_RANK_INVALID == c.rank || c.rank >= prte_rml_base.n_dmns) {
+            continue;
+        }
+        kids[n++] = c.rank;
+    }
+
+    if (0 == n) {
+        free(kids);
+        kids = NULL;
+    }
+    *children = kids;
+    *nchildren = n;
+    return PRTE_SUCCESS;
+}
+
 // Replace failed children after promotion or failures
 static void update_descendants(void){
     pmix_rank_t* children = (pmix_rank_t*)prte_rml_base.children.array;

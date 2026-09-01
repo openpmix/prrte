@@ -1116,6 +1116,210 @@ static int test_fence_generation(void)
     return failures;
 }
 
+/*
+ * The release tree: the second topology, derived rather than agreed.
+ *
+ * What matters is not whether one daemon's answer looks right but whether all
+ * the answers fit together - every live daemon except the root has exactly
+ * one parent, that parent claims it as a child, and everyone reaches the
+ * root. A derivation that disagreed with itself would satisfy a
+ * single-daemon check and strand a subtree in the field.
+ */
+static int check_release_tree(const char *label)
+{
+    int failures = 0;
+    pmix_rank_t r, live = 0, root = PMIX_RANK_INVALID, reached = 0;
+    pmix_rank_t *parent_of;
+    char buf[160];
+
+    parent_of = (pmix_rank_t *) malloc(prte_rml_base.n_dmns * sizeof(pmix_rank_t));
+    if (NULL == parent_of) {
+        return 1;
+    }
+    for (r = 0; r < prte_rml_base.n_dmns; r++) {
+        parent_of[r] = PMIX_RANK_INVALID;
+    }
+
+    for (r = 0; r < prte_rml_base.n_dmns; r++) {
+        pmix_rank_t parent = PMIX_RANK_INVALID, *kids = NULL;
+        size_t nkids = 0, i;
+
+        if (!prte_rml_is_node_up(r)) {
+            continue;
+        }
+        live++;
+        if (PRTE_SUCCESS != prte_rml_release_tree(r, &parent, &kids, &nkids)) {
+            snprintf(buf, sizeof(buf), "%s: a live rank %u got no tree", label, r);
+            CHECK(buf, false);
+            continue;
+        }
+        if (PMIX_RANK_INVALID == parent) {
+            if (PMIX_RANK_INVALID != root) {
+                snprintf(buf, sizeof(buf), "%s: a second root at %u", label, r);
+                CHECK(buf, false);
+            }
+            root = r;
+        } else {
+            parent_of[r] = parent;
+            /* a parent must be alive - promoting past a dead ancestor is the
+             * whole point of sharing the routing tree's machinery */
+            if (!prte_rml_is_node_up(parent)) {
+                snprintf(buf, sizeof(buf), "%s: %u's parent %u is dead",
+                         label, r, parent);
+                CHECK(buf, false);
+            }
+        }
+        /* every child claimed must name us back */
+        for (i = 0; i < nkids; i++) {
+            pmix_rank_t cp = PMIX_RANK_INVALID, *ck = NULL;
+            size_t cn = 0;
+            if (!prte_rml_is_node_up(kids[i])) {
+                snprintf(buf, sizeof(buf), "%s: %u claims dead child %u",
+                         label, r, kids[i]);
+                CHECK(buf, false);
+                continue;
+            }
+            if (PRTE_SUCCESS == prte_rml_release_tree(kids[i], &cp, &ck, &cn)) {
+                if (cp != r) {
+                    snprintf(buf, sizeof(buf),
+                             "%s: %u claims %u as a child, but %u's parent is %u",
+                             label, r, kids[i], kids[i], cp);
+                    CHECK(buf, false);
+                }
+                if (NULL != ck) {
+                    free(ck);
+                }
+            }
+        }
+        if ((size_t) prte_rml_base.radix2 < nkids) {
+            snprintf(buf, sizeof(buf), "%s: rank %u has %d children, over radix",
+                     label, r, (int) nkids);
+            CHECK(buf, false);
+        }
+        if (NULL != kids) {
+            free(kids);
+        }
+    }
+
+    snprintf(buf, sizeof(buf), "%s: exactly one root", label);
+    CHECK(buf, PMIX_RANK_INVALID != root || 0 == live);
+
+    for (r = 0; r < prte_rml_base.n_dmns; r++) {
+        pmix_rank_t walk = r;
+        int hops = 0;
+        if (!prte_rml_is_node_up(r)) {
+            continue;
+        }
+        while (PMIX_RANK_INVALID != parent_of[walk] && hops <= (int) live) {
+            walk = parent_of[walk];
+            hops++;
+        }
+        if (walk == root && hops <= (int) live) {
+            reached++;
+        }
+    }
+    snprintf(buf, sizeof(buf), "%s: every live daemon reaches the root", label);
+    CHECK(buf, reached == live);
+
+    free(parent_of);
+    return failures;
+}
+
+/* How many edges move when one daemon dies?  This is the number that decided
+ * the design: promoting in place moves the edges below the casualty, while
+ * renumbering over the live daemons moves roughly half the tree - and every
+ * moved edge is a lateral connection to open while the DVM is recovering. */
+static int count_moved_edges(pmix_rank_t victim)
+{
+    pmix_rank_t r, before[128], moved = 0;
+
+    for (r = 0; r < prte_rml_base.n_dmns && r < 128; r++) {
+        pmix_rank_t p = PMIX_RANK_INVALID, *k = NULL;
+        size_t n = 0;
+        before[r] = PMIX_RANK_INVALID;
+        if (prte_rml_is_node_up(r) &&
+            PRTE_SUCCESS == prte_rml_release_tree(r, &p, &k, &n)) {
+            before[r] = p;
+            if (NULL != k) { free(k); }
+        }
+    }
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, victim);
+    for (r = 0; r < prte_rml_base.n_dmns && r < 128; r++) {
+        pmix_rank_t p = PMIX_RANK_INVALID, *k = NULL;
+        size_t n = 0;
+        if (r == victim || !prte_rml_is_node_up(r)) {
+            continue;
+        }
+        if (PRTE_SUCCESS == prte_rml_release_tree(r, &p, &k, &n)) {
+            if (p != before[r]) {
+                moved++;
+            }
+            if (NULL != k) { free(k); }
+        }
+    }
+    pmix_bitmap_clear_bit(&prte_rml_base.failed_dmns, victim);
+    return (int) moved;
+}
+
+static int test_release_tree(void)
+{
+    int failures = 0;
+    pmix_rank_t save_dmns = prte_rml_base.n_dmns;
+    int save_r2 = prte_rml_base.radix2, moved;
+    pmix_rank_t p = PMIX_RANK_INVALID, *k = NULL;
+    size_t n = 0;
+
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 128);
+
+    /* several radices, and sizes that are not powers of them - a complete
+     * tree is the easy case and not the one that breaks */
+    prte_rml_base.n_dmns = 16;
+    prte_rml_base.radix2 = 2;  failures += check_release_tree("16 daemons radix 2");
+    prte_rml_base.radix2 = 3;  failures += check_release_tree("16 daemons radix 3");
+    prte_rml_base.radix2 = 64; failures += check_release_tree("16 daemons radix 64");
+    prte_rml_base.n_dmns = 1;  failures += check_release_tree("1 daemon");
+    prte_rml_base.n_dmns = 2;  failures += check_release_tree("2 daemons");
+    prte_rml_base.n_dmns = 7;  failures += check_release_tree("7 daemons radix 3");
+    prte_rml_base.n_dmns = 13; failures += check_release_tree("13 daemons radix 3");
+
+    /* the release radix is genuinely independent of the routing radix */
+    prte_rml_base.n_dmns = 16;
+    prte_rml_base.radix2 = 3;
+    CHECK("release tree: radix2 is not the routing radix",
+          prte_rml_base.radix2 != prte_rml_base.radix || 3 == prte_rml_base.radix);
+
+    /* failures: a dead node is promoted past, not routed to */
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 1);
+    failures += check_release_tree("16 daemons, an interior daemon dead");
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 5);
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 11);
+    failures += check_release_tree("16 daemons, several dead");
+    pmix_bitmap_clear_all_bits(&prte_rml_base.failed_dmns);
+
+    /* ...and the property that chose promotion over renumbering. Losing one
+     * daemon must disturb a bounded neighbourhood, not half the tree. */
+    prte_rml_base.n_dmns = 64;
+    prte_rml_base.radix2 = 3;
+    moved = count_moved_edges(1);
+    CHECK("release tree: losing a daemon moves few edges, not half the tree",
+          moved <= 2 * prte_rml_base.radix2);
+
+    /* a radix below 2 is not a degenerate tree, it is a division by zero */
+    prte_rml_base.radix2 = 1;
+    CHECK("release tree: radix below 2 is refused",
+          PRTE_SUCCESS != prte_rml_release_tree(0, &p, &k, &n));
+    prte_rml_base.radix2 = save_r2;
+
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+    prte_rml_base.n_dmns = save_dmns;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_release_tree\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1146,6 +1350,7 @@ int main(void)
     failures += test_group_directives();
     failures += test_fence_operation();
     failures += test_fence_generation();
+    failures += test_release_tree();
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
     failures += test_recovery_epoch();

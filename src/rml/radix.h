@@ -40,6 +40,11 @@ typedef prte_rml_routed_tree_node_t radix_node_t;
 /* Obtain a radix node configured for this rank */
 static radix_node_t radix_node(const pmix_rank_t rank);
 
+/* As radix_node, but in a tree of the given radix rather than the routing
+ * tree's.  There is more than one radix tree over the daemons - see the radix
+ * member of prte_rml_routed_tree_node_t. */
+static radix_node_t radix_node_in(const pmix_rank_t rank, const pmix_rank_t radix);
+
 /**
  * Raise the node's rank up the tree, to represent its parent
  *
@@ -124,7 +129,7 @@ static bool radix_node_is_valid(const radix_node_t* node){
     if(node->depth > prte_rml_base.n_dmns) return false;
     if(node->width == 0) return false;
     if(node->count == 0) return false;
-    if(node->count/prte_rml_base.radix > prte_rml_base.n_dmns) return false;
+    if(node->count/node->radix > prte_rml_base.n_dmns) return false;
     if(node->count < node->width) return false;
 
     pmix_rank_t layer_offset = node->count - node->width;
@@ -133,14 +138,14 @@ static bool radix_node_is_valid(const radix_node_t* node){
     if(node->rank != exp_rank) return false;
 
     pmix_rank_t exp_count =
-        (node->width*prte_rml_base.radix-1)/(prte_rml_base.radix-1);
+        (node->width*node->radix-1)/(node->radix-1);
     if(node->count != exp_count) return false;
 
     pmix_rank_t depth = node->depth;
     pmix_rank_t width = node->width;
-    while(width >= (pmix_rank_t) prte_rml_base.radix && depth > 0){
-        if(width % prte_rml_base.radix != 0) return false;
-        width = width / prte_rml_base.radix;
+    while(width >= (pmix_rank_t) node->radix && depth > 0){
+        if(width % node->radix != 0) return false;
+        width = width / node->radix;
         depth--;
     }
     if(depth != 0 || width != 1) return false;
@@ -164,7 +169,7 @@ static inline void radix_update_rank(radix_node_t* node){
 /* Helper: increment depth and update width/count without changing rank */
 static inline void radix_incr_depth(radix_node_t* node){
     if(node->depth > prte_rml_base.n_dmns+1 ||
-        node->width/prte_rml_base.radix > prte_rml_base.n_dmns
+        node->width/node->radix > prte_rml_base.n_dmns
     ) {
         // Avoid overflows leading to undefined behaviour
         node->depth = PMIX_RANK_INVALID;
@@ -172,7 +177,7 @@ static inline void radix_incr_depth(radix_node_t* node){
         node->count = PMIX_RANK_INVALID;
     }
     node->depth++;
-    node->width *= prte_rml_base.radix;
+    node->width *= node->radix;
     node->count += node->width;
 }
 /* Helper: decrement depth and update width/count without changing rank */
@@ -185,14 +190,23 @@ static inline void radix_decr_depth(radix_node_t* node){
     }
     node->depth--;
     node->count -= node->width;
-    node->width /= prte_rml_base.radix;
+    node->width /= node->radix;
 }
 
 __prte_attribute_unused__
-static radix_node_t radix_node(const pmix_rank_t rank){
-    radix_node_t node = {.base = rank};
+/* Build a node in a tree of the given radix.  Every other operation here
+ * derives from an existing node and copies it, so the radix travels with the
+ * node and this is the only place a tree is chosen. */
+static radix_node_t radix_node_in(const pmix_rank_t rank, const pmix_rank_t radix){
+    radix_node_t node = {.base = rank, .radix = radix};
     radix_to_base(&node);
     return node;
+}
+
+/* ...and in the routing tree, which is what almost every caller wants. */
+__prte_attribute_unused__
+static radix_node_t radix_node(const pmix_rank_t rank){
+    return radix_node_in(rank, (pmix_rank_t) prte_rml_base.radix);
 }
 
 static void radix_to_parent(radix_node_t* node){
@@ -211,7 +225,7 @@ __prte_attribute_unused__
 static radix_node_t radix_child(const radix_node_t* node, pmix_rank_t idx){
     radix_node_t child = *node;
     radix_incr_depth(&child);
-    if(idx >= (pmix_rank_t) prte_rml_base.radix) child.rank = PMIX_RANK_INVALID;
+    if(idx >= (pmix_rank_t) node->radix) child.rank = PMIX_RANK_INVALID;
     if(node->rank >= prte_rml_base.n_dmns){
         child.base = PMIX_RANK_INVALID;
     } else {
@@ -227,7 +241,7 @@ static radix_node_t radix_right_sibling(const radix_node_t* node){
     if(node->rank >= prte_rml_base.n_dmns){
         sibling.base = PMIX_RANK_INVALID;
     } else {
-        sibling.base = node->rank + node->width/prte_rml_base.radix;
+        sibling.base = node->rank + node->width/node->radix;
         if(sibling.base >= node->count) sibling.base = PMIX_RANK_INVALID;
     }
     radix_update_rank(&sibling);
@@ -235,9 +249,9 @@ static radix_node_t radix_right_sibling(const radix_node_t* node){
 }
 
 static void radix_to_depth(radix_node_t* node, const pmix_rank_t depth){
-    double width = pow(prte_rml_base.radix, depth);
-    double count = (width*prte_rml_base.radix-1)/(prte_rml_base.radix-1);
-    if(count/prte_rml_base.radix > prte_rml_base.n_dmns){
+    double width = pow(node->radix, depth);
+    double count = (width*node->radix-1)/(node->radix-1);
+    if(count/node->radix > prte_rml_base.n_dmns){
         node->rank  = PMIX_RANK_INVALID;
         node->depth = PMIX_RANK_INVALID;
         node->width = PMIX_RANK_INVALID;
@@ -266,10 +280,10 @@ static void radix_to_base(radix_node_t* node){
         return;
     }
 
-    double radix = prte_rml_base.radix;
+    double radix = node->radix;
     node->depth = log(node->base*(radix-1) + 1) / log(radix);
-    node->width = pow(prte_rml_base.radix, node->depth);
-    node->count = (node->width*prte_rml_base.radix-1)/(prte_rml_base.radix-1);
+    node->width = pow(node->radix, node->depth);
+    node->count = (node->width*node->radix-1)/(node->radix-1);
 
     // Floating point logic and integer truncation could mean we're slightly off
     // with our chosen depth
@@ -290,7 +304,7 @@ static void radix_to_next(radix_node_t* node){
         // child slot fell exactly on the boundary (e.g. rank 0 with the default
         // radix 64 in a 64-daemon DVM), which made radix_to_next_living give up
         // and silently drop every rank in that subtree from the repaired tree.
-        pmix_rank_t child = node->rank + node->width*prte_rml_base.radix;
+        pmix_rank_t child = node->rank + node->width*node->radix;
         while(child >= prte_rml_base.n_dmns) child -= node->width;
         radix_incr_depth(node);
         node->rank = child;
@@ -341,7 +355,7 @@ static pmix_rank_t radix_subtree_index(
     if(n == node->rank || !radix_subtree_contains(node, n)){
         return PMIX_RANK_INVALID;
     }
-    pmix_rank_t child_width = node->width*prte_rml_base.radix;
+    pmix_rank_t child_width = node->width*node->radix;
     // Return simplified from:
     // child_rank = (n - node->count)%child_width + node->count
     // child_index = ( child_rank - node->count ) / node->width
