@@ -10,7 +10,6 @@
 # one obliges you to delete its line and the list can only shrink.
 #
 # Format: <path> <type>.<member>
-examples/server.c myxfer_t.caller
 src/mca/ess/base/ess_base_frame.c prte_ess_base_signal_t.signal
 src/mca/filem/raw/filem_raw_module.c prte_filem_raw_incoming_t.type
 src/mca/filem/raw/filem_raw_module.c prte_filem_raw_output_t.data
