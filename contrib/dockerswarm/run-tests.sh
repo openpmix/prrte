@@ -4601,6 +4601,7 @@ test_grpcomm() {
     test_grpcomm_ft
     test_fence_straggler
     test_fence_early_arrival
+    test_low_radix_release
 }
 
 test_fence_early_arrival() {
@@ -4663,6 +4664,73 @@ test_fence_early_arrival() {
         || bad "the HNP died over the overlapping rounds"
 
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+}
+
+test_low_radix_release() {
+    local out n hosts
+
+    banner "grpcomm: a fence release can travel a tree of its own"
+    # The rollup and the release want opposite radices.  A gathering daemon
+    # receives r messages and sends ONE aggregate, so fanout costs it nothing;
+    # a broadcasting daemon receives one copy and sends r, so fanout is the
+    # whole cost.  grpcomm_low_radix_release sends a fence's release down the
+    # tree rml_base_radix2 describes rather than the routing tree.
+    #
+    # The two radices are deliberately far apart here: routing radix 64 over
+    # eight daemons is one hop from the HNP to everybody, while release radix
+    # 2 is three levels deep.  That is what makes the case worth running - the
+    # release then arrives from a daemon that is NOT the receiver's routing
+    # parent, which the parent check screened on until it learned to ask which
+    # tree a message travelled, and daemons in the middle relay on a tree they
+    # relay on for nothing else.
+    #
+    # Run in the foreground rather than against a daemonized DVM, because the
+    # last assertion reads the HNP's verbose output and a --daemonize'd DVM
+    # detaches it.
+    #
+    # Note what this does NOT establish: anything about speed.  These
+    # containers share one host and have no per-node uplinks for a radix to
+    # contend on, so the entire point of the low radix is invisible here.
+    # What it establishes is that the release arrives, intact, over the other
+    # tree.
+    hosts=node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1
+    cleanup_swarm
+    if ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        return
+    fi
+
+    out=$(RUN "timeout -k 5 180 prterun --prtemca grpcomm_low_radix_release 1 \
+                   --prtemca rml_base_radix2 2 --prtemca rml_base_radix 64 \
+                   --prtemca grpcomm_base_verbose 1 \
+                   --host $hosts -n 8 --map-by node $FENCER collect --twice" 2>&1)
+
+    n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+    [ "$n" = 8 ] \
+        && ok "all 8 ranks completed a modex fence released on the other tree" \
+        || bad "$n of 8 ranks completed the fence: $(echo "$out" | grep FENCER | tr '\n' ' ' | tail -c 250)"
+
+    n=$(echo "$out" | grep -c 'FENCER second rank .* rc PMIX_SUCCESS')
+    [ "$n" = 8 ] \
+        && ok "...and a second one over the same participants" \
+        || bad "$n of 8 ranks completed the second fence"
+
+    n=$(echo "$out" | grep -c 'peers-bad 0')
+    [ "$n" = 8 ] \
+        && ok "...with every peer's contribution delivered" \
+        || bad "$n of 8 ranks got a complete modex: $(echo "$out" | grep 'peers-' | tr '\n' ' ' | tail -c 250)"
+
+    # The assertion without which every one above passes vacuously: the
+    # release has to have gone down the other tree.  All of them succeed just
+    # as well when the knob is quietly ignored, which is exactly what happened
+    # the first time this was wired up - the selector was never installed, and
+    # three green runs said nothing at all.
+    n=$(echo "$out" | grep -c 'on tree 1')
+    [ "$n" -ge 1 ] \
+        && ok "...and the release travelled the release tree, not the routing one" \
+        || bad "no broadcast used the release tree - the knob was ignored"
+
     cleanup_swarm
 }
 
