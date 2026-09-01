@@ -911,8 +911,14 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     pmix_info_t *info = NULL;
     prte_grpcomm_fence_signature_t *sig = NULL;
     prte_grpcomm_fence_t *coll;
-    prte_grpcomm_fence_op_t op;
-    uint32_t gen;
+    /* Both are filled by their unpack below, which writes nothing on failure
+     * and whose failure returns from here - so neither is ever read unset.
+     * Initialized anyway, and to the value that means "nothing was said"
+     * rather than to a round or an operation this contribution did not name:
+     * a compiler that cannot see across the unpack has to assume they might
+     * be read, and if one ever were, silence is the only safe answer. */
+    prte_grpcomm_fence_op_t op = PRTE_GRPCOMM_FENCE_OP_UNKNOWN;
+    uint32_t gen = PRTE_GRPCOMM_FENCE_GEN_UNKNOWN;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
