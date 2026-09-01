@@ -193,15 +193,47 @@ int prte_grpcomm_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
     return prte_grpcomm_xcast_nb(tag, msg, NULL, NULL);
 }
 
+/* Which tree a collective's release travels.
+ *
+ * Chosen by tag, not by size, and that is deliberate: the operations differ
+ * in what they carry, and a byte threshold cannot express that while a tag
+ * can. A fence release is the whole modex, which is what makes the release
+ * fanout dominate a collecting fence; a group release is small, and a low
+ * radix buys nothing where the r*M*beta term is nil and costs depth. So the
+ * fence's release is the one that moves when the low-radix tree is turned on
+ * and the group's is not, until somebody measures a reason otherwise.
+ *
+ * This is the single seam every release goes through, which is why the choice
+ * lives here rather than at each of the four call sites. */
+int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
+                                      pmix_data_buffer_t *msg)
+{
+    if (prte_grpcomm_globals.low_radix_release &&
+        PRTE_RML_TAG_FENCE_RELEASE == tag) {
+        return prte_grpcomm_xcast_topo(tag, msg, PRTE_GRPCOMM_TOPO_RELEASE,
+                                       NULL, NULL);
+    }
+    return prte_grpcomm_xcast(tag, msg);
+}
+
 int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
                                  prte_grpcomm_xcast_complete_fn_t cbfunc,
                                  void *cbdata){
+    return prte_grpcomm_xcast_topo(tag, msg, PRTE_GRPCOMM_TOPO_ROUTING,
+                                   cbfunc, cbdata);
+}
+
+int prte_grpcomm_xcast_topo(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
+                            prte_grpcomm_topology_t topology,
+                            prte_grpcomm_xcast_complete_fn_t cbfunc,
+                            void *cbdata){
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
-                         "%s grpcomm:xcast: with %d bytes",
+                         "%s grpcomm:xcast: with %d bytes on tree %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int) msg->bytes_used));
+                         (int) msg->bytes_used, (int) topology));
 
     op_t* op = PMIX_NEW(op_t);
+    op->sig.topology = topology;
     op->msg_tag = tag;
     /* stash the completion callback on the initiating op.  It is not fired from
      * this op (which is discarded after begin_xcast relays it); begin_xcast

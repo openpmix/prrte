@@ -48,7 +48,8 @@ prte_grpcomm_globals_t prte_grpcomm_globals = {
     .fence_generations = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_generations)
 };
 
-prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
+prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast =
+    prte_grpcomm_release_bcast_select;
 
 /* File scope, not a local: the MCA layer keeps the pointer it is handed and
  * writes through it whenever the variable is set, so a stack slot would be
@@ -136,6 +137,19 @@ void prte_grpcomm_register(void)
                                "every daemon that reads the parameter.",
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_grpcomm_globals.fence_delay_vpid);
+
+    /* Send a fence's release down the low-radix tree instead of the routing
+     * tree.  Off by default, and that is the point of shipping it at all: we
+     * will not have data to choose a winner before release, so the tree we
+     * know works stays the default and this exists to be evaluated against
+     * it.  The radix it uses is rml_base_radix2. */
+    prte_grpcomm_globals.low_radix_release = false;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "low_radix_release",
+                               "Fan a fence's release out over the low-radix "
+                               "release tree (rml_base_radix2) rather than the "
+                               "routing tree. Off by default.",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_grpcomm_globals.low_radix_release);
 }
 
 /**
