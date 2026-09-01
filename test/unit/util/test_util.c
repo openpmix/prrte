@@ -57,6 +57,13 @@
  *    prte_util_get_ordered_host_list() walked the list through an item it
  *    had already released.
  *
+ *  - prte_util_filter_hostfile_nodes() stopped recognizing an allocated node
+ *    once its daemon reported a different hostname for it, because the node
+ *    matcher only looked at the second node's aliases when the first node had
+ *    aliases of its own -- and the node parsed out of the hostfile, which is
+ *    always passed first, never has any. A hostfile naming nodes by address
+ *    launched once and then failed to map.
+ *
  * What is deliberately NOT here: session_dir (creates directories under
  * the real tmpdir), stacktrace (installs signal handlers), daemon_init
  * (forks), and the parts of nidmap that need a populated DVM. Those belong
@@ -1068,6 +1075,54 @@ static int test_hostfile(void)
         }
     }
     PMIX_LIST_DESTRUCT(&nodes);
+
+    /*
+     * A hostfile has to keep matching a node after the daemons report in.
+     * prted_report_launch() replaces each node's name with the hostname its
+     * own daemon found and demotes the name the allocation used to an alias,
+     * so on the second and later passes the hostfile's name lives on the
+     * allocation node's ALIAS list while the node parsed out of the file has
+     * no aliases at all - and the parsed node is always the first argument to
+     * prte_nptr_match(). That is the shape that failed: the matcher only
+     * examined the second node's aliases when the first had aliases of its
+     * own, so a hostfile naming nodes by address launched once and then died
+     * with hostfile:extra-node-not-found. The predicate is pinned directly in
+     * test/unit/runtime, but only this reaches it the way the launch does.
+     *
+     * Address resolution is turned off across the case so the address is
+     * compared as a name rather than against whichever interfaces the machine
+     * running the test happens to own.
+     */
+    {
+        bool saved_resolve = prte_do_not_resolve;
+        char filterpath[256];
+
+        prte_do_not_resolve = true;
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        nd = PMIX_NEW(prte_node_t);
+        nd->name = strdup("node05");
+        PMIx_Argv_append_nosize(&nd->aliases, "10.0.0.5");
+        nd->slots = 4;
+        pmix_list_append(&nodes, &nd->super);
+        /* a second node the hostfile does not name, so the filter still has
+         * to discriminate and not simply keep whatever it was given */
+        nd = PMIX_NEW(prte_node_t);
+        nd->name = strdup("node06");
+        nd->slots = 4;
+        pmix_list_append(&nodes, &nd->super);
+
+        if (NULL != write_hostfile("10.0.0.5\n", filterpath, sizeof(filterpath))) {
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            CHECK("a hostfile name matches an allocated node's alias", PRTE_SUCCESS == rc);
+            CHECK("...and the node is kept under the name its daemon reported",
+                  1 == pmix_list_get_size(&nodes) && NULL != find_node(&nodes, "node05"));
+            CHECK("...and the node it did not name is gone",
+                  NULL == find_node(&nodes, "node06"));
+            unlink(filterpath);
+        }
+        PMIX_LIST_DESTRUCT(&nodes);
+        prte_do_not_resolve = saved_resolve;
+    }
 
     unlink(path);
     return failures;
