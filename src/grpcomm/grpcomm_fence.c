@@ -41,7 +41,9 @@
 
 /* internal functions */
 static void fence(int sd, short args, void *cbdata);
-static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bool create);
+static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig,
+                                         uint32_t generation, uint32_t step,
+                                         bool create);
 static int create_dmns(prte_grpcomm_fence_signature_t *sig,
                        pmix_rank_t **dmns, size_t *ndmns);
 static int fence_sig_pack(pmix_data_buffer_t *bkt,
@@ -699,7 +701,8 @@ static void fence(int sd, short args, void *cbdata)
     /* retrieve an existing tracker, create it if not
      * already found. The fence module is responsible
      * for releasing it upon completion of the collective */
-    coll = get_tracker(&sig, true);
+    coll = get_tracker(&sig, prte_grpcomm_fence_gen_next(&sig),
+                       PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
     if (NULL == coll) {
         st = PMIX_ERR_NOT_FOUND;
         goto done;
@@ -984,28 +987,31 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* check for the tracker and create it if not found */
-    if (NULL == (coll = get_tracker(sig, true))) {
+    /* Which round this contribution belongs to, and so which tracker it joins.
+     *
+     * A sender that named a round gets that round - including one AHEAD of
+     * where we are.  That happens routinely rather than exceptionally: xcast
+     * hands a release to our children before we process it ourselves, so a
+     * child can be released, open the next round, and reach us while we are
+     * still finishing the previous one.  Its contribution gets a tracker of
+     * its own and accumulates there until our own release arrives and we
+     * catch up.  Folding it into the round we are still in - which is what
+     * adopting the higher number onto the live tracker would do - would put
+     * the next round's data in a bucket holding this round's.
+     *
+     * A sender that named no round is a daemon a grow added, which has not
+     * learned this signature's numbering yet.  It joins whatever round we
+     * think is current, which is the right answer for a joiner and cannot be
+     * a straggler: it has no earlier round here to have straggled from. */
+    if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == gen) {
+        gen = prte_grpcomm_fence_gen_next(sig);
+    }
+    if (NULL == (coll = get_tracker(sig, gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PMIX_RELEASE(sig);
         return;
     }
     PMIX_RELEASE(sig);
-
-    /* Settle the tracker's round against what just arrived.
-     *
-     * UNKNOWN on either side is silence rather than a claim: a daemon with no
-     * memo entry for these participants has never released a fence over them,
-     * which is the ordinary state of one grown into the DVM after the job
-     * started.  It cannot stamp 0 - that names a round long since released,
-     * and its contribution would be dropped by every daemon that had been
-     * present for it.  Adopting a higher generation is the same move
-     * fence_recv makes for a recovery epoch it has not caught up with. */
-    if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN != gen &&
-        (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == coll->generation ||
-         coll->generation < gen)) {
-        coll->generation = gen;
-    }
 
     if (!prte_grpcomm_fence_op_merge(coll, op)) {
         /* The participants asked for different collectives.  Report it and
@@ -1403,10 +1409,28 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
     }
     prte_grpcomm_fence_gen_record(sig, gen);
 
-    /* check for the tracker - it is not an error if not
-     * found as that just means we are not involved
-     * in the collective */
-    if (NULL == (coll = get_tracker(sig, false))) {
+    /* Find the round this release ends.  Not an error if there is none - that
+     * just means we had no participants in it.
+     *
+     * The fallback is for a daemon a grow added.  It did not know this
+     * signature's numbering when it opened its tracker, so that tracker is
+     * filed under UNKNOWN rather than under the round the rest of the DVM
+     * calls this one; the release is the first thing that tells it, so adopt
+     * the number onto it here.  There can only be the one such tracker per
+     * signature: the next round opens with a real number, because recording
+     * this release above gave us one. */
+    coll = get_tracker(sig, gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, false);
+    if (NULL == coll) {
+        coll = get_tracker(sig, PRTE_GRPCOMM_FENCE_GEN_UNKNOWN,
+                           PRTE_GRPCOMM_FENCE_STEP_ROLLUP, false);
+        if (NULL != coll) {
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                                 "%s grpcomm:fence learning that its round is %u",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) gen));
+            coll->generation = gen;
+        }
+    }
+    if (NULL == coll) {
         PMIX_RELEASE(sig);
         return;
     }
@@ -1462,21 +1486,37 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
     PMIX_RELEASE(sig);
 }
 
-static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bool create)
+/* Does this tracker have the identity we are looking for?
+ *
+ * All three parts, and the reason each is here is in the tracker's own
+ * definition. Note that the generation is compared exactly, including when
+ * it is UNKNOWN: a daemon that has not learned a signature's numbering keeps
+ * its work on an UNKNOWN tracker and adopts a real number when a release
+ * tells it one - see the note in fence_release(). */
+static bool tracker_matches(prte_grpcomm_fence_t *coll,
+                            prte_grpcomm_fence_signature_t *sig,
+                            uint32_t generation, uint32_t step)
+{
+    if (coll->generation != generation || coll->step != step) {
+        return false;
+    }
+    return fence_sig_same(sig, coll->sig);
+}
+
+static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig,
+                                         uint32_t generation, uint32_t step,
+                                         bool create)
 {
     prte_grpcomm_fence_t *coll;
     int rc;
 
     /* search the existing tracker list to see if this already exists */
     PMIX_LIST_FOREACH(coll, &prte_grpcomm_globals.fence_ops, prte_grpcomm_fence_t) {
-        if (sig->sz == coll->sig->sz) {
-            // must match proc signature
-            if (0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
-                PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
-                                     "%s grpcomm:base:returning existing collective",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                return coll;
-            }
+        if (tracker_matches(coll, sig, generation, step)) {
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                                 "%s grpcomm:base:returning existing collective",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            return coll;
         }
     }
     /* if we get here, then this is a new collective - so create
@@ -1496,11 +1536,11 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
         PMIX_PROC_CREATE(coll->sig->signature, coll->sig->sz);
         memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
     }
-    /* Which round this is.  The memo answers UNKNOWN if we have never
-     * released a fence over these participants, and that is not the same as
-     * zero: it means we have no claim to make, and the first contribution to
-     * name a generation will settle it. */
-    coll->generation = prte_grpcomm_fence_gen_next(coll->sig);
+    /* the identity we were asked for - the caller resolved it, because only
+     * the caller knows whether it is opening a round of its own or joining
+     * one somebody else named */
+    coll->generation = generation;
+    coll->step = step;
     pmix_list_append(&prte_grpcomm_globals.fence_ops, &coll->super);
 
     /* now get the daemons involved */
@@ -1525,9 +1565,11 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
  * build a tracker and inspect what the rollup was sized to expect, which is
  * where a fence goes wrong long before any message moves. */
 prte_grpcomm_fence_t *prte_grpcomm_fence_get_tracker(prte_grpcomm_fence_signature_t *sig,
+                                                            uint32_t generation,
+                                                            uint32_t step,
                                                             bool create)
 {
-    return get_tracker(sig, create);
+    return get_tracker(sig, generation, step, create);
 }
 
 static int create_dmns(prte_grpcomm_fence_signature_t *sig,
