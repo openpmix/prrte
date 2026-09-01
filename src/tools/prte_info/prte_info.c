@@ -245,10 +245,16 @@ int main(int argc, char *argv[])
     /* add those in */
     pmix_pointer_array_add(&mca_types, "pmix");
 
-    /* add the rml and routed types since they are no
-     * longer in a framework */
+    /* add the rml, routed and grpcomm types since they are no
+     * longer in a framework.  prte_register_params() has already registered
+     * their parameters - it calls each of these subsystems' register function
+     * directly for exactly this reason - but nothing walks a framework list
+     * to find them, so the type has to be named here or the parameters are
+     * invisible to prte_info and therefore to anyone trying to discover
+     * them. */
     pmix_pointer_array_add(&mca_types, "rml");
     pmix_pointer_array_add(&mca_types, "routed");
+    pmix_pointer_array_add(&mca_types, "grpcomm");
 
     /* push all the types found by autogen */
     for (i = 0; NULL != prte_frameworks[i]; i++) {
