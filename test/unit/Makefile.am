@@ -9,6 +9,10 @@ SUBDIRS = rmaps runtime errmgr ess event filem grpcomm hwloc include odls iof pl
 # check_static_init.pl is kept identical to the copy in PMIx
 # (test/unit/check_static_init.pl); fix one and copy it across rather
 # than letting the two drift.
+# check_ctor_coverage.py is kept identical to the copy in PMIx
+# (test/unit/check_ctor_coverage.py); fix one and copy it across rather
+# than letting the two drift.  Their baselines differ, being records of
+# two different code bases, and are not interchangeable.
 dist_check_SCRIPTS = check_static_init.pl check_query_authority.py \
                      check_ctor_coverage.py
 

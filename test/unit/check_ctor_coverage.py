@@ -175,8 +175,15 @@ def main():
             ctor_body = function_body(text, ctor)
             if ctor_body is None:
                 continue
-            if re.search(r'\bmemset\s*\(', ctor_body):
-                continue          # clears wholesale; nothing to enumerate
+            # A memset of the WHOLE object accounts for every member at once.
+            # One of a single member does not, and must not exempt the rest -
+            # constructors that clear an embedded header and then set fields
+            # individually are common, and skipping them would hide every
+            # omission in the constructor. So require the target to be the
+            # object itself: a first argument with no -> or . in it.
+            if re.search(r'\bmemset\s*\(\s*(?:\([^)]*\)\s*)?[A-Za-z_]\w*\s*,',
+                         ctor_body):
+                continue
             for mtype, name in members_of(body):
                 if name in EXEMPT_NAMES:
                     continue
