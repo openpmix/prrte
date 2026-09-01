@@ -1368,9 +1368,85 @@ static void relcb(void *cbdata)
     }
 }
 
+static void fence_release_process(pmix_data_buffer_t *buffer);
+
+/* Fault injection: carry a release across the delay timer.  The buffer is a
+ * copy - the one the RML handed us goes back when that callback returns. */
+typedef struct {
+    prte_event_t ev;
+    pmix_data_buffer_t *buf;
+} release_delay_caddy_t;
+
+static void release_delay_fire(int sd, short args, void *cbdata)
+{
+    release_delay_caddy_t *dc = (release_delay_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:fence processing the held-back release",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    fence_release_process(dc->buf);
+    PMIX_DATA_BUFFER_RELEASE(dc->buf);
+    free(dc);
+}
+
+static bool release_should_delay(void)
+{
+    if (0 >= prte_grpcomm_globals.release_delay_ms) {
+        return false;
+    }
+    if (0 > prte_grpcomm_globals.release_delay_vpid) {
+        return true;
+    }
+    return ((pmix_rank_t) prte_grpcomm_globals.release_delay_vpid
+            == PRTE_PROC_MY_NAME->rank);
+}
+
 void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
                                        pmix_data_buffer_t *buffer,
                                        prte_rml_tag_t tag, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    if (release_should_delay()) {
+        /* Hold our own processing back while our children get theirs on time
+         * - xcast forwarded to them before handing this up, so they are
+         * already going.  Their clients will open the next round and their
+         * contributions will arrive here while this daemon still has the
+         * previous one open, which is the window the round number covers and
+         * which is otherwise microseconds wide. */
+        release_delay_caddy_t *dc = (release_delay_caddy_t *) calloc(1, sizeof(*dc));
+        struct timeval tv;
+        pmix_status_t prc;
+
+        if (NULL == dc) {
+            fence_release_process(buffer);
+            return;
+        }
+        PMIX_DATA_BUFFER_CREATE(dc->buf);
+        prc = PMIx_Data_copy_payload(dc->buf, buffer);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_RELEASE(dc->buf);
+            free(dc);
+            fence_release_process(buffer);
+            return;
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:fence holding its release back %d ms",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             prte_grpcomm_globals.release_delay_ms));
+        tv.tv_sec = prte_grpcomm_globals.release_delay_ms / 1000;
+        tv.tv_usec = (prte_grpcomm_globals.release_delay_ms % 1000) * 1000;
+        prte_event_evtimer_set(prte_event_base, &dc->ev, release_delay_fire, dc);
+        PMIX_POST_OBJECT(dc);
+        prte_event_evtimer_add(&dc->ev, &tv);
+        return;
+    }
+    fence_release_process(buffer);
+}
+
+static void fence_release_process(pmix_data_buffer_t *buffer)
 {
     int32_t cnt;
     int rc, ret;
@@ -1378,7 +1454,6 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
     prte_grpcomm_fence_t *coll;
     pmix_byte_object_t bo;
     uint32_t gen;
-    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_globals.output,
                          "%s grpcomm: fence release called with %d bytes",

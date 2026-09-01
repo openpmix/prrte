@@ -91,6 +91,8 @@ void prte_grpcomm_register(void)
      * can arrange that window: it is otherwise a timing accident.
      *
      * Compiled in always, on purpose.  See src/grpcomm/AGENTS.md. */
+    prte_grpcomm_globals.release_delay_ms = 0;
+    prte_grpcomm_globals.release_delay_vpid = -1;
     prte_grpcomm_globals.joined_late = false;
     prte_grpcomm_globals.joined_late_known = false;
 
@@ -102,6 +104,27 @@ void prte_grpcomm_register(void)
                                "0 (the default) sends immediately.",
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_grpcomm_globals.fence_delay_ms);
+
+    /* The other half of the pair: hold a daemon's own processing of a release
+     * back while its children get theirs on time.  That is the only way to
+     * reach the early-arrival window, where a contribution for the NEXT round
+     * lands on a daemon still finishing the previous one. */
+    prte_grpcomm_globals.release_delay_ms = 0;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "release_delay_ms",
+                               "Hold this daemon's own processing of a fence "
+                               "release back by this many milliseconds. The "
+                               "forward to its children is not delayed. Fault "
+                               "injection; 0 (the default) processes at once.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.release_delay_ms);
+
+    prte_grpcomm_globals.release_delay_vpid = -1;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "release_delay_vpid",
+                               "Restrict grpcomm_release_delay_ms to the daemon "
+                               "with this vpid. -1 (the default) delays on "
+                               "every daemon that reads the parameter.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.release_delay_vpid);
 
     /* -1 means "whichever daemon this is", which is what a per-node MCA file
      * wants; a vpid names one daemon in a DVM-wide setting, which is what a

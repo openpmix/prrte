@@ -110,6 +110,20 @@ typedef struct {
     // delay_ms 0 costs one compare per fence.
     int fence_delay_ms;
     int fence_delay_vpid;
+    // Fault injection, the other half: hold this daemon's own *processing* of
+    // a fence release back, without holding up the forward to its children.
+    //
+    // That is the shape of the one window the round number has to cover and
+    // grpcomm_fence_delay_ms cannot reach. xcast forwards a release before
+    // processing it, so a child is released while its parent still has the
+    // previous round open; the child's clients start the next round and their
+    // contribution arrives at a parent that has not caught up. Delaying the
+    // parent's processing widens that gap from microseconds to whatever is
+    // asked for, which is what makes it testable at all.
+    //
+    // Ships for the same reason its sibling does.
+    int release_delay_ms;
+    int release_delay_vpid;
     // Did this daemon join a DVM that had already been running collectives?
     //
     // It decides what "I have no round number for this signature" means, and

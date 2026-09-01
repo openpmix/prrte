@@ -658,15 +658,30 @@ That cost two full build-and-run cycles of false green here.  (It is also a
 neat demonstration that the on-demand path works: the fence had genuinely
 lost the key and the application never noticed.)
 
-**Still open: the early contribution.**  `PRTE_RML_TAG_FENCE_RELEASE` is not
-in `xcast`'s `process_first` set, so a daemon forwards a release to its
-children *before* processing it itself.  A child can therefore be released,
-start the next round, and have its contribution reach the parent while the
-parent is still in the previous one.  Dropping is safe there but adopting the
-higher number onto the live tracker is **not** — it relabels a tracker whose
-bucket holds the previous round's data.  Handling that properly means keying
-trackers by `(signature, generation)` rather than by signature alone, which is
-the same identity a lateral movement would need.
+**The early contribution, and why it is not a corner case.**
+`PRTE_RML_TAG_FENCE_RELEASE` is not in `xcast`'s `process_first` set, so a
+daemon forwards a release to its children *before* processing it itself.  A
+child can therefore be released, start the next round, and have its
+contribution reach the parent while the parent is still in the previous one.
+That is what `(signature, generation)` keying is for: the early contribution
+gets a tracker of its own instead of landing in a bucket the release is about
+to discard.
+
+Adopting the higher number onto the live tracker instead — which is what the
+first attempt did — is worse than dropping, because it relabels a tracker
+holding the previous round's data.  The symptom is not wrong data but a
+**hang**: the early contribution is consumed by the wrong round, and the round
+it belonged to then waits for something that has already arrived.  Measured,
+with the generation removed from the key: the second fence completes on 0 of 4
+ranks while the first still succeeds and the DVM survives.
+
+`grpcomm_release_delay_ms` (with `grpcomm_release_delay_vpid`) is what makes
+that reachable — it holds one daemon's own *processing* of a release back
+while the forward to its children goes on time, widening a window that is
+otherwise microseconds.  Drive it at `rml_base_radix 1` so the tree is a chain
+and the delayed daemon is genuinely interior; hanging it off the HNP as a leaf
+tests nothing.  See the *"a contribution for the next round does not join this
+one"* case in `contrib/dockerswarm`.
 
 **A release with no local callback still has data to free.** A daemon
 holding a tracker only because it relayed for its subtree has no `cbfunc`
