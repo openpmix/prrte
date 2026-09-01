@@ -24,6 +24,43 @@
 
 BEGIN_C_DECLS
 
+/* Which tree a broadcast travels.
+ *
+ * There is more than one: the routing tree, at a high radix, which everything
+ * has always used; and the release tree, at a low one, which a collective's
+ * fan-out will use because the two want opposite radices - fanout is free on
+ * the way up a rollup and is the entire cost on the way down a release. See
+ * docs/plans/scalable_collectives/two-radix-release.rst.
+ *
+ * The topology is part of a broadcast's identity, not a routing hint. Two
+ * trees cannot share reliability accounting: a completion count is a
+ * statement about one tree's shape, and acks rolled up tree A say nothing
+ * about coverage of a message that travelled tree B. So each topology gets
+ * its own op-id sequence, its own completion state, and its own idea of who
+ * its parent and children are - and a message names which it belongs to.
+ *
+ * Keep PRTE_GRPCOMM_TOPO_ROUTING at zero: it is the value a zeroed structure
+ * or an unstamped message lands on, and it is the one that has always been
+ * meant. */
+typedef enum {
+    PRTE_GRPCOMM_TOPO_ROUTING = 0,
+    PRTE_GRPCOMM_TOPO_RELEASE,
+    PRTE_GRPCOMM_TOPO_COUNT
+} prte_grpcomm_topology_t;
+
+/* The per-tree reliability state.  One of these per topology: the sequence is
+ * what orders ops within a tree, and two trees ordering against one counter
+ * would have each raising out-of-order on the other's traffic. */
+typedef struct {
+    // ID of the last known completed (in our subtree) operation
+    size_t op_id_completed;
+    // op_id_completed when we were last promoted
+    // (our subtree grew, so we can't assume completion in our new subtree)
+    size_t op_id_completed_at_promotion;
+    // ID of the last known initiated operation
+    size_t op_id_inited;
+} prte_grpcomm_tree_state_t;
+
 /* Tracks ongoing xcast operations to ensure all messages are delivered exactly
  * once to all daemons even in the presence of daemon failures */
 typedef struct {
@@ -33,13 +70,8 @@ typedef struct {
     // FIFO of completion callbacks for master-originated broadcasts awaiting
     // relay back to the master (see grpcomm_xcast.c)
     pmix_list_t pending_completions;
-    // ID of the last known completed (in our subtree) operation
-    size_t op_id_completed;
-    // op_id_completed when we were last promoted
-    // (our subtree grew, so we can't assume completion in our new subtree)
-    size_t op_id_completed_at_promotion;
-    // ID of the last known initiated operation
-    size_t op_id_inited;
+    // reliability state, one set per tree
+    prte_grpcomm_tree_state_t tree[PRTE_GRPCOMM_TOPO_COUNT];
 } prte_grpcomm_xcast_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_xcast_t);
 
