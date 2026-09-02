@@ -4732,6 +4732,32 @@ test_low_radix_release() {
         && ok "...and the release travelled the release tree, not the routing one" \
         || bad "no broadcast used the release tree - the knob was ignored"
 
+    # ...and it travelled it over DIRECT links, which is the assertion that
+    # decides whether any of the above means anything.  prte_rml_get_route()
+    # answers on the ROUTING tree, so a release edge sent routed is relayed by
+    # whichever daemon the routing tree puts in between - and at radix 64 that
+    # is the controller itself.  The release then crosses the very link the
+    # second tree exists to keep it off, the controller handles it twice, and
+    # the fanout is not reduced at all.  Every assertion above passes exactly
+    # as well in that state: the release does arrive, over the release tree,
+    # with the right data.  It was shipped that way, and the mistake was
+    # invisible until the routing was read directly.
+    #
+    # rml_base_verbose 2 names the macro each send used.  A forward from a
+    # NON-controller daemon is the one that matters - the controller's own
+    # children are routing children either way, so it is the only daemon whose
+    # sends cannot tell the two apart.
+    out=$(RUN "timeout -k 5 180 prterun --prtemca grpcomm_low_radix_release 1 \
+                   --prtemca rml_base_radix2 2 --prtemca rml_base_radix 64 \
+                   --prtemca rml_base_verbose 2 --leave-session-attached \
+                   --host $hosts -n 8 --map-by node $FENCER collect" 2>&1)
+    # tag 15 is PRTE_RML_TAG_XCAST; node1 hosts the controller, so exclude it
+    n=$(echo "$out" | grep -v '^\[node1:' \
+            | grep -cE 'RML-SEND-PAYLOAD-DIRECT-CB\([0-9]+:15\)')
+    [ "$n" -ge 1 ] \
+        && ok "...over direct links ($n relayed forwards bypassed the routing tree)" \
+        || bad "release forwards went out routed - every edge that is not also a routing edge is being relayed, so the second tree buys nothing"
+
     cleanup_swarm
 }
 
