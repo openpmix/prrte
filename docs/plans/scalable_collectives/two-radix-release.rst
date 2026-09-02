@@ -137,12 +137,102 @@ What is *not* covered by the fence's existing fault handler: it ends a fence
 that lost a **participant**, and knows nothing about losing a **relay on a
 second topology**.  That is this design's own responsibility.
 
+What the implementation actually needed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The sketch above is right about the shape and wrong about the cost.  Four
+things had to change, and only the first was anticipated.  Each was found by
+killing a relay under a held release on the container harness, and each was
+measured rather than reasoned about — the count of daemons released went 4,
+then 5, then 7.
+
+**The derived tree did not agree with itself.**  Naming a parent by walking up
+past dead ancestors, while computing children by replacing a dead child in
+place, are two different promotion rules.  At eight daemons, radix 2, with
+daemon 1 dead, the promotion puts daemon 4 in slot 1 — so daemon 3's parent is
+4, while a walk-up says 0, and 0's children say 4.  Daemon 3 is in no tree at
+all.  Both halves now derive from the position the daemon actually occupies.
+``test_release_tree`` in ``test/unit/rml`` brute-forces every failure subset
+for radices 2 to 4 and requires the relation to be one tree rooted at 0
+covering exactly the living daemons; it is the cheapest guard here by a wide
+margin, and it catches this in milliseconds.
+
+**"Is the sender my parent?" is not answerable during a repair.**  Both the
+forward and the ack-request paths screened on the sender being this daemon's
+parent in the tree the message travelled.  That is sound on the routing tree,
+because the repair notice travels that same tree — a daemon has processed the
+notice that gave it a new parent before anything that parent relays afterwards
+can arrive.  A derived tree has no such ordering: every daemon recomputes
+independently when the notice reaches it, so a repaired parent replays to a
+child that has not heard, and the child discards the one message that would
+have released it.  The screen is now asked only of the routing tree.
+
+**An ack must answer whoever asked**, not whoever the answering daemon
+currently calls its parent, for the same reason.  Answering the wrong daemon
+costs nothing — it holds no operation under that ack id — while failing to
+answer the right one hangs the broadcast.
+
+**Nobody defers.**  The routing tree makes a promoted daemon wait for its own
+parent to replay before replaying onward, to preserve operation ordering.
+Copying that here strands subtrees: a daemon deferring to a parent that has
+already replayed waits for a second replay that is never coming.  It is also
+unnecessary — an operation a child is missing is by definition still in
+flight, so some daemon is replaying it in the same pass, in order, because the
+root cannot retire one until every daemon has acked.
+
+**A forward must be read under the view it was computed in.**  This is the one
+that does not follow from the tree being derived, and it is the subtlest.  A
+daemon promoted into a dead relay's slot still reads itself as a leaf until the
+news reaches it, so it answers the repair by retiring the operation as
+complete, having forwarded it nowhere — and the subtree the repair existed to
+reach is stranded with nobody holding the payload.  Every forward therefore
+carries ``prte_rml_tree_version()``, a monotone count of the departures and
+returns the sender has learned of, and a receiver that is behind it **and**
+was addressed by a daemon it does not call its parent takes the payload,
+delivers it locally, and parks the operation without deriving anything until
+the notice lands.
+
+Both conditions are load-bearing.  The version has to be monotone, which is
+why it counts events learned rather than the size of the failed set — a
+revival clears a bit, so a popcount would go *down*, and a daemon that had
+processed the revival would read every peer that had not as being ahead of
+it.  But monotone is not agreed: a daemon grown into a DVM is seeded from the
+departed set it was launched with, and daemons process a revival at different
+moments, so counts legitimately differ.  The "not my parent" test is the
+concrete local evidence that the two views actually disagree, and it is what
+keeps ordinary traffic — which always arrives from a daemon's parent — from
+ever being parked.
+
+Any further topology added here — Bruck above all — inherits all five.  They
+are properties of *deriving* a tree rather than being told one, not properties
+of this particular tree.
+
 Selection
 ---------
 
 One MCA parameter naming the release topology, defaulting to the current
 behaviour.  The rollup is not selectable — every axis favours a high radix
 for it, so there is nothing to choose.
+
+As implemented, the two are separate and only the first is a switch:
+
+``grpcomm_low_radix_release`` (bool, default **false**)
+   Whether a fence's release leaves the routing tree at all.  False is the
+   whole of the old behaviour: every release travels the routing tree, and
+   nothing in the derived-tree path runs.  This is the parameter that
+   collapses it all back.
+
+``rml_base_radix2`` (int, default **rml_base_radix**)
+   The shape of the release tree.  It selects nothing on its own — with the
+   switch off it is not consulted at all.
+
+That default is a trap and PRRTE now says so.  At equal radices the release
+tree *is* the routing tree — same parent and same children for every rank and
+every failure pattern, which ``test_release_tree_matches_routing`` pins — so
+turning the switch on and leaving the radix alone gets the identical fanout
+carried through more machinery, which can only be slower.  The
+``release-radix-noop`` help topic is emitted once by the master for that
+combination, and the run continues.
 
 A second parameter gives the release radix, so the 16x above can be explored
 rather than asserted; the cost model says 3 but the model's constants are the
@@ -155,6 +245,76 @@ detect — but a daemon configured differently from its peers is a real
 deployment error, and the failure it produces without a check is a hang.
 Mismatch should produce a named ``show_help``, as the withdrawn movement id
 did.
+
+First measurement, and what it does not settle
+----------------------------------------------
+
+Taken on ``contrib/dockerswarm``, ten daemons, routing radix 64 (so the
+release on the routing tree is one hop to all nine peers) against release
+radix 2 (depth 4, three hops).  ``grpcomm_enable_timing`` stamps an absolute
+microsecond when the originator starts a broadcast and when each daemon has
+the payload; coverage is the span between the two, so this measures the
+broadcast alone rather than an end-to-end fence — whose run-to-run spread on
+this harness is larger than the whole effect.  Payload from
+``scaletest --entropy``, since the default fill is a ramp that deflate
+squashes 250:1.  Medians over 10 releases per cell:
+
+.. list-table::
+   :header-rows: 1
+
+   * - release payload (on the wire)
+     - routing tree (radix 64)
+     - release tree (radix 2)
+   * - 33 B (a barrier's release)
+     - 408 us
+     - 854 us
+   * - 10.5 KB
+     - 1810 us
+     - 1770 us
+   * - 166 KB
+     - 4579 us
+     - 6326 us
+   * - 658 KB
+     - 9949 us
+     - 11406 us
+
+**The low radix loses here, and the reason is the harness rather than the
+idea.**  Every "node" is a container on one host, so the nine copies the flat
+tree makes the HNP send do not contend for anything — there is no per-node
+uplink, and they go at loopback speed.  The ``r*M*beta`` term the low radix
+exists to reduce is therefore close to free, while the extra hops are real:
+the 33-byte row is the cost of depth with no payload at all, and three extra
+hops cost ~450 us, or ~150 us a hop.
+
+So this is not evidence against the design.  It is a measurement of an
+environment in which the quantity being optimized is approximately zero, and
+it is the reading the harness section of ``contrib/dockerswarm/AGENTS.md``
+warns to expect.  What it does establish:
+
+* the mechanism works and is measurable — the release really does travel the
+  other tree, and the instrument resolves it;
+* the depth penalty is real and is roughly linear in hops;
+* nothing here justifies changing the default, which stays the routing tree.
+
+What would settle it is a machine where a daemon's outbound bandwidth is
+shared and finite — a real cluster with one NIC a node.  There the flat
+tree's nine copies serialize on that NIC while the low radix's extra hops are
+paid against a much larger transfer term.  ``contrib/scaling/cluster-sweep.sh``
+is the harness for that; until it has been run, the parameter ships off by
+default and this table is the only data.
+
+One caveat for whoever runs it next: the release is store-and-forward, so a
+deeper tree pays depth times the *transfer* time, not merely depth times a
+latency.  The crossover is therefore not simply "payload big enough" — it
+needs the per-copy bandwidth at the root to be the binding constraint, which
+is the thing this harness cannot arrange.
+
+A note on reading the instrument: a fence issues **two** releases per
+iteration and they are wildly different sizes — the allgather's carries the
+modex, the barrier's is 33 bytes — and both go out on the same tag.  A median
+taken over all tag-31 releases is therefore dominated by the 33-byte ones and
+says almost nothing about payload.  Pair each release with the size on the
+originator's own census line before averaging anything.
 
 Verification
 ------------
