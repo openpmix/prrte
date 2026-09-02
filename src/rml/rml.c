@@ -236,6 +236,17 @@ void prte_rml_load_dead_dmns(const char *spec)
             continue;
         }
         for (r = first; r <= last; r++) {
+            if (!pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, (int) r)) {
+                /* Start this daemon's derived-tree version in step with the
+                 * DVM it is joining.  A daemon grown into a DVM that has
+                 * already lost members has learned of those departures right
+                 * here and nowhere else, and leaving it at zero would make it
+                 * read every peer as being ahead of it - so every forward it
+                 * received on a derived tree would be parked, waiting for
+                 * news it had already been given, until the next daemon
+                 * happened to die. */
+                prte_rml_base.tree_version++;
+            }
             pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, (int) r);
         }
     }

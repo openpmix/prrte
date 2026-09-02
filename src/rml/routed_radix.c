@@ -226,10 +226,15 @@ static void handle_promotion(void){
  * and for the same reason: there is no originator to settle a disagreement.
  *
  * The caller frees `children`. */
+uint32_t prte_rml_tree_version(void)
+{
+    return prte_rml_base.tree_version;
+}
+
 int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
                           pmix_rank_t **children, size_t *nchildren)
 {
-    radix_node_t node, iter, up;
+    radix_node_t node, iter, up, pos;
     pmix_rank_t *kids;
     size_t n = 0;
 
@@ -246,15 +251,44 @@ int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
 
     node = radix_node_in(me, (pmix_rank_t) prte_rml_base.radix2);
 
-    /* Walk up past any ancestor that has failed.  The root has no parent, and
-     * that is the only daemon allowed to be without one. */
-    if (0 != me) {
-        up = radix_parent(&node);
-        while (PMIX_RANK_INVALID != up.rank && !radix_is_living(&up)) {
-            if (0 == up.rank) {
-                break;
-            }
-            up = radix_parent(&up);
+    /* Find the position this daemon actually occupies.
+     *
+     * A dead node is replaced in place by the next living node of its own
+     * subtree, so a daemon whose parent slot has failed may be the daemon that
+     * takes it - and if it does, it may equally take that slot's parent, and
+     * so on up a chain of failures.  Climb while the answer is us.
+     *
+     * Both halves below have to be derived from that position rather than from
+     * the base one, and they have to agree.  Walking up past a dead ancestor
+     * to name a parent while computing children in place does not: on eight
+     * daemons at radix 2, losing daemon 1 promotes daemon 4 into its slot, so
+     * daemon 3's parent is 4 - but a walk-up says 0, and 0's children say 4.
+     * Daemon 3 then waits on a parent that is not sending to it, and a
+     * broadcast that must reach every daemon reaches six of seven.  Nothing
+     * detects that: it is not a failure, it is two daemons deriving different
+     * trees, which is the one thing a tree with no protocol cannot survive. */
+    pos = node;
+    while (0 != pos.rank) {
+        radix_node_t repl;
+        up = radix_parent(&pos);
+        if (PMIX_RANK_INVALID == up.rank || radix_is_living(&up)) {
+            break;
+        }
+        repl = radix_rooted_get_next_living(&up, &up);
+        if (repl.rank != me) {
+            break;
+        }
+        pos = up;
+    }
+
+    /* Our parent is whoever occupies our position's parent slot: that daemon
+     * if it lives, and otherwise its replacement - which cannot be us, or the
+     * climb above would not have stopped.  The root has no parent, and is the
+     * only daemon allowed to be without one. */
+    if (0 != pos.rank) {
+        up = radix_parent(&pos);
+        if (PMIX_RANK_INVALID != up.rank && !radix_is_living(&up)) {
+            up = radix_rooted_get_next_living(&up, &up);
         }
         *parent = up.rank;
     }
@@ -264,12 +298,16 @@ int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    /* ...and take each child, or the next living node beneath it if that
-     * child has failed - the promotion the routing tree performs, at this
-     * tree's radix. */
-    RADIX_CHILD_FOREACH(node, iter) {
+    /* ...and take each child of that position, or the living node that stands
+     * in for it.  The slot holding our own original subtree is the exception:
+     * there our child is whoever succeeds *us* inside it, since we have left
+     * it to stand where its former root did.  Where we were not promoted, no
+     * slot holds us and this is the plain in-place replacement. */
+    RADIX_CHILD_FOREACH(pos, iter) {
         radix_node_t c = iter;
-        if (!radix_is_living(&c)) {
+        if (radix_subtree_contains(&iter, me)) {
+            c = radix_rooted_get_next_living(&iter, &node);
+        } else if (!radix_is_living(&c)) {
             c = radix_rooted_get_next_living(&iter, &iter);
         }
         if (PMIX_RANK_INVALID == c.rank || c.rank >= prte_rml_base.n_dmns) {
@@ -375,6 +413,11 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
     }
 
     if(!global){
+        /* Count the departures we have just learned of.  Only on the local
+         * pass: a global notice runs the local one first, which screens the
+         * ranks it already knew, and the global list is not screened at all -
+         * counting there would count every rank twice. */
+        prte_rml_base.tree_version += (uint32_t) status.failed_ranks.size;
         // Skip this work for global, since it will have already been done
         // in the local update
         prte_rml_update_ancestors(&prte_rml_base.ancestors);
@@ -504,6 +547,11 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     // constructor captures prev from prte_rml_base as it stands now.
     prte_rml_recovery_status_t status;
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+
+    /* A return reshapes every derived tree exactly as a departure does, and
+     * the version has to move for it, or a daemon that has processed this
+     * revival reads every peer that has not as being ahead of it. */
+    prte_rml_base.tree_version++;
 
     // The returned rank is live again. Clear every failure mark for it.
     // dead_dmns is deliberately left alone -- a revivable rank is never in it,
