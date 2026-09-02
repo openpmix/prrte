@@ -216,27 +216,34 @@ for it, so there is nothing to choose.
 
 As implemented, the two are separate and only the first is a switch:
 
-``grpcomm_low_radix_release`` (bool, default **false**)
-   Whether a fence's release leaves the routing tree at all.  False is the
-   whole of the old behaviour: every release travels the routing tree, and
-   nothing in the derived-tree path runs.  This is the parameter that
-   collapses it all back.
+``grpcomm_low_radix_release`` (bool, default **true**)
+   Whether a fence's release leaves the routing tree at all.  Turned off is
+   the whole of the old behaviour: every release travels the routing tree,
+   and nothing in the derived-tree path runs.  This is the parameter that
+   collapses it all back, which is what makes it the right thing to reach
+   for if a release ever misbehaves.
 
-``rml_base_radix2`` (int, default **rml_base_radix**)
+``rml_base_radix2`` (int, default **4**)
    The shape of the release tree.  It selects nothing on its own — with the
    switch off it is not consulted at all.
 
-That default is a trap and PRRTE now says so.  At equal radices the release
-tree *is* the routing tree — same parent and same children for every rank and
-every failure pattern, which ``test_release_tree_matches_routing`` pins — so
-turning the switch on and leaving the radix alone gets the identical fanout
-carried through more machinery, which can only be slower.  The
-``release-radix-noop`` help topic is emitted once by the master for that
-combination, and the run continues.
+Both defaults changed once the radix question below was worked through, and
+they changed together: 4 is where the optimum sits for every payload past
+the crossover, and a fence release is never anywhere near the crossover, so
+there was no longer a reason to ship the thing switched off.  The original
+reason — "no data to choose a winner" — was answered by a model rather than
+by the measurement it was waiting for, and the model is decisive in a way a
+single machine's numbers would not have been: the conclusion survives an
+eightfold sweep of every constant in it.
 
-A second parameter gives the release radix, so the 16x above can be explored
-rather than asserted; the cost model says 3 but the model's constants are the
-ones we do not have.
+Setting the two radices *equal* remains a trap, and PRRTE still says so.  At
+equal radices the release tree *is* the routing tree — same parent and same
+children for every rank and every failure pattern, which
+``test_release_tree_matches_routing`` pins — so that combination gets the
+identical fanout carried through more machinery, which can only be slower.
+It is no longer what leaving the radix alone gives you, but it is still one
+setting away in either direction.  The ``release-radix-noop`` help topic is
+emitted once by the master for it, and the run continues.
 
 **The topology must be stamped on the wire and checked, not merely
 configured.**  A release is a broadcast and does have an originator, so

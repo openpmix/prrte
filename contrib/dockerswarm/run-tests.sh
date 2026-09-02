@@ -4758,6 +4758,28 @@ test_low_radix_release() {
         && ok "...over direct links ($n relayed forwards bypassed the routing tree)" \
         || bad "release forwards went out routed - every edge that is not also a routing edge is being relayed, so the second tree buys nothing"
 
+    # And now with NO parameters at all, because that is the contract as
+    # shipped: grpcomm_low_radix_release defaults on and rml_base_radix2
+    # defaults to 4.  Every assertion above sets both, so all of them would go
+    # on passing if a later change quietly turned the feature back off, and
+    # nobody would be measuring what the runtime actually does.  The routing
+    # radix is left alone too - at its default of 64 over eight daemons a
+    # radix-4 release tree is genuinely a different shape, so "on tree 1" here
+    # means the derived tree really was built and used.
+    cleanup_swarm
+    out=$(RUN "timeout -k 5 180 prterun --prtemca grpcomm_base_verbose 1 \
+                   --host $hosts -n 8 --map-by node $FENCER collect" 2>&1)
+    n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+    [ "$n" = 8 ] && ok "a fence with no parameters at all completes on 8 ranks" \
+                 || bad "$n of 8 ranks completed a default-configuration fence"
+    n=$(echo "$out" | grep -c 'on tree 1')
+    [ "$n" -ge 1 ] \
+        && ok "...and its release took the release tree BY DEFAULT" \
+        || bad "the default configuration put the release on the routing tree"
+    n=$(echo "$out" | grep -c 'peers-bad 0')
+    [ "$n" = 8 ] && ok "...delivering every peer's contribution" \
+                 || bad "$n of 8 ranks got a complete modex by default"
+
     cleanup_swarm
 }
 
