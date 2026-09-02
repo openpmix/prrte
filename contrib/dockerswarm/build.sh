@@ -181,6 +181,35 @@ $(find "$tree" -name '*.l' 2>/dev/null)
 EOF
 }
 
+# A second source tree - PMIX_SRC, OMPI_SRC - is built out of tree too, over a
+# READ-ONLY bind mount, so an in-tree build in one of those is fatal for the
+# same reason it is fatal in this one.  It is not ours to distclean, though:
+# build.sh was pointed at the PRRTE tree and owns it, while PMIX_SRC is
+# somebody's working tree that happens to have been lent to us.  So say what is
+# wrong and stop, rather than either destroying their build or letting the
+# builder die on
+#
+#     configure: error: source directory already configured; run "make
+#     distclean" there first
+#
+# which names no tree, no variable, and nothing to do about it.
+check_foreign_srcdir() {
+    local tree="$1" var="$2"
+    [ -n "$tree" ] || return 0
+    if [ -f "$tree/config.status" ] || [ -f "$tree/Makefile" ] || \
+       [ -n "$(find "$tree/src" -name '*.lo' -print -quit 2>/dev/null)" ]; then
+        echo ">>> ERROR: $var points at a tree that holds an IN-TREE build:" >&2
+        echo ">>>          $tree" >&2
+        echo ">>>        It is bind-mounted read-only and configured VPATH, so" \
+             "configure refuses to run and VPATH=srcdir would link its stale" \
+             "objects even if it did." >&2
+        echo ">>>        Run 'make distclean' there (it is your build, so this" \
+             "script will not), or unset $var to use the PMIx baked into the" \
+             "image." >&2
+        exit 2
+    fi
+}
+
 # --- make the source tree VPATH-ready (idempotent) --------------------------
 prep_srcdir() {
     if srcdir_has_intree && [ "$distclean" != never ]; then
@@ -279,11 +308,13 @@ build_linux() {
 
     local pmix_mount=()
     if [ -n "$PMIX_SRC" ]; then
+        check_foreign_srcdir "$(cd "$PMIX_SRC" && pwd)" PMIX_SRC
         gen_lex "$(cd "$PMIX_SRC" && pwd)"
         pmix_mount=(-v "$(cd "$PMIX_SRC" && pwd)":/pmix-src:ro)
     fi
     local ompi_mount=()
     if [ -n "$OMPI_SRC" ]; then
+        check_foreign_srcdir "$(cd "$OMPI_SRC" && pwd)" OMPI_SRC
         gen_lex "$(cd "$OMPI_SRC" && pwd)"
         ompi_mount=(-v "$(cd "$OMPI_SRC" && pwd)":/ompi-src:ro)
     fi
