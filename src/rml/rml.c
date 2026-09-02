@@ -306,14 +306,28 @@ void prte_rml_register(void)
      * going up and is the whole cost coming down.  See
      * docs/plans/scalable_collectives/two-radix-release.rst.
      *
-     * Defaulting it to the routing radix means the second tree is the same
-     * shape as the first until someone asks otherwise, which is what keeps
-     * the default behaviour exactly what it is today. */
-    prte_rml_base.radix2 = prte_rml_base.radix;
+     * Four, which changes nothing on its own: this radix is not consulted
+     * at all unless grpcomm_low_radix_release is turned on, and that is off.
+     * What it does is make turning that switch on do the useful thing with
+     * one parameter rather than two - it used to default to the routing
+     * radix, which made the same tree twice and left the feature a silent
+     * no-op for anyone who set only the switch.
+     *
+     * Four rather than three because the cost model's optimum, minimised
+     * over the radix at each of several DVM sizes and payloads, is 2, 3, 4 or
+     * 5 for every payload past the point where bandwidth overtakes the
+     * thread-divided software cost of a copy - and 4 is within a few percent
+     * of the best of them everywhere.  The release tree exists for exactly
+     * those payloads: it carries a fence release, which is the whole modex.
+     * The derivation, the crossover it turns on, and what remains unmeasured
+     * about it are in docs/plans/scalable_collectives/two-radix-release.rst
+     * under "Where does the release radix come from at scale". */
+    prte_rml_base.radix2 = 4;
     (void) pmix_mca_base_var_register("prte", "rml", "base", "radix2",
                                       "Radix of the tree used to fan a "
                                       "collective's release out (minimum 2). "
-                                      "Defaults to the routing tree's radix.",
+                                      "Consulted only when "
+                                      "grpcomm_low_radix_release is set.",
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_rml_base.radix2);
     /* Same clamp and the same reason: the tree math divides by (radix - 1). */

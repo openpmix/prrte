@@ -1404,14 +1404,14 @@ static int check_release_tree(pmix_rank_t ndmns, int radix2, const char *label)
 /*
  * ...and at the same radix it IS the routing tree.
  *
- * rml_base_radix2 defaults to rml_base_radix, so turning
- * grpcomm_low_radix_release on and setting nothing else sends the release
- * down a tree of exactly the shape it was already using - every daemon
- * relaying to the same children as before.  That is worth pinning rather than
- * assuming, because it is the whole basis for the diagnostic PRRTE prints for
- * that combination: it is not a cheaper fanout, it is the same fanout carried
+ * Set rml_base_radix2 equal to rml_base_radix and the release goes down a
+ * tree of exactly the shape it was already using - every daemon relaying to
+ * the same children as before.  That is worth pinning rather than assuming,
+ * because it is the whole basis for the diagnostic PRRTE prints for that
+ * combination: it is not a cheaper fanout, it is the same fanout carried
  * through the derived-tree machinery, which is strictly more work for no
- * change in shape.
+ * change in shape.  (It is no longer what you get by leaving the radix
+ * alone - that default is 4 - but it remains one setting away.)
  */
 static int test_release_tree_matches_routing(void)
 {
