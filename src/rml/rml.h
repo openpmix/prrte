@@ -358,6 +358,10 @@ typedef struct {
     // rank is a stale incarnation and is dropped. Grown on demand as ranks
     // appear; see prte_rml_epoch_ok / prte_rml_record_epoch.
     uint64_t *peer_epochs;
+    // Monotone count of departures and returns this daemon has learned of -
+    // the version of every tree derived from the live set. See
+    // prte_rml_tree_version().
+    uint32_t tree_version;
     size_t peer_epochs_size;
 
     // Track all ancestors up to HNP, to simplify fault handling
@@ -404,6 +408,23 @@ PRTE_EXPORT extern uint64_t prte_rml_boot_epoch;
  * that). prte_rml_record_epoch force-sets the authoritative epoch for a rank
  * (used by the revival path and the HNP's return validation);
  * prte_rml_get_epoch reads it (0 if unknown). */
+/* How many daemon departures and returns this process has learned of.
+ *
+ * A version number for every tree derived from the live set, and the only
+ * thing anything asks of it is "has the other end seen news I have not".  It
+ * therefore has to be **monotone**, which is why it counts events learned
+ * rather than the size of the failed set: a revival clears a bit, so a
+ * popcount of failed_dmns goes down, and a daemon that had processed the
+ * revival would read every peer that had not as being ahead of it - and wait
+ * for news that had already arrived.
+ *
+ * It counts ranks rather than notices, so a daemon told of three departures
+ * at once lands on the same number as one that learned them singly.  It is
+ * not a total order - two daemons can reach the same count having learned
+ * about different daemons - and is not meant to be; see the parking
+ * commentary in prte_grpcomm_xcast_recv for what is and is not concluded
+ * from it. */
+PRTE_EXPORT uint32_t prte_rml_tree_version(void);
 PRTE_EXPORT bool prte_rml_epoch_ok(pmix_rank_t rank, uint64_t epoch);
 PRTE_EXPORT void prte_rml_record_epoch(pmix_rank_t rank, uint64_t epoch);
 PRTE_EXPORT uint64_t prte_rml_get_epoch(pmix_rank_t rank);

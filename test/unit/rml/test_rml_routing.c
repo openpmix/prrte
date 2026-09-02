@@ -1236,6 +1236,302 @@ static int test_parse_uris(void)
     return failures;
 }
 
+
+/*
+ * The release tree: derived, never agreed.
+ *
+ * A fence's release may fan out over a second radix tree (grpcomm's
+ * low_radix_release), and nothing about that tree is negotiated - every daemon
+ * computes it from the daemon count, the radix and the failed set, which they
+ * already hold in step.  That is what makes it cheap, and it is also what makes
+ * a disagreement fatal rather than merely wrong: there is no originator to
+ * settle one, so a daemon whose parent does not think it is a child simply
+ * waits, and a broadcast that must reach every daemon reaches all but it.
+ *
+ * So the property to pin is not any particular shape but that the two halves
+ * of the derivation agree, for every failure pattern.  Brute-force it: for
+ * each rank ask who its parent is and who its children are, and require the
+ * relation to be a single tree rooted at 0 that covers exactly the live
+ * daemons.
+ *
+ * That is not hypothetical.  Naming a parent by walking up past dead ancestors
+ * while computing children in place is the obvious way to write this and it
+ * does not agree with itself: at eight daemons, radix 2, with daemon 1 dead,
+ * the promotion puts daemon 4 in slot 1 - so daemon 3's parent is 4, while a
+ * walk-up says 0, and 0's children say 4.  Daemon 3 is then in no tree at all.
+ */
+static int check_release_tree(pmix_rank_t ndmns, int radix2, const char *label)
+{
+    int failures = 0;
+    pmix_rank_t r, seen, parent_of[64], nkids[64], kids_of[64][64];
+    bool live[64], reached[64];
+    pmix_rank_t nlive = 0, stack[64], nstack = 0;
+
+    prte_rml_base.radix2 = radix2;
+    prte_process_info.num_daemons = ndmns;
+    /* the tree is derived from prte_rml_base's own count, which normally
+     * comes from prte_rml_compute_routing_tree(); set it directly here so a
+     * shape is not read against the previous case's daemon count */
+    prte_rml_base.n_dmns = ndmns;
+
+    for (r = 0; r < ndmns; r++) {
+        pmix_rank_t *kids = NULL, parent = PMIX_RANK_INVALID;
+        size_t n = 0, i;
+
+        live[r] = !pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, r);
+        reached[r] = false;
+        parent_of[r] = PMIX_RANK_INVALID;
+        nkids[r] = 0;
+        if (!live[r]) {
+            continue;
+        }
+        nlive++;
+        if (PRTE_SUCCESS != prte_rml_release_tree(r, &parent, &kids, &n)) {
+            fprintf(stderr, "FAIL [%s]: release tree refused rank %u\n",
+                    label, (unsigned) r);
+            failures++;
+            continue;
+        }
+        parent_of[r] = parent;
+        for (i = 0; i < n; i++) {
+            kids_of[r][nkids[r]++] = kids[i];
+        }
+        if (NULL != kids) {
+            free(kids);
+        }
+    }
+
+    /* every live rank but the root has a living parent; the root has none */
+    for (r = 0; r < ndmns; r++) {
+        if (!live[r]) {
+            continue;
+        }
+        if (0 == r) {
+            if (PMIX_RANK_INVALID != parent_of[r]) {
+                fprintf(stderr, "FAIL [%s]: root claims parent %u\n",
+                        label, (unsigned) parent_of[r]);
+                failures++;
+            }
+            continue;
+        }
+        if (PMIX_RANK_INVALID == parent_of[r] || parent_of[r] >= ndmns
+            || !live[parent_of[r]]) {
+            fprintf(stderr, "FAIL [%s]: rank %u has no living parent (%u)\n",
+                    label, (unsigned) r, (unsigned) parent_of[r]);
+            failures++;
+        }
+    }
+
+    /* ...and the two halves name each other: p lists c iff c names p */
+    for (r = 0; r < ndmns; r++) {
+        pmix_rank_t i;
+        if (!live[r]) {
+            continue;
+        }
+        for (i = 0; i < nkids[r]; i++) {
+            pmix_rank_t c = kids_of[r][i];
+            if (c >= ndmns || !live[c]) {
+                fprintf(stderr, "FAIL [%s]: rank %u lists dead child %u\n",
+                        label, (unsigned) r, (unsigned) c);
+                failures++;
+                continue;
+            }
+            if (parent_of[c] != r) {
+                fprintf(stderr,
+                        "FAIL [%s]: rank %u lists child %u, whose parent is %u\n",
+                        label, (unsigned) r, (unsigned) c,
+                        (unsigned) parent_of[c]);
+                failures++;
+            }
+        }
+        if (0 == r) {
+            continue;
+        }
+        {
+            pmix_rank_t p = parent_of[r], j;
+            bool found = false;
+            if (p < ndmns && live[p]) {
+                for (j = 0; j < nkids[p]; j++) {
+                    if (kids_of[p][j] == r) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found) {
+                fprintf(stderr,
+                        "FAIL [%s]: rank %u names parent %u, which does not "
+                        "list it\n", label, (unsigned) r, (unsigned) p);
+                failures++;
+            }
+        }
+    }
+
+    /* ...and it is one tree, not a forest: walking from the root reaches
+     * every live daemon exactly once */
+    if (live[0]) {
+        stack[nstack++] = 0;
+        reached[0] = true;
+    }
+    seen = 0;
+    while (0 < nstack) {
+        pmix_rank_t cur = stack[--nstack], i;
+        seen++;
+        for (i = 0; i < nkids[cur]; i++) {
+            pmix_rank_t c = kids_of[cur][i];
+            if (c >= ndmns) {
+                continue;
+            }
+            if (reached[c]) {
+                fprintf(stderr, "FAIL [%s]: rank %u reached twice\n",
+                        label, (unsigned) c);
+                failures++;
+                continue;
+            }
+            reached[c] = true;
+            stack[nstack++] = c;
+        }
+    }
+    if (seen != nlive) {
+        fprintf(stderr, "FAIL [%s]: tree covers %u of %u living daemons\n",
+                label, (unsigned) seen, (unsigned) nlive);
+        failures++;
+    }
+
+    return failures;
+}
+
+/*
+ * ...and at the same radix it IS the routing tree.
+ *
+ * rml_base_radix2 defaults to rml_base_radix, so turning
+ * grpcomm_low_radix_release on and setting nothing else sends the release
+ * down a tree of exactly the shape it was already using - every daemon
+ * relaying to the same children as before.  That is worth pinning rather than
+ * assuming, because it is the whole basis for the diagnostic PRRTE prints for
+ * that combination: it is not a cheaper fanout, it is the same fanout carried
+ * through the derived-tree machinery, which is strictly more work for no
+ * change in shape.
+ */
+static int test_release_tree_matches_routing(void)
+{
+    int failures = 0;
+    int radix;
+    pmix_rank_t ndmns, r;
+
+    for (radix = 2; radix <= 5; radix++) {
+        for (ndmns = 1; ndmns <= 12; ndmns++) {
+            for (r = 0; r < ndmns; r++) {
+                pmix_rank_t *kids = NULL, parent = PMIX_RANK_INVALID;
+                pmix_rank_t *rkids, want_parent;
+                size_t n = 0, i, rn;
+
+                build_dvm(radix, ndmns, r);
+                prte_rml_base.radix2 = radix;
+                prte_rml_base.n_dmns = ndmns;
+
+                if (PRTE_SUCCESS != prte_rml_release_tree(r, &parent, &kids, &n)) {
+                    fprintf(stderr, "FAIL [release==routing]: refused rank %u\n",
+                            (unsigned) r);
+                    failures++;
+                    continue;
+                }
+                want_parent = (0 == r) ? PMIX_RANK_INVALID : prte_rml_base.lifeline;
+                if (parent != want_parent) {
+                    fprintf(stderr, "FAIL [release==routing]: radix %d, %u daemons, "
+                            "rank %u: release parent %u, routing parent %u\n",
+                            radix, (unsigned) ndmns, (unsigned) r,
+                            (unsigned) parent, (unsigned) want_parent);
+                    failures++;
+                }
+                rkids = (pmix_rank_t *) prte_rml_base.children.array;
+                rn = 0;
+                for (i = 0; i < prte_rml_base.children.size; i++) {
+                    if (PMIX_RANK_INVALID != rkids[i]) {
+                        rn++;
+                    }
+                }
+                if (rn != n) {
+                    fprintf(stderr, "FAIL [release==routing]: radix %d, %u daemons, "
+                            "rank %u: release has %u children, routing has %u\n",
+                            radix, (unsigned) ndmns, (unsigned) r,
+                            (unsigned) n, (unsigned) rn);
+                    failures++;
+                } else {
+                    size_t j = 0;
+                    for (i = 0; i < prte_rml_base.children.size; i++) {
+                        if (PMIX_RANK_INVALID == rkids[i]) {
+                            continue;
+                        }
+                        if (kids[j] != rkids[i]) {
+                            fprintf(stderr, "FAIL [release==routing]: radix %d, "
+                                    "%u daemons, rank %u: child %u vs %u\n",
+                                    radix, (unsigned) ndmns, (unsigned) r,
+                                    (unsigned) kids[j], (unsigned) rkids[i]);
+                            failures++;
+                        }
+                        j++;
+                    }
+                }
+                if (NULL != kids) {
+                    free(kids);
+                }
+            }
+        }
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED release tree matches routing at equal radix\n");
+    }
+    return failures;
+}
+
+static int test_release_tree(void)
+{
+    int failures = 0;
+    int radix2;
+    pmix_rank_t ndmns;
+
+    prte_rml_base.radix2 = 2;
+
+    for (radix2 = 2; radix2 <= 4; radix2++) {
+        for (ndmns = 1; ndmns <= 12; ndmns++) {
+            unsigned long mask, limit = 1UL << ndmns;
+            char label[96];
+
+            /* every subset of failures, with rank 0 always alive: the HNP
+             * dying is not a tree repair, it is the end of the DVM */
+            for (mask = 0; mask < limit; mask += 2) {
+                pmix_rank_t r;
+                if (12 == ndmns && 0 != (mask % 37)) {
+                    continue;   /* 4096 subsets a radix is enough at the top end */
+                }
+                pmix_bitmap_clear_all_bits(&prte_rml_base.failed_dmns);
+                for (r = 0; r < ndmns; r++) {
+                    if (mask & (1UL << r)) {
+                        pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
+                    }
+                }
+                snprintf(label, sizeof(label),
+                         "release tree radix %d, %u daemons, failed 0x%lx",
+                         radix2, (unsigned) ndmns, mask);
+                failures += check_release_tree(ndmns, radix2, label);
+                if (0 != failures) {
+                    /* one shape is enough to read; do not print thousands */
+                    pmix_bitmap_clear_all_bits(&prte_rml_base.failed_dmns);
+                    return failures;
+                }
+            }
+        }
+    }
+    pmix_bitmap_clear_all_bits(&prte_rml_base.failed_dmns);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED release tree agreement\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1251,6 +1547,8 @@ int main(void)
     failures += test_radix_shape();
     failures += test_radix_traversal();
     failures += test_routing_tree();
+    failures += test_release_tree();
+    failures += test_release_tree_matches_routing();
     failures += test_departed_ranks_survive_recompute();
     failures += test_global_failures_survive_recompute();
     failures += test_reconcile_ancestry();
