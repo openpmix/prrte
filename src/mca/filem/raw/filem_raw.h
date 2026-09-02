@@ -32,6 +32,11 @@ PRTE_EXPORT extern prte_filem_base_module_t prte_filem_raw_module;
 
 extern bool prte_filem_raw_flatten_trees;
 
+/* How many chunks of one file may be in flight at once - see the flow
+ * control commentary on prte_filem_raw_xfer_t below.
+ */
+extern int prte_filem_raw_chunk_window;
+
 #define PRTE_FILEM_RAW_CHUNK_MAX 16384
 
 /* buffer size used when copying a staged file into a working directory,
@@ -61,6 +66,32 @@ typedef struct {
     uint32_t mode;
     int32_t nchunk;
     int status;
+    /* Flow control for the chunk pump.
+     *
+     * send_chunk hands a chunk to the non-blocking xcast and immediately
+     * re-arms its own read event.  Nothing in that loop waits for the bytes
+     * to arrive anywhere: the only ack this component receives is one per
+     * *file*, sent by each daemon at EOF, so it cannot gate a read.  Without
+     * a cap the file is therefore read as fast as the progress thread can
+     * turn, and every chunk stays resident until it is delivered - xcast
+     * holds a broadcast's payload on every daemon along the path until that
+     * daemon's subtree confirms receipt, and retires those holdings in
+     * strict broadcast order, so one slow subtree pins every chunk behind
+     * it.  Measured on a ten-node DVM, a 256 MB preload took the HNP from
+     * 9 MB to 744 MB.
+     *
+     * "inflight" is how many of this file's chunks have been broadcast and
+     * not yet confirmed delivered to the whole DVM.  "paused" says the read
+     * stopped because that reached prte_filem_raw_chunk_window, and a
+     * delivery is what will restart it.
+     */
+    int32_t inflight;
+    bool paused;
+    /* The transfer has been retired.  A delivery that arrives afterwards
+     * still has to give back the reference it holds, but must not re-arm a
+     * read on a file that is finished.
+     */
+    bool retired;
     /* Delivery accounting, all four fields maintained together.
      *
      * "nexpected" is how many daemons still owe an ack.  It is seeded from

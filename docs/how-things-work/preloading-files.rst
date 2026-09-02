@@ -128,3 +128,21 @@ the directory they launched from.
 
 Note that the staged files remain in the working directory after the job
 completes |mdash| they were delivered there, not borrowed.
+
+
+How much of a file is in flight at once
+---------------------------------------
+
+A staged file is read on the DVM master in 16 KByte chunks and broadcast to
+the daemons, and the broadcast layer holds each chunk on every daemon it
+passes through until that daemon's part of the DVM has confirmed receipt.
+So a file being staged occupies memory in the daemons in proportion to how
+far ahead of delivery the master is allowed to read.
+
+``filem_raw_chunk_window`` (default 64, so one MByte) is how many chunks of
+one file may be outstanding before the master waits for the oldest of them
+to arrive everywhere.  It is the only bound on that memory.  The default
+fills the round trip of the fabrics PRRTE is usually run on with room to
+spare; raise it if staging is measurably slower than the network should
+allow, and expect the daemons' footprint during a transfer to rise with it.
+Several files preloaded by one job each get a window of their own.
