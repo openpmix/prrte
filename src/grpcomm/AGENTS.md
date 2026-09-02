@@ -393,6 +393,46 @@ broadcast path. There is no separate size gate to sweep — the compressor's own
 --pmixmca pcompress zstd --pmixmca pcompress_zstd_level 1
 ```
 
+### How long a broadcast took: three stamps, and which pair to use
+
+`grpcomm_enable_timing` also stamps absolute microseconds at three points, so
+that the quantity a change to the fanout tree is actually about — how long the
+payload took to reach the whole DVM — can be measured. An end-to-end fence
+cannot resolve it: the rollup's noise is larger than the effect.
+
+```text
+grpcomm:xcast:timing started   op_id N tree K at <sec>.<usec>   originator only
+grpcomm:xcast:timing processed op_id N tag T tree K at ...      every daemon
+grpcomm:xcast:timing completed op_id N tag T tree K at ...      master only
+```
+
+Pair them on **(tree, op_id)**, never on the tag: the `started` line cannot
+name the payload tag, because at that point `tag` is the tag the message
+*arrived* on (`PRTE_RML_TAG_XCAST`) and the real one is still packed inside.
+Several broadcasts are in flight at once and they complete out of order, so
+the pairing key is load-bearing rather than a convenience.
+
+**Which span to measure depends on whose clock you have.**
+
+- `started` → last `processed` is the coverage itself, and it is only
+  meaningful where the clocks are common: a container swarm sharing one
+  kernel, yes; a real cluster, no. NTP holds a cluster to about a
+  millisecond and the whole broadcast is shorter than that, so the answer
+  there is clock skew with a broadcast buried in it.
+- `started` → `completed` is the same span measured **at one end**, on the
+  master, and is what to use anywhere else. It reads high by the ack tree's
+  return path, which is separable: a zero-byte broadcast is very nearly a
+  measurement of it on its own.
+
+Pair either with the census line's own `raw`/`wire` sizes, printed by
+`grpcomm_base_verbose 1` just before `started` on the same thread. Do not
+average a tag's spans without doing that — **a fence emits two releases per
+iteration on the same tag**, the allgather's (large) and the barrier's (tens
+of bytes), so a median over all of them is a median of the barrier.
+
+A `--daemonize`d DVM discards the HNP's output, so any of this needs a
+foreground `prte` or `prterun`.
+
 ### Timing runs want an optimized build — a debug build measures itself
 
 **Do not draw conclusions about sizes or times from a `--enable-debug` build.**
