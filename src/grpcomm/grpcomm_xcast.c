@@ -468,7 +468,11 @@ void prte_grpcomm_xcast_recv(
          *
          * It is only comparable where the clocks are: fine on a container
          * swarm sharing one kernel, meaningless across a real cluster without
-         * a synchronized clock. */
+         * a synchronized clock - which is why finish_op stamps a "completed"
+         * line on the master as well.  That span is start-to-finish on ONE
+         * clock and is the measurement to use anywhere the clocks are not
+         * common; it costs the ack tree's return path on top of the coverage,
+         * which a zero-byte broadcast prices on its own. */
         if (prte_grpcomm_globals.enable_timing) {
             struct timeval tnow;
             gettimeofday(&tnow, NULL);
@@ -1140,6 +1144,27 @@ static void finish_op(op_t* op) {
      * own subtree completed, not the whole DVM. */
     if (PRTE_PROC_IS_MASTER && NULL != op->cbfunc) {
         op->cbfunc(op->cbdata);
+    }
+    /* The other end of a coverage measurement that needs only one clock.
+     * The "processed" stamps say when each daemon got the payload, which is
+     * the quantity a change to the fanout is about - but comparing them with
+     * the originator's "started" needs the daemons' clocks to agree with it,
+     * and off a single-kernel container swarm they do not: NTP holds a
+     * cluster to about a millisecond and the whole broadcast is shorter than
+     * that.  Completion on the master is the same span measured at one end.
+     * It arrives once every daemon has both received the payload and rolled
+     * its acknowledgement back up, so it reads high by the return path - and
+     * that is separable, being very nearly what a zero-byte broadcast
+     * measures. */
+    if (PRTE_PROC_IS_MASTER && prte_grpcomm_globals.enable_timing) {
+        struct timeval tnow;
+        gettimeofday(&tnow, NULL);
+        pmix_output(0, "%s grpcomm:xcast:timing completed op_id %lu tag %u "
+                    "tree %d at %ld.%06ld",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    (unsigned long) op->sig.op_id, (unsigned) op->msg_tag,
+                    (int) op->sig.topology, (long) tnow.tv_sec,
+                    (long) tnow.tv_usec);
     }
     PMIX_RELEASE(op);
 }
