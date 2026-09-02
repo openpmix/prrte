@@ -91,6 +91,7 @@ static pmix_list_t incoming_files;
 static pmix_list_t positioned_files;
 
 static void send_chunk(int fd, short argc, void *cbdata);
+static void chunk_delivered(void *cbdata);
 static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                        prte_rml_tag_t tag, void *cbdata);
 static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -342,6 +343,12 @@ static const char *type_name(int32_t type)
 static void xfer_retire(int status, prte_filem_raw_xfer_t *xfer, bool positioned)
 {
     prte_filem_raw_outbound_t *outbound = xfer->outbound;
+
+    /* chunks of this file may still be travelling; each holds a reference
+     * and will call back.  Say the transfer is over so that none of them
+     * restarts a read on it - see chunk_delivered.
+     */
+    xfer->retired = true;
 
     /* transfer the status, if not success */
     if (PRTE_SUCCESS != status) {
@@ -1443,9 +1450,19 @@ static void send_chunk(int xxx, short argc, void *cbdata)
         return;
     }
 
-    /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_FILEM_BASE, &chunk))) {
+    /* Goes to all daemons, and we ask to be told when it got there.
+     *
+     * The reference is what makes that callback safe: this transfer can be
+     * retired - by an error ack, by an aborting DVM, by the fault handler -
+     * while chunks it broadcast are still travelling, and the callback for
+     * one of those would otherwise land on freed memory.  Each in-flight
+     * chunk holds one, and chunk_delivered gives it back.
+     */
+    PMIX_RETAIN(rev);
+    rc = prte_grpcomm_xcast_nb(PRTE_RML_TAG_FILEM_BASE, &chunk, chunk_delivered, rev);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(rev);
         PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         close(fd);
         rev->fd = -1;
@@ -1454,6 +1471,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&chunk);
     rev->nchunk++;
+    rev->inflight++;
 
     /* if num_bytes was zero, then we need to terminate the event
      * and close the file descriptor
@@ -1462,12 +1480,49 @@ static void send_chunk(int xxx, short argc, void *cbdata)
         close(fd);
         rev->fd = -1;
         return;
-    } else {
-        /* restart the read event */
+    }
+
+    /* Read on only while this file has fewer than the window's worth of
+     * chunks still travelling.  Nothing else limits how far ahead of
+     * delivery this loop can run: the file-level ack cannot gate it (a
+     * daemon sends that once, at EOF), and re-arming with prte_event_active
+     * does not even return to the event loop's poll, so the whole file
+     * would be read, compressed and queued without the progress thread
+     * servicing anything at all.  See the flow-control commentary on
+     * prte_filem_raw_xfer_t.
+     */
+    if (rev->inflight >= prte_filem_raw_chunk_window) {
+        rev->paused = true;
+        return;
+    }
+    /* restart the read event */
+    rev->pending = true;
+    PMIX_POST_OBJECT(rev);
+    prte_event_active(&rev->ev, PRTE_EV_WRITE, 1);
+}
+
+/* One broadcast chunk has reached every daemon in the DVM.
+ *
+ * Fires on the progress thread from grpcomm's completion path, so it may
+ * simply restart a read the window had stopped - but only if the transfer
+ * is still running.  A transfer that has been retired still owes this
+ * callback its reference; it just has nothing left to read.
+ */
+static void chunk_delivered(void *cbdata)
+{
+    prte_filem_raw_xfer_t *rev = (prte_filem_raw_xfer_t *) cbdata;
+
+    if (0 < rev->inflight) {
+        rev->inflight--;
+    }
+    if (rev->paused && !rev->retired && 0 <= rev->fd &&
+        rev->inflight < prte_filem_raw_chunk_window) {
+        rev->paused = false;
         rev->pending = true;
         PMIX_POST_OBJECT(rev);
         prte_event_active(&rev->ev, PRTE_EV_WRITE, 1);
     }
+    PMIX_RELEASE(rev);
 }
 
 static void send_complete(char *file, int status)
@@ -1943,6 +1998,9 @@ static void xfer_construct(prte_filem_raw_xfer_t *ptr)
     ptr->file = NULL;
     ptr->nchunk = 0;
     ptr->status = PRTE_SUCCESS;
+    ptr->inflight = 0;
+    ptr->paused = false;
+    ptr->retired = false;
     ptr->nexpected = 0;
     ptr->nrecvd = 0;
     PMIX_CONSTRUCT(&ptr->acked, pmix_bitmap_t);

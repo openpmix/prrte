@@ -49,16 +49,21 @@ job proceeds to mapping.
 
 | File | Contents |
 |------|----------|
-| `filem_raw_component.c` | Registration, the single `flatten_directory_trees` MCA param, `query` (priority 0). |
-| `filem_raw.h` | The four private classes, `PRTE_FILEM_RAW_CHUNK_MAX` (16384), `PRTE_FILEM_RAW_COPY_MAX` (8192), the `flatten_trees` flag. |
+| `filem_raw_component.c` | Registration, the two MCA params (`flatten_directory_trees`, `chunk_window`), `query` (priority 0). |
+| `filem_raw.h` | The four private classes, `PRTE_FILEM_RAW_CHUNK_MAX` (16384), `PRTE_FILEM_RAW_COPY_MAX` (8192), the `flatten_trees` flag and the `chunk_window`. |
 | `filem_raw_module.c` | Everything: the module vtable, HNP send path, daemon receive path, placement, and class instances. |
 | `help-prte-filem-raw.txt` | The daemon-side collision message. |
 
-### MCA parameter
+### MCA parameters
 
 `filem_raw_flatten_directory_trees` (bool, default false). When true, a
 staged file's remote target is just its basename — all files land flat in
 the working directory instead of recreating their directory tree.
+
+`filem_raw_chunk_window` (int, default 64). How many 16 KB chunks of one
+file may be broadcast before the reader waits for the oldest of them to
+reach the whole DVM. See *flow control* below — this is the only bound on
+how much of a staged file the daemons hold at once.
 
 ---
 
@@ -67,7 +72,7 @@ the working directory instead of recreating their directory tree.
 | Class | Lives on | Role |
 |-------|----------|------|
 | `prte_filem_raw_outbound_t` | HNP | One preposition request. Holds the list of `xfers`, the aggregate `status`, and the caller's `cbfunc`/`cbdata`. When its `xfers` list drains, the callback fires. |
-| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nchunk` (next chunk index), and the delivery accounting (`nexpected`, `nrecvd`, the `acked` bitmap, `horizon`) described under *completion accounting*. |
+| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nchunk` (next chunk index), the flow-control state (`inflight`, `paused`, `retired`) described under *flow control*, and the delivery accounting (`nexpected`, `nrecvd`, the `acked` bitmap, `horizon`) described under *completion accounting*. |
 | `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, `mode`, the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
 | `prte_filem_raw_output_t` | daemon | One received chunk: `numbytes` + a `PRTE_FILEM_RAW_CHUNK_MAX` data buffer, queued on an incoming file's `outputs` list for the write handler. |
 
@@ -184,11 +189,67 @@ Runs on the progress thread, re-arming itself until EOF:
 4. `prte_grpcomm.xcast(PRTE_RML_TAG_FILEM_BASE, &chunk)` — broadcast to
    **all daemons at once**. Increment `nchunk`.
 5. If `numbytes == 0` this was the EOF chunk: close the fd and stop.
+6. Otherwise, if this file already has `filem_raw_chunk_window` chunks in
+   flight, set `paused` and stop; `chunk_delivered` restarts the read.
    Otherwise re-arm the read event (`prte_event_active(..., PRTE_EV_WRITE,
    1)`) to pump the next chunk.
 
 So a file of *N* chunks produces *N* payload broadcasts plus one final
 zero-byte broadcast that tells receivers to close and finalize.
+
+### Flow control — why the pump has to be gated
+
+**Nothing else stops this loop from reading the whole file into memory.**
+The broadcast is fire-and-forget and the only ack this component receives
+is one per *file*, sent by each daemon at EOF, so it can never gate a read.
+And `prte_event_active()` does not go back through the event loop's poll —
+under `event_base_new()`'s defaults (`limit_callbacks_after_prio` is
+INT_MAX, so `max_to_process` is INT_MAX and there is no dispatch deadline)
+libevent keeps taking `TAILQ_FIRST(activeq)`, and a callback that re-arms
+itself is simply run again. A self-re-arming event therefore starves the
+poll outright: 2,000,000 iterations of that pattern against a real
+libevent 2.1.12 base never let it service a socket once.
+
+That matters because `xcast` **holds a broadcast's payload on every daemon
+along the path** until that daemon's subtree confirms receipt, and
+`finish_op` retires those holdings in strict broadcast order — so one slow
+subtree pins every chunk behind it. Measured on the ten-node swarm with a
+256 MB `--preload-files` and `prte_num_worker_threads 0` (which puts the
+OOB's own events on the starved base, so nothing at all gets in): the HNP
+went from 9 MB to **744 MB**, and the transfer took 84 s. With the window
+it is 13 MB and 5.9 s — the read pauses, the loop polls, and the bytes
+actually move.
+
+The default configuration escaped the worst of it only by accident: the
+OOB worker threads (`prte_num_worker_threads`, default 8) read acks on
+their own bases and inject them with `PRTE_RML_ACTIVATE_MESSAGE`, i.e. a
+cross-thread `prte_event_active` on `prte_event_base`, which *does* get in.
+That is incidental relief, not flow control — the in-flight window was
+still rate × ack-latency with no cap, and it grew with the file (+17 MB at
+256 MB, +27 MB at 1 GB).
+
+So `send_chunk` broadcasts with `prte_grpcomm_xcast_nb()` and asks to be
+told when the chunk has reached the whole DVM:
+
+| Field | Meaning |
+|-------|---------|
+| `inflight` | Chunks of this file broadcast and not yet confirmed delivered DVM-wide. |
+| `paused` | The read stopped because `inflight` reached the window; a delivery restarts it. |
+| `retired` | `xfer_retire` has run. A delivery arriving afterwards must give back its reference and nothing else. |
+
+**Each in-flight chunk holds a reference on the xfer** (`PMIX_RETAIN` at
+the broadcast, `PMIX_RELEASE` in `chunk_delivered`). Without it a transfer
+retired while chunks are still travelling — by an error ack, by
+`prte_dvm_abort_ordered`, by the fault handler — would have its completions
+land on freed memory. `retired` is what stops a late completion re-arming a
+read on a file that is finished; the reference is what stops it touching
+anything at all.
+
+The counterpart in grpcomm is that a broadcast **never** disappears without
+telling its caller: `begin_xcast`'s pack and send failures now go through
+`abandon_xcast`, which fires the completion callback before discarding the
+op. Without that a failed broadcast would leave this pump paused forever
+with the job wedged at `VM_READY`.
 
 ### `recv_ack` + `xfer_complete` — completion accounting
 
