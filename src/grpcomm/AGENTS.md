@@ -477,6 +477,42 @@ gathering daemon receives r messages and sends one aggregate, so width is
 free) and the release wants a **narrow** one (a broadcasting daemon receives
 one and sends r, so width is the whole cost).
 
+### A derived tree's edges must be sent DIRECT
+
+`prte_rml_get_route()` answers on the **routing** tree, so an edge of any other
+tree that is not also a routing edge gets *relayed*. At a high routing radix
+the relay is the controller itself, which means the bytes cross the very link
+the second tree exists to keep them off, the controller handles them twice,
+and the fanout is not reduced at all. Measured on eight daemons at routing
+radix 64 with release radix 2: seven of nine release edges went back through
+rank 0, which is worse than not having a second tree.
+
+So `forward_payload_to()` and `send_ack_msg()` route their sends through
+`edge_is_direct()`: the routing tree keeps the routed send (there every edge
+*is* the route), and every other tree gets
+`prte_rml_send_payload_direct_cb_nb()` / `prte_rml_send_buffer_direct_cb_nb()`.
+Both fall back to a routed send on their own when contact information is
+missing, so no caller handles "no direct route".
+
+A peer reached that way and not also a tree neighbour is registered with
+`prte_rml_lateral_register()`. That is about faults, not delivery: losing a
+lateral link means the tree has **not** changed shape, and repairing on the
+strength of it would end every in-flight collective in the DVM.
+`prte_rml_route_lost()` consults `prte_rml_is_lateral_only()`, deregisters,
+and calls the lateral-lost callback instead of repairing.
+
+grpcomm installs that callback (`prte_grpcomm_xcast_lateral_lost`), and it
+closes a hole that only exists once edges are direct: an *undeliverable*
+forward is covered by `forward_lost`, but a link that drops **after** the
+forward landed produces no send completion at all, and the operation then
+waits on an ack that is never coming. The handler re-derives and re-forwards,
+and deliberately concludes nothing about the peer being dead — the RML reached
+it precisely because it decided the loss was not a tree fault.
+
+**Check this when measuring.** `--prtemca rml_base_verbose 2` names the macro
+each send used; a release-tree forward from a non-controller must appear as
+`RML-SEND-PAYLOAD-DIRECT-CB`.
+
 ### A derived tree repairs by different rules, and they are not optional
 
 An op may travel a tree other than the routing one — today a fence release
