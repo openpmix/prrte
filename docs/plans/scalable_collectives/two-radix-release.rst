@@ -278,13 +278,46 @@ squashes 250:1.  Medians over 10 releases per cell:
      - 9949 us
      - 11406 us
 
-**The low radix loses here, and the reason is the harness rather than the
-idea.**  Every "node" is a container on one host, so the nine copies the flat
-tree makes the HNP send do not contend for anything — there is no per-node
-uplink, and they go at loopback speed.  The ``r*M*beta`` term the low radix
-exists to reduce is therefore close to free, while the extra hops are real:
-the 33-byte row is the cost of depth with no payload at all, and three extra
-hops cost ~450 us, or ~150 us a hop.
+**Those numbers were taken against a defect and are superseded** — see the
+table below.  The forwards were being sent *routed*, so seven of the nine
+release edges were relayed through the controller and the fanout was not
+reduced at all.  They are kept here because the correction is the more
+interesting number.
+
+Once the release edges are sent direct (``prte_rml_send_payload_direct_cb_nb``,
+with the peer registered as a lateral link):
+
+.. list-table::
+   :header-rows: 1
+
+   * - release payload (on the wire)
+     - routing tree (radix 64)
+     - release tree (radix 2)
+   * - 33 B (a barrier's release)
+     - 476 us
+     - 563 us
+   * - 10.5 KB
+     - 1758 us
+     - 2018 us
+   * - 166 KB
+     - 6381 us
+     - 4963 us
+   * - 658 KB
+     - 7774 us
+     - 7786 us
+
+The trustworthy row is the first: no payload, so it is pure depth, and it has
+55 samples rather than 10.  The low radix's penalty there fell from **+446 us
+to +87 us**, which is the seven relayed edges disappearing at roughly the
+50 us a hop this harness shows.  The payload rows became *inconclusive* rather
+than negative - a single flat-tree cell at 658 KB ranges from 2362 to 36343 us
+over ten samples, so no ordering can be read out of them.
+
+That is still not a case for turning the parameter on.  It is the removal of a
+reason it could never have worked, and the measurement environment is
+unchanged: every "node" is a container on one host, so the copies the flat
+tree makes the controller send contend for nothing, and the ``r*M*beta`` term
+the low radix exists to reduce stays close to free.
 
 So this is not evidence against the design.  It is a measurement of an
 environment in which the quantity being optimized is approximately zero, and
@@ -292,8 +325,9 @@ it is the reading the harness section of ``contrib/dockerswarm/AGENTS.md``
 warns to expect.  What it does establish:
 
 * the mechanism works and is measurable — the release really does travel the
-  other tree, and the instrument resolves it;
-* the depth penalty is real and is roughly linear in hops;
+  other tree, over direct links, and the instrument resolves it;
+* the depth penalty is real, but most of what was measured as depth was
+  relaying, and it went away with the routed sends;
 * nothing here justifies changing the default, which stays the routing tree.
 
 What would settle it is a machine where a daemon's outbound bandwidth is
@@ -302,6 +336,15 @@ tree's nine copies serialize on that NIC while the low radix's extra hops are
 paid against a much larger transfer term.  ``contrib/scaling/cluster-sweep.sh``
 is the harness for that; until it has been run, the parameter ships off by
 default and this table is the only data.
+
+**And check the edges are direct before believing any of it.**  A release tree
+whose edges are sent routed is not a second tree at all - at a high routing
+radix every non-child edge is relayed by the controller, so the bytes cross
+the very link the tree exists to keep them off and the controller handles them
+twice.  ``--prtemca rml_base_verbose 2`` names the macro each send used:
+release-tree forwards must appear as ``RML-SEND-PAYLOAD-DIRECT-CB``, and a
+plain ``RML-SEND-PAYLOAD-CB`` from a non-controller means the measurement is
+of the routing tree wearing a disguise.
 
 One caveat for whoever runs it next: the release is store-and-forward, so a
 deeper tree pays depth times the *transfer* time, not merely depth times a
