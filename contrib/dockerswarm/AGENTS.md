@@ -152,6 +152,16 @@ an `"OAC_HAVE_APPLE" redefined` error when the two trees were configured
 for different platforms; the quiet and far worse version is same-platform
 with a different `--with-pmix`.
 
+**A second source tree is refused, not cleaned.** `PMIX_SRC` and `OMPI_SRC`
+are bind-mounted read-only and configured VPATH just as this tree is, so an
+in-tree build in one of them is fatal for exactly the same reasons — but
+those trees are not ours to destroy: `build.sh` was pointed at the PRRTE
+tree and owns it, while `PMIX_SRC` is somebody's working tree lent to us.
+So `check_foreign_srcdir` names the tree and the variable and stops. Without
+it the failure was the builder's own `configure: error: source directory
+already configured; run "make distclean" there first` — which names no tree,
+no variable, and no way to tell which of the two builds it came from.
+
 The only way to stop paying for the distclean is to stop keeping an
 in-tree build (below). Removing the destructive step entirely would mean
 building from a *snapshot* of the source inside the volume rather than a
