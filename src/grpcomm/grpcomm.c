@@ -165,15 +165,34 @@ void prte_grpcomm_register(void)
                                &prte_grpcomm_globals.xcast_delay_vpid);
 
     /* Send a fence's release down the low-radix tree instead of the routing
-     * tree.  Off by default, and that is the point of shipping it at all: we
-     * will not have data to choose a winner before release, so the tree we
-     * know works stays the default and this exists to be evaluated against
-     * it.  The radix it uses is rml_base_radix2. */
-    prte_grpcomm_globals.low_radix_release = false;
+     * tree.  ON by default.  The radix it uses is rml_base_radix2.
+     *
+     * It shipped off, on the grounds that there was no data to choose a
+     * winner with.  There is now a model instead, and it is decisive in a way
+     * a measurement of one swarm would not have been: a broadcasting daemon's
+     * r copies cost ceil(r/t) software sends but r whole payloads on one NIC,
+     * so past a payload of B*c/t bytes the fanout is pure bandwidth and the
+     * optimum radix drops to 3-5 and stays there for every larger payload and
+     * every DVM size.  A fence release is the modex, which is far past that
+     * crossover on any machine - kilobytes at worst, and the crossover is
+     * kilobytes at best.  Radix 64 costs 6.1x to 6.4x the optimum there, and
+     * that figure survives sweeping the machine constants eightfold.
+     *
+     * What is not settled is where the crossover sits, which is a property of
+     * a real network and moves with B, c and prte_num_worker_threads.  It
+     * does not have to be settled to make this the default: nothing this
+     * tree carries is anywhere near it.  The derivation is in
+     * docs/plans/scalable_collectives/two-radix-release.rst.
+     *
+     * Turning it off restores the single-tree behaviour exactly - the release
+     * goes down the routing tree and none of the derived-tree code runs - so
+     * this remains the one switch to reach for if a release misbehaves. */
+    prte_grpcomm_globals.low_radix_release = true;
     pmix_mca_base_var_register("prte", "grpcomm", NULL, "low_radix_release",
                                "Fan a fence's release out over the low-radix "
                                "release tree (rml_base_radix2) rather than the "
-                               "routing tree. Off by default.",
+                               "routing tree. On by default; turn it off to "
+                               "put every release back on the routing tree.",
                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_grpcomm_globals.low_radix_release);
 }

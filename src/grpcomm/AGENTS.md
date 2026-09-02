@@ -500,12 +500,14 @@ The in-file comments are the real spec — read them. The load-bearing ideas:
 
 ### Turning the release onto its own tree takes ONE parameter
 
-`grpcomm_low_radix_release` (bool, **default false**) is the switch: it alone
-decides whether a fence's release leaves the routing tree. Off, every release
-goes down the routing tree and none of the derived-tree code below runs.
+`grpcomm_low_radix_release` (bool, **default true**) is the switch: it alone
+decides whether a fence's release leaves the routing tree. Turned off, every
+release goes down the routing tree and none of the derived-tree code below
+runs — which makes it the one thing to reach for if a release misbehaves,
+since it restores the single-tree behaviour exactly.
 
 `rml_base_radix2` (int, **default 4**) only gives the release tree its shape,
-and is not consulted at all while the switch is off. Four is where the cost
+and is not consulted at all when the switch is off. Four is where the cost
 model puts the optimum for every payload past the point at which a copy's
 bandwidth overtakes its thread-divided software cost, which is the only kind
 of payload this tree ever carries — see
