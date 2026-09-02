@@ -63,6 +63,20 @@
 #   * A DVM that came up with fewer nodes than you asked for reports a
 #     perfectly plausible number for the wrong scale.  Every DVM is verified
 #     by counting distinct hostnames before anything is measured.
+#   * That verification must run the CLIENT, not `hostname`.  The client is
+#     built into the results directory, and a cluster whose nodes do not
+#     share that directory launches `hostname` perfectly and the client not
+#     at all -- 36 jobs failing identically, an empty summary, and no clue
+#     on the console.  Preflight launches the client itself and turns on
+#     --preload-binary when it has to.
+#   * "prte --daemonize" tells you nothing about why a DVM did not start: the
+#     child closes stdout and stderr before it launches a daemon, and it has
+#     already written the --report-uri file by then.  A failed launch is
+#     therefore indistinguishable from a healthy DVM until the first job is
+#     refused.  So the DVM is started in the background WITHOUT --daemonize
+#     and is not considered up until it says "DVM ready".
+#   * A sweep that cannot take a single sample must say so on the console and
+#     stop.  Printing an empty table after an hour is the worst of both.
 #   * A run whose client failed still prints timings for the phases that did
 #     run.  Rows are only recorded when the client reported every phase.
 #   * The absolute numbers depend on the build.  --enable-debug roughly
@@ -219,9 +233,11 @@ if [ "$quick" -eq 1 ]; then
     sizes="1024"
     reps=3
     phases="env,radix,barrier"
-    # smallest, middle and full allocation
+    # smallest, middle and full allocation -- de-duplicated, because a small
+    # allocation collapses them onto each other and measuring the same point
+    # three times looks like three points
     mid=$((NNODES / 2)); [ "$mid" -lt 2 ] && mid=2
-    nodes_list="2,$mid,$NNODES"
+    nodes_list=$(printf '%s\n' 2 "$mid" "$NNODES" | sort -n -u | paste -sd, -)
 fi
 
 # ---------------------------------------------------------------------------
@@ -258,6 +274,7 @@ write_manifest() {
         echo "  sizes:   $sizes"
         echo "  reps:    $reps"
         echo "  phases:  $phases"
+        echo "  preload: ${PRELOAD:-none (client is on a shared filesystem)}"
         echo
         echo "== prte_info =="
         prte_info --all 2>/dev/null | grep -iE "prte:version|repo rev|pmix:version|configure command|c compiler:|build cflags" || true
@@ -309,6 +326,44 @@ preflight() {
     # shellcheck disable=SC2086
     ${CC:-cc} -O2 -g -o "$BIN" "$here/scaletest.c" $cflags $ldflags -lpmix 2>"$outdir/build.log" \
         || { sed -n '1,20p' "$outdir/build.log" >&2; die "could not build scaletest.c (see $outdir/build.log)"; }
+
+    check_client_reach
+}
+
+# Can the compute nodes run the client we just built?
+#
+# We build it into the results directory, which on most clusters is a shared
+# home and on some is not -- and where it is not, EVERY job of the sweep fails
+# identically while the DVM itself is perfectly healthy.  PRRTE has the answer
+# already (--preload-binary stages the executable to each node), so the only
+# question is whether we need it, and that is settled here by launching the
+# client rather than reasoned about from the filesystem.
+#
+# Two nodes is enough: the failure is "this path does not exist over there",
+# and node 2 is over there.  We try the plain launch first so that a cluster
+# with a shared filesystem does not pay the staging cost on every job.
+check_client_reach() {
+    local n=2
+    [ "$NNODES" -ge 2 ] || n=$NNODES
+
+    say "checking that the compute nodes can launch the client"
+
+    PRELOAD=""
+    if dvm_start "$n" 1 64; then
+        dvm_stop
+        say "client is visible on the compute nodes"
+        return 0
+    fi
+
+    PRELOAD="--preload-binary"
+    if dvm_start "$n" 1 64; then
+        dvm_stop
+        say "client is NOT on a shared filesystem -- using --preload-binary"
+        return 0
+    fi
+
+    PRELOAD=""
+    die "cannot launch $BIN on $n nodes, with or without --preload-binary -- see $LOG"
 }
 
 # ---------------------------------------------------------------------------
@@ -316,7 +371,16 @@ preflight() {
 # ---------------------------------------------------------------------------
 
 URI=""
+DVM_LOG=""
+DVM_PID=""
 DVM_UP=0
+# --preload-binary, when the client is not on a filesystem the nodes share.
+# Decided once, by experiment, in preflight.
+PRELOAD=""
+# How the sweep is going, so that a run which cannot take a sample at all can
+# say so while there is still someone watching.
+NSAMPLES=0
+NFAILED=0
 
 hostspec() {   # <nodes> <slots>
     local n=$1 slots=$2 i out=""
@@ -324,29 +388,70 @@ hostspec() {   # <nodes> <slots>
     echo "$out"
 }
 
+# We deliberately do NOT use --daemonize here, even though this is exactly the
+# persistent DVM it is meant for.  Two things about it make a failure to start
+# undiagnosable:
+#
+#   * the daemonized child points its stdout and stderr at /dev/null before it
+#     launches a single daemon, so whatever prte has to say about why the DVM
+#     did not come up is discarded -- redirecting the command does not help,
+#     because the redirection is undone in the child;
+#   * the URI file is written by the PMIx server at init, long before any
+#     daemon has reported, so its existence proves only that the HNP started.
+#
+# Together those turn "prte could not launch the daemons" into a DVM that
+# looks up, answers nothing, and gets reported as a mapping problem.  Run it
+# in the background instead and wait for the "DVM ready" it prints once every
+# daemon has checked in: then success is a positive statement, and a failure
+# leaves its reason in a log we can show the user.
 dvm_start() {  # <nodes> <slots> <radix> <extra mca...>
     local n=$1 slots=$2 radix=$3; shift 3
     local extra="$*" tries seen
 
     URI="$outdir/dvm.uri"
+    DVM_LOG="$outdir/dvm.log"
     rm -f "$URI"
+    : > "$DVM_LOG"
     # shellcheck disable=SC2086
-    prte --daemonize --report-uri "$URI" \
+    prte --report-uri "$URI" \
          --prtemca rml_base_radix "$radix" $extra \
-         --host "$(hostspec "$n" "$slots")" >> "$LOG" 2>&1
+         --host "$(hostspec "$n" "$slots")" < /dev/null > "$DVM_LOG" 2>&1 &
+    DVM_PID=$!
 
     for ((tries = 0; tries < dvm_timeout; tries++)); do
-        [ -s "$URI" ] && break
+        grep -q "DVM ready" "$DVM_LOG" 2>/dev/null && break
+        kill -0 "$DVM_PID" 2>/dev/null || break      # it died -- stop waiting
         sleep 1
     done
-    [ -s "$URI" ] || { echo "    DVM never reported a URI" >&2; return 1; }
+    if ! grep -q "DVM ready" "$DVM_LOG" 2>/dev/null; then
+        echo "    DVM did not start -- prte said:" >&2
+        sed -n '1,12p' "$DVM_LOG" >&2
+        cat "$DVM_LOG" >> "$LOG"
+        dvm_stop
+        return 1
+    fi
+    cat "$DVM_LOG" >> "$LOG"
+    [ -s "$URI" ] || { echo "    DVM never reported a URI" >&2; dvm_stop; return 1; }
 
     # A DVM that came up short reports a believable number for the wrong
     # scale, so count the daemons that actually answer before measuring.
-    seen=$($TIMEOUT 120 prun --dvm-uri "file:$URI" --map-by ppr:1:node -n "$n" hostname 2>/dev/null \
+    #
+    # This runs the CLIENT rather than `hostname`, and that is the whole
+    # point of it: `hostname` is on every node's PATH by construction, so a
+    # check that uses it proves the DVM formed and says nothing about whether
+    # the thing we are about to measure can be launched at all.  On a cluster
+    # whose nodes do not share the results directory that difference is the
+    # entire run.  --version touches no PMIx call, so this stays a launch
+    # test and not a measurement.
+    #
+    # prun's stderr goes to the log, not down the pipe: it must not be
+    # counted as a node, and it is the only explanation we will get.
+    # shellcheck disable=SC2086
+    seen=$($TIMEOUT 120 prun --dvm-uri "file:$URI" $PRELOAD --map-by ppr:1:node -n "$n" \
+               "$BIN" --probe 2>>"$LOG" \
            | sort -u | grep -c . || true)
     if [ "${seen:-0}" -ne "$n" ]; then
-        echo "    DVM came up with ${seen:-0} of $n nodes -- skipping" >&2
+        echo "    DVM answered for ${seen:-0} of $n nodes -- skipping (see $LOG)" >&2
         dvm_stop
         return 1
     fi
@@ -355,7 +460,19 @@ dvm_start() {  # <nodes> <slots> <radix> <extra mca...>
 }
 
 dvm_stop() {
+    local w
     [ -n "$URI" ] && [ -s "$URI" ] && $TIMEOUT 60 pterm --dvm-uri "file:$URI" >> "$LOG" 2>&1
+    # The DVM is our child now, so reap it -- and make sure it is really gone
+    # before the next cycle starts another one on the same nodes.
+    if [ -n "$DVM_PID" ]; then
+        for ((w = 0; w < 30; w++)); do
+            kill -0 "$DVM_PID" 2>/dev/null || break
+            sleep 1
+        done
+        kill -0 "$DVM_PID" 2>/dev/null && kill -TERM "$DVM_PID" 2>/dev/null
+        wait "$DVM_PID" 2>/dev/null || true
+        DVM_PID=""
+    fi
     DVM_UP=0
     rm -f "$URI"
 }
@@ -395,6 +512,37 @@ parse_sample() {   # <capture-file> -> "put,collect,barrier" in microseconds
         END { if (n > 0) printf "%.1f,%.1f,%.1f", mp, mc, mb }' "$1"
 }
 
+# A job that produced nothing.  Keep its output -- it is the only account of
+# why, and a summary of empty rows is not one -- and give up if the sweep has
+# yet to produce a single sample.  The failure that made this necessary took
+# an hour to print an empty table.
+GIVE_UP_AFTER=6
+
+job_failed() {   # <what> <tag> <rep> <capture-file>
+    local what=$1 tag=$2 rep=$3 cap=$4 keep
+
+    NFAILED=$((NFAILED + 1))
+    mkdir -p "$outdir/failures"
+    keep="$outdir/failures/$tag-rep$rep.txt"
+    mv -f "$cap" "$keep" 2>/dev/null || true
+    {
+        echo "    $what $tag rep$rep -- kept $keep"
+        sed -n '1,20p' "$keep" | sed 's/^/        /'
+    } >> "$LOG"
+
+    if [ "$NSAMPLES" -eq 0 ] && [ "$NFAILED" -ge "$GIVE_UP_AFTER" ]; then
+        echo >&2
+        echo "ERROR: $NFAILED jobs have failed and not one sample has been taken." >&2
+        echo "       Stopping rather than sweeping a configuration that cannot run." >&2
+        echo "       The last job said:" >&2
+        grep -vE '^-{10,}$|^[[:space:]]*$|https://github.com/openpmix' "$keep" \
+            | sed -n '1,10p' | sed 's/^/       /' >&2
+        echo "       Full output: $keep" >&2
+        dvm_stop
+        exit 1
+    fi
+}
+
 run_job() {   # <phase> <nodes> <radix> <ppn> <nkeys> <size> <gds> <threads> <rep>
     local phase=$1 n=$2 radix=$3 ppn=$4 k=$5 s=$6 gds=$7 thr=$8 rep=$9
     local nprocs=$((n * ppn)) cap tag vals mca=""
@@ -404,19 +552,20 @@ run_job() {   # <phase> <nodes> <radix> <ppn> <nkeys> <size> <gds> <threads> <re
     tag="${phase}-n${n}r${radix}p${ppn}k${k}s${s}"
 
     # shellcheck disable=SC2086
-    if ! $TIMEOUT "$job_timeout" prun --dvm-uri "file:$URI" $mca \
+    if ! $TIMEOUT "$job_timeout" prun --dvm-uri "file:$URI" $mca $PRELOAD \
              --map-by "ppr:$ppn:node" --bind-to none -n "$nprocs" \
              "$BIN" --tag "$tag" --nkeys "$k" --sizes "$s" \
                     --iters 1 --warmup 0 --entropy >"$cap" 2>&1; then
-        echo "    FAILED $tag rep$rep: $(tail -2 "$cap" | tr '\n' ' ')" >> "$LOG"
-        rm -f "$cap"; return 1
+        job_failed FAILED "$tag" "$rep" "$cap"
+        return 1
     fi
     vals=$(parse_sample "$cap")
     if [ -z "$vals" ]; then
-        echo "    NO DATA $tag rep$rep: $(tail -2 "$cap" | tr '\n' ' ')" >> "$LOG"
-        rm -f "$cap"; return 1
+        job_failed "NO DATA" "$tag" "$rep" "$cap"
+        return 1
     fi
     rm -f "$cap"
+    NSAMPLES=$((NSAMPLES + 1))
 
     local put col bar
     IFS=, read -r put col bar <<< "$vals"
@@ -425,6 +574,16 @@ run_job() {   # <phase> <nodes> <radix> <ppn> <nkeys> <size> <gds> <threads> <re
         "$gds" "$thr" "$rep" "$put" "$col" "$bar" \
         "$(awk -v a="$col" -v b="$bar" 'BEGIN{print a-b}')" >> "$RAW"
     return 0
+}
+
+# The first job on a fresh DVM, whose result is thrown away: it pays for the
+# connections, the session directories and the first-touch of everything the
+# measured jobs then reuse.  Its failure is not counted against the sweep --
+# it is not a sample, and the give-up rule must fire on measurements.
+warm_job() {  # <nodes> <radix> <nkeys> <size> [gds] [threads]
+    local saved=$NFAILED
+    run_job warm "$1" "$2" 1 "$3" "$4" "${5:-default}" "${6:-0}" 0 >/dev/null 2>&1 || true
+    NFAILED=$saved
 }
 
 # Every configuration that shares a DVM runs inside one start/stop.
@@ -471,7 +630,7 @@ sweep() {
             for r in ${radices//,/ }; do
                 say "radix phase: nodes=$n radix=$r"
                 if dvm_start "$n" "$slots" "$r"; then
-                    run_job warm "$n" "$r" 1 "$nkeys" 1024 default 0 0 >/dev/null 2>&1 || true
+                    warm_job "$n" "$r" "$nkeys" 1024
                     for p in ${ppn_list//,/ }; do
                         run_reps radix "$n" "$r" "$p" "$nkeys" 1024 default 0
                     done
@@ -485,7 +644,7 @@ sweep() {
             for r in ${radices//,/ }; do
                 say "barrier phase: nodes=$n radix=$r"
                 if dvm_start "$n" "$slots" "$r"; then
-                    run_job warm "$n" "$r" 1 0 1 default 0 0 >/dev/null 2>&1 || true
+                    warm_job "$n" "$r" 0 1
                     run_reps barrier "$n" "$r" 1 0 1 default 0
                     dvm_stop
                 fi
@@ -497,7 +656,7 @@ sweep() {
             for r in 3 64; do
                 say "payload phase: nodes=$n radix=$r"
                 if dvm_start "$n" "$slots" "$r"; then
-                    run_job warm "$n" "$r" 1 "$nkeys" 1024 default 0 0 >/dev/null 2>&1 || true
+                    warm_job "$n" "$r" "$nkeys" 1024
                     for s in ${sizes//,/ }; do
                         run_reps payload "$n" "$r" 1 "$nkeys" "$s" default 0
                     done
@@ -511,7 +670,7 @@ sweep() {
             for g in default hash; do
                 say "gds phase: nodes=$n gds=$g"
                 if dvm_start "$n" "$slots" 64 "$([ "$g" = hash ] && echo '--pmixmca gds hash')"; then
-                    run_job warm "$n" 64 1 "$nkeys" 1024 "$g" 0 0 >/dev/null 2>&1 || true
+                    warm_job "$n" 64 "$nkeys" 1024 "$g"
                     run_reps gds "$n" 64 1 "$nkeys" 1024 "$g" 0
                     dvm_stop
                 fi
@@ -523,7 +682,7 @@ sweep() {
             for t in 0 $((64 / 4)); do
                 say "threads phase: nodes=$n worker_threads=$t"
                 if dvm_start "$n" "$slots" 64 "--prtemca prte_num_worker_threads $t"; then
-                    run_job warm "$n" 64 1 "$nkeys" 1024 default "$t" 0 >/dev/null 2>&1 || true
+                    warm_job "$n" 64 "$nkeys" 1024 default "$t"
                     run_reps threads "$n" 64 1 "$nkeys" 1024 default "$t"
                     dvm_stop
                 fi
@@ -565,7 +724,12 @@ summarize() {
         }' "$RAW" | (read -r h; echo "$h"; sort -k1,1 -k2,2n -k3,3n -k5,5n) > "$out"
 
     echo
-    say "summary (medians over reps):"
+    if [ "$NSAMPLES" -eq 0 ]; then
+        say "NO SAMPLES -- $NFAILED jobs ran and none reported a fence."
+        say "See $outdir/failures/ for what each of them said."
+        return
+    fi
+    say "summary (medians over reps): $NSAMPLES samples, $NFAILED failed jobs"
     echo
     column -t < "$out" 2>/dev/null || cat "$out"
     echo
