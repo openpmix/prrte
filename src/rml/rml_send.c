@@ -171,6 +171,28 @@ int prte_rml_send_payload_cb_nb(pmix_rank_t rank,
     return send_buffer(rank, NULL, payload, tag, false, cbfunc, cbdata);
 }
 
+int prte_rml_send_payload_direct_cb_nb(pmix_rank_t rank,
+                                       prte_rml_payload_t *payload,
+                                       prte_rml_tag_t tag,
+                                       prte_rml_buffer_callback_fn_t cbfunc,
+                                       void *cbdata)
+{
+    if (NULL == payload || NULL == payload->dbuf) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    return send_buffer(rank, NULL, payload, tag, true, cbfunc, cbdata);
+}
+
+int prte_rml_send_buffer_direct_cb_nb(pmix_rank_t rank,
+                                      pmix_data_buffer_t *buffer,
+                                      prte_rml_tag_t tag,
+                                      prte_rml_buffer_callback_fn_t cbfunc,
+                                      void *cbdata)
+{
+    return send_buffer(rank, buffer, NULL, tag, true, cbfunc, cbdata);
+}
+
 int prte_rml_send_buffer_direct_nb(pmix_rank_t rank,
                                    pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tag)

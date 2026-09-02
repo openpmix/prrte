@@ -200,6 +200,11 @@ int prte_grpcomm_init(void)
                        prte_rml_base.radix, prte_rml_base.radix2);
     }
 
+    /* Losing a lateral link is not a tree fault, so the RML deliberately does
+     * not repair on it - but a derived tree's broadcast may have been relying
+     * on that link, and nothing else will tell it.  See lateral_link_lost(). */
+    prte_rml_lateral_set_lost_callback(prte_grpcomm_xcast_lateral_lost);
+
     /* setup the trackers */
     PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops,
                    prte_grpcomm_xcast_t);

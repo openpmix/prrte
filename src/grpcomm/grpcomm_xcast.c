@@ -180,6 +180,9 @@ static void topo_children(prte_grpcomm_topology_t topo, pmix_rank_t **children,
                           size_t *n, bool *owned);
 static size_t topo_n_children(prte_grpcomm_topology_t topo);
 static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo);
+/* Is an edge of this tree sent direct rather than routed?  Registers the peer
+ * as a lateral link when it is one - see the definition. */
+static bool edge_is_direct(prte_grpcomm_topology_t topo, pmix_rank_t dest);
 
 
 // Pack the xcast message forwarded to our children.  Takes no destination:
@@ -786,6 +789,40 @@ static void release_tree_fault(op_t* op)
 }
 
 
+/* A lateral link died while we were relying on it.
+ *
+ * This is the hole that opens the moment a derived tree's edges stop being
+ * routing edges.  An undeliverable forward is already covered - the send
+ * completes with an error and forward_lost drops the expectation - but a link
+ * that drops AFTER the forward landed produces no send completion at all, and
+ * the op then waits on an ack that is never coming.
+ *
+ * Note what this is not allowed to conclude.  prte_rml_route_lost() reaches
+ * here precisely because it has decided the loss is NOT a routing-tree fault,
+ * and it deliberately does not diagnose the peer as dead: the socket may
+ * simply have dropped.  So this must not fail anything or mark anyone dead.
+ * Re-deriving and re-forwarding is the whole response, and it is safe for both
+ * readings - if the peer is alive the direct send re-opens the connection, and
+ * if it really died the global notice arrives later and the repair runs again
+ * on a live set that no longer contains it. */
+void prte_grpcomm_xcast_lateral_lost(pmix_rank_t rank)
+{
+    op_t *op, *next_op;
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:xcast lateral link to %s lost -"
+                         " replaying any derived-tree ops that used it",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_VPID_PRINT(rank)));
+
+    PMIX_LIST_FOREACH_SAFE(op, next_op, &XCAST.ops, op_t){
+        if (PRTE_GRPCOMM_TOPO_ROUTING == op->sig.topology) {
+            continue;
+        }
+        release_tree_fault(op);
+    }
+}
+
 void prte_grpcomm_xcast_fault_handler(
     const prte_rml_recovery_status_t* status
 ) {
@@ -980,14 +1017,28 @@ static void send_ack_msg(
         return;
     }
 
+    /* An ack retraces an edge of the same tree, so it is sent the same way -
+     * routed for the routing tree, direct for a derived one.  Acks are a few
+     * bytes, so this is about hops rather than bandwidth: routing one on a
+     * derived tree sends it through the controller and back out, which is two
+     * hops and a wakeup at the busiest daemon in the DVM for a message that
+     * had one hop to travel. */
+    bool direct = edge_is_direct(sig->topology, dest);
     if(is_request){
         /* A re-poll aimed at a child we cannot reach says exactly what an
          * undeliverable forward says - no ack is ever coming from that subtree
          * - so it is tracked the same way.  The upward direction is not: a
          * failure there is our lifeline, which is the fault machinery's
          * business and not this op's. */
-        PRTE_RML_SEND_CB(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK,
-                         forward_lost, SIG_TO_CBDATA(*sig));
+        if (direct) {
+            PRTE_RML_SEND_DIRECT_CB(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK,
+                                    forward_lost, SIG_TO_CBDATA(*sig));
+        } else {
+            PRTE_RML_SEND_CB(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK,
+                             forward_lost, SIG_TO_CBDATA(*sig));
+        }
+    } else if (direct) {
+        PRTE_RML_SEND_DIRECT(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK);
     } else {
         PRTE_RML_SEND(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK);
     }
@@ -1511,6 +1562,40 @@ static prte_rml_payload_t* build_forward_payload(op_t* op){
     return payload;
 }
 
+/* An edge of a derived tree is sent DIRECT, and the peer is registered.
+ *
+ * The routed send picks the next hop the *routing* tree would take, so an edge
+ * that is not also a routing edge gets relayed - and at a high routing radix
+ * the relay is the controller itself.  The bytes then cross the very link the
+ * second tree exists to keep them off, the controller handles them twice, and
+ * the fanout is not reduced at all: measured on eight daemons at routing radix
+ * 64 with release radix 2, seven of nine release edges went back through rank
+ * 0.  A direct send is what makes the tree mean anything, and the design said
+ * so from the start ("A radix-3 release edge is a sibling edge in a radix-64
+ * routing tree, so this needs direct sends to non-children").
+ *
+ * Registering the peer is a separate obligation and it is about faults, not
+ * delivery: losing a lateral link means the tree has NOT changed shape, and
+ * repairing on the strength of it would end every in-flight collective in the
+ * DVM.  prte_rml_is_lateral_only() is the test the fault path uses, and it
+ * answers false for anything that is also a tree neighbour, so registering a
+ * peer that happens to be our parent or child costs nothing.
+ *
+ * The routing tree keeps the routed send unchanged: there every edge IS the
+ * route. */
+static bool edge_is_direct(prte_grpcomm_topology_t topo, pmix_rank_t dest)
+{
+    if (PRTE_GRPCOMM_TOPO_ROUTING == topo) {
+        return false;
+    }
+    if (dest != prte_rml_get_route(dest)) {
+        /* not reachable in one routing hop, so this is a genuine lateral edge
+         * and the fault machinery has to be told about the link */
+        prte_rml_lateral_register(dest);
+    }
+    return true;
+}
+
 static void forward_payload_to(op_t* op, prte_rml_payload_t* payload,
                                pmix_rank_t dest){
     int rc;
@@ -1525,8 +1610,13 @@ static void forward_payload_to(op_t* op, prte_rml_payload_t* payload,
     /* The op-id is carried by value rather than by pointer: the send outlives
      * the op on precisely the paths that matter, so the callback has to be
      * able to look the op up and find it gone. */
-    PRTE_RML_SEND_PAYLOAD_CB(rc, dest, payload, PRTE_RML_TAG_XCAST,
-                             forward_lost, SIG_TO_CBDATA(op->sig));
+    if (edge_is_direct(op->sig.topology, dest)) {
+        PRTE_RML_SEND_PAYLOAD_DIRECT_CB(rc, dest, payload, PRTE_RML_TAG_XCAST,
+                                        forward_lost, SIG_TO_CBDATA(op->sig));
+    } else {
+        PRTE_RML_SEND_PAYLOAD_CB(rc, dest, payload, PRTE_RML_TAG_XCAST,
+                                 forward_lost, SIG_TO_CBDATA(op->sig));
+    }
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
