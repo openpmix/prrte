@@ -112,7 +112,7 @@ Plain functions, all `PRTE_EXPORT`, declared in `grpcomm.h`:
 | `prte_grpcomm_finalize()` | Tear down trackers, cancel the RML receives. |
 | `prte_grpcomm_fault_handler(status)` | Invoked on **every** daemon by `src/rml/routed_radix.c` when the routing tree changes. Called twice per death (LOCAL scope then GLOBAL scope); which scope a collective keys on depends on what it needs, so read *Surviving a daemon failure* before adding a third. |
 | `prte_grpcomm_xcast(tag, msg)` | Broadcast to **every** daemon, delivered at `tag`. Non-destructive to `msg`. Returns `PRTE_SUCCESS` on *acceptance*, not completion. |
-| `prte_grpcomm_xcast_nb(tag, msg, cbfunc, cbdata)` | As above, but `cbfunc` fires on the **master** once the whole DVM has confirmed receipt. `cbfunc`/`cbdata` are ignored on non-master daemons. `xcast` is just `xcast_nb(tag, msg, NULL, NULL)`. |
+| `prte_grpcomm_xcast_nb(tag, msg, cbfunc, cbdata)` | As above, but `cbfunc` fires on the **master** once the whole DVM has confirmed receipt — or, if the broadcast is abandoned before it is ever emitted, as soon as that is known (`abandon_xcast`), because a caller waiting on it would otherwise wait forever. It carries no status, so it means only "stop waiting". `cbfunc`/`cbdata` are ignored on non-master daemons. `xcast` is just `xcast_nb(tag, msg, NULL, NULL)`. |
 | `prte_grpcomm_fence(procs, nprocs, info, ninfo, data, ndata, cbfunc, cbdata)` | Non-blocking allgather/barrier across the daemons hosting `procs`. A barrier supplies no data. Returns `PRTE_SUCCESS` once queued. |
 | `prte_grpcomm_group(op, grpid, procs, nprocs, directives, ndirs, cbfunc, cbdata)` | PMIx group construct/destruct/cancel. |
 

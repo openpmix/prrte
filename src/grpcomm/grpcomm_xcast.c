@@ -944,6 +944,25 @@ void prte_grpcomm_xcast_fault_handler(
     drive_completions();
 }
 
+/* Discard a broadcast that was never emitted, telling its caller.
+ *
+ * A completion callback is normally fired by finish_op, from the op the
+ * master builds when this broadcast is relayed back to it - which never
+ * happens if the broadcast dies here.  A caller that is waiting on that
+ * callback would then wait forever: the collective shrink never emits its
+ * completion event, and filem's chunk pump never restarts a read.  Neither
+ * failure announces itself, so say so here instead.  The callback carries no
+ * status, so it means only "stop waiting"; the error itself has already been
+ * logged by the caller of this function.
+ */
+static void abandon_xcast(op_t *op)
+{
+    if (PRTE_PROC_IS_MASTER && NULL != op->cbfunc) {
+        op->cbfunc(op->cbdata);
+    }
+    PMIX_RELEASE(op);
+}
+
 static void begin_xcast(int sd, short args, void* cbdata){
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -960,7 +979,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
-        PMIX_RELEASE(op);
+        abandon_xcast(op);
         return;
     }
 
@@ -993,7 +1012,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
             PMIX_RELEASE(pc);
         }
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
-        PMIX_RELEASE(op);
+        abandon_xcast(op);
         return;
     }
 
