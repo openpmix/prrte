@@ -129,7 +129,7 @@ static void usage(const char *argv0)
     fprintf(stderr,
             "usage: %s [--nkeys N] [--sizes A,B,C] [--iters N] [--warmup N]\n"
             "          [--scope global|remote|local] [--tag STR] [--verify]\n"
-            "          [--neighbors] [--entropy]\n",
+            "          [--neighbors] [--entropy] [--probe]\n",
             argv0);
 }
 
@@ -146,6 +146,7 @@ int main(int argc, char **argv)
     bool verify = false;
     bool neighbors = false;
     bool entropy = false;
+    bool probe = false;
     char hostname[256];
     char key[PMIX_MAX_KEYLEN + 1];
     char *payload = NULL;
@@ -185,6 +186,8 @@ int main(int argc, char **argv)
             neighbors = true;
         } else if (0 == strcmp(argv[a], "--entropy")) {
             entropy = true;
+        } else if (0 == strcmp(argv[a], "--probe")) {
+            probe = true;
         } else if (0 == strcmp(argv[a], "--scope") && a + 1 < argc) {
             ++a;
             if (0 == strcmp(argv[a], "global")) {
@@ -205,6 +208,21 @@ int main(int argc, char **argv)
     if (0 == iters) {
         usage(argv[0]);
         return 1;
+    }
+    /* A launch test, and nothing else: print this node's name and go, without
+     * touching PMIx.  A sweep has to know that the binary it is about to
+     * measure can be started on every node it named, and it cannot learn that
+     * by launching `hostname` -- that is on every node's PATH by
+     * construction, whereas this program was built into a results directory
+     * the cluster may not share.  Printing the hostname is what lets the
+     * caller count distinct nodes from the same run that proves the launch. */
+    if (probe) {
+        if (0 != gethostname(hostname, sizeof(hostname))) {
+            return 1;
+        }
+        hostname[sizeof(hostname) - 1] = '\0';
+        printf("%s\n", hostname);
+        return 0;
     }
     /* --verify fetches rank+1, which is exactly one of the two peers the
      * NEIGHBORS phase then times.  Run together, verify warms the cache the
