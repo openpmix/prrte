@@ -156,6 +156,26 @@ typedef struct {
     // Ships for the same reason its sibling does.
     int release_delay_ms;
     int release_delay_vpid;
+    // Fault injection, the third: hold this daemon's *forward* of a broadcast
+    // back, so the op stays in flight on the tree for as long as is asked
+    // for.
+    //
+    // Its two siblings both act on a release that has already been forwarded,
+    // which is the right shape for the round-number window and the wrong one
+    // for the fault path: repairing a tree only means anything while an op is
+    // still travelling it, and on eight daemons a release is over in
+    // microseconds. Widening that to seconds is what makes it possible to
+    // kill a daemon in the middle of a broadcast on purpose rather than by
+    // luck.
+    //
+    // Deliberately confined to the trees that are NOT the routing tree. The
+    // routing tree carries the daemon command channel - the halt, the wireup,
+    // the launch - and a knob that stalls those does not inject a fault, it
+    // wedges the DVM, which is a different experiment and a worse one.
+    //
+    // Ships for the same reason its siblings do.
+    int xcast_delay_ms;
+    int xcast_delay_vpid;
     // Did this daemon join a DVM that had already been running collectives?
     //
     // It decides what "I have no round number for this signature" means, and
@@ -249,6 +269,9 @@ int prte_grpcomm_xcast_topo(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
  * for the same job. */
 typedef int (*prte_grpcomm_release_bcast_fn_t)(prte_rml_tag_t tag, pmix_data_buffer_t *msg);
 PRTE_EXPORT extern prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast;
+/* Which tree a release for this tag travels - the decision alone, so it can
+ * be asserted without a DVM to send over. */
+PRTE_EXPORT prte_grpcomm_topology_t prte_grpcomm_release_topology(prte_rml_tag_t tag);
 PRTE_EXPORT int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
                                                   pmix_data_buffer_t *msg);
 

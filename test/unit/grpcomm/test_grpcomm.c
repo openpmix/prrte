@@ -82,8 +82,31 @@ static int test_release_bcast_default(void)
 {
     int failures = 0;
 
-    CHECK("release path defaults to xcast",
-          prte_grpcomm_release_bcast == prte_grpcomm_xcast);
+    CHECK("release path is wired to the selector",
+          prte_grpcomm_release_bcast == prte_grpcomm_release_bcast_select);
+
+    /* ...and the selector routes by tag.  A fence release is the whole modex,
+     * so it is the one that moves onto the low-radix tree when that is asked
+     * for; a group release is small, where a low radix buys nothing and costs
+     * depth, so it stays on the routing tree either way.  With the knob off,
+     * nothing moves at all - which is the assertion that keeps the default
+     * being the tree we know works. */
+    prte_grpcomm_globals.low_radix_release = false;
+    CHECK("knob off: a fence release travels the routing tree",
+          PRTE_GRPCOMM_TOPO_ROUTING
+              == prte_grpcomm_release_topology(PRTE_RML_TAG_FENCE_RELEASE));
+    CHECK("knob off: a group release travels the routing tree",
+          PRTE_GRPCOMM_TOPO_ROUTING
+              == prte_grpcomm_release_topology(PRTE_RML_TAG_GROUP_RELEASE));
+
+    prte_grpcomm_globals.low_radix_release = true;
+    CHECK("knob on: a fence release travels the release tree",
+          PRTE_GRPCOMM_TOPO_RELEASE
+              == prte_grpcomm_release_topology(PRTE_RML_TAG_FENCE_RELEASE));
+    CHECK("knob on: a group release still travels the routing tree",
+          PRTE_GRPCOMM_TOPO_ROUTING
+              == prte_grpcomm_release_topology(PRTE_RML_TAG_GROUP_RELEASE));
+    prte_grpcomm_globals.low_radix_release = false;
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_release_bcast_default\n");

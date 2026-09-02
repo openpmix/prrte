@@ -26,3 +26,29 @@ completed with a result that only some participants would recognize.
 Note that a participant contributing no data is NOT this error. An
 allgather over participants that happen to have nothing to publish is
 still an allgather, and is expected — only the directive decides.
+#
+[release-radix-noop]
+
+The low-radix fence release was requested, but the release tree it would
+use has the same radix as the routing tree, so it describes exactly the
+same tree:
+
+   Routing radix (rml_base_radix): %d
+   Release radix (rml_base_radix2): %d
+
+grpcomm_low_radix_release moves a fence's release off the routing tree
+and onto a tree of its own, so that the rollup and the fanout can be
+given the radices each of them wants: a gathering daemon receives r
+messages and sends one aggregate, so a wide tree costs it nothing, while
+a broadcasting daemon receives one copy and sends r, so the width is the
+whole cost. The point of the second tree is therefore to be NARROWER
+than the first.
+
+At equal radices it is not narrower, it is identical - every daemon
+relays to the same children it already had. The release will still be
+correct, but it buys nothing and is carried through more machinery than
+the routing tree needs, so it can only be slower.
+
+Set rml_base_radix2 to the radix you actually want for the release, or
+turn grpcomm_low_radix_release off. The runtime is continuing with the
+settings as given.
