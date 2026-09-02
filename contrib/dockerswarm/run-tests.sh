@@ -4602,6 +4602,7 @@ test_grpcomm() {
     test_fence_straggler
     test_fence_early_arrival
     test_low_radix_release
+    test_low_radix_release_fault
 }
 
 test_fence_early_arrival() {
@@ -4731,6 +4732,107 @@ test_low_radix_release() {
         && ok "...and the release travelled the release tree, not the routing one" \
         || bad "no broadcast used the release tree - the knob was ignored"
 
+    cleanup_swarm
+}
+
+test_low_radix_release_fault() {
+    local out n t0 t1 el
+
+    banner "grpcomm: a release tree repairs itself when a relay dies"
+    # Two trees in the DVM, each for one direction of a collective, and each
+    # therefore needing its own recovery.  The routing tree's is reported to
+    # us by the RML -- who was promoted, which children changed, what the
+    # previous set was -- and none of that describes the release tree, which
+    # is derived rather than repaired: after a death every daemon simply
+    # computes a different answer from a live set they all hold in step.
+    #
+    # Applying the routing tree's facts to a release-tree operation is not a
+    # near miss, it is the wrong tree in every particular.  Here the routing
+    # radix is 64, so a non-master daemon has NO routing children at all --
+    # and the old handler read that as "my subtree is empty, this operation is
+    # complete" and retired a release that had not been forwarded anywhere.
+    #
+    # The shape: release radix 2 over eight daemons is 0->{1,2}, 1->{3,4},
+    # 2->{5,6}, 3->{7}.  Daemon 1 is told to hold its forward, so daemons 3, 4
+    # and 7 do not have the release; then daemon 1 is killed, taking the held
+    # copy with it.  The only way those three are ever released is the repair.
+    # Daemon 1 hosts no process, so what dies is a relay and nothing else --
+    # the fence itself is not "affected" and must simply carry on.
+    cleanup_swarm
+    if ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        return
+    fi
+
+    if ! prted_dvm_start_mca \
+            'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1' \
+            '--prtemca grpcomm_low_radix_release 1 --prtemca rml_base_radix2 2 --prtemca rml_base_radix 64 --prtemca grpcomm_xcast_delay_ms 12000 --prtemca grpcomm_xcast_delay_vpid 1'; then
+        bad "could not start the DVM for the release-tree fault test"
+        cleanup_swarm
+        return
+    fi
+
+    # The canary, and the assertion without which everything below passes
+    # vacuously: prove the hold is armed and aimed at daemon 1 before killing
+    # anything.  A parameter that never reached the daemons, or a delay that
+    # is not on the path a release takes, makes every later assertion pass
+    # while testing nothing at all -- which is exactly how the first version
+    # of the low-radix case spent three green runs.  With daemon 1 holding for
+    # 12s the fence cannot finish sooner, so the wall clock says whether it is
+    # really holding.
+    t0=$(date +%s)
+    out=$(RUN "timeout -k 5 120 prun --dvm-uri file:$PRTED_URI \
+                   --host node1:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1 \
+                   -n 7 --map-by node $FENCER collect" 2>&1)
+    t1=$(date +%s)
+    el=$((t1 - t0))
+    n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+    [ "$n" = 7 ] && [ "$el" -ge 10 ] \
+        && ok "the forward hold is live: 7 ranks released, after ${el}s" \
+        || bad "hold not in effect ($n of 7 ranks, ${el}s) -- every assertion below would be vacuous"
+
+    # Now the fault.  Kill daemon 1 while it is sitting on the release.
+    PRUN_BG /tmp/lrr-fault.out \
+        "--host node1:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1 \
+         -n 7 --map-by node --rtos recoverable $FENCER collect"
+    sleep 4
+    if ! ON 2 'pgrep -x prted' >/dev/null 2>&1; then
+        bad "node2 has no daemon to kill"
+    else
+        ON 2 'pkill -9 -x prted' >/dev/null 2>&1
+        n=0
+        while [ "$n" -lt 90 ]; do
+            RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+            sleep 1; n=$((n+1))
+        done
+        out=$(RUN 'tr -d "\000" < /tmp/lrr-fault.out' 2>&1)
+
+        n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+        [ "$n" = 7 ] \
+            && ok "every rank was released after the relay holding it died" \
+            || bad "$n of 7 ranks were released: $(echo "$out" | grep FENCER | tr '\n' ' ' | tail -c 300)"
+
+        # ...and with the payload intact.  A repair that delivered *a*
+        # release rather than the one that was in flight would still let the
+        # fence return; what says it was the right one is the modex.
+        n=$(echo "$out" | grep -c 'peers-bad 0')
+        [ "$n" = 7 ] \
+            && ok "...with every peer's contribution still delivered" \
+            || bad "$n of 7 ranks got a complete modex after the repair"
+    fi
+
+    # The DVM has to have survived it: the repair runs on every daemon, and
+    # one that mis-repairs takes its own broadcast ordering with it, which
+    # shows up on the NEXT collective rather than this one.
+    out=$(RUN "timeout -k 5 60 prun --dvm-uri file:$PRTED_URI \
+                   --host node1:1,node3:1,node4:1 -n 3 --map-by node \
+                   $FENCER collect" 2>&1)
+    n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+    [ "$n" = 3 ] \
+        && ok "...and a later fence over the survivors still completes" \
+        || bad "the DVM could not run a fence after the repair: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 }
 
@@ -6755,6 +6857,17 @@ test_linux() {
         # anything yourself.
         echo "     Recreate them: ${SWARM_ENV}docker compose up -d --force-recreate" >&2
         echo "     (from contrib/dockerswarm, so the pinned project name applies)" >&2
+        return
+    fi
+
+    # Run only the named phases, for iterating on one of them.  Everything
+    # above this line is preflight and still runs: the checks that say the
+    # install is the one you built, and the sweep that says the swarm is
+    # clean, are exactly the ones whose absence makes a subset run lie.
+    if [ -n "${TEST_ONLY:-}" ]; then
+        for only_fn in $TEST_ONLY; do
+            "$only_fn"
+        done
         return
     fi
 
