@@ -5789,6 +5789,93 @@ test_errmgr() {
     [ "$c" = 0 ] && ok "...and no daemon is left behind" \
                  || bad "$c stray prted after a failed start"
     cleanup_swarm
+
+    banner "errmgr: a launch that fails on ONE node still accounts for the others"
+    # The case above fails every rank, and that is the easy one: nothing ever
+    # started, so nothing is left to account for.  The interesting shape is a
+    # launch that succeeds on some nodes and fails on one, which is what a
+    # path present on only part of a cluster produces -- the ordinary way to
+    # meet this, not an exotic one.
+    #
+    # job_errors used to declare such a job TERMINATED the instant the failure
+    # arrived, on the grounds that "the job never launched, so no proc state
+    # will be triggered".  That holds only when no daemon was given anything
+    # to run.  Here the other daemons launched their ranks and are still
+    # reporting it, so check_job_complete releases the job object underneath
+    # them: their "local launch complete" lands on an HNP that no longer has
+    # the job (plm_base_receive's PRTE_ERR_NOT_FOUND), and so does the death
+    # of every rank that did start (state/base's orphaned-proc path, which
+    # asks the user to file a bug for what is only a mistyped path).
+    #
+    # And the consequence is not confined to diagnostics: a PERSISTENT DVM
+    # does not survive it.  Releasing the job while its daemons are mid-report
+    # leaves the HNP with nothing it can account for, and it comes down -- so
+    # a mistyped path on one node of a long-lived DVM destroys the DVM, which
+    # is the one thing a persistent DVM exists not to do.  The last assertion
+    # below is the one that catches that.
+    #
+    # The first of them needs no log at all: a partial launch failure reported
+    # a DIFFERENT exit status from a total one, because the status was taken
+    # while the accounting was still incomplete.  On the unfixed runtime this
+    # block scores 4 of 7 -- 183 against 75, a PRTE_ERR_NOT_FOUND out of
+    # plm_base_receive, and a DVM that is gone by the next job.
+    cleanup_swarm
+    # A binary on node2 and node3 and NOT on node4.  /tmp is per-container
+    # here, which is what makes this expressible at all.
+    for n in 2 3; do
+        docker exec "$NODE$n" sh -c \
+            'printf "#!/bin/sh\nexit 0\n" > /tmp/partial-app && chmod +x /tmp/partial-app' \
+            >/dev/null 2>&1
+    done
+    docker exec "$NODE"4 rm -f /tmp/partial-app >/dev/null 2>&1
+
+    out=$(RUN 'timeout -k 5 90 prterun --host node2:1,node3:1,node4:1 -np 3 --map-by node \
+                  /tmp/partial-app' 2>&1); rc_partial=$?
+    RUN 'timeout -k 5 90 prterun --host node2:1,node3:1 -np 2 --map-by node \
+                  /no/such/executable' >/dev/null 2>&1; rc_total=$?
+    [ "$rc_partial" != 0 ] && ok "a launch that fails on one node fails the job (rc=$rc_partial)" \
+                           || bad "a missing executable on node4 was reported as success"
+    [ "$rc_partial" = "$rc_total" ] \
+        && ok "...reporting the same status as a launch that failed everywhere ($rc_total)" \
+        || bad "partial launch failure exited $rc_partial, total failure $rc_total"
+    echo "$out" | grep -q 'node4' \
+        && ok "...naming the node that could not run it" \
+        || bad "the diagnostic did not name node4: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    c=$(prted_settle 10 1 2 3 4)
+    [ "$c" = 0 ] && ok "...and every daemon came down afterwards" \
+                 || bad "$c stray prted after a partial launch failure"
+    cleanup_swarm
+
+    # The same launch against a PERSISTENT DVM, whose HNP has to survive it
+    # and go on working.  Run in the foreground so the HNP's own output is
+    # readable -- a --daemonize'd DVM discards it, and the whole point here is
+    # what the HNP says to itself.
+    HNPLOG=/tmp/partial-hnp.log
+    RUN "rm -f $PRTED_URI $HNPLOG" >/dev/null 2>&1
+    RUN_BG "$HNPLOG" "prte --report-uri $PRTED_URI --host node2:1,node3:1,node4:1"
+    for _ in $(seq 30); do RUN "grep -q 'DVM ready' $HNPLOG" 2>/dev/null && break; sleep 1; done
+    if RUN "test -s $PRTED_URI" 2>/dev/null; then
+        PRUN "--map-by node -np 3 /tmp/partial-app" >/dev/null 2>&1
+        sleep 2
+        hnp=$(RUN "cat $HNPLOG" 2>&1)
+        echo "$hnp" | grep -q 'PRTE ERROR' \
+            && bad "the HNP lost the job while its daemons were still reporting it: $(echo "$hnp" | grep 'PRTE ERROR' | head -1)" \
+            || ok "the HNP kept the job object until every daemon had reported"
+        echo "$hnp$out" | grep -qi 'holds no record of the job\|internal inconsistency' \
+            && bad "a mistyped path produced an internal-inconsistency report" \
+            || ok "...so no bug report is asked of the user for a mistyped path"
+        out=$(PRUN "--map-by node -np 3 hostname" 2>&1)
+        [ "$(echo "$out" | grep -c 'node[234]')" = 3 ] \
+            && ok "...and the DVM still runs the next job" \
+            || bad "the DVM did not survive a partial launch failure: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+    else
+        skp "could not start a persistent DVM for the partial-launch test"
+    fi
+    for n in 2 3; do
+        docker exec "$NODE$n" rm -f /tmp/partial-app >/dev/null 2>&1
+    done
+    cleanup_swarm
 }
 
 ########################################################################

@@ -284,17 +284,40 @@ static void job_errors(int fd, short args, void *cbdata)
     /* ensure we terminate any processes left running in the DVM */
     _terminate_job(jdata->nspace);
 
-    /* if the job never launched, then we need to let the
-     * state machine know this job failed - it has no
-     * other means of being alerted since no proc states
-     * will be triggered */
-    if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
-        || PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state
-        || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state
+    /* If the job never got as far as a process, nothing else will ever tell
+     * the state machine it is over: no proc state can be triggered for a proc
+     * that was never handed to a daemon, so the completion accounting has
+     * nothing to count down and the job object would sit here forever.  Say
+     * so directly for the states that mean exactly that - the job stopped
+     * before any daemon was given anything to run.
+     *
+     * The two launch failures are NOT among them, and the difference matters.
+     * They mean the daemons DID receive the job and act on it, so every one
+     * of its procs is already accounted for or shortly will be: proc_errors
+     * force-marks a failed proc WAITPID_FIRED and IOF_COMPLETE, and the
+     * _terminate_job() above brings down whichever ones did start.  Declaring
+     * the job TERMINATED here instead runs check_job_complete, which releases
+     * the job object - and on a multi-node launch that routinely happens with
+     * ranks still alive on the other nodes, because a job whose executable is
+     * missing on ONE node has already started every rank on the others.  Their
+     * deaths then arrive with no job to account them to, which is the
+     * orphaned-proc path in state/base: an internal-inconsistency banner
+     * asking the user to file a bug, for a mistyped path.
+     *
+     * So take the shortcut for those two only once every proc really has been
+     * counted, and otherwise leave it to the ordinary accounting, which is
+     * already driving.  Nothing is lost by waiting: the exit code and the
+     * aborted-proc attribute are set above, before either arm.
+     */
+    if (PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state
         || PRTE_JOB_STATE_ALLOC_FAILED == jdata->state
         || PRTE_JOB_STATE_MAP_FAILED == jdata->state
         || PRTE_JOB_STATE_FILES_POSN_FAILED == jdata->state
         || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
+    } else if ((PRTE_JOB_STATE_FAILED_TO_START == jdata->state
+                || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state)
+               && jdata->num_terminated >= jdata->num_procs) {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
     }
 
