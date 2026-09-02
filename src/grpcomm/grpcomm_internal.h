@@ -271,6 +271,9 @@ typedef int (*prte_grpcomm_release_bcast_fn_t)(prte_rml_tag_t tag, pmix_data_buf
 PRTE_EXPORT extern prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast;
 /* Which tree a release for this tag travels - the decision alone, so it can
  * be asserted without a DVM to send over. */
+/* Told by the RML that a lateral link died - see the definition for why a
+ * derived tree needs this and the routing tree does not. */
+PRTE_EXPORT void prte_grpcomm_xcast_lateral_lost(pmix_rank_t rank);
 PRTE_EXPORT prte_grpcomm_topology_t prte_grpcomm_release_topology(prte_rml_tag_t tag);
 PRTE_EXPORT int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
                                                   pmix_data_buffer_t *msg);

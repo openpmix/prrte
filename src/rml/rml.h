@@ -160,6 +160,37 @@ PRTE_EXPORT int prte_rml_send_payload_cb_nb(pmix_rank_t rank,
     } while (0)
 
 /**
+ * As prte_rml_send_payload_cb_nb, but bypass the routing tree.
+ *
+ * This is the combination a broadcast on a *derived* tree needs and no other
+ * caller does: one packed payload shared by every destination, a completion
+ * callback (an undeliverable forward means that subtree's ack is never
+ * coming), and a destination chosen by a tree that is not the routing one.
+ * Sent routed, such a forward is relayed by whichever daemon the routing tree
+ * puts in between - which at a high routing radix is the controller itself,
+ * so the bytes cross the very link the second tree exists to keep them off
+ * and the fanout is not reduced at all.
+ *
+ * Falls back to a routed send when the peer's contact information is not
+ * available, exactly as prte_rml_send_buffer_direct_nb does.  Register the
+ * peer with prte_rml_lateral_register() unless it is also a tree neighbour.
+ */
+PRTE_EXPORT int prte_rml_send_payload_direct_cb_nb(pmix_rank_t rank,
+                                                   prte_rml_payload_t *payload,
+                                                   prte_rml_tag_t tag,
+                                                   prte_rml_buffer_callback_fn_t cbfunc,
+                                                   void *cbdata);
+
+#define PRTE_RML_SEND_PAYLOAD_DIRECT_CB(_r, r, p, t, cf, cd)               \
+    do {                                                                   \
+        pmix_output_verbose(2, prte_rml_base.rml_output,                   \
+                            "RML-SEND-PAYLOAD-DIRECT-CB(%s:%d): %s:%s:%d", \
+                            PMIX_RANK_PRINT(r), t,                         \
+                            __FILE__, __func__, __LINE__);                 \
+        (_r) = prte_rml_send_payload_direct_cb_nb(r, p, t, cf, cd);        \
+    } while (0)
+
+/**
  * As prte_rml_send_buffer_nb, but bypass the routing tree and deliver straight
  * to the named peer.
  *
@@ -180,6 +211,23 @@ PRTE_EXPORT int prte_rml_send_payload_cb_nb(pmix_rank_t rank,
 PRTE_EXPORT int prte_rml_send_buffer_direct_nb(pmix_rank_t rank,
                                                pmix_data_buffer_t *buffer,
                                                prte_rml_tag_t tag);
+
+/* As prte_rml_send_buffer_cb_nb, but bypass the routing tree.  The ack half of
+ * a derived tree's traffic needs this for the same reason the forward does. */
+PRTE_EXPORT int prte_rml_send_buffer_direct_cb_nb(pmix_rank_t rank,
+                                                  pmix_data_buffer_t *buffer,
+                                                  prte_rml_tag_t tag,
+                                                  prte_rml_buffer_callback_fn_t cbfunc,
+                                                  void *cbdata);
+
+#define PRTE_RML_SEND_DIRECT_CB(_r, r, b, t, cf, cd)               \
+    do {                                                           \
+        pmix_output_verbose(2, prte_rml_base.rml_output,           \
+                            "RML-SEND-DIRECT-CB(%s:%d): %s:%s:%d", \
+                            PMIX_RANK_PRINT(r), t,                 \
+                            __FILE__, __func__, __LINE__);         \
+        (_r) = prte_rml_send_buffer_direct_cb_nb(r, b, t, cf, cd); \
+    } while(0)
 
 #define PRTE_RML_SEND_DIRECT(_r, r, b, t)                       \
     do {                                                        \
