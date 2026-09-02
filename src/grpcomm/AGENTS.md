@@ -458,6 +458,91 @@ The in-file comments are the real spec — read them. The load-bearing ideas:
   assuming its *newly-acquired* subtree finished ops it completed before
   promotion.
 
+### Turning the release onto its own tree takes TWO parameters
+
+`grpcomm_low_radix_release` (bool, **default false**) is the switch: it alone
+decides whether a fence's release leaves the routing tree. Off, every release
+goes down the routing tree and none of the derived-tree code below runs.
+
+`rml_base_radix2` (int, **defaults to `rml_base_radix`**) only gives the
+release tree its shape, and is not consulted at all while the switch is off.
+
+Setting the switch and leaving the radix alone does nothing useful, and it is
+the obvious mistake: at equal radices the release tree *is* the routing tree,
+identical parent and children for every rank and every failure pattern
+(`test_release_tree_matches_routing` in `test/unit/rml`). The master emits the
+`release-radix-noop` help topic for that combination and carries on. Note
+which way round the two want to be: the rollup wants a **wide** tree (a
+gathering daemon receives r messages and sends one aggregate, so width is
+free) and the release wants a **narrow** one (a broadcasting daemon receives
+one and sends r, so width is the whole cost).
+
+### A derived tree repairs by different rules, and they are not optional
+
+An op may travel a tree other than the routing one — today a fence release
+under `grpcomm_low_radix_release`, tomorrow anything else added to
+`prte_grpcomm_topology_t`. Such a tree is **derived**: every daemon computes
+it from the daemon count, the failed set and `rml_base_radix2`, all of which
+they hold in step, so there is no protocol and nothing to keep synchronized.
+That is what makes it cheap. It also means **none of the routing tree's
+recovery inputs describe it** — `status->promoted`, `->children_changed`,
+`->prev_children` and `prte_rml_base.n_children` are all facts about the
+routing tree, and applying them to an op travelling another one is not a near
+miss but the wrong tree in every particular. With `rml_base_radix 64` a
+non-master daemon has *no* routing children at all, and the handler read that
+as "my subtree is empty, this op is complete" and retired a release it had
+forwarded nowhere.
+
+`release_tree_fault()` is the separate path, and five rules hold it up. All
+five are properties of deriving a tree rather than being told one, so anything
+added here inherits them:
+
+- **Both halves of the derivation must agree.** `prte_rml_release_tree()`
+  computes a parent *and* children, and they have to describe the same tree
+  for every failure pattern. Walking up past dead ancestors to name a parent
+  while replacing a dead child in place is two different promotion rules and
+  orphans daemons outright. `test_release_tree` (`test/unit/rml`) brute-forces
+  every failure subset and requires one tree rooted at 0 covering exactly the
+  living daemons — run it before believing any change here.
+- **Do not screen a forward on "is the sender my parent".** That screen is
+  sound on the routing tree, whose repair notice travels the routing tree, so
+  a daemon has processed the notice that gave it a new parent before anything
+  that parent relays can arrive. A derived tree has no such ordering: a
+  repaired parent replays to a child that has not heard yet. Both the forward
+  and the ack-request screens are therefore asked only of
+  `PRTE_GRPCOMM_TOPO_ROUTING`.
+- **Ack whoever asked** (`send_ack_to`, `op->upstream`), not whoever this
+  daemon's own derivation currently calls its parent. Answering the wrong
+  daemon costs nothing; failing to answer the right one hangs the broadcast.
+- **Nobody defers.** `replay_pending_parent` is a routing-tree device; here a
+  daemon deferring to a parent that has already replayed waits for a second
+  replay that never comes, and strands its subtree. It is also unnecessary: an
+  op a child is missing is still in flight, hence held and replayed by someone
+  in the same pass, in op order.
+- **A forward must be read under the view it was computed in.** Every forward
+  carries `prte_rml_tree_version()` — a monotone count of the departures and
+  returns the sender has learned of. A receiver that is behind it **and** was
+  addressed by a daemon it does not call its parent parks the op
+  (`awaiting_news`): it takes the payload and delivers it locally, which does
+  not depend on the tree, but derives nothing until the notice lands. Without
+  this, a daemon promoted into a dead relay's slot still reads itself as a
+  leaf, retires the op as complete with zero children, and strands everything
+  beneath it. Both conditions are required — the version is a count of events
+  learned rather than an agreed number, and daemons legitimately hold
+  different ones for a while (a grown daemon is seeded from the departed set
+  it was launched with), so the "not my parent" test is what keeps ordinary
+  traffic from ever being parked.
+
+`grpcomm_xcast_delay_ms` / `_vpid` is the instrument: it holds one daemon's
+*forward* on a non-routing tree, so a broadcast that is otherwise over in
+microseconds can have a daemon killed underneath it on purpose. Its two
+siblings (`grpcomm_fence_delay_ms`, `grpcomm_release_delay_ms`) both act after
+the forward has gone and cannot reach this path at all. It ships compiled in,
+for the same reason they do. `contrib/dockerswarm`'s
+"a release tree repairs itself when a relay dies" is the case, and its first
+assertion is a canary on the hold being live — without it every assertion
+below passes vacuously.
+
 ### The forward is shared, and that changes what a send completion means
 
 `tree_whole_forward()` packs the forward **once** and hands the same
