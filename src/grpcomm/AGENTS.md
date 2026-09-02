@@ -498,20 +498,28 @@ The in-file comments are the real spec — read them. The load-bearing ideas:
   assuming its *newly-acquired* subtree finished ops it completed before
   promotion.
 
-### Turning the release onto its own tree takes TWO parameters
+### Turning the release onto its own tree takes ONE parameter
 
 `grpcomm_low_radix_release` (bool, **default false**) is the switch: it alone
 decides whether a fence's release leaves the routing tree. Off, every release
 goes down the routing tree and none of the derived-tree code below runs.
 
-`rml_base_radix2` (int, **defaults to `rml_base_radix`**) only gives the
-release tree its shape, and is not consulted at all while the switch is off.
+`rml_base_radix2` (int, **default 4**) only gives the release tree its shape,
+and is not consulted at all while the switch is off. Four is where the cost
+model puts the optimum for every payload past the point at which a copy's
+bandwidth overtakes its thread-divided software cost, which is the only kind
+of payload this tree ever carries — see
+[`two-radix-release.rst`](../../docs/plans/scalable_collectives/two-radix-release.rst),
+"Where does the release radix come from at scale".
 
-Setting the switch and leaving the radix alone does nothing useful, and it is
-the obvious mistake: at equal radices the release tree *is* the routing tree,
-identical parent and children for every rank and every failure pattern
+Setting the two to the SAME value does nothing useful, and it used to be the
+obvious mistake because that is what leaving the radix alone gave you: at
+equal radices the release tree *is* the routing tree, identical parent and
+children for every rank and every failure pattern
 (`test_release_tree_matches_routing` in `test/unit/rml`). The master emits the
-`release-radix-noop` help topic for that combination and carries on. Note
+`release-radix-noop` help topic for that combination and carries on. It is
+still reachable — by setting `rml_base_radix` to 4, or `rml_base_radix2` to
+64 — which is why the diagnostic stays. Note
 which way round the two want to be: the rollup wants a **wide** tree (a
 gathering daemon receives r messages and sends one aggregate, so width is
 free) and the release wants a **narrow** one (a broadcasting daemon receives

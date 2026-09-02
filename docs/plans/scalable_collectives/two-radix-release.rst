@@ -413,10 +413,141 @@ Open questions
    done, and the *payload* over participants only.  The notice is O(1)
    against the payload's ``D``, so the saving survives and the invariant
    holds.  Not worth building until a subset-fence workload asks for it.
-#. **Where does the release radix come from at scale?**  A fixed 3 is the
-   cost model's answer for a large DVM and is plainly wrong for a small one,
-   where the extra depth buys nothing.  A rule of thumb wants data we do not
-   have.
+#. **Where does the release radix come from at scale?**
+   **Answered: from the payload, through one ratio - and the answer is a
+   step rather than a curve, which is why a constant is the right shape for
+   it after all.  The number is 4.**
+
+   Write ``N`` for the daemon count, ``M`` for the bytes on the wire,
+   ``alpha`` for a hop's latency - the time from a daemon holding the payload
+   to its first byte going back out - ``c`` for the software cost of *one*
+   forwarded copy, ``B`` for one link's bandwidth, and ``t`` for
+   ``prte_num_worker_threads``.  A daemon at radix ``r`` sends ``r`` copies;
+   the tree is ``ceil(log_r N)`` deep; and the last daemon at the bottom
+   waits for all of it:
+
+   .. code-block:: text
+
+       T(r) = ceil(log_r N) * ( alpha  +  ceil(r/t) * c  +  r * M/B )
+
+   The two fanout terms are there separately because they parallelise
+   differently, and that turns out to be the whole answer.  The **software**
+   cost of a copy is spread across the worker pool - the OOB does its
+   ``writev`` on ``peer->evbase``, and the pool hands out ``t`` bases in
+   rotation - so ``r`` copies cost ``ceil(r/t)`` of them.  The **wire** cost
+   is not: ``r`` copies of ``M`` bytes cross one NIC whatever thread issued
+   them.  So fanout is nearly free until the wire term per copy overtakes the
+   thread-divided software term, and ruinous afterwards.  The crossover is
+   just those two being equal:
+
+   .. code-block:: text
+
+       M* = B * c / t
+
+   Below ``M*`` the depth term dominates and a *high* radix is right.  Above
+   it every copy is bandwidth, and ``r`` multiplies it while only
+   ``log_r N`` divides the depth - so the optimum falls to a small constant
+   and **stays there for every larger payload**.  Minimising the expression
+   above over ``r`` in ``[2, N-1]``, at ``alpha = 100 us``, ``c = 25 us``
+   (measured, below), ``t = 8`` and a 10 GbE link (so ``M* = 3.9 KB``):
+
+   ============  =========  ===========  =============  =============
+   payload       N = 128    N = 1024     N = 10000      cost of r=64
+   ============  =========  ===========  =============  =============
+   barrier       12         32           22             1.5 - 1.7x
+   10 KB         12         6            7              ~2x
+   100 KB        6          4            5              4.4 - 4.7x
+   10 MB         2          4            3              6.4 - 7.1x
+   256 MB        2          4            3              6.4 - 7.1x
+   ============  =========  ===========  =============  =============
+
+   Three things fall out of that table, and each settles something.
+
+   **The optimum barely depends on N.**  Four orders of magnitude of DVM
+   size move it between 2 and 6 once the payload is past ``M*``.  It is not a
+   function of scale, so it does not want a rule that reads the scale: the
+   question "where does it come from at scale" has the answer "not from the
+   scale".  What was right in the original worry - that a fixed radix is
+   wrong for a *small* DVM - is real but narrow, and it is handled by the
+   clamp rather than by a rule: below ``N = 4`` the flat tree is already
+   optimal because ``r`` is capped at ``N-1``, and it is beaten by 1.17x at
+   ``N = 4``, 2.4x at 16 and 53x at 1024.
+
+   **The number is 4.**  Across every row past the crossover the optimum is
+   2, 3, 4 or 5, and 4 is within a few percent of the best of them
+   everywhere.  There is nothing to tune and no table to carry.
+
+   **And the tag-based selection already in the code is exactly right.**
+   ``prte_grpcomm_release_topology()`` moves the *fence* release to the low
+   radix and leaves the group's alone, on the argument that the operations
+   differ in what they carry and a byte threshold cannot express that.  The
+   model agrees for a better reason than the one given: a fence release is
+   the whole modex, always far past ``M*``, and a group release is small,
+   always far below it.  The tag is a reliable proxy for which side of ``M*``
+   the payload sits on, and the two regimes want genuinely different radices
+   rather than different points on a curve.
+
+   **Why nobody has noticed the default is wrong.**  Radix 64 costs only
+   1.5 - 1.7x on a barrier and 4.4 - 7.1x on a real modex release.  The
+   operations a DVM performs constantly are the small ones, so the penalty
+   that shows up in ordinary use is the small one, and the large one appears
+   only in the operation nobody profiles.
+
+   **What ``c`` actually is, measured.**  ``grpcomm_enable_timing``'s
+   ``started``-to-``completed`` span prices a release directly, with no fence
+   and no client around it.  Taken on ``contrib/dockerswarm``, flat radix (so
+   the tree is one level and the span is ``alpha' + (N-1)*c`` by
+   construction), a bare barrier's release, 15 independent jobs at each of
+   ``N = 2, 4, 6, 8, 10``:
+
+   .. code-block:: text
+
+       median of 15:   T =  179 us  +  129 us * (N-1)
+       minimum of 15:  T =  235 us  +   25 us * (N-1)
+
+   The median's slope is the ten containers contending for eight cores; the
+   minimum's is the closest this harness comes to an uncontended copy.  So
+   ``c`` is about **25 us** and the broadcast's fixed floor about **200 us**,
+   in a debug build, on loopback, with the acknowledgement tree's return
+   included in both.
+
+   That floor is worth noticing on its own.  The barrier fit recorded
+   earlier in this document - ``165 us + 40 us * (N-1)`` end to end - was
+   read as a client-to-server-to-daemon round trip that "no topology
+   touches".  It is not: **the release broadcast by itself, with no client in
+   the picture at all, already costs ~200 us fixed and ~25 us a daemon.**
+   Both of that fit's terms are substantially the broadcast's own, which
+   makes them ours rather than PMIx's, and makes them things a topology
+   change does touch.
+
+   **What is still not measured.**  ``alpha``, and ``c`` and ``B`` on
+   anything but a shared-kernel container swarm.  The *ordering* survives a
+   wide range of them, which is the reason to publish a number now: sweeping
+   ``(alpha, c)`` from ``(150, 40)`` to ``(20, 5)`` microseconds - an eight-
+   fold change in both - moves ``r*`` between 3 and 5 for every payload past
+   10 KB and leaves radix 64 costing 6.1x to 6.4x the optimum throughout.
+   Reaching an optimum of 64 needs a hop's latency to be something like 128
+   times the cost of a copy, which is not a machine.  What the constants do
+   move is ``M*``, which scales directly with ``c`` and inversely with ``t``:
+   between those same two pairs it runs from 6.2 KB down to 780 B.  Where the
+   step sits is a measurement; which side of it a modex sits on is not in
+   doubt.
+
+   It is also a much cheaper measurement than the radix sweep it replaces.
+   Fitting ``T = alpha + (N-1) * c`` to a *flat* release over increasing
+   ``N`` gives both constants from one curve, and ``B`` comes from the same
+   curve repeated at a second payload - no sweep over radices, and no DVM
+   cycle per radix.  ``contrib/scaling/cluster-sweep.sh`` should be asking
+   for those three numbers rather than for a ranking of radices, and the
+   ``completed`` stamp exists so that it can: the span it closes is measured
+   on the master's own clock, which is the only one a real cluster has.
+
+   **The coupling worth recording.**  ``M*`` has ``t`` in the denominator,
+   so the worker pool and the release radix are one question, not two.
+   Raising ``prte_num_worker_threads`` moves the crossover *down* - more
+   threads make software fanout cheaper, so the payload at which bandwidth
+   takes over is smaller, and the low radix becomes right sooner.  Any future
+   measurement of one of them has to record the other.
 #. **Does the group collective's release want the same treatment?**
    **Answered: it gets the mechanism for free, and should keep the tree's
    radix.**
