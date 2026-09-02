@@ -110,6 +110,15 @@ typedef struct {
     // replay it to our children. This is because our completion information
     // for older ops is invalid when our subtree grows
     bool replay_pending_parent;
+    /* Who last spoke to us about this op - the daemon that forwarded it, or
+     * that re-polled us for an ack.  It is who we answer, in preference to
+     * whoever our own derivation currently calls our parent: see send_ack_to. */
+    pmix_rank_t upstream;
+    /* Held because the daemon that forwarded it had seen departures we had
+     * not, so our own derivation of this tree is behind the one it was sent
+     * under.  Cleared when the news arrives - see the parking commentary in
+     * prte_grpcomm_xcast_recv. */
+    bool awaiting_news;
     // # children at time of (re)start
     size_t nexpected;
     // # children confirmed completed
@@ -155,7 +164,7 @@ static void forward_lost(int status, pmix_proc_t *peer,
 // Locally process the message being broadcast, if not already done
 static void process_msg(op_t *op);
 // Ack that myself and my full subtree have received this message
-static void send_ack(signature_t* sig, pmix_rank_t ack_id);
+static void send_ack_to(signature_t* sig, pmix_rank_t ack_id, pmix_rank_t up);
 // Request an ack after a failure without resending full user message
 static void request_ack(pmix_rank_t from, signature_t* sig, pmix_rank_t ack_id);
 // Remove local tracking and ack to parent
@@ -205,15 +214,21 @@ int prte_grpcomm_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
  *
  * This is the single seam every release goes through, which is why the choice
  * lives here rather than at each of the four call sites. */
-int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
-                                      pmix_data_buffer_t *msg)
+prte_grpcomm_topology_t prte_grpcomm_release_topology(prte_rml_tag_t tag)
 {
     if (prte_grpcomm_globals.low_radix_release &&
         PRTE_RML_TAG_FENCE_RELEASE == tag) {
-        return prte_grpcomm_xcast_topo(tag, msg, PRTE_GRPCOMM_TOPO_RELEASE,
-                                       NULL, NULL);
+        return PRTE_GRPCOMM_TOPO_RELEASE;
     }
-    return prte_grpcomm_xcast(tag, msg);
+    return PRTE_GRPCOMM_TOPO_ROUTING;
+}
+
+int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
+                                      pmix_data_buffer_t *msg)
+{
+    return prte_grpcomm_xcast_topo(tag, msg,
+                                   prte_grpcomm_release_topology(tag),
+                                   NULL, NULL);
 }
 
 int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
@@ -369,7 +384,15 @@ void prte_grpcomm_xcast_recv(
                          (int) buffer->bytes_used));
 
     signature_t sig;
+    uint32_t sender_version;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
+    {
+        int32_t cnt = 1;
+        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &sender_version,
+                                             &cnt, PMIX_UINT32)) {
+            return;
+        }
+    }
 
     /* Ignore messages from old parents - but "parent" is a question about the
      * tree this broadcast is travelling, which is why the signature has to be
@@ -377,7 +400,30 @@ void prte_grpcomm_xcast_recv(
      * tree's parent, and on a routing tree of a different radix that daemon is
      * a sibling or a cousin rather than a parent. Screening on the routing
      * parent would discard every one of them. */
-    if(!PRTE_PROC_IS_MASTER && sender->rank != topo_parent(sig.topology)){
+    if (!PRTE_PROC_IS_MASTER &&
+        PRTE_GRPCOMM_TOPO_ROUTING == sig.topology &&
+        sender->rank != topo_parent(sig.topology)) {
+        /* An old parent's forward, on the tree where "old" is a question this
+         * daemon can answer.  The repair notice travels this tree, so by the
+         * time a new parent relays anything we have already processed the
+         * notice that made it our parent - the screen can only ever be
+         * rejecting a genuinely superseded message.
+         *
+         * On a derived tree that reasoning does not hold and the screen is
+         * actively wrong: every daemon recomputes its own shape when the
+         * notice reaches it, and a daemon that has repaired can replay to a
+         * child that has not.  The child then reads a forward from its new
+         * parent as coming from a stranger and discards it, and since the
+         * whole point of the replay is to reach daemons whose relay died, it
+         * discards the one message that would have released it.  That was
+         * exactly the failure: a fence released on the low-radix tree hung
+         * three daemons behind a killed relay, each of them having received
+         * and silently dropped the repair.
+         *
+         * Accepting it costs nothing.  A duplicate forward is already
+         * idempotent - op_id decides, and an op we hold or have completed is
+         * recognized either way - and the ack goes back to the sender rather
+         * than to our own idea of a parent. */
         return;
     }
 
@@ -409,6 +455,32 @@ void prte_grpcomm_xcast_recv(
             return;
         }
         sig.op_id = ++TREE_OF(sig).op_id_inited;
+        /* Absolute microseconds, so a broadcast's coverage can be measured
+         * across daemons rather than only at one.  Every daemon prints the
+         * same stamp when it processes the payload (process_msg), and the
+         * span from this line to the last of those is how long the broadcast
+         * took to reach the whole DVM - which is the quantity a change to the
+         * fanout tree is about, and the one an end-to-end fence cannot
+         * resolve because the rollup's noise is larger than the effect.
+         *
+         * It is only comparable where the clocks are: fine on a container
+         * swarm sharing one kernel, meaningless across a real cluster without
+         * a synchronized clock. */
+        if (prte_grpcomm_globals.enable_timing) {
+            struct timeval tnow;
+            gettimeofday(&tnow, NULL);
+            /* No payload tag here on purpose: `tag` at this point is the
+             * tag the xcast message ARRIVED on (PRTE_RML_TAG_XCAST), not the
+             * one the payload will be delivered at - that is inside the
+             * message and is not unpacked until below.  The processed lines
+             * carry the real one, and (tree, op_id) pairs the two. */
+            pmix_output(0, "%s grpcomm:xcast:timing started op_id %lu "
+                        "tree %d at %ld.%06ld",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (unsigned long) sig.op_id,
+                        (int) sig.topology, (long) tnow.tv_sec,
+                        (long) tnow.tv_usec);
+        }
     }
     if(!sig.op_id){
         PRTE_ERROR_LOG( PRTE_ERR_NOT_INITIALIZED );
@@ -440,7 +512,7 @@ void prte_grpcomm_xcast_recv(
     if(PMIX_SUCCESS != unpack_ack_id(buffer, &ack_id)) return;
 
     if(complete) {
-        send_ack(&sig, ack_id);
+        send_ack_to(&sig, ack_id, sender->rank);
         return;
     }
 
@@ -470,6 +542,69 @@ void prte_grpcomm_xcast_recv(
     }
 
     op->ack_id_up = ack_id;
+    op->upstream = sender->rank;
+
+    /* Park a forward that was derived from news we have not heard.
+     *
+     * On a derived tree the shape is a function of the live set, so a daemon
+     * that has recorded more departures than we have computed this forward
+     * from a set ours does not yet include - and everything we would do with
+     * it next depends on our own derivation.  Above all the child count: a
+     * daemon that has just been promoted into a dead relay's slot still reads
+     * itself as a leaf until the news reaches it, so it would answer the
+     * repair by retiring the operation as complete, having forwarded it
+     * nowhere.  The subtree the repair existed to reach is then stranded with
+     * nobody holding the payload, which is exactly how this failed: five of
+     * seven daemons released, and the two below the promoted one waiting for
+     * a broadcast that had already been declared delivered.
+     *
+     * So take the payload and deliver it locally - that part does not depend
+     * on the tree at all, and it is what releases this daemon's own clients -
+     * but do not derive anything until the news arrives.  nexpected is left
+     * at its constructed SIZE_MAX, so the operation cannot satisfy op_ready()
+     * and retire while parked; release_tree_fault() picks it up when the
+     * departure notice lands, and forwards it under the shape both ends then
+     * agree on.
+     *
+     * Two things have to be true before we hold anything, and the second is
+     * what keeps this from being a hazard of its own.  The sender must be
+     * ahead of us, and the forward must have come from a daemon our own
+     * derivation does not call our parent - concrete local evidence that the
+     * two views disagree, rather than an inference from a number.  In the
+     * ordinary case a forward always arrives from our parent, so ordinary
+     * traffic can never be parked however the versions happen to sit; and the
+     * case this exists for always fails that test, because a daemon promoted
+     * into a dead relay's slot is by definition being addressed by a daemon
+     * that is not its parent yet.
+     *
+     * That matters because the version is a count of events learned, not an
+     * agreed number.  It is monotone, which is all the comparison needs, but
+     * daemons can legitimately hold different counts for a while - a grown
+     * daemon is seeded from the departed set it was launched with, and a
+     * revival moves the count on the daemons that have processed it first.
+     * Requiring the second signal means such a skew costs nothing.
+     *
+     * The routing tree is exempt because it does not have the problem: its
+     * repair notice travels the routing tree itself, so a daemon has always
+     * processed the notice that gave it a new parent before anything that
+     * parent relays afterwards can arrive. */
+    if (PRTE_GRPCOMM_TOPO_ROUTING != sig.topology &&
+        sender_version > prte_rml_tree_version() &&
+        sender->rank != topo_parent(sig.topology)) {
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:xcast holding op_id %lu on tree %d: "
+                             "%s is at tree version %u, we are at %u",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (unsigned long) sig.op_id, (int) sig.topology,
+                             PRTE_NAME_PRINT(sender),
+                             (unsigned) sender_version,
+                             (unsigned) prte_rml_tree_version()));
+        op->awaiting_news = true;
+        process_msg(op);
+        return;
+    }
+    op->awaiting_news = false;
+
     if(assume_incomplete){
         op->processed = true;
         op->replay_pending_parent = true;
@@ -545,17 +680,23 @@ void prte_grpcomm_xcast_ack(
     op_t* op = find_op(&sig);
 
     if(is_request){
-        if(sender->rank != topo_parent(sig.topology)){
+        if (PRTE_GRPCOMM_TOPO_ROUTING == sig.topology &&
+            sender->rank != topo_parent(sig.topology)) {
             // Old message, or one from a daemon that is our parent in some
-            // other tree than the one this op travels
+            // other tree than the one this op travels. Only asked of the
+            // routing tree, for the reason given at the same screen in
+            // prte_grpcomm_xcast_recv: on a derived tree the two ends repair
+            // independently, so "not my parent" may only mean "I have not
+            // heard yet", and refusing the poll strands the op.
             return;
         }
         if(NULL != op){
-            // We'll send with the new id once we're done
+            // We'll send with the new id once we're done, to whoever asked
             op->ack_id_up = ack_id;
+            op->upstream = sender->rank;
         } else if(sig.op_id <= TREE_OF(sig).op_id_completed){
             // We've finished this one, ack now
-            send_ack(&sig, ack_id);
+            send_ack_to(&sig, ack_id, sender->rank);
         } else {
             // We haven't seen this xcast before
             PRTE_ERROR_LOG( PRTE_ERR_OUT_OF_ORDER_MSG );
@@ -572,6 +713,79 @@ void prte_grpcomm_xcast_ack(
     }
 }
 
+/* Repair an op travelling a tree other than the routing one.
+ *
+ * The routing tree is repaired incrementally and the RML hands us a
+ * description of what moved - who was promoted, which children changed, what
+ * the previous set was.  None of that describes a derived tree, which is not
+ * repaired at all: after a death every daemon simply computes a different
+ * answer from a live set they all hold in step.  There is no "previous
+ * children" to diff against, and inventing one would mean caching a second
+ * tree only so that a fault could compare it.
+ *
+ * So do not diff.  Every daemon still holding this op forwards it to whoever
+ * its children are now, and the asymmetry the design turns on does the rest:
+ * a duplicate is harmless - the op id decides, so a daemon that holds this op
+ * or has already completed it recognizes it either way - while a release that
+ * never arrives hangs a fence for good.  Replaying too much costs a message on
+ * a path that has just lost a daemon; replaying too little costs the job.
+ *
+ * Note that nobody waits.  The routing tree makes a *promoted* daemon defer
+ * its replay until its own parent has replayed, because its subtree may have
+ * grown to include daemons that never saw this op, and sending them op N+1
+ * before op N breaks the ordering finish_op enforces.  Here that deferral is
+ * both unnecessary and harmful.  Unnecessary because an op a child is missing
+ * is by definition still in flight - the root cannot retire one until every
+ * daemon has acked it - so it is held by some daemon that is replaying it in
+ * this same pass, and the list is walked in op order.  Harmful because a
+ * daemon deferring to a parent that has already replayed waits for a second
+ * replay that is never coming, and strands its whole subtree.  That was
+ * measured rather than reasoned: relaxing only the parent screen took the
+ * count from four daemons released to five - the one that received the replay
+ * directly - and left the two below it waiting on it. */
+static void release_tree_fault(op_t* op)
+{
+    size_t n = topo_n_children(op->sig.topology);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:xcast repairing %sop_id %lu on tree %d: "
+                         "%d children now, parent %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         op->awaiting_news ? "held " : "",
+                         (unsigned long) op->sig.op_id,
+                         (int) op->sig.topology, (int) n,
+                         PRTE_VPID_PRINT(topo_parent(op->sig.topology))));
+
+    /* Note what is deliberately NOT done here: the ack id we hold is not
+     * invalidated.  The block above does that for the routing tree, so that a
+     * new parent is not answered under a round it never opened - but it is
+     * only safe where somebody is going to ask again, and the empty-subtree
+     * case below answers immediately and then retires the op.  An ack under
+     * the last id we were actually given is at worst ignored; one under
+     * PMIX_RANK_INVALID is ignored for certain, and there is no second
+     * chance.  Every op that survives this call is about to be forwarded, and
+     * the forward it draws in reply carries a fresh id with it. */
+    if (0 == n) {
+        /* nothing below us on this tree any more - our subtree is complete
+         * by virtue of being empty, which is what the routing path does with
+         * the same discovery */
+        finish_op(op);
+        return;
+    }
+
+    op->nexpected = n;
+    op->nreported = 0;
+    /* we cannot tell a surviving child's ack from a dead one's, so nothing
+     * counted before this point can be trusted - start a fresh round */
+    op->ack_id_down++;
+    op->replay_pending_parent = false;
+    /* the news we were held for */
+    op->awaiting_news = false;
+
+    tree_whole_forward(op);
+}
+
+
 void prte_grpcomm_xcast_fault_handler(
     const prte_rml_recovery_status_t* status
 ) {
@@ -579,14 +793,29 @@ void prte_grpcomm_xcast_fault_handler(
     // is how we get the global scope notifications in the first place
     if(status->scope != PRTE_RML_FAULT_SCOPE_LOCAL) return;
 
-    if(status->promoted){
-        /* A promotion grows our subtree in EVERY tree we relay on, so the
-         * completion information we hold is stale in each of them - this is
-         * per-daemon news, not per-op. */
-        for(int t = 0; t < PRTE_GRPCOMM_TOPO_COUNT; t++){
-            XCAST.tree[t].op_id_completed_at_promotion =
-                XCAST.tree[t].op_id_completed;
+    /* Our subtree may have grown, and what we hold about it is then stale:
+     * an op we completed and released was completed by the daemons that were
+     * below us *then*, which says nothing about one that has just arrived.
+     * Marking the completions as suspect is what makes a later replay of such
+     * an op get re-inserted and forwarded on (assume_incomplete, in the recv
+     * path) rather than answered with a bare ack that ends the cascade one
+     * daemon short of the one still waiting.
+     *
+     * On the routing tree we are told when that happened: the RML repairs it
+     * incrementally and reports the promotion.  On a derived tree nobody
+     * reports anything - every daemon simply recomputes a different answer
+     * from the new live set - so there is no promotion to be told about, and
+     * the honest reading of any death is that our subtree there may have
+     * grown.  Do not be tempted to narrow this by comparing child sets: the
+     * daemon that needs the replay is not our child but somewhere below one,
+     * and our own children may be identical while the tree beneath them is
+     * not. */
+    for (int t = 0; t < PRTE_GRPCOMM_TOPO_COUNT; t++) {
+        if (PRTE_GRPCOMM_TOPO_ROUTING == t && !status->promoted) {
+            continue;
         }
+        XCAST.tree[t].op_id_completed_at_promotion =
+            XCAST.tree[t].op_id_completed;
     }
     if(status->parent_changed || status->promoted || status->demoted){
         // Avoid confusing new parent by accidentally acking with
@@ -596,6 +825,24 @@ void prte_grpcomm_xcast_fault_handler(
             op->ack_id_up = PMIX_RANK_INVALID;
         }
     }
+    /* Every tree this daemon relays on has just changed shape, not only the
+     * routing one - the release tree is derived from the live daemon set, so
+     * a death reshapes it too, and the ops travelling it need the same
+     * treatment on their own terms.  They cannot take the branch below: it
+     * reads the routing tree's child count, diffs against the routing tree's
+     * previous children, and forwards to them.  Applied to an op that is not
+     * travelling the routing tree, every one of those is the wrong tree. */
+    {
+        op_t* op;
+        op_t* next_op;
+        PMIX_LIST_FOREACH_SAFE(op, next_op, &XCAST.ops, op_t){
+            if (PRTE_GRPCOMM_TOPO_ROUTING == op->sig.topology) {
+                continue;
+            }
+            release_tree_fault(op);
+        }
+    }
+
     if(status->children_changed || status->promoted || status->demoted){
         const pmix_rank_t* prev_children =
             (const pmix_rank_t*) status->prev_children.array;
@@ -605,6 +852,9 @@ void prte_grpcomm_xcast_fault_handler(
         op_t* op;
         op_t* next_op;
         PMIX_LIST_FOREACH_SAFE(op, next_op, &XCAST.ops, op_t){
+            if (PRTE_GRPCOMM_TOPO_ROUTING != op->sig.topology) {
+                continue;
+            }
             if(0 == prte_rml_base.n_children){
                 /* Under tree_whole both tests are constants - every op holds
                  * its payload and nothing can be blocked - so this is the
@@ -749,15 +999,27 @@ static void send_ack_msg(
     }
 }
 
-static void send_ack(signature_t* sig, pmix_rank_t ack_id){
-    /* Up the tree this op travelled, not up the routing tree. An ack is a
-     * statement about coverage of one topology, and it is only meaningful to
-     * the daemon that is waiting on it in that same topology. */
-    pmix_rank_t up = topo_parent(sig->topology);
+/* Answer whoever asked.
+ *
+ * An ack is a reply to a particular forward or poll, so the daemon waiting for
+ * it is the one that sent that message - not whoever our own derivation calls
+ * our parent right now.  On the routing tree the two are the same, because the
+ * tree is repaired by a notice travelling that same tree and a daemon's view
+ * therefore changes before anything it relays afterwards can arrive.  A
+ * derived tree has no such ordering: every daemon recomputes it independently
+ * when the death notice reaches it, so a repaired parent can replay to a child
+ * that has not yet heard, and the two disagree for as long as that takes.
+ *
+ * Answering the sender needs neither side to be up to date.  Answering the
+ * wrong daemon costs nothing - it holds no op under that ack id and drops the
+ * message - while failing to answer the right one hangs the broadcast, so
+ * where the two rules differ this is the safe direction. */
+static void send_ack_to(signature_t* sig, pmix_rank_t ack_id, pmix_rank_t up){
     if(PRTE_PROC_IS_MASTER) return;
     if(PMIX_RANK_INVALID == up) return;
     send_ack_msg(sig, ack_id, false, up);
 }
+
 
 static void request_ack(pmix_rank_t from, signature_t* sig, pmix_rank_t ack_id){
     send_ack_msg(sig, ack_id, true, from);
@@ -788,7 +1050,9 @@ static void drive_completions(void){
 
 
 static void finish_op(op_t* op) {
-    send_ack(&op->sig, op->ack_id_up);
+    send_ack_to(&op->sig, op->ack_id_up,
+                PMIX_RANK_INVALID != op->upstream
+                    ? op->upstream : topo_parent(op->sig.topology));
     pmix_list_remove_item(&XCAST.ops, &op->super);
     if(op->sig.op_id > TREE_OF(op->sig).op_id_completed_at_promotion){
         if(op->sig.op_id != TREE_OF(op->sig).op_id_completed+1){
@@ -887,14 +1151,22 @@ static int unpack_bool(pmix_data_buffer_t* buffer, bool* boolean){
  * receiver tells it from a forward by the op-id, which is zero here and
  * assigned by the controller. */
 static int pack_relay_msg(pmix_data_buffer_t* buffer, op_t* op){
+    uint32_t version = prte_rml_tree_version();
     int rc = pack_sig(buffer, &op->sig);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buffer, &version, 1, PMIX_UINT32);
+    }
     if(PMIX_SUCCESS == rc) rc = pack_ack_id(buffer, &op->ack_id_down);
     if(PMIX_SUCCESS == rc) rc = pack_msg(buffer, op);
     return rc;
 }
 
 static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
+    uint32_t version = prte_rml_tree_version();
     int rc = pack_sig(buffer, &op->sig);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buffer, &version, 1, PMIX_UINT32);
+    }
     if(PMIX_SUCCESS == rc) rc = pack_ack_id(buffer, &op->ack_id_down);
     if(PMIX_SUCCESS == rc) rc = pack_msg(buffer, op);
     return rc;
@@ -1059,6 +1331,57 @@ static void tree_whole_forward(op_t* op){
     if (owned) { free(children); }
 }
 
+/* Fault injection: hold a forward back so the op is still travelling its tree
+ * when a daemon is killed underneath it.  See grpcomm_internal.h for why this
+ * exists and why it refuses the routing tree. */
+typedef struct {
+    pmix_event_t ev;
+    op_t *op;
+} xcast_delay_caddy_t;
+
+static bool forward_should_delay(prte_grpcomm_topology_t topo)
+{
+    if (0 >= prte_grpcomm_globals.xcast_delay_ms) {
+        return false;
+    }
+    if (PRTE_GRPCOMM_TOPO_ROUTING == topo) {
+        return false;
+    }
+    if (0 > prte_grpcomm_globals.xcast_delay_vpid) {
+        return true;
+    }
+    return ((pmix_rank_t) prte_grpcomm_globals.xcast_delay_vpid
+            == PRTE_PROC_MY_NAME->rank);
+}
+
+static void forward_delay_fire(int sd, short args, void *cbdata)
+{
+    xcast_delay_caddy_t *dc = (xcast_delay_caddy_t *) cbdata;
+    op_t *op;
+    bool live = false;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    /* The op may have retired while we sat on it - the fault handler retires
+     * one whose subtree has emptied - and forwarding a payload out of a
+     * retired op would put a broadcast on the tree that nothing is waiting
+     * for.  We hold a reference, so the object is ours to read either way;
+     * what has to be checked is whether it is still the live op. */
+    PMIX_LIST_FOREACH(op, &XCAST.ops, op_t){
+        if (op == dc->op) {
+            live = true;
+            break;
+        }
+    }
+    if (live) {
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:xcast forwarding the held-back op",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        tree_whole_forward(dc->op);
+    }
+    PMIX_RELEASE(dc->op);
+    free(dc);
+}
+
 static void forward_op(op_t* op){
     /* The daemon job object can be gone by the time a broadcast is being
      * forwarded - teardown retires it while the last xcasts (the halt, the
@@ -1078,6 +1401,29 @@ static void forward_op(op_t* op){
     op->replay_pending_parent = false;
     op->nexpected = topo_n_children(op->sig.topology);
     op->nreported = 0;
+
+    if (forward_should_delay(op->sig.topology)) {
+        xcast_delay_caddy_t *dc = (xcast_delay_caddy_t *) calloc(1, sizeof(*dc));
+        struct timeval tv;
+
+        if (NULL != dc) {
+            /* nexpected is already set, so the op cannot retire while we hold
+             * the payload: it is waiting on children that have not been sent
+             * to yet, which is exactly the state being manufactured */
+            PMIX_RETAIN(op);
+            dc->op = op;
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                                 "%s grpcomm:xcast holding its forward back %d ms",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 prte_grpcomm_globals.xcast_delay_ms));
+            tv.tv_sec = prte_grpcomm_globals.xcast_delay_ms / 1000;
+            tv.tv_usec = (prte_grpcomm_globals.xcast_delay_ms % 1000) * 1000;
+            prte_event_evtimer_set(prte_event_base, &dc->ev, forward_delay_fire, dc);
+            PMIX_POST_OBJECT(dc);
+            prte_event_evtimer_add(&dc->ev, &tv);
+            return;
+        }
+    }
 
     tree_whole_forward(op);
 }
@@ -1314,6 +1660,21 @@ static void process_msg(op_t* op){
     if(op->processed) return;
     op->processed = true;
 
+    /* The other end of the coverage measurement started in
+     * prte_grpcomm_xcast_recv - this is the moment this daemon actually has
+     * the payload, which for a fence release is the moment its clients are
+     * about to be let go. */
+    if (prte_grpcomm_globals.enable_timing) {
+        struct timeval tnow;
+        gettimeofday(&tnow, NULL);
+        pmix_output(0, "%s grpcomm:xcast:timing processed op_id %lu tag %u "
+                    "tree %d at %ld.%06ld",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    (unsigned long) op->sig.op_id, (unsigned) op->msg_tag,
+                    (int) op->sig.topology, (long) tnow.tv_sec,
+                    (long) tnow.tv_usec);
+    }
+
     pmix_data_buffer_t *msg = PMIx_Data_buffer_create();
     if(op->msg_compressed){
         pmix_byte_object_t decomp_msg = PMIX_BYTE_OBJECT_STATIC_INIT;
@@ -1372,6 +1733,8 @@ static void op_con(op_t* p)
 
     p->processed = false;
     p->replay_pending_parent = false;
+    p->upstream = PMIX_RANK_INVALID;
+    p->awaiting_news = false;
 
     p->nreported = 0;
     /* "not yet computed" - forward_op() sets the real count. Deliberately the

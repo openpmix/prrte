@@ -38,6 +38,8 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/util/pmix_output.h"
 
+#include "src/util/prte_show_help.h"
+
 #include "grpcomm_internal.h"
 
 prte_grpcomm_globals_t prte_grpcomm_globals = {
@@ -138,6 +140,30 @@ void prte_grpcomm_register(void)
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_grpcomm_globals.fence_delay_vpid);
 
+    /* And the third: hold the forward itself back, so an operation is still
+     * travelling its tree when a daemon is killed underneath it.  Its two
+     * siblings both act after the forward has gone, which cannot reach the
+     * fault path at all - on eight daemons a release is over in microseconds.
+     *
+     * Non-routing trees only.  Stalling the routing tree would hold up the
+     * daemon command channel rather than injecting a fault. */
+    prte_grpcomm_globals.xcast_delay_ms = 0;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "xcast_delay_ms",
+                               "Fault injection: hold a daemon's forward of a "
+                               "broadcast on a non-routing tree back by this "
+                               "many milliseconds, so the operation stays in "
+                               "flight long enough for a daemon loss to be "
+                               "aimed at it (0 = off)",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.xcast_delay_ms);
+
+    prte_grpcomm_globals.xcast_delay_vpid = -1;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "xcast_delay_vpid",
+                               "Restrict grpcomm_xcast_delay_ms to the daemon "
+                               "with this vpid (-1 = every daemon)",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.xcast_delay_vpid);
+
     /* Send a fence's release down the low-radix tree instead of the routing
      * tree.  Off by default, and that is the point of shipping it at all: we
      * will not have data to choose a winner before release, so the tree we
@@ -157,6 +183,23 @@ void prte_grpcomm_register(void)
  */
 int prte_grpcomm_init(void)
 {
+    /* A release tree at the routing tree's own radix IS the routing tree -
+     * same parent, same children, for every rank and every failure pattern
+     * (test_release_tree_matches_routing pins it).  rml_base_radix2 defaults
+     * to rml_base_radix, so turning the release onto its own tree and setting
+     * nothing else is the easy mistake, and it is a silent one: the fence
+     * still works, it just does the identical fanout through the derived-tree
+     * path.  Say so rather than let somebody measure it and conclude the idea
+     * does not help.
+     *
+     * The master alone, because every daemon reads the same two parameters
+     * and would otherwise say it once each. */
+    if (PRTE_PROC_IS_MASTER && prte_grpcomm_globals.low_radix_release
+        && prte_rml_base.radix2 == prte_rml_base.radix) {
+        prte_show_help("help-prte-grpcomm.txt", "release-radix-noop", true,
+                       prte_rml_base.radix, prte_rml_base.radix2);
+    }
+
     /* setup the trackers */
     PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops,
                    prte_grpcomm_xcast_t);
