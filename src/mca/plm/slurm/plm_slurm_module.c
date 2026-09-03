@@ -349,16 +349,21 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* start one orted on each node */
     pmix_argv_append(&argc, &argv, "--ntasks-per-node=1");
 
-    if (!prte_get_attribute(&state->jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL) &&
-        !prte_get_attribute(&state->jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL) &&
-        !prte_elastic_mode) {
-        /* kill the job if any prteds die */
-        pmix_argv_append(&argc, &argv, "--kill-on-bad-exit");
-    } else {
-        /* don't kill if a node or prted dies */
-        pmix_argv_append(&argc, &argv, "--no-kill");
-        pmix_argv_append(&argc, &argv, "--kill-on-bad-exit=0");
-    }
+    /* Never let Slurm kill the step because one prted died.
+     *
+     * This is unconditional on purpose.  --kill-on-bad-exit tells srun to
+     * take down the WHOLE step when any one task exits non-zero, and --no-kill
+     * is what stops a single node's failure doing the same - so between them
+     * they decide whether losing one daemon costs us one daemon or all of the
+     * daemons that srun launched.  PRRTE decides what a lost daemon means
+     * (see errmgr/dvm, and the recoverable/continuous runtime options); the
+     * scheduler must not pre-empt that decision by killing the survivors.
+     *
+     * It matters far more now than it used to: a prted stays inside its step
+     * rather than daemonizing out of it, so these flags reach real, live
+     * daemons instead of a fork's parent that had already exited. */
+    pmix_argv_append(&argc, &argv, "--no-kill");
+    pmix_argv_append(&argc, &argv, "--kill-on-bad-exit=0");
 
     /* our daemons are not an MPI task */
     pmix_argv_append(&argc, &argv, "--mpi=none");
