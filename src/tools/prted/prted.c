@@ -354,10 +354,29 @@ int main(int argc, char *argv[])
                 prte_process_info.nodename);
     }
 
-    /* detach from controlling terminal
-     * otherwise, remain attached so output can get to us
+    /* Detach from the controlling terminal - but ONLY if our launcher said
+     * to.  Forking and calling setsid() leaves the process the launcher is
+     * tracking behind: our parent exits as soon as we signal we are up, and
+     * whether that is a favor or a fatal mistake depends entirely on who
+     * launched us.  plm/ssh wants it (the ssh session closes and its
+     * concurrency slot frees for the next group), and says so with
+     * --daemonize.  A resource manager does NOT: srun, lsb_launch and palsd
+     * each hand us a task slot and watch the process they started, so the
+     * detach tells the RM the task finished.  Under Slurm that ends the step,
+     * and slurmstepd then SIGKILLs everything still in the step's cgroup -
+     * which includes us, because setsid() escapes a process tree and not a
+     * cgroup.  Those launchers therefore withhold --daemonize and we stay put.
+     *
+     * A bootstrapped daemon has no launcher at all - it is started by hand
+     * or by a service manager on every node - so nothing is tracking it and
+     * it detaches as it always has.
+     *
+     * --leave-session-attached and --debug-daemons override in the other
+     * direction: they exist so the daemon's output reaches the user, and a
+     * fork to /dev/null would defeat them.
      */
-    if (!prte_leave_session_attached && !prte_debug_daemons_flag) {
+    if ((pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE) || prte_bootstrap_setup) &&
+        !prte_leave_session_attached && !prte_debug_daemons_flag) {
         if (0 > pipe(wait_pipe)) {
             return PRTE_ERROR;
         }
@@ -365,6 +384,14 @@ int main(int argc, char *argv[])
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
     } else {
+        if (!prte_leave_session_attached && !prte_debug_daemons_flag) {
+            /* we are staying in our launcher's process, but that is no reason
+             * to write on its terminal - take the half of the daemonization
+             * that only silences us */
+            if (PRTE_SUCCESS != prte_daemon_detach_io()) {
+                return PRTE_ERROR;
+            }
+        }
         // the daemon_init_callback fn already setsid, so don't
         // do it twice!
     #if defined(HAVE_SETSID)

@@ -33,13 +33,41 @@ schizo open/select/detect_proxy
 schizo->parse_cli(...)               <- SILENT: a daemon has no user to warn
 prte_ess_base_bootstrap()            <- bootstrap only: am I the controller?
 prte_register_params()
-daemonize (unless --leave-session-attached or --debug-daemons)
+daemonize -- ONLY on --daemonize, and not when debugging (see below)
 prte_init(MASTER or DAEMON)          <- the whole runtime
 [bind to prte_daemon_cores]
 register PRTE_RML_TAG_DAEMON recv    <- from here on we can be given orders
 check-in sequence (below)
 event loop
 ```
+
+- **A `prted` forks only when its launcher tells it to.** The fork +
+  `setsid()` in `prte_daemon_init_callback` leaves the launcher tracking
+  a process that exits the moment the real daemon is up, and whether that
+  is a favor or a fatal mistake depends entirely on who is doing the
+  tracking:
+  - `plm/ssh` **wants** it, and passes `--daemonize`. The ssh session
+    closes, and without tree spawn the concurrency slot frees so the next
+    group of daemons can go out.
+  - A resource manager does **not**. `srun`, `lsb_launch` and `palsd`
+    each hand the daemon a task slot and watch the process they started;
+    detaching from it tells the RM the task finished. Under Slurm that
+    ends the step, and `slurmstepd` then SIGKILLs whatever is left in the
+    step's cgroup — which includes the daemon, because `setsid()` escapes
+    a process tree and not a cgroup. `plm/slurm`, `plm/lsf` and
+    `plm/pals` therefore withhold `--daemonize`, and the daemon remains
+    the task. (This was
+    [issue #2757](https://github.com/openpmix/prrte/issues/2757): the
+    detach was unconditional and `--daemonize`, though `prted` accepts it,
+    was never read. It was survivable only for as long as a separate bug
+    left the fork's parent blocked forever, accidentally keeping the step
+    alive.)
+
+  Even when it does not fork, a non-debug `prted` still points its
+  stdin/stdout/stderr at `/dev/null` via `prte_daemon_detach_io()` — it
+  has no more business writing on the launcher's terminal than a
+  daemonized one does. `--leave-session-attached` and `--debug-daemons`
+  suppress both halves, which is the whole point of them.
 
 - **The pristine environment must be captured before we add to it.**
   `prte_launch_environ` is what every application process inherits; it is

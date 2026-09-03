@@ -724,11 +724,17 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     pmix_argv_append(&argc, &argv, final_cmd);
     free(final_cmd); /* done with this */
 
-    /* if we are not tree launching or debugging, tell the daemon
-     * to daemonize so we can launch the next group
+    /* Unless we are debugging, tell the daemon to daemonize: an ssh session
+     * held open for the daemon's whole life is one process per node on both
+     * ends and, without tree spawn, a concurrency slot we cannot get back to
+     * launch the next group.  prted forks only when it is told to (see
+     * src/tools/prted/AGENTS.md), so this flag is what makes it happen -
+     * which is exactly why the RM launchers, whose tracked task the daemon
+     * must remain, do not pass it.  Tree spawn wants the release just as much
+     * as a flat launch does; it simply had no concurrency reason to ask, and
+     * used to get the fork regardless.
      */
-    if (prte_mca_plm_ssh_component.no_tree_spawn &&
-        !prte_debug_daemons_flag &&
+    if (!prte_debug_daemons_flag &&
         !prte_debug_daemons_file_flag && !prte_leave_session_attached &&
         /* Daemonize when not using qrsh.  Or, if using qrsh, only
          * daemonize if told to by user with daemonize_qrsh flag. */

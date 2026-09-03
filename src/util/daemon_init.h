@@ -46,6 +46,22 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t child));
 
+/**
+ * Point stdin/stdout/stderr at /dev/null without forking.
+ *
+ * This is the second half of prte_daemon_init_callback - the half that
+ * detaches a daemon's *output* from whoever launched it - broken out so
+ * that a daemon which must NOT fork can still be silent.  A prted
+ * launched by a resource manager is exactly that case: it has to remain
+ * the process the RM is tracking (see src/tools/prted/AGENTS.md), but it
+ * has no more business writing on the launcher's terminal than a
+ * daemonized one does.
+ *
+ * @retval PRTE_SUCCESS the descriptors were redirected
+ * @retval PRTE_ERR_FATAL /dev/null could not be opened
+ */
+PRTE_EXPORT int prte_daemon_detach_io(void);
+
 END_C_DECLS
 
 static inline int prte_daemon_init(char *working_dir)
