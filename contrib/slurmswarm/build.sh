@@ -90,6 +90,13 @@ PMIX_REF="${PMIX_REF:-master}"          # baked-image PMIx branch
 PMIX_REPO="${PMIX_REPO:-https://github.com/openpmix/openpmix.git}"
 PMIX_SRC="${PMIX_SRC:-}"                # optional openpmix checkout to build
 SLURM_VERSION="${SLURM_VERSION:-}"      # override the image's baked SLURM release
+# Extra configure arguments for a PMIX_SRC build.  The reason this exists is
+# --enable-debug: PMIX_SRC is how an uncommitted PMIx change is tested here,
+# and the moment such a change needs debugging, valgrind and gdb have only
+# addresses to work with because the default build carries no symbols.  It is
+# part of the recorded configure arguments, so changing it forces the
+# reconfigure it needs.
+PMIX_CONFIG_ARGS="${PMIX_CONFIG_ARGS:-}"
 
 mode=linux
 distclean=auto                          # auto | always | never
@@ -240,6 +247,7 @@ build_linux() {
     docker run --rm \
         -v "$root":/prrte-src:ro \
         -v "$VOLUME":/opt/prte \
+        -e PMIX_CONFIG_ARGS="$PMIX_CONFIG_ARGS" \
         ${pmix_mount[@]+"${pmix_mount[@]}"} \
         "$IMAGE" bash -euo pipefail -c '
             jobs=$(nproc)
@@ -268,7 +276,7 @@ build_linux() {
                 PMIX_PREFIX=/opt/prte/pmix
                 echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
                 mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
-                pmix_args="--prefix=$PMIX_PREFIX"
+                pmix_args="--prefix=$PMIX_PREFIX ${PMIX_CONFIG_ARGS:-}"
                 if reconfigure_needed . "$pmix_args" /pmix-src; then
                     echo ">>>> (re)configuring PMIx: $pmix_args"
                     /pmix-src/configure $pmix_args
