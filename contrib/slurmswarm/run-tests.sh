@@ -244,6 +244,25 @@ preflight() {
     out=$(SQ 'sinfo --version' | tr -d '\r')
     [ -n "$out" ] && ok "SLURM answers: $out" \
                   || { bad "slurmctld is not answering on node1"; exit 2; }
+
+    # How SLURM tracks a step's processes decides which PRRTE bugs this suite
+    # can see at all, so it is reported here rather than left implicit.  Under
+    # proctrack/linuxproc a process that forks, setsid()s and orphans itself
+    # leaves the step's /proc parentage and outlives it; under proctrack/cgroup
+    # -- what every real cluster runs -- it cannot, and slurmstepd kills it
+    # with the rest of the cgroup once the last task exits.  See "Process
+    # tracking" in AGENTS.md.
+    PROCTRACK=$(SQ 'scontrol show config' \
+                | sed -n 's|^ProctrackType *= *proctrack/\([a-z]*\).*|\1|p' | tr -d ' \r')
+    case "$PROCTRACK" in
+        cgroup)
+            ok "process tracking: proctrack/cgroup -- a detached prted cannot outlive its step" ;;
+        linuxproc)
+            skp "process tracking: proctrack/linuxproc -- a process that escapes its parent outlives the step, so step-escape cases will skip; rerun with PRTE_SLURM_PROCTRACK=cgroup PRTE_SLURM_PRIVILEGED=true docker compose up -d --force-recreate" ;;
+        *)
+            skp "cannot determine ProctrackType from scontrol show config"
+            PROCTRACK=unknown ;;
+    esac
     # Sweep BEFORE asserting the cluster is idle.  Anything hand-driven leaves
     # an allocation behind -- that is what `slurm-alloc new` is for -- and a
     # suite that reported it as a failure would be red for a condition it is
@@ -698,21 +717,44 @@ test_plm() {
         && ok "a daemon is running on each non-head allocated node" \
         || bad "only $(prted_count 2 3 4)/3 daemons came up"
 
-    banner "plm/slurm: srun hands off and exits, and the daemons outlive it"
-    # prted daemonizes by default, so the srun that launched it completes as
-    # soon as the fork is done -- and PRRTE has to recognize that exit as a
-    # hand-off rather than as a launch failure.  On a real scheduler the step
-    # really does end, and SLURM really does reap it; nothing in the sibling
-    # harness can show either.
-    SA 'grep -q "primary srun exited after daemon hand-off" /tmp/prte.out' \
-        && ok "PRRTE recognized the srun exit as a hand-off, not a failure" \
-        || bad "no hand-off note from plm/slurm: $(SA 'grep -c srun /tmp/prte.out')"
+    banner "plm/slurm: the daemons stay inside the step srun launched them in"
+    #
+    # THIS IS THE CASE THAT MATTERS ON A REAL CLUSTER, and it is the one this
+    # harness could not previously state.  A prted that forks, setsid()s and
+    # lets its parent exit leaves behind the process srun is tracking: srun's
+    # task completes, srun returns, and SLURM ends the step.  Under
+    # proctrack/cgroup the daemon is still in that step's cgroup -- setsid()
+    # escapes a process tree, not a cgroup -- so slurmstepd kills it moments
+    # after it reported in to the HNP, and every node goes down at once.  That
+    # is https://github.com/openpmix/prrte/issues/2757.
+    #
+    # So the invariant is: the prted must REMAIN the task srun is tracking,
+    # which means plm/slurm must not tell it to daemonize.  Both assertions
+    # below hold in either process-tracking mode; what differs is the damage
+    # when they fail.  Under proctrack/cgroup the DVM dies here.  Under
+    # proctrack/linuxproc the detached daemon escapes and survives, so only
+    # these two assertions notice -- which is exactly the value of stating
+    # them, because linuxproc is the default (see "Process tracking" in
+    # AGENTS.md).
     SA 'pgrep -x srun >/dev/null' \
-        && bad "an srun is still running after the hand-off" \
-        || ok "no srun survives the hand-off"
+        && ok "the srun that launched the daemons is still running" \
+        || bad "no srun survives the launch -- the daemons detached from their step"
     n=$(SQ "squeue -h -s -j $jid -o '%i'" | grep -c . | tr -d ' ')
-    [ "$n" = 0 ] && ok "SLURM has no leftover job step for the daemons" \
-                 || bad "$n job step(s) still registered against job $jid"
+    [ "$n" -ge 1 ] 2>/dev/null \
+        && ok "SLURM still has the daemon job step registered against job $jid" \
+        || bad "no job step against job $jid -- the step ended the moment the daemons launched"
+    # And say it the way SLURM says it: the daemon's pid is one the scheduler
+    # accounts to the step, not an orphan the node happens to be running.
+    # `scontrol listpids` only knows about the node it runs on, so it has to
+    # be asked on the node the daemon is actually on.
+    out=$(ON 2 'pgrep -x prted' | tr -d ' \r' | head -1)
+    if [ -n "$out" ]; then
+        ON 2 "scontrol listpids 2>/dev/null | awk '{print \$1}' | grep -qx $out" \
+            && ok "node2's prted (pid $out) is a pid SLURM accounts to a step" \
+            || bad "node2's prted (pid $out) is in no SLURM step -- it escaped the step"
+    else
+        bad "no prted on node2 to check against the step"
+    fi
     out=$(SA 'timeout 60 prun -n 4 --map-by node hostname' 2>&1)
     n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
     [ "$n" = 4 ] && ok "a job runs across the srun-launched DVM" \
@@ -1634,6 +1676,7 @@ test_launch() {
 ########################################################################
 
 HAVE_JSON=0
+PROCTRACK=unknown
 preflight
 test_cluster
 test_ras_alloc
