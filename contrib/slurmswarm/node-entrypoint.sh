@@ -68,6 +68,51 @@ fi
 mkdir -p /var/spool/slurmctld /var/spool/slurmd /var/log/slurm
 chown slurm:slurm /var/spool/slurmctld /var/log/slurm
 
+# ---------------------------------------------------------------------------
+# process tracking
+# ---------------------------------------------------------------------------
+# The baked slurm.conf/cgroup.conf ask for proctrack/linuxproc with cgroups
+# switched off, because that is all an unprivileged container can do.  That
+# choice is not neutral: linuxproc tracks a step by walking /proc parentage,
+# so a task that forks, setsid()s and lets its parent exit is no longer a
+# descendant of anything the step knows about and simply outlives it.  A real
+# cluster runs proctrack/cgroup, where the same process cannot escape -- it
+# is still in the step's cgroup, and slurmstepd kills the cgroup once the
+# last task exits.  Any PRRTE bug that lives in that gap is invisible here
+# under linuxproc, so the mode is selectable and the harness can be run both
+# ways.  See "Process tracking" in AGENTS.md.
+#
+# cgroup mode needs a writable /sys/fs/cgroup, i.e. a privileged container
+# (docker-compose.yml's PRTE_SLURM_PRIVILEGED).  Refuse loudly rather than
+# starting a slurmd that will die with an unrelated-looking message.
+case "${PRTE_SLURM_PROCTRACK:-linuxproc}" in
+    linuxproc)
+        ;;
+    cgroup)
+        # The probe has to be a mkdir.  A cgroup2 filesystem refuses to create
+        # an ordinary file however writable it is -- a directory IS the write
+        # it supports -- so `touch` reports "Permission denied" on a hierarchy
+        # slurmd would have been perfectly happy with.
+        if ! mountpoint -q /sys/fs/cgroup || ! mkdir /sys/fs/cgroup/.prte-rw-probe 2>/dev/null; then
+            log "ERROR: PRTE_SLURM_PROCTRACK=cgroup needs a writable /sys/fs/cgroup;"
+            log "ERROR: bring the swarm up with PRTE_SLURM_PRIVILEGED=true as well."
+            exit 1
+        fi
+        rmdir /sys/fs/cgroup/.prte-rw-probe
+        log "process tracking: proctrack/cgroup + task/cgroup"
+        sed -i -e 's|^ProctrackType=.*|ProctrackType=proctrack/cgroup|' \
+               -e 's|^TaskPlugin=.*|TaskPlugin=task/cgroup|' /etc/slurm/slurm.conf
+        # autodetect finds cgroup/v2; IgnoreSystemd is required because there
+        # is no systemd in the container for slurmd to ask over D-Bus, and
+        # without it slurmd exits exactly as it does with no cgroup at all.
+        printf 'CgroupPlugin=autodetect\nIgnoreSystemd=yes\n' > /etc/slurm/cgroup.conf
+        ;;
+    *)
+        log "ERROR: PRTE_SLURM_PROCTRACK must be linuxproc or cgroup, not '${PRTE_SLURM_PROCTRACK}'"
+        exit 1
+        ;;
+esac
+
 # Which node is the controller is read out of slurm.conf rather than
 # hardcoded here, so changing SlurmctldHost is a one-file edit.
 ctld_host="$(sed -n 's/^SlurmctldHost=\([^ ]*\).*/\1/p' /etc/slurm/slurm.conf | head -1)"
