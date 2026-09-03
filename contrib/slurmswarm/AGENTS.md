@@ -417,7 +417,53 @@ not ordinary cluster configuration:
 - **`ProctrackType=proctrack/linuxproc`, `TaskPlugin=task/none`.** The cgroup
   plugins want a cgroup hierarchy to own. `linuxproc` tracks a step by walking
   `/proc` parentage, which needs nothing a container lacks. See §7 for the
-  consequence.
+  cleanup consequence and §9a for the much larger one.
+
+### 9a. Process tracking, and why the default hides bugs
+
+`ProctrackType` is not a tuning knob here. It decides which PRRTE behaviors
+this harness is *able* to observe, so a run's coverage depends on it and
+preflight prints which mode is in force.
+
+Under **`proctrack/linuxproc`** a step is the set of processes reachable by
+walking `/proc` parentage from the task `slurmd` started. A task that forks,
+calls `setsid()` and lets its parent exit is reparented to PID 1 and is no
+longer reachable from anything the step knows about: it escapes, and outlives
+the step. That is the mode a container gets for free, and it is the default.
+
+Under **`proctrack/cgroup`** — what every production cluster runs — the same
+process cannot escape. `setsid()` leaves a process tree; it does not leave a
+cgroup. When the last task of a step exits, `slurmstepd` signals the step's
+cgroup, and anything still in it dies.
+
+A `prted` is exactly a process that forks and detaches. So the difference
+between the two modes is the difference between "the daemon survives its
+`srun` and the DVM works" and "the daemon is killed the instant `srun`
+returns and every node goes down right after reporting in" — and the harness
+running only the first of those is why
+[issue #2757](https://github.com/openpmix/prrte/issues/2757) was found on a
+user's cluster rather than here.
+
+To run the real-cluster mode, both variables are required — the mode, and the
+privilege the writable cgroup hierarchy needs:
+
+```sh
+export PRTE_SLURM_PROCTRACK=cgroup PRTE_SLURM_PRIVILEGED=true
+docker compose up -d --force-recreate
+./run-tests.sh
+```
+
+The entrypoint rewrites `ProctrackType`/`TaskPlugin` and replaces
+`CgroupPlugin=disabled` with `autodetect` + `IgnoreSystemd=yes` before
+`slurmd` starts, and **refuses to start** if the mode was asked for without
+the privilege — the alternative being a `slurmd` that dies with a message
+about D-Bus that names neither. Going back is the same two variables unset
+plus another `--force-recreate`.
+
+The default stays `linuxproc` and unprivileged: it is what a developer's
+machine can do without being asked for anything, and it covers everything in
+this suite that is not about a process outliving its step. It just must not
+be mistaken for the cluster.
 - **`InactiveLimit=0`.** Load-bearing. The harness holds its allocations with
   `salloc --no-shell`-style background jobs and runs steps into them minutes
   later; a non-zero `InactiveLimit` kills an allocation with no active step,

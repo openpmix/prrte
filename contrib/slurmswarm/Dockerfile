@@ -51,10 +51,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc g++ make \
-        autoconf automake libtool m4 flex \
+        autoconf automake libtool m4 flex pkg-config \
         perl python3 git curl bzip2 \
         libevent-dev libhwloc-dev zlib1g-dev libzstd-dev \
         libjansson-dev \
+        libdbus-1-dev libbpf-dev \
         munge libmunge-dev libjson-c-dev libyaml-dev \
         openssh-server openssh-client \
         iproute2 iputils-ping procps less vim ca-certificates \
@@ -67,7 +68,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ras/slurm's entire modify surface has nothing to parse.  configure does not
 # fail when it is missing, it just quietly builds less, so the plugin is
 # checked for after install rather than assumed.
-ARG SLURM_VERSION=24.11.6
+#
+# libdbus-1-dev and libbpf-dev, above, are the same kind of silent
+# dependency for cgroup_v2.so: without them configure builds only the v1
+# plugin, and a node configured for cgroup/v2 -- which is what
+# PRTE_SLURM_PROCTRACK=cgroup asks for, and the only version a modern kernel
+# offers -- dies at startup with "cannot create cgroup context for
+# cgroup/v2", naming a plugin rather than the packages it wanted.  So that
+# plugin is checked for after install too.  (IgnoreSystemd=yes spares us
+# dbus at RUN time; it does not spare us the headers at build time.)
+ARG SLURM_VERSION=25.11.6
 ARG SLURM_URL=https://download.schedmd.com/slurm
 RUN groupadd -r slurm && useradd -r -g slurm -d /var/lib/slurm -s /usr/sbin/nologin slurm \
     && curl -fsSL "$SLURM_URL/slurm-$SLURM_VERSION.tar.bz2" -o /tmp/slurm.tar.bz2 \
@@ -79,6 +89,7 @@ RUN groupadd -r slurm && useradd -r -g slurm -d /var/lib/slurm -s /usr/sbin/nolo
     && make install \
     && ldconfig \
     && test -f /usr/local/lib/slurm/serializer_json.so \
+    && test -f /usr/local/lib/slurm/cgroup_v2.so \
     && rm -rf /src/slurm /tmp/slurm.tar.bz2
 
 # ---- baked PMIx (default) ----

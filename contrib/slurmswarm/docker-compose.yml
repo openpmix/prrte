@@ -42,14 +42,27 @@ x-node: &node
   tty: true
   volumes:
     - prte-build:/opt/prte:ro
-  # NOTE what is NOT here: no privileged flag, no added capability, no bind
+  # The process-tracking mode, read by node-entrypoint.sh, which writes the
+  # matching ProctrackType/TaskPlugin into slurm.conf before slurmd starts.
+  # See "Process tracking" in AGENTS.md -- this is not a tuning knob, it
+  # decides whether a `prted` that detaches from its step can be observed
+  # surviving it, so it decides which PRRTE bugs this harness can see.
+  environment:
+    PRTE_SLURM_PROCTRACK: ${PRTE_SLURM_PROCTRACK:-linuxproc}
+  # `cgroup` needs a writable cgroup hierarchy, which an ordinary container
+  # does not have.  Default false: the harness stays unprivileged exactly
+  # like contrib/dockerswarm's, and `linuxproc` needs nothing from the kernel
+  # a container lacks.  Both variables must be set together, and run-tests.sh
+  # refuses the mismatch rather than running a suite whose containers cannot
+  # do what its configuration claims.
+  privileged: ${PRTE_SLURM_PRIVILEGED:-false}
+  # NOTE on the default (unprivileged) path: no added capability, no bind
   # mount of the host's /sys/fs/cgroup.  slurmd insists on initializing a
   # cgroup context at startup whatever the configured plugins are, and a
   # container has neither a systemd to ask nor a writable cgroup filesystem --
   # so this harness used to need CAP_SYS_ADMIN to remount that filesystem
   # read-write.  `CgroupPlugin=disabled` (SLURM 24.05 and newer, see
-  # cgroup.conf) removes the need entirely, and these are ordinary
-  # unprivileged containers exactly like contrib/dockerswarm's.
+  # cgroup.conf) removes the need entirely.
   #
   # If you ever run this against an older SLURM, that is the wall you will
   # hit, and the symptom is ten "unk*" nodes in sinfo with slurmd dead on
