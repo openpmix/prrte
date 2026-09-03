@@ -851,9 +851,30 @@ grantable_count() {
 }
 
 drop_extra_jobs() {   # $1 = the job id to keep
-    local j
+    local j out
     for j in $(SQ "squeue -h -o '%i'" | tr -d ' \r'); do
         [ "$j" = "$1" ] && continue
+        # ASK THE DVM TO GIVE IT UP -- do not just scancel it.
+        #
+        # These extra jobs are not all leftovers.  Some are expander
+        # allocations the running DVM has absorbed, and their daemons live
+        # inside those jobs' Slurm steps.  scancel'ing one behind PRRTE's back
+        # kills daemons it still believes in, and the HNP does the right thing
+        # with that -- reports a comm failure on an unreleased daemon and takes
+        # a non-recoverable DVM down.  Every later group is then lost to a DVM
+        # that is simply gone.  This was survivable only while a prted
+        # daemonized out of its step, beyond scancel's reach; it is not
+        # survivable now that a daemon stays in the allocation it launched in.
+        #
+        # A completed release cancels the Slurm job itself, so there is
+        # nothing left to scancel afterwards.  Waiting for that completion is
+        # the point: the release is asynchronous, and a scancel issued while
+        # it is still in flight beats PRRTE to the daemons and causes exactly
+        # the failure this is avoiding.  Only fall back to scancel when the
+        # DVM did not take the job -- a pending expander it never absorbed,
+        # or one it has already given up.
+        out=$(SA "timeout 90 elastic release-id $j" 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY && continue
         SQ "scancel $j" >/dev/null 2>&1
     done
 }
