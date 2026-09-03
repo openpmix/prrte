@@ -698,6 +698,22 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
          * lets prun/the HNP exit.
          */
         if (primary_srun_pid == proc->pid) {
+            /* An elastic release ends the daemons this srun launched on
+             * purpose, and because the prted stays attached it ends them
+             * CLEANLY - so a zero exit reaches us for the same reason a
+             * non-zero one does below, and needs the same question asked of
+             * it. Without this the release of a node belonging to the
+             * primary step reads as the DVM ending and takes the whole DVM
+             * down with it. */
+            if (NULL != job_id && srun_exit_expected(*job_id)) {
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                                     "%s plm:slurm: srun for elastic job %" PRIu32
+                                     " exited cleanly after its daemons were released",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), *job_id));
+                free(job_id);
+                PMIX_RELEASE(t2);
+                return;
+            }
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: primary daemons complete!",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
