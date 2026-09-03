@@ -118,18 +118,18 @@ meaningless (it's srun's, not the failed proc's). The callback:
 - Refuses to proceed against an `ancient` SLURM (`ancient-version`).
 - On non-zero exit → `srun-failed` help + activate
   `DAEMONS_TERMINATED`.
-- On clean exit of the **primary** srun, whether that means the DVM is
-  gone depends on whether the `prted`s daemonized. By default a `prted`
-  forks and detaches (see `src/tools/prted/AGENTS.md`), and its parent —
-  the process srun actually tracks as the task — exits as soon as the
-  real daemon signals it is up, long before the daemon itself does. So a
-  clean exit here is normally just that hand-off, not termination: it is
-  ignored, and real daemon loss is instead caught when the daemon's RML
-  connection to the HNP drops. Only with `--debug-daemons` or
-  `--leave-session-attached` (no forking, `prted` stays attached) does
-  srun genuinely track the daemon's own lifetime, so only then does a
-  clean exit fire `DAEMONS_TERMINATED` (set `num_terminated = num_procs`
-  first to avoid a bogus error message) so `prun`/the HNP can exit.
+- On clean exit of the **primary** srun → `DAEMONS_TERMINATED` (set
+  `num_terminated = num_procs` first to avoid a bogus error message) so
+  `prun`/the HNP can exit. That is sound because **this component never
+  passes `--daemonize`**, so the process srun tracks *is* the daemon: a
+  `prted` forks only when told to, and a `prted` launched by a resource
+  manager must remain the task the RM is watching. See
+  [`src/tools/prted/AGENTS.md`](../../../tools/prted/AGENTS.md) —
+  detaching ends the step, and under `proctrack/cgroup` `slurmstepd` then
+  kills the daemon along with it. Do not "fix" a spurious termination here
+  by teaching this callback to ignore the exit; if srun is exiting while
+  the DVM is alive, the daemon has left its step and *that* is the bug
+  ([#2757](https://github.com/openpmix/prrte/issues/2757)).
 
 `plm_slurm_terminate_prteds` similarly special-cases the "we never
 launched additional daemons" case (`primary_pid_set == false`) by firing
@@ -178,7 +178,10 @@ not srun).
   containers running a real SLURM, where the daemons really do go out over
   `srun --jobid=<the allocation>`. It asserts the three things only a live
   scheduler shows — that the step joins the caller's job rather than
-  queueing a second one, that the srun exit after `prted` daemonizes is
-  read as a hand-off and not a launch failure (and leaves SLURM no dangling
-  step), and that `pterm` does not take the user's allocation down with the
-  DVM.
+  queueing a second one, that the daemons stay *inside* the step srun
+  launched them in (the srun is still running, the step is still
+  registered, and SLURM accounts the `prted`'s pid to it), and that `pterm`
+  does not take the user's allocation down with the DVM. Run it with
+  `PRTE_SLURM_PROCTRACK=cgroup PRTE_SLURM_PRIVILEGED=true` for the process
+  tracking a real cluster does; the unprivileged default lets a detached
+  daemon escape its step and survive, which hides that whole class.

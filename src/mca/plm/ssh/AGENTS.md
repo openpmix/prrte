@@ -112,8 +112,14 @@ This is the intricate part. It assembles the argv passed to the agent:
 - Splits the daemon command via `prte_plm_base_setup_prted_cmd` (default
   `prted`), prepends the prefix `bindir` when it's the stock `prted`, and
   handles a wrapper (`valgrind ... prted`).
-- Joins the whole shell script with `;`, appends `--daemonize` (non-tree,
-  non-debug), then the standard daemon options via
+- Joins the whole shell script with `;`, appends `--daemonize` (unless
+  debugging or `--leave-session-attached`; the qrsh/llspawn toggles still
+  apply). This flag is load-bearing rather than advisory: a `prted` forks
+  only when told to, so without it the daemon stays in the foreground and
+  holds the ssh session open for its whole life. It is withheld by the RM
+  launchers on purpose — see
+  [`src/tools/prted/AGENTS.md`](../../../tools/prted/AGENTS.md). Then the
+  standard daemon options via
   `prte_plm_base_prted_append_basic_args(..., "env", &proc_vpid_index)`.
 - Forces `--prtemca plm ssh` on the remote daemon, and — **when
   tree-spawning** — adds `--tree-spawn --prtemca prte_parent_uri

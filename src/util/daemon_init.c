@@ -38,11 +38,44 @@
 #include "constants.h"
 #include "src/util/daemon_init.h"
 
+int prte_daemon_detach_io(void)
+{
+    int fd;
+
+    /* connect input to /dev/null */
+    fd = open("/dev/null", O_RDONLY);
+    if (0 > fd) {
+        return PRTE_ERR_FATAL;
+    }
+    dup2(fd, STDIN_FILENO);
+    if (fd != STDIN_FILENO) {
+        close(fd);
+    }
+
+    /* connect outputs to /dev/null */
+    fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
+    if (0 > fd) {
+        return PRTE_ERR_FATAL;
+    }
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+    /* just to be safe, make sure we aren't trying
+     * to close stdout or stderr! since we dup'd both
+     * of them to the same fd, we can't just close it
+     * since one of the two would still be open and
+     * someone could attempt to use it.
+     */
+    if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+        close(fd);
+    }
+
+    return PRTE_SUCCESS;
+}
+
 int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
 {
 #if defined(HAVE_FORK)
     pid_t pid;
-    int fd;
 
     if ((pid = fork()) < 0) {
         return PRTE_ERROR;
@@ -66,35 +99,7 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
         }
     }
 
-    /* connect input to /dev/null */
-    fd = open("/dev/null", O_RDONLY);
-    if (0 > fd) {
-        return PRTE_ERR_FATAL;
-    }
-    dup2(fd, STDIN_FILENO);
-    if (fd != STDIN_FILENO) {
-        close(fd);
-    }
-
-    /* connect outputs to /dev/null */
-    fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
-    if (fd >= 0) {
-        dup2(fd, STDOUT_FILENO);
-        dup2(fd, STDERR_FILENO);
-        /* just to be safe, make sure we aren't trying
-         * to close stdout or stderr! since we dup'd both
-         * of them to the same fd, we can't just close it
-         * since one of the two would still be open and
-         * someone could attempt to use it.
-         */
-        if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-            close(fd);
-        }
-    } else {
-        return PRTE_ERR_FATAL;
-    }
-
-    return PRTE_SUCCESS;
+    return prte_daemon_detach_io();
 
 #else /* HAVE_FORK */
     return PRTE_ERR_NOT_SUPPORTED;
