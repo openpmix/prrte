@@ -879,6 +879,93 @@ drop_extra_jobs() {   # $1 = the job id to keep
     done
 }
 
+# A scheduler-backed allocation can be taken away without asking PRRTE.
+#
+# This is the case the harness itself got wrong: drop_extra_jobs used to
+# scancel absorbed allocations behind the DVM's back, four groups died of it,
+# and the reason it went unnoticed for so long is that it was survivable while
+# a prted daemonized out of its step and so sat beyond scancel's reach.  Now
+# that a daemon stays inside the allocation it was launched in, an scancel
+# reaches real daemons - so what PRRTE does about it is worth stating rather
+# than leaving to be rediscovered.
+#
+# The DVM cannot prevent this, and should not pretend it did not happen: the
+# nodes are genuinely gone.  What it owes the user is to NOTICE, to say so,
+# and to leave nothing behind - not to hang waiting on daemons that will never
+# answer, and not to take the user's own allocation down as collateral.
+#
+# Deliberately NOT asserted: whether the DVM survives.  It currently ends,
+# which is defensible for a non-recoverable DVM that lost a daemon nobody
+# released, but an elastic DVM shrinking instead would be equally defensible.
+# That is an open policy question and this case must not silently freeze an
+# answer to it.  It runs on its own allocation and its own DVM so that either
+# outcome is harmless to everything else.
+elastic_external_cancel_group() {
+    local out aj anodes jid n
+
+    banner "ras/slurm: an absorbed allocation cancelled behind the DVM's back"
+    cleanup_cluster
+    ALLOC new --tag dvm --nodes 3 --tasks-per-node 2 >/dev/null 2>&1
+    jid=$(ALLOC jobid --tag dvm | tr -d ' \r')
+    if ! dvm_start --prtemca prte_elastic_mode 1; then
+        bad "no DVM came up for the external-cancel case"
+        cleanup_cluster
+        return
+    fi
+
+    out=$(SA 'timeout 240 elastic extend 2' 2>&1)
+    aj=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$aj" ]; then
+        bad "could not absorb an allocation to cancel: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        skp "the external-cancel case needs an absorbed allocation"
+        dvm_stop; cleanup_cluster
+        return
+    fi
+    anodes=$(job_nodes "$aj")
+    sleep 6
+    # shellcheck disable=SC2086
+    n=$(prted_count $(idx_of "$anodes"))
+    [ "$n" = "$(echo "$anodes" | tr ',' '\n' | grep -c .)" ] \
+        && ok "the DVM absorbed job $aj and has daemons on $anodes" \
+        || bad "the absorbed allocation never got its daemons ($n on $anodes)"
+
+    # The scheduler takes it back.  Not through PRRTE - this is a user, or an
+    # admin, or a job's time limit, doing what any of them may legitimately do.
+    SQ "scancel $aj" >/dev/null 2>&1
+    sleep 15
+
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(idx_of "$anodes"))" = 0 ] \
+        && ok "the cancelled allocation's daemons are gone" \
+        || bad "a daemon survived the cancellation of job $aj"
+
+    # Either form counts as having reported it.  show_help aggregates by
+    # topic, so whether the full node-died text or the one-line summary
+    # naming that topic reaches the user depends on what else was printed
+    # first -- and the oob layer's own "unable to complete a TCP connection"
+    # usually wins the race.  Both say the loss was noticed and announced,
+    # which is the property under test; which one is displayed is not.
+    SA 'grep -qE "lost communication with a remote daemon|help-errmgr-base.txt / node-died" /tmp/prte.out' \
+        && ok "the HNP reported the loss rather than waiting on it" \
+        || bad "the HNP never reported losing the cancelled allocation's daemons"
+
+    n=0
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        [ "$(prted_count $i)" = 1 ] && n=$((n+1))
+    done
+    [ "$n" = 0 ] \
+        && ok "no daemon was left orphaned anywhere in the cluster" \
+        || bad "$n orphaned daemon(s) left behind after the cancellation"
+
+    # The DVM may end here; the user's allocation is not PRRTE's to end.
+    SQ "squeue -h -j $jid -o '%T'" | grep -q RUNNING \
+        && ok "the user's own allocation was left alone" \
+        || bad "job $jid did not survive - PRRTE cancelled the user's allocation"
+
+    dvm_stop
+    cleanup_cluster
+}
+
 # THE PHASE IS A SEQUENCE OF INDEPENDENT GROUPS, AND THAT IS DELIBERATE.
 #
 # Each group below is its own function so that a group which cannot proceed
@@ -920,6 +1007,7 @@ test_elastic() {
     elastic_pending_cancel_group "$jid"
     elastic_tainted_hostname_group
     dvm_stop
+    elastic_external_cancel_group
     cleanup_cluster
 
     # The last two groups need the recording shim in front of the real SLURM
