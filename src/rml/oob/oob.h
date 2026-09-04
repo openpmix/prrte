@@ -104,6 +104,10 @@ typedef struct {
                                delay backs off exponentially up to this value (0 => fixed delay) */
     int connect_max_time;   /**< max seconds to keep retrying a non-lifeline peer before giving up
                                and letting the routing tree heal to an ancestor (0 => forever) */
+    int silent_loss_vpid;   /**< fault injection: daemon vpid whose departure this process must
+                               pretend not to have noticed, so that the next message for it goes
+                               through a fresh connection attempt instead of being short-circuited
+                               by the node already being marked down (-1 => nobody) */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 

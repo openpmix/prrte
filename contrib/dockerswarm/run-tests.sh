@@ -6686,6 +6686,69 @@ test_rml() {
         bad "could not start a DVM with worker threads"
     fi
     cleanup_swarm
+
+    banner "rml/oob: a daemon that died is not reported as a firewall problem"
+    # There are two ways to fail to reach a daemon, and they want opposite
+    # advice.  A daemon we have never reached may not have started, or may be
+    # behind a firewall, so suspecting the configuration is fair.  A daemon we
+    # HAVE reached is a different story: the connection worked, which
+    # exonerates the network and the firewall by itself, and telling that user
+    # to check iptables sends them away from the answer - which on a managed
+    # cluster is usually that the scheduler reclaimed the allocation the
+    # daemon was living in.
+    #
+    # Reaching the second case by timing alone is a race a test cannot win.
+    # The HNP normally sees the socket close, reports the loss, the node is
+    # marked down, and every later message for it is refused before it ever
+    # reaches the oob.  prte_oob_silent_loss_vpid removes the race by naming a
+    # daemon whose departure the HNP must pretend not to have noticed, so the
+    # next message for it has to open a fresh connection and fail there.
+    #
+    # The DVM runs in the foreground here rather than through
+    # prted_dvm_start_mca, because --daemonize sends the HNP's stdout to
+    # /dev/null and this whole case is about what the HNP prints.
+    cleanup_swarm
+    RUN 'rm -f /tmp/oobmsg.out' >/dev/null 2>&1
+    # One line on purpose: RUN_BG appends the redirect to what it is given, so
+    # a command split across newlines would send only its last line to the file.
+    RUN_BG /tmp/oobmsg.out 'prte --host node1:1,node2:1,node3:1 --prtemca prte_oob_silent_loss_vpid 1 --prtemca prte_retry_delay 1 --prtemca prte_max_recon_attempts 2 --prtemca plm_base_verbose 5'
+    n=0
+    while [ "$n" -lt 30 ]; do
+        RUN 'grep -q "DVM ready" /tmp/oobmsg.out' >/dev/null 2>&1 && break
+        sleep 1; n=$((n+1))
+    done
+    if [ "$n" -ge 30 ]; then
+        bad "no DVM came up for the oob message case: $(RUN 'tail -3 /tmp/oobmsg.out' 2>&1 | tr '\n' ' ' | tail -c 200)"
+    else
+        # Which node holds vpid 1 is the launcher's business, so read it back
+        # rather than assume it: the case is about that daemon, and killing
+        # the wrong one would prove nothing.
+        w=$(RUN "grep -oE 'daemon \[[^]]*@0,1\] on node node[0-9]+' /tmp/oobmsg.out | \
+                 grep -oE 'node[0-9]+\$' | head -1" 2>/dev/null | tr -d ' \r')
+        if [ -z "$w" ]; then
+            bad "could not tell which node holds daemon vpid 1"
+        else
+            ok "daemon vpid 1 is on $w"
+            ON "${w#node}" 'pkill -9 -x prted' >/dev/null 2>&1
+            sleep 2
+            # Make the HNP send to it.  With the loss suppressed it still
+            # believes in that daemon, so this goes through a fresh connect
+            # attempt, which is the path under test.
+            RUN "timeout -k 5 90 prun --host $w -n 1 hostname" >/dev/null 2>&1
+            sleep 20
+            RUN 'grep -q "no longer reachable" /tmp/oobmsg.out' \
+                && ok "the HNP said the daemon had gone, not that a firewall was to blame" \
+                || bad "the HNP did not report the loss as a departed daemon: $(RUN 'tail -6 /tmp/oobmsg.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+            RUN 'grep -q "check that any firewall" /tmp/oobmsg.out' \
+                && bad "the HNP blamed a firewall for a daemon that had been running" \
+                || ok "...and offered no firewall advice for a connection that had worked"
+            RUN "grep -q 'Remote host:.*$w' /tmp/oobmsg.out" \
+                && ok "the report names the node that went away ($w)" \
+                || bad "the report does not name $w"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
 }
 
 ########################################################################
