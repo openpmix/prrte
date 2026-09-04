@@ -1505,7 +1505,22 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
      * it can decide what to do about it.
      */
     if (MCA_OOB_TCP_CONNECTED == old_state) {
-        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
+        /* ...unless we have been told to pretend we did not notice this one.
+         * Reporting the loss is what gets the node marked down, and a node
+         * marked down turns every later message for it into an immediate
+         * refusal - which is the whole reason the connect-failure path is so
+         * hard to reach on purpose.  Staying quiet leaves this process still
+         * believing in the daemon, so the next message for it opens a fresh
+         * connection and fails there instead.  See prte_oob_silent_loss_vpid. */
+        if (0 <= prte_oob_base.silent_loss_vpid
+            && (pmix_rank_t) prte_oob_base.silent_loss_vpid == peer->name.rank) {
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                                "%s tcp_peer_close: NOT reporting loss of %s (fault injection)",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(&(peer->name)));
+        } else {
+            PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
+        }
     }
 }
 

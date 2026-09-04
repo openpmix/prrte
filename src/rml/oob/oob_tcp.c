@@ -586,6 +586,28 @@ int prte_oob_register(void)
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.connect_max_time);
 
+    /* Fault injection, and deliberately NOT restricted to a debug build - the
+     * behavior it exists to reach is in the build that ships, and a hook that
+     * only exists elsewhere cannot demonstrate it.  It costs one comparison
+     * on a path that runs when a connection is already being torn down.
+     *
+     * Losing a daemon has two shapes, and only one of them is easy to arrange.
+     * Normally this process sees the socket close, reports the loss, the node
+     * is marked down, and every later message for it is refused before it
+     * reaches the oob at all.  The other shape is a daemon that has gone away
+     * while this process still believes in it: the next message then has to
+     * open a fresh connection, and it is that attempt failing which tells the
+     * user their daemon is unreachable.  Reaching it by timing alone is a race
+     * nobody wins reliably, so this names a vpid whose departure is to be
+     * ignored, and the race disappears. */
+    prte_oob_base.silent_loss_vpid = -1;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_silent_loss_vpid",
+                                        "Fault injection: pretend not to notice the departure of "
+                                        "this daemon vpid, so the next message for it must open a "
+                                        "fresh connection [default: -1 => notice every departure]",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.silent_loss_vpid);
+
     prte_oob_base.max_msg_size = 100;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
                                         "Max size of an OOB message in Megabytes(default = 100)",
