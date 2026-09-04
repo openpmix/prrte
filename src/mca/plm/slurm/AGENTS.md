@@ -61,10 +61,7 @@ If no Slurm command can be run, or the version cannot be parsed
    - `srun`
    - `--external-launcher` (unless `early`)
    - `--ntasks-per-node=1` (one `prted` per node)
-   - `--kill-on-bad-exit` — **unless** the job is recoverable/continuous
-     or `prte_elastic_mode`, in which case `--no-kill
-     --kill-on-bad-exit=0` (a node/daemon dying must not tear down an
-     elastic DVM).
+   - `--no-kill --kill-on-bad-exit=0`, always — see the rule below.
    - `--mpi=none` (daemons aren't MPI tasks), `--cpu-bind=none` (don't
      let TaskAffinity pin the prted to one core).
    - any `plm_slurm_args`.
@@ -162,9 +159,23 @@ not srun).
   [`common/slurm`](../../common/slurm/AGENTS.md) parsed out of
   `srun --version`. Change a threshold there, not here — and remember a
   third component reads the same struct.
-- **Elastic mode changes the kill flags.** `--no-kill
-  --kill-on-bad-exit=0` in elastic/recoverable/continuous mode is
-  deliberate — a node loss must not kill the whole srun.
+- **The kill flags are unconditional, and must stay that way.**
+  `--kill-on-bad-exit` tells `srun` to take down the *whole step* when any
+  one task exits non-zero, and `--no-kill` is what stops a single node's
+  failure doing the same — so between them they decide whether losing one
+  daemon costs us one daemon or all of the daemons that `srun` launched.
+  Which daemon losses are survivable is PRRTE's judgement to make: that is
+  what [`errmgr/dvm`](../../errmgr/dvm/AGENTS.md) and the `recoverable` and
+  `continuous` runtime options are for, and the scheduler must not pre-empt
+  it by killing the survivors.
+
+  This has been got wrong once already, and quietly. `8d67814366` made the
+  flags unconditional; `538e4ada35`, whose subject describes only *adding*
+  them for elastic mode, reinstated the `--kill-on-bad-exit` branch for
+  everything else and said nothing about it. It went unnoticed for as long
+  as it did because a `prted` daemonized out of its step, so the flags only
+  ever governed a fork's parent that had already exited. They reach live
+  daemons now.
 - **Environment purge in the child is mandatory** — SLURM forwards the
   full environment; leaving `PMIX_`/`PRTE_` vars in breaks tool
   connections and duplicates command-line settings.
