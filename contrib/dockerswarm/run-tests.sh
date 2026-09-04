@@ -4446,6 +4446,127 @@ test_connect() {
     cleanup_swarm
 }
 
+
+SL=/opt/prte/prte/bin/spawnloop
+
+test_spawn_repeat() {
+    local out n a b iters nsps uniq phost aranks held cnr
+
+    iters=40
+
+    banner "spawn: many spawns in a row, from a process off the master node"
+    # Every other spawn case here spawns once.  What only exists BETWEEN
+    # spawns is the requesting daemon's request table: each spawn takes a
+    # slot in prte_pmix_server_globals.local_reqs, the index is stamped on
+    # the job as PRTE_JOB_ROOM_NUM and shipped to the master so the answer
+    # can be matched back, slots are recycled by pmix_pointer_array_add as
+    # requests retire, and the index is never cleared from the job.  A stale
+    # room number therefore does not fail -- it completes whatever spawn now
+    # holds that slot.
+    #
+    # None of it runs on one node: prte_plm_base_spawn_response takes a
+    # local shortcut when the requestor is on the master's own node, so the
+    # room number never crosses the wire.  Hence --host node3:1 below, and
+    # hence the assertion that the parent really did land off node1: if it
+    # did not, everything after it passes vacuously.
+    cleanup_swarm
+    if ! RUN "test -x $SL"; then
+        skp "spawnloop client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:4,node2:4,node3:4,node4:4'; then
+        bad "could not start a DVM for the repeated-spawn tests"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node3:1 -n 1 $SL --iters $iters --kids 2" 2>&1)
+
+    phost=$(echo "$out" | awk '$1=="SPWN" && $2=="PARENT" {print $5}' | head -1)
+    if [ -n "$phost" ] && [ "$phost" != "node1" ]; then
+        ok "the spawning process ran on $phost, so its spawns are relayed to the master"
+    else
+        skp "parent landed on '$phost' -- the relayed-response path is not being tested"
+    fi
+
+    n=$(echo "$out" | grep -c '^SPWN ITER .* OK ')
+    if [ "$n" = "$iters" ]; then
+        ok "$iters consecutive spawns all completed"
+    else
+        bad "only $n of $iters spawns completed: $(echo "$out" | grep -E '^SPWN (FAIL|ITER)' | tail -3 | tr '\n' ' ')"
+    fi
+
+    echo "$out" | grep -q "^SPWN DONE $iters\$" \
+        && ok "...and the spawning process ran to the end" \
+        || bad "the spawning process did not finish: $(echo "$out" | grep '^SPWN' | tail -3 | tr '\n' ' ')"
+
+    # A repeated child namespace would mean two spawns were answered with the
+    # same job -- the shape a recycled room number produces.
+    nsps=$(echo "$out" | awk '$1=="SPWN" && $2=="ITER" && $4=="OK" {print $5}')
+    n=$(echo "$nsps" | grep -c .)
+    uniq=$(echo "$nsps" | sort -u | grep -c .)
+    if [ "$n" = "$uniq" ]; then
+        ok "...and every spawn was answered with a distinct namespace ($uniq)"
+    else
+        bad "$n spawns produced only $uniq distinct namespaces -- an answer went to the wrong request"
+    fi
+
+    echo "$out" | grep -q '^SPWN FAIL' \
+        && bad "spawnloop reported: $(echo "$out" | grep '^SPWN FAIL' | head -2 | tr '\n' ' ')" \
+        || ok "...with no failed spawn, connect or disconnect along the way"
+
+    banner "spawn: a node rank is not reissued while its holder is still running"
+    # A node rank names a proc among everything alive on its node, across
+    # every job there -- that is the whole difference between it and
+    # local_rank, which is numbered within one job.  It used to be read off
+    # node->num_procs, which is a population count and goes back DOWN when
+    # any job's procs leave, so a job mapped after an earlier job ended was
+    # handed the ranks a third, still-running job was using.
+    #
+    # Three jobs, and the OVERLAP is the whole case: A and B have to be
+    # alive together, so that when A leaves it is A's ranks that come free
+    # while B still holds the ones after them.  Run A to completion before
+    # starting B and the counter is back at zero either way -- the case
+    # passes against the defect it was written for.
+    RUN 'rm -f /tmp/spawn-hold-a.out /tmp/spawn-hold-b.out' >/dev/null 2>&1
+    PRUN_BG /tmp/spawn-hold-a.out "--host node2:6 -n 2 $SL --hold 12"
+    sleep 5
+    PRUN_BG /tmp/spawn-hold-b.out "--host node2:6 -n 2 $SL --hold 40"
+    sleep 6
+    aranks=$(RUN 'cat /tmp/spawn-hold-a.out' 2>/dev/null | \
+             awk '$1=="SPWN" && $2=="HOLD" {print $8}' | sort -n | tr '\n' ' ')
+    held=$(RUN 'cat /tmp/spawn-hold-b.out' 2>/dev/null | \
+           awk '$1=="SPWN" && $2=="HOLD" {print $8}' | sort -n | tr '\n' ' ')
+    if [ -z "$aranks" ] || [ -z "$held" ]; then
+        skp "node ranks not reported (first='$aranks' second='$held') -- cannot check for reissue"
+    else
+        ok "two overlapping jobs on node2 took node ranks $aranks and $held"
+        # let the first job leave, then map a third into the gap it left
+        sleep 8
+        cnr=$(PRUN "--host node2:6 -n 2 $SL --hold 1" 2>&1 | \
+              awk '$1=="SPWN" && $2=="HOLD" {print $8}' | sort -n | tr '\n' ' ')
+        if [ -z "$cnr" ]; then
+            skp "third job reported no node ranks -- cannot check for reissue"
+        else
+            n=0
+            for a in $cnr; do
+                for b in $held; do
+                    [ "$a" = "$b" ] && n=$((n + 1))
+                done
+            done
+            if [ "$n" = 0 ]; then
+                ok "...and a job mapped after the first left got $cnr, held by nobody"
+            else
+                bad "a job mapped after the first left got $cnr -- $n of those are still held by live procs ($held)"
+            fi
+        fi
+    fi
+    RUN 'rm -f /tmp/spawn-hold-a.out /tmp/spawn-hold-b.out' >/dev/null 2>&1
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+}
+
 GC=/opt/prte/prte/bin/groupcon
 GINV=/opt/prte/prte/bin/groupinv
 FENCER=/opt/prte/prte/bin/fencer
@@ -8968,6 +9089,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_grpcomm
 
     test_connect
+
+    test_spawn_repeat
 
     test_pmix_cycling
 
