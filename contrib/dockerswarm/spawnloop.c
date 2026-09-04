@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     ssize_t len;
     int iters = 25, kids = 2, hold = 0, napps = 1, nfailed = 0, i, n;
     size_t a;
-    bool self = false;
+    bool self = false, orphan = false;
     struct timespec t0, t1;
 
     for (n = 1; n < argc; n++) {
@@ -173,6 +173,12 @@ int main(int argc, char **argv)
             napps = atoi(argv[++n]);
         } else if (0 == strcmp(argv[n], "--self")) {
             self = true;
+        } else if (0 == strcmp(argv[n], "--orphan")) {
+            /* spawn children that will connect back to us, and then leave
+             * without ever joining that connect.  A collective cannot
+             * complete without every participant, so the children are stuck
+             * unless the runtime ends the fence when we die. */
+            orphan = true;
         } else if (0 == strcmp(argv[n], "--hold") && n + 1 < argc) {
             hold = atoi(argv[++n]);
         } else {
@@ -241,6 +247,11 @@ int main(int argc, char **argv)
         /* COMM_SELF spawn connects the ONE spawning rank to its children;
          * a wildcard here would demand every rank of this job join, which
          * they are not doing - each is off spawning children of its own. */
+        if (orphan) {
+            printf("SPWN ORPHANED %d %s\n", i, nsp2);
+            fflush(stdout);
+            continue;
+        }
         PMIX_PROC_LOAD(&procs[0], myproc.nspace,
                        self ? myproc.rank : PMIX_RANK_WILDCARD);
         PMIX_PROC_LOAD(&procs[1], nsp2, PMIX_RANK_WILDCARD);
