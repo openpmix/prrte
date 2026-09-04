@@ -122,6 +122,7 @@ PMIX_HOME="${PMIX_HOME:-}"              # optional installed PMIx prefix (macOS)
 OMPI_SRC="${OMPI_SRC:-}"
 # Build every component as a run-time loadable DSO rather than into libprrte.
 MCA_DSO="${PRTE_SWARM_MCA_DSO:-0}"
+SWARM_ASAN="${PRTE_SWARM_ASAN:-0}"
 
 mode=linux
 distclean=auto                          # auto | always | never
@@ -324,6 +325,7 @@ build_linux() {
         -v "$root":/prrte-src:ro \
         -v "$VOLUME":/opt/prte \
         -e PRTE_SWARM_MCA_DSO="$MCA_DSO" \
+        -e PRTE_SWARM_ASAN="$SWARM_ASAN" \
         ${pmix_mount[@]+"${pmix_mount[@]}"} \
         ${ompi_mount[@]+"${ompi_mount[@]}"} \
         "$IMAGE" bash -euo pipefail -c '
@@ -391,16 +393,45 @@ build_linux() {
                 done < <(orphan_dirs "$1" "$2")
             }
 
+            # PRTE_SWARM_ASAN=1 builds BOTH code bases under AddressSanitizer.
+            # It has to be both: ASAN only checks an access made by code it
+            # instrumented, and several of the interesting reads are in PMIx
+            # inlines (PMIx_Check_nspace and friends) reached from PRRTE.
+            # Instrumenting only one side intercepts the malloc/free but never
+            # flags the read, which looks exactly like "no bug here".
+            #
+            # It goes into the configure ARGUMENT string on purpose, so
+            # reconfigure_needed sees the knob change and reconfigures -- the
+            # same mechanism that catches a changed --with-pmix.  Slow, so it
+            # is off by default; -O1 keeps frames readable in the report.
+            # Passed to configure through the ENVIRONMENT, not the argument
+            # string: the argument strings below are expanded unquoted, so a
+            # CFLAGS carrying spaces is word-split into options configure then
+            # rejects.  configure inherits CFLAGS/LDFLAGS.
+            #
+            # asan_tag exists only so the recorded .configure-args differs and
+            # reconfigure_needed fires when the knob is turned on or off; the
+            # flags themselves never appear in that string.
+            asan_tag=""
+            asan_cflags=""
+            if [ "${PRTE_SWARM_ASAN:-0}" != 0 ]; then
+                asan_cflags="-fsanitize=address -fno-omit-frame-pointer"
+                export CFLAGS="-fsanitize=address -fno-omit-frame-pointer -g -O1"
+                export LDFLAGS="-fsanitize=address"
+                asan_tag=" [asan]"
+                echo ">>>> AddressSanitizer build (PRTE_SWARM_ASAN=1)"
+            fi
+
             if [ -d /pmix-src ]; then
                 PMIX_PREFIX=/opt/prte/pmix
                 echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
                 mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
                 pmix_args="--prefix=$PMIX_PREFIX"
-                if reconfigure_needed . "$pmix_args" /pmix-src; then
+                if reconfigure_needed . "$pmix_args$asan_tag" /pmix-src; then
                     echo ">>>> (re)configuring PMIx: $pmix_args"
                     drop_orphans . /pmix-src
                     /pmix-src/configure $pmix_args
-                    echo "$pmix_args" > .configure-args
+                    echo "$pmix_args$asan_tag" > .configure-args
                 fi
                 make -j"$jobs"
                 make install
@@ -432,7 +463,7 @@ build_linux() {
                 prte_args="$prte_args --enable-mca-dso"
                 echo ">>>> components as DSOs (--enable-mca-dso)"
             fi
-            if reconfigure_needed . "$prte_args" /prrte-src; then
+            if reconfigure_needed . "$prte_args$asan_tag" /prrte-src; then
                 echo ">>>> (re)configuring PRRTE: $prte_args"
                 drop_orphans . /prrte-src
                 # The install outlives the build dir, and lib/prte holds the
@@ -443,7 +474,7 @@ build_linux() {
                 # adds.
                 rm -rf /opt/prte/prte/lib/prte
                 /prrte-src/configure $prte_args
-                echo "$prte_args" > .configure-args
+                echo "$prte_args$asan_tag" > .configure-args
             fi
             # show_help GOLDEN RULE: prte_show_help_content.c embeds every
             # help-*.txt in the tree, but its make rule depends only on the
@@ -474,7 +505,7 @@ build_linux() {
             # pass on node1 and quietly test the wrong library everywhere
             # else.
             echo ">>>> elastic test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/elastic \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/elastic \
                 /prrte-src/contrib/dockerswarm/elastic.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -485,7 +516,7 @@ build_linux() {
             # hosts none of the procs of the target job -- i.e. never on one
             # node.  (No apostrophes here: see the note further down.)
             echo ">>>> jobinfo (direct-modex) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/jobinfo \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/jobinfo \
                 /prrte-src/contrib/dockerswarm/jobinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -497,7 +528,7 @@ build_linux() {
             # "--display map" shows only the first of those steps.
             # (No apostrophes here: see the note further down.)
             echo ">>>> devinfo (device assignment) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/devinfo \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/devinfo \
                 /prrte-src/contrib/dockerswarm/devinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -511,7 +542,7 @@ build_linux() {
             # node running the DVM master.  Neither is reachable on one host.
             # (No apostrophes here: see the note further down.)
             echo ">>>> spawnloop (repeated spawn) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/spawnloop \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/spawnloop \
                 /prrte-src/contrib/dockerswarm/spawnloop.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -522,7 +553,7 @@ build_linux() {
             # PMIX_RANGE_LOCAL turns on only exists across nodes.
             # (No apostrophes here: see the note further down.)
             echo ">>>> dataserver (publish/lookup) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/dataserver \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/dataserver \
                 /prrte-src/contrib/dockerswarm/dataserver.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -533,7 +564,7 @@ build_linux() {
             # all on a single host.
             # (No apostrophes here: see the note further down.)
             echo ">>>> proctable (query/state translation) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/proctable \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/proctable \
                 /prrte-src/contrib/dockerswarm/proctable.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -546,7 +577,7 @@ build_linux() {
             # exercised against a daemon that merely received the broadcast.
             # (No apostrophes here: see the note further down.)
             echo ">>>> groupcon (group construct/destruct) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/groupcon \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/groupcon \
                 /prrte-src/contrib/dockerswarm/groupcon.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -560,7 +591,7 @@ build_linux() {
             # one the runtime has to keep.
             # (No apostrophes here: see the note further down.)
             echo ">>>> connector (connect/disconnect assemblage) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/connector \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/connector \
                 /prrte-src/contrib/dockerswarm/connector.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -574,7 +605,7 @@ build_linux() {
             # skipped entirely and the test proves nothing.
             # (No apostrophes here: see the note further down.)
             echo ">>>> groupinv (group invite/join context id) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/groupinv \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/groupinv \
                 /prrte-src/contrib/dockerswarm/groupinv.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -600,7 +631,7 @@ build_linux() {
             # NOTE: this whole block is inside bash -c ..., so an apostrophe
             # anywhere in it (even in a comment) ends the script.
             echo ">>>> fencer (modex vs barrier) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/fencer \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/fencer \
                 /prrte-src/contrib/dockerswarm/fencer.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -614,7 +645,7 @@ build_linux() {
             # test.
             # (No apostrophes here: see the note further down.)
             echo ">>>> pmixloop (init/fence/finalize cycling) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/pmixloop \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/pmixloop \
                 /prrte-src/contrib/dockerswarm/pmixloop.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -627,7 +658,7 @@ build_linux() {
             # process playing both roles, so the report never crosses a wire.
             # (No apostrophes here: see the note further down.)
             echo ">>>> faulty (deliberate process failures) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/faulty \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/faulty \
                 /prrte-src/contrib/dockerswarm/faulty.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -640,7 +671,7 @@ build_linux() {
             # message needs the child on a node the parent is not on.
             # (No apostrophes here: see the note further down.)
             echo ">>>> envspawn (odls envar directives) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/envspawn \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/envspawn \
                 /prrte-src/contrib/dockerswarm/envspawn.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -651,7 +682,7 @@ build_linux() {
             # saturated so every write the daemon attempts is a partial one.
             # (No apostrophes here: see the note further down.)
             echo ">>>> slowcat (slow stdin reader) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/slowcat \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/slowcat \
                 /prrte-src/contrib/dockerswarm/slowcat.c
 
             # examples/dynamic.c is the PMIx_Spawn example shipped in this
@@ -663,7 +694,7 @@ build_linux() {
             # NOTE: this whole block is inside bash -c '...', so an
             # apostrophe anywhere in it (even in a comment) ends the script.
             echo ">>>> dynamic (PMIx_Spawn) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/dynamic \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/dynamic \
                 /prrte-src/examples/dynamic.c -I/prrte-src/examples \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -676,7 +707,7 @@ build_linux() {
             # NOTE: this whole block is inside bash -c ..., so an apostrophe
             # anywhere in it (even in a comment) ends the script.
             echo ">>>> sessionctrl (PMIx_Session_control) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/sessionctrl \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/sessionctrl \
                 /prrte-src/examples/sessionctrl.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -691,7 +722,7 @@ build_linux() {
             # other nodes to mean anything.
             # (No apostrophes here: see the note further down.)
             echo ">>>> peerinfo (peer reserved-key lookup) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/peerinfo \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/peerinfo \
                 /prrte-src/contrib/dockerswarm/peerinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -703,7 +734,7 @@ build_linux() {
             # as success.  Needs ranks on daemons other than the master to
             # show up at all, which is why it lives here.
             echo ">>>> slotinfo (allocation query relay) test client"
-            gcc -O0 -g -o /opt/prte/prte/bin/slotinfo \
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/slotinfo \
                 /prrte-src/contrib/dockerswarm/slotinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
@@ -744,6 +775,21 @@ build_linux() {
                     /prrte-src/contrib/dockerswarm/mpinoop.c
                 /opt/prte/ompi/bin/mpicc -O0 -g -o /opt/prte/ompi/bin/ring_c \
                     /ompi-src/examples/ring_c.c
+
+                # spawnrepro: repeated MPI_Comm_spawn_multiple off COMM_SELF,
+                # a barrier on the intercommunicator, and a disconnect -- the
+                # mpi4py TestSpawnMultipleSelf sequence.  It has to be built
+                # with MPI rather than approximated against PMIx: the barrier
+                # is a collective over the parent proc AND the whole child
+                # job, and it is MPI_Comm_disconnect that dissolves that
+                # assemblage.  Those orderings against job termination are
+                # what is under test.  It spawns ITSELF, so it needs its own
+                # installed path compiled in.
+                echo ">>>> spawnrepro (mpi4py spawn sequence)"
+                /opt/prte/ompi/bin/mpicc ${asan_cflags:-} -O0 -g \
+                    -DSELF_PATH=\"/opt/prte/ompi/bin/spawnrepro\" \
+                    -o /opt/prte/ompi/bin/spawnrepro \
+                    /prrte-src/contrib/dockerswarm/spawnrepro.c
             fi
 
             # runtime env for login shells (node-entrypoint handles ld.so)

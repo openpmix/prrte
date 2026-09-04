@@ -38,7 +38,14 @@
  * MPI_Comm_disconnect produce, and the thing mpi4py's spawn tests do over and
  * over.
  *
- *   spawnloop [--iters N] [--kids N] [--child] [--hold S]
+ *   spawnloop [--iters N] [--kids N] [--apps N] [--self] [--child] [--hold S]
+ *
+ * --self makes EVERY rank spawn on its own, and connect only to the children
+ * it asked for - the shape MPI_Comm_spawn_multiple on COMM_SELF produces, and
+ * the one mpi4py's TestSpawnMultipleSelf drives.  It is the concurrent case:
+ * several spawn requests are in flight at the master at once, each of which
+ * joins its session before it is named, while earlier children are completing.
+ * --apps gives each spawn several app contexts, as spawn_multiple does.
  *
  * --hold turns it into a placeholder instead: report where the runtime put
  * this proc, stay alive S seconds, leave.  That is what makes the OTHER
@@ -123,7 +130,9 @@ static int be_child(void)
     memcpy(&parent, val->data.proc, sizeof(pmix_proc_t));
     PMIX_VALUE_RELEASE(val);
 
-    PMIX_PROC_LOAD(&procs[0], parent.nspace, PMIX_RANK_WILDCARD);
+    /* PMIX_PARENT_ID names a PROC.  Connect to exactly that proc, so a
+     * COMM_SELF-style spawn does not demand the spawner's whole job. */
+    PMIX_PROC_LOAD(&procs[0], parent.nspace, parent.rank);
     PMIX_PROC_LOAD(&procs[1], myproc.nspace, PMIX_RANK_WILDCARD);
 
     if (PMIX_SUCCESS != (rc = PMIx_Connect(procs, 2, NULL, 0))) {
@@ -146,9 +155,11 @@ int main(int argc, char **argv)
     pmix_app_t *app;
     pmix_status_t rc;
     char nsp2[PMIX_MAX_NSLEN + 1];
-    char self[4096];
+    char selfpath[4096];
     ssize_t len;
-    int iters = 25, kids = 2, hold = 0, i, n;
+    int iters = 25, kids = 2, hold = 0, napps = 1, nfailed = 0, i, n;
+    size_t a;
+    bool self = false;
     struct timespec t0, t1;
 
     for (n = 1; n < argc; n++) {
@@ -158,11 +169,15 @@ int main(int argc, char **argv)
             iters = atoi(argv[++n]);
         } else if (0 == strcmp(argv[n], "--kids") && n + 1 < argc) {
             kids = atoi(argv[++n]);
+        } else if (0 == strcmp(argv[n], "--apps") && n + 1 < argc) {
+            napps = atoi(argv[++n]);
+        } else if (0 == strcmp(argv[n], "--self")) {
+            self = true;
         } else if (0 == strcmp(argv[n], "--hold") && n + 1 < argc) {
             hold = atoi(argv[++n]);
         } else {
-            fprintf(stderr, "usage: %s [--iters N] [--kids N] [--child] [--hold S]\n",
-                    argv[0]);
+            fprintf(stderr, "usage: %s [--iters N] [--kids N] [--apps N] "
+                            "[--self] [--child] [--hold S]\n", argv[0]);
             return 1;
         }
     }
@@ -183,13 +198,13 @@ int main(int argc, char **argv)
      * because /tmp and the cwd are per-container while the install volume is
      * shared - so the path has to be one that resolves on whatever node the
      * child is mapped onto. */
-    len = readlink("/proc/self/exe", self, sizeof(self) - 1);
+    len = readlink("/proc/self/exe", selfpath, sizeof(selfpath) - 1);
     if (0 >= len) {
         printf("SPWN FAIL self-path 0 cannot read /proc/self/exe\n");
         fflush(stdout);
         return 1;
     }
-    self[len] = '\0';
+    selfpath[len] = '\0';
 
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
         printf("SPWN FAIL parent-init 0 %s\n", PMIx_Error_string(rc));
@@ -201,20 +216,33 @@ int main(int argc, char **argv)
     for (i = 0; i < iters; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t0);
 
-        PMIX_APP_CREATE(app, 1);
-        app->cmd = strdup(self);
-        app->maxprocs = kids;
-        PMIX_ARGV_APPEND(rc, app->argv, self);
-        PMIX_ARGV_APPEND(rc, app->argv, "--child");
-        rc = PMIx_Spawn(NULL, 0, app, 1, nsp2);
-        PMIX_APP_FREE(app, 1);
+        PMIX_APP_CREATE(app, (size_t) napps);
+        for (a = 0; a < (size_t) napps; a++) {
+            app[a].cmd = strdup(selfpath);
+            app[a].maxprocs = kids;
+            PMIX_ARGV_APPEND(rc, app[a].argv, selfpath);
+            PMIX_ARGV_APPEND(rc, app[a].argv, "--child");
+        }
+        rc = PMIx_Spawn(NULL, 0, app, (size_t) napps, nsp2);
+        PMIX_APP_FREE(app, (size_t) napps);
         if (PMIX_SUCCESS != rc) {
+            /* Report and carry on, rather than leaving.  A caller that walks
+             * out on a failed spawn is not what an application does - mpi4py
+             * catches the error and runs the next test - and it changes what
+             * is under test: an earlier child of this rank may still be
+             * parked in PMIx_Connect waiting for us, and abandoning it turns
+             * every later measurement into a study of that. */
             printf("SPWN FAIL spawn %d %s\n", i, PMIx_Error_string(rc));
             fflush(stdout);
-            return 10;
+            ++nfailed;
+            continue;
         }
 
-        PMIX_PROC_LOAD(&procs[0], myproc.nspace, PMIX_RANK_WILDCARD);
+        /* COMM_SELF spawn connects the ONE spawning rank to its children;
+         * a wildcard here would demand every rank of this job join, which
+         * they are not doing - each is off spawning children of its own. */
+        PMIX_PROC_LOAD(&procs[0], myproc.nspace,
+                       self ? myproc.rank : PMIX_RANK_WILDCARD);
         PMIX_PROC_LOAD(&procs[1], nsp2, PMIX_RANK_WILDCARD);
         if (PMIX_SUCCESS != (rc = PMIx_Connect(procs, 2, NULL, 0))) {
             printf("SPWN FAIL connect %d %s\n", i, PMIx_Error_string(rc));
@@ -233,7 +261,7 @@ int main(int argc, char **argv)
         fflush(stdout);
     }
 
-    printf("SPWN DONE %d\n", iters);
+    printf("SPWN DONE %d (%d spawns failed)\n", iters, nfailed);
     fflush(stdout);
     PMIx_Finalize(NULL, 0);
     return 0;
