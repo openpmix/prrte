@@ -51,7 +51,16 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     int i;
     pmix_list_t node_list;
     int32_t num_slots;
-    int rc;
+    /* Initialized because there are paths that reach the return without
+     * assigning it: in per-app dispatch (app_idx >= 0) the compute_vpids
+     * call below is skipped, so rc is only ever set inside the app loop -
+     * and that loop body is skipped entirely for every app index that is
+     * not the requested one.  An app array whose requested slot is empty
+     * therefore returned a garbage status to the caller, which reads it as
+     * success or failure at random.  Only -O1 and above sees this; the
+     * ordinary --enable-debug build is -O0, where GCC does not run the
+     * analysis that finds it. */
+    int rc = PRTE_SUCCESS;
     /* Reset the per-node "mapped" flags only on the genuine first mapping pass.
      * In per-app dispatch this module is entered once per app context; treating
      * each entry as an initial map would re-clear the flags on nodes a previous
