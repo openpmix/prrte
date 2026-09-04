@@ -941,12 +941,19 @@ release:
      */
     session = jdata->session;
     if(NULL != session){
+        /* Drop this job from the session's list.  By identity, NOT by
+         * namespace: PMIX_CHECK_NSPACE answers "true" the moment either side
+         * is empty, and this array legitimately holds jobs that have no
+         * namespace yet - plm_base_receive puts a spawn request into it at
+         * "moveon", while prte_plm_base_setup_job does not mint the namespace
+         * until the job reaches JOB_STATE_INIT an event later.  A completing
+         * job whose walk reached such an entry first therefore cleared
+         * somebody else's slot and broke, unregistering a live job and
+         * leaving its own entry behind to dangle once it was freed. */
         for(i = 0; i < session->jobs->size; i++){
-            if(NULL != (jptr = pmix_pointer_array_get_item(session->jobs, i))){
-                if(PMIX_CHECK_NSPACE(jdata->nspace, jptr->nspace)){
-                    pmix_pointer_array_set_item(session->jobs, i, NULL);
-                    break;
-                }
+            if(jdata == (prte_job_t *) pmix_pointer_array_get_item(session->jobs, i)){
+                pmix_pointer_array_set_item(session->jobs, i, NULL);
+                break;
             }
         }
         /* Tell the session-control layer the job is gone. It records the

@@ -917,6 +917,28 @@ static void prte_job_destruct(prte_job_t *job)
     if (NULL != job->traces) {
         PMIx_Argv_free(job->traces);
     }
+    /* A session's job array holds BORROWED pointers - see prte_session_t -
+     * so a job that dies while still listed there leaves the session holding
+     * a dangling one, and every later walk of that array reads freed memory.
+     * The job pool above is kept honest the same way, by the object removing
+     * itself as it goes; do the same here rather than relying on whichever
+     * state-machine path happened to run first.  check_complete_resume()
+     * normally drops the entry, but it has exits that return before reaching
+     * that point, and a job can be released without completing at all.
+     *
+     * Matched by identity, not by namespace: PMIX_CHECK_NSPACE treats an
+     * empty namespace as a wildcard, and this array legitimately holds
+     * not-yet-named jobs - plm_base_receive adds a spawn request to it before
+     * prte_plm_base_setup_job mints the namespace - so a namespace compare
+     * here can match, and clear, somebody else's entry. */
+    if (NULL != job->session && NULL != job->session->jobs) {
+        for (n = 0; n < job->session->jobs->size; n++) {
+            if (job == (prte_job_t *) pmix_pointer_array_get_item(job->session->jobs, n)) {
+                pmix_pointer_array_set_item(job->session->jobs, n, NULL);
+            }
+        }
+    }
+
     /* Both the primary session and every target carry a counted reference -
      * see prte_job_t::session.  Dropping them here is what finally reclaims a
      * reservation that was torn down while this job was still running in it:
