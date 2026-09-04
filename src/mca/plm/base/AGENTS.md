@@ -137,19 +137,33 @@ therefore run **before** the job is added to `session->jobs` — that array
 rejected after being added stays there as a phantom for the life of the
 session.
 
-**A spawn request arrives with no namespace.** The requester packs a job
-object the HNP has not named yet; `prte_plm_base_setup_job` assigns the
-nspace (via `prte_plm_base_create_jobid`) when the job reaches `INIT`.
-Anything keyed on the job's identity therefore cannot be done here. That
-caught the reservation-ownership grant: the spawned job is supposed to
-become an owner of the reservation it targets (so it can spawn onto those
-nodes in turn), and recording it at request time wrote an **empty**
-namespace into the owner set. An empty namespace is not merely useless —
-`PMIx_Check_nspace` treats an empty side as a *wildcard*, so an empty
-owner entry matches every namespace and retires the reservation's
-ownership gate entirely. The grant now happens in `setup_job`, once the
-job has a name, and `prte_session_add_owner` refuses an empty namespace
-outright.
+**A spawn request arrives with no namespace — so name it, first thing.**
+The requester cannot name what it sends: the jobid counter is the HNP's,
+so `interim()` packs an unnamed job on whatever daemon hosts the client
+and this is where the HNP first has the object. An unnamed job carries the
+*empty* namespace, and `PMIx_Check_nspace` treats an empty side as a
+**wildcard** — so until it is named, every identity test the job passes
+through answers true against every namespace in the DVM. Three separate
+bugs came out of that window: the reservation-ownership grant recorded an
+empty namespace as an owner and thereby opened the reservation to
+everyone, `errmgr/dvm` took an early-failing job for the *daemon* job and
+brought the whole DVM down, and a completing job cleared another job's
+slot in `session->jobs`. `prte_plm_base_create_jobid()` is therefore
+called immediately after the unpack, before the sender, the personality,
+the session or anything else is looked at.
+
+Naming is **not** registration. Entering the job in `prte_job_data` still
+waits for `INIT` (`prte_plm_base_setup_job`), because that array is what a
+joining daemon is caught up from (`prte_util_pack_job_catchup`) and what
+the job queries enumerate — and a job named here may still be waiting on
+an allocation it requested, or parked in `prte_cache` until the DVM is
+ready, with no map to describe. Reaching `INIT` is what says the job is
+going to be launched.
+
+The reservation-ownership grant stays in `setup_job` for the same reason,
+not for want of a name: a request rejected after `moveon:` — an
+add-hosts failure, a malformed spawn allocation — must not have become an
+owner of a reservation on its way out, and nothing removes an owner.
 
 The requester is still vetted here, before anything is granted:
 `prte_session_is_owned_by(session, requestor)`.

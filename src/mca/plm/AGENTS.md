@@ -180,7 +180,7 @@ spine of launch:
 
 | Handler | State it services → what it does |
 |---------|----------------------------------|
-| `prte_plm_base_setup_job` | `INIT` → assign a jobid (`prte_plm_base_create_jobid`), record the job as an owner of the reservation(s) it targets (it has a namespace only now — see the command processor below), arm spawn/job timeout timers, then `INIT_COMPLETE`. |
+| `prte_plm_base_setup_job` | `INIT` → enter the job in `prte_job_data` (it was *named* at the DVM's door, in the command processor; reaching `INIT` is what says it will actually be launched), record it as an owner of the reservation(s) it targets, arm spawn/job timeout timers, then `INIT_COMPLETE`. |
 | `prte_plm_base_allocation_complete` | `ALLOCATION_COMPLETE` → `LAUNCH_DAEMONS` (the component's handler). Has a bootstrap-DVM special case that stands up the VM directly. |
 | `prte_plm_base_daemons_launched` | `DAEMONS_LAUNCHED` → **deliberately a no-op**; we wait for daemons to phone home rather than advancing. |
 | `prte_plm_base_daemons_reported` | `DAEMONS_REPORTED` → size any node whose slot count was not given (`PRTE_NODE_FLAG_SLOTS_GIVEN`), sum the job's session nodes into `total_slots_alloc`, then `VM_READY`. |
@@ -342,13 +342,12 @@ thread-safe on the progress thread) and switches on
   must happen before the job is added to `session->jobs`** — that array
   borrows its entries and nothing ever removes one, so a job rejected
   afterwards stays as a phantom for the life of the session. And **the job
-  has no namespace here**: the requester packs an unnamed job and the HNP
-  names it later, in `prte_plm_base_setup_job`. Anything keyed on the
-  job's own identity has to wait for that. The reservation-ownership grant
-  did not, and so recorded an *empty* namespace as an owner — which
-  `PMIx_Check_nspace` treats as a wildcard matching every namespace,
-  retiring the ownership gate on that reservation. The grant now happens
-  in `setup_job`, and `prte_session_add_owner` refuses an empty namespace.
+  arrives with no namespace, so this is where it is named**: the requester
+  cannot name it (the jobid counter is the HNP's), and an empty namespace
+  is a *wildcard* to `PMIx_Check_nspace`, so an unnamed job matches every
+  namespace in the DVM. `prte_plm_base_create_jobid()` runs immediately
+  after the unpack, before anything else looks at the job. Registering it
+  in `prte_job_data` is a separate, later step — see the base guide.
 - **`PRTE_PLM_UPDATE_PROC_STATE`** — daemons report per-proc pid/state/
   exit-code; the handler activates the corresponding proc state.
 - **`PRTE_PLM_REGISTERED_CMD`** — procs registered for sync; advances to
@@ -521,7 +520,9 @@ node (issue #2707).
   HNP procID `base@0`.
 - `prte_plm_base_create_jobid(jdata)` — assigns each new job the nspace
   `base@N` with a monotonic `next_jobid` (wrapping/reusing when
-  exhausted).
+  exhausted). A job that already has a name keeps it. It does **not**
+  register the job in `prte_job_data`; that happens at `INIT`, in
+  `prte_plm_base_setup_job`.
 
 ---
 

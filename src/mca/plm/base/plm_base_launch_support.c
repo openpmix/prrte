@@ -759,9 +759,33 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     /* update job state */
     caddy->jdata->state = caddy->job_state;
 
-    /* start by getting a jobid */
-    if (PMIX_NSPACE_INVALID(caddy->jdata->nspace)) {
-        if (PRTE_SUCCESS != (rc = prte_plm_base_create_jobid(caddy->jdata))) {
+    /* Start by ensuring the job has a name.  A job that entered the DVM
+     * through the PLM command processor was named the moment it was
+     * unpacked, so this is a no-op for it; a job that reached INIT by some
+     * other route is named here. */
+    if (PRTE_SUCCESS != (rc = prte_plm_base_create_jobid(caddy->jdata))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
+        PMIX_RELEASE(caddy);
+        return;
+    }
+
+    /* Now enter it in the global job registry.  This is deliberately later
+     * than the naming.  prte_job_data is what a daemon joining the DVM is
+     * caught up from and what the job queries enumerate, and a job is named
+     * before it is known to be launchable at all: it may still be waiting on
+     * an allocation it requested, or parked in prte_cache until the DVM is
+     * ready.  Such a job has no map, and a catch-up entry for an unmapped
+     * job leaves every joining daemon holding a procless copy of it forever
+     * (see prte_util_pack_job_catchup).  Reaching INIT is what says the job
+     * is going to be launched.
+     *
+     * A job that is already registered - it came back through here, or it
+     * was entered by whoever built it - keeps the slot it has; index is -1
+     * until something registers it, and prte_job_destruct clears exactly
+     * that slot. */
+    if (0 > caddy->jdata->index) {
+        if (PRTE_SUCCESS != (rc = prte_set_job_data_object(caddy->jdata))) {
             PRTE_ERROR_LOG(rc);
             PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
             PMIX_RELEASE(caddy);
@@ -769,19 +793,22 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
         }
     }
 
-    /* Now - and only now - can the job be recorded as an owner of the
+    /* Now - and only now - is the job recorded as an owner of the
      * reservation(s) it was cleared to run in.  That grant is what lets it
-     * spawn further jobs onto those nodes, and it belongs to the job's own
-     * namespace, which did not exist until the line above: a spawn request
-     * arrives with an empty nspace and the HNP names the job here.
+     * spawn further jobs onto those nodes, and nothing ever removes an
+     * owner, so it waits until the job is known to be launching: a request
+     * rejected in the command processor (a failed add-hosts, a malformed
+     * spawn allocation) must not have made itself an owner on its way out.
      *
-     * Granting it at request-vetting time therefore recorded an EMPTY
-     * namespace as an owner - and an empty namespace matches every other one
-     * (PMIx_Check_nspace treats it as a wildcard), so the first job spawned
-     * into a reservation quietly opened that reservation to every namespace
-     * in the DVM.  prte_session_add_owner now refuses an empty namespace
-     * outright; this is where the real one is recorded.  Both calls are
-     * no-ops for the default session, which everyone may use. */
+     * It also has to be a real namespace.  Granting it at request-vetting
+     * time, back when the job was not named until this function ran,
+     * recorded an EMPTY namespace as an owner - and an empty namespace
+     * matches every other one (PMIx_Check_nspace treats it as a wildcard),
+     * so the first job spawned into a reservation quietly opened that
+     * reservation to every namespace in the DVM.  The job is named at the
+     * DVM's door now, and prte_session_add_owner refuses an empty namespace
+     * outright.  Both calls are no-ops for the default session, which
+     * everyone may use. */
     if (NULL != caddy->jdata->target_sessions) {
         for (n = 0; n < caddy->jdata->num_target_sessions; n++) {
             prte_session_add_owner(caddy->jdata->target_sessions[n], caddy->jdata->nspace);

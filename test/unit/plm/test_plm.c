@@ -520,14 +520,16 @@ static int test_naming(void)
     char *save_base = prte_plm_globals.base_nspace;
     uint32_t save_next = prte_plm_globals.next_jobid;
     pmix_proc_t save_me, save_hnp;
-    prte_job_t *jdata;
+    prte_job_t *jdata, *jdata2;
     char expect[PMIX_MAX_NSLEN + 1];
+    char expect2[PMIX_MAX_NSLEN + 1];
 
     memcpy(&save_me, PRTE_PROC_MY_NAME, sizeof(pmix_proc_t));
     memcpy(&save_hnp, PRTE_PROC_MY_HNP, sizeof(pmix_proc_t));
 
-    /* create_jobid registers the job, so we need the global job array that
-     * a full prte_init() would have built for us */
+    /* create_jobid does not register the job, but it consults the global job
+     * array when it has wrapped and is looking for a reusable jobid -- so we
+     * still need the array a full prte_init() would have built for us */
     if (NULL == prte_job_data) {
         prte_job_data = PMIX_NEW(pmix_pointer_array_t);
         pmix_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
@@ -563,15 +565,38 @@ static int test_naming(void)
     CHECK("create_jobid succeeds", PRTE_SUCCESS == prte_plm_base_create_jobid(jdata));
     snprintf(expect, sizeof(expect), "%s@1", prte_plm_globals.base_nspace);
     CHECK("first jobid is base@1", 0 == strcmp(jdata->nspace, expect));
-    CHECK("job is registered", jdata == prte_get_job_data_object(jdata->nspace));
     CHECK("next_jobid advanced", 2 == prte_plm_globals.next_jobid);
 
-    /* a restarting job keeps the nspace it already has */
+    /* Naming does NOT enter the job in the global registry.  The two are
+     * separate steps on purpose: a job is named at the DVM's door, where an
+     * empty nspace would be read as a wildcard by every identity test it
+     * then passes, but it is registered only when it reaches INIT -- until
+     * then it may still be waiting on an allocation, or parked in
+     * prte_cache, with no map for a joining daemon to be caught up from. */
+    CHECK("naming did not register the job", NULL == prte_get_job_data_object(jdata->nspace));
+
+    /* ...so a second job named while the first is still unregistered must
+     * still get a name of its own */
+    jdata2 = PMIX_NEW(prte_job_t);
+    CHECK("second create_jobid succeeds", PRTE_SUCCESS == prte_plm_base_create_jobid(jdata2));
+    snprintf(expect2, sizeof(expect2), "%s@2", prte_plm_globals.base_nspace);
+    CHECK("second jobid is base@2", 0 == strcmp(jdata2->nspace, expect2));
+    CHECK("second jobid differs from the first", 0 != strcmp(jdata2->nspace, jdata->nspace));
+    CHECK("next_jobid advanced again", 3 == prte_plm_globals.next_jobid);
+    PMIX_RELEASE(jdata2);
+
+    /* a job that already has a name keeps it -- a restarting job, and the
+     * ordinary case of a job named at the door reaching INIT later */
+    CHECK("create_jobid on a named job succeeds",
+          PRTE_SUCCESS == prte_plm_base_create_jobid(jdata));
+    CHECK("named job kept its nspace", 0 == strcmp(jdata->nspace, expect));
+    CHECK("naming a named job consumed no jobid", 3 == prte_plm_globals.next_jobid);
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RESTART);
     CHECK("create_jobid on restart succeeds", PRTE_SUCCESS == prte_plm_base_create_jobid(jdata));
     CHECK("restart kept its nspace", 0 == strcmp(jdata->nspace, expect));
-    CHECK("restart did not consume a jobid", 2 == prte_plm_globals.next_jobid);
+    CHECK("restart did not consume a jobid", 3 == prte_plm_globals.next_jobid);
     PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RESTART);
+    PMIX_RELEASE(jdata);
 
     free(prte_plm_globals.base_nspace);
     prte_plm_globals.base_nspace = save_base;
