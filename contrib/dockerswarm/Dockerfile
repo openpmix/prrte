@@ -21,7 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc g++ make \
         autoconf automake libtool m4 flex \
-        perl python3 git \
+        perl python3 python3-dev python3-pip python3-venv git \
         libevent-dev libhwloc-dev zlib1g-dev libzstd-dev \
         libjansson-dev \
         openssh-server openssh-client \
