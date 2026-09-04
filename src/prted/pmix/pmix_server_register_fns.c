@@ -662,12 +662,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
      * half of itself. The identical screen, and the reasoning, is in
      * prte_pmix_server_connection_spawned() (pmix_server_connect.c).
      *
-     * strncmp, not PMIX_CHECK_NSPACE: that macro treats an empty nspace on
-     * either side as a wildcard match, and this test must answer only for the
-     * namespace it was actually given.
+     * PMIX_CHECK_NSPACE_STRICT, not PMIX_CHECK_NSPACE: the latter treats an
+     * empty nspace on either side as a wildcard match, and this test must
+     * answer only for the namespace it was actually given.
      */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc, PMIX_PROC)) {
-        if (0 != strncmp(PRTE_PROC_MY_NAME->nspace, parentproc->nspace, PMIX_MAX_NSLEN)) {
+        if (!PMIX_CHECK_NSPACE_STRICT(PRTE_PROC_MY_NAME->nspace, parentproc->nspace)) {
             parent = prte_get_job_data_object(parentproc->nspace);
         }
         if (NULL != parent && PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {

@@ -75,11 +75,11 @@ static bool registry_live(void)
  * NOT PMIX_CHECK_NSPACE, which answers "true" the moment either side is
  * empty - wildcard semantics that are right for matching a request and wrong
  * for deciding who is in an assemblage, where an empty nspace would put a
- * proc in every one of them. */
-static bool same_nspace(const pmix_nspace_t a, const pmix_nspace_t b)
-{
-    return (0 == strncmp(a, b, PMIX_MAX_NSLEN));
-}
+ * proc in every one of them.  PMIX_CHECK_NSPACE_STRICT is that question,
+ * and it also declines to call two *unset* namespaces the same one: an
+ * assemblage member with no namespace is malformed input, not a participant
+ * two requests can agree on. */
+#define same_nspace(a, b) PMIX_CHECK_NSPACE_STRICT((a), (b))
 
 /* Does this member entry cover this proc?  An entry naming a wildcard rank
  * stands for every proc of that namespace, which is how a connect between

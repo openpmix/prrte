@@ -251,14 +251,14 @@ progress:
  * all, and this is what keeps it from making us wait on strangers. */
 static bool in_our_tree(const char *jobid, const char *root)
 {
-    if (0 == strncmp(jobid, spawnednspace, PMIX_MAX_NSLEN)) {
+    /* STRICT throughout: spawnednspace is empty until we have spawned
+     * something, and PMIX_CHECK_NSPACE's wildcard would then claim every
+     * job on a shared DVM as ours. */
+    if (PMIX_CHECK_NSPACE_STRICT(jobid, spawnednspace)) {
         return true;
     }
-    if (NULL == root || '\0' == root[0]) {
-        return false;
-    }
-    return (0 == strncmp(root, myproc.nspace, PMIX_MAX_NSLEN) ||
-            0 == strncmp(root, spawnednspace, PMIX_MAX_NSLEN));
+    return (PMIX_CHECK_NSPACE_STRICT(root, myproc.nspace) ||
+            PMIX_CHECK_NSPACE_STRICT(root, spawnednspace));
 }
 
 static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
@@ -312,7 +312,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
         /* somebody else's job on a DVM we share */
         goto progress;
     }
-    primary = (0 == strncmp(jobid, spawnednspace, PMIX_MAX_NSLEN));
+    primary = PMIX_CHECK_NSPACE_STRICT(jobid, spawnednspace);
 
     if (verbose) {
         pmix_output(0, "JOB %s COMPLETED WITH STATUS %d, %u LEFT IN TREE",
