@@ -958,7 +958,6 @@ static void prte_node_construct(prte_node_t *node)
     node->procs = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(node->procs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    node->next_node_rank = 0;
 
     node->state = PRTE_NODE_STATE_UNKNOWN;
     node->slots = 0;

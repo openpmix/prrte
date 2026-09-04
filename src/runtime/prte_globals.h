@@ -366,8 +366,6 @@ typedef struct {
     prte_node_rank_t num_procs;
     /* array of pointers to procs on this node */
     pmix_pointer_array_t *procs;
-    /* next node rank on this node */
-    prte_node_rank_t next_node_rank;
     /** State of this node */
     prte_node_state_t state;
     /** A "soft" limit on the number of slots available on the node.

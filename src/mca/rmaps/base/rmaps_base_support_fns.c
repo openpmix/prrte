@@ -633,14 +633,36 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
         PMIX_RELEASE(proc); // releases node to maintain accounting
         return NULL;
     }
+    /* A node rank has to be unique among the procs alive on this node at any
+     * one time, across every job running there - that is the entire
+     * difference between it and local_rank, which is numbered within one job.
+     * The slot this proc just took in node->procs is exactly that property:
+     * pmix_pointer_array_add() hands back the lowest index no live proc
+     * holds, and a job's completion NULLs the slot as it releases the proc.
+     *
+     * node->num_procs cannot supply it, which is what this used to read.  It
+     * is a population count, and it goes back *down* when any job's procs
+     * leave, so a job mapped after an earlier job ended was handed the node
+     * ranks a third, still-running job was already using.  Two live procs on
+     * one node then answered PMIX_NODE_RANK with the same number.  On a
+     * persistent DVM - and on anything doing repeated PMIx_Spawn - that is
+     * the common case, not a corner. */
+    if (PRTE_NODE_RANK_INVALID <= rc) {
+        /* more live procs on this node than a node rank can name.  Refuse
+         * rather than hand back a value that aliases the invalid marker */
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        pmix_pointer_array_set_item(node->procs, rc, NULL);
+        PMIX_RELEASE(proc); // releases node to maintain accounting
+        return NULL;
+    }
 
     /* if this is a tool app, then it doesn't count against
      * available slots - otherwise, it does */
     if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
         proc->local_rank = 0;
-        proc->node_rank = UINT16_MAX;
+        proc->node_rank = PRTE_NODE_RANK_INVALID;
     } else {
-        proc->node_rank = node->num_procs;
+        proc->node_rank = (prte_node_rank_t) rc;
         node->num_procs++;
         ++node->slots_inuse;
         /* slots_available is what this mapping operation may still take

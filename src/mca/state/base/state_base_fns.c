@@ -1007,7 +1007,6 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
     // recover node resources
     node->slots_inuse--;
     node->num_procs--;
-    node->next_node_rank--;
 
     // find the node in the map
     node_idx = INT_MAX;
