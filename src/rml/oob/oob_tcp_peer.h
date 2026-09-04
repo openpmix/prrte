@@ -62,6 +62,14 @@ typedef struct {
                                     the connection being closed.  Separates a connection that
                                     died while still being established, whose untried addresses
                                     must still be tried, from the loss of a working one. */
+    bool ever_connected;       /**< has a connection to this peer EVER reached CONNECTED?
+                                    Unlike `established`, this is never cleared, so it answers
+                                    a different question: not "is the connection being closed
+                                    a working one" but "did this peer ever work at all".  That
+                                    is what separates a daemon we have never reached - which
+                                    may not have started, or may be behind a firewall - from
+                                    one that was running and has since gone away, and the two
+                                    need opposite advice. */
     int num_retries;
     time_t first_attempt; /**< wall-clock time of the first connection attempt in the current
                                retry sequence; 0 until the first retry is scheduled.  Used to
