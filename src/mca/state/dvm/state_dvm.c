@@ -992,7 +992,6 @@ release:
                     !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
-                    node->next_node_rank--;
                 }
                 /* release the resources held by the proc - only the first
                  * cpu in the proc's cpuset was used to mark usage.  The

@@ -19,6 +19,7 @@ test_rmaps_SOURCES = \
     test_ranking.c         \
     test_binding.c         \
     test_check_avail.c     \
+    test_node_rank.c       \
     test_resize.c          \
     test_dispatch.c        \
     test_round_robin.c     \
