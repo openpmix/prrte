@@ -203,10 +203,12 @@ pmix_status_t prte_pmix_set_primary_server(const pmix_proc_t *target)
 {
     pmix_status_t rc;
 
-    /* PMIX_CHECK_PROCID answers "true" for an empty nspace, so the flag -
-     * not the identity - is what says we have ever designated one */
+    /* STRICT: PMIX_CHECK_PROCID answers "true" for an empty nspace, so it
+     * would call an undesignated primary server the same process as whoever
+     * is being designated now.  The flag still says whether we have ever
+     * designated one - it is set on paths that do not come through here */
     if (prte_pmix_server_globals.primary_server_set &&
-        PMIX_CHECK_PROCID(&prte_pmix_server_globals.primary_server, target)) {
+        PMIX_CHECK_PROCID_STRICT(&prte_pmix_server_globals.primary_server, target)) {
         return PMIX_SUCCESS;
     }
 

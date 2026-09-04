@@ -96,16 +96,13 @@ static bool member_covers(const pmix_proc_t *member, const pmix_proc_t *proc)
  * order carries no meaning - the PMIx definition says so explicitly - so this
  * compares them as sets.
  *
- * The comparison of a single entry is literal, deliberately: PMIX_CHECK_PROCID
- * would call "nspace/0" and "nspace/WILDCARD" a match, and the two are
- * different participant lists.  PMIx itself will not match a connect
- * expressed one way with a connect expressed the other, so neither may we -
- * a disconnect naming a set we never recorded must fail to find it rather
- * than drop somebody else's. */
-static bool same_proc(const pmix_proc_t *a, const pmix_proc_t *b)
-{
-    return (a->rank == b->rank && same_nspace(a->nspace, b->nspace));
-}
+ * The comparison of a single entry wildcards on neither half, which is what
+ * PMIX_CHECK_PROCID_STRICT is for: PMIX_CHECK_PROCID would call "nspace/0"
+ * and "nspace/WILDCARD" a match, and the two are different participant
+ * lists.  PMIx itself will not match a connect expressed one way with a
+ * connect expressed the other, so neither may we - a disconnect naming a set
+ * we never recorded must fail to find it rather than drop somebody else's. */
+#define same_proc(a, b) PMIX_CHECK_PROCID_STRICT((a), (b))
 
 static bool same_membership(prte_pmix_server_connection_t *cptr,
                             const pmix_proc_t *members, size_t nmembers)

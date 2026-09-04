@@ -666,7 +666,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
          * the first finds its request already retired and logs a spurious
          * "not found". */
         if (PRTE_PROC_IS_MASTER ||
-            PMIX_CHECK_PROCID(&jdata->originator, PRTE_PROC_MY_NAME)) {
+            PMIX_CHECK_PROCID_STRICT(&jdata->originator, PRTE_PROC_MY_NAME)) {
             ret = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
             if (PRTE_SUCCESS != ret) {
                 PRTE_ERROR_LOG(ret);
