@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     ssize_t len;
     int iters = 25, kids = 2, hold = 0, napps = 1, nfailed = 0, i, n;
     size_t a;
-    bool self = false, orphan = false;
+    bool orphan = false;
     struct timespec t0, t1;
 
     for (n = 1; n < argc; n++) {
@@ -171,8 +171,6 @@ int main(int argc, char **argv)
             kids = atoi(argv[++n]);
         } else if (0 == strcmp(argv[n], "--apps") && n + 1 < argc) {
             napps = atoi(argv[++n]);
-        } else if (0 == strcmp(argv[n], "--self")) {
-            self = true;
         } else if (0 == strcmp(argv[n], "--orphan")) {
             /* spawn children that will connect back to us, and then leave
              * without ever joining that connect.  A collective cannot
@@ -183,7 +181,7 @@ int main(int argc, char **argv)
             hold = atoi(argv[++n]);
         } else {
             fprintf(stderr, "usage: %s [--iters N] [--kids N] [--apps N] "
-                            "[--self] [--child] [--hold S]\n", argv[0]);
+                            "[--child] [--hold S] [--orphan]\n", argv[0]);
             return 1;
         }
     }
@@ -244,16 +242,20 @@ int main(int argc, char **argv)
             continue;
         }
 
-        /* COMM_SELF spawn connects the ONE spawning rank to its children;
-         * a wildcard here would demand every rank of this job join, which
-         * they are not doing - each is off spawning children of its own. */
         if (orphan) {
             printf("SPWN ORPHANED %d %s\n", i, nsp2);
             fflush(stdout);
             continue;
         }
-        PMIX_PROC_LOAD(&procs[0], myproc.nspace,
-                       self ? myproc.rank : PMIX_RANK_WILDCARD);
+        /* Name THIS rank, never a wildcard.  It has to agree exactly with
+         * what the child asks for - the child connects to the proc named by
+         * PMIX_PARENT_ID - and PMIx compares participant lists literally, so
+         * "nspace/0" and "nspace/WILDCARD" are different sets.  A mismatch is
+         * not a slow connect; it matches nothing and blocks both halves
+         * forever.  A wildcard would also demand every rank of this job join
+         * a connect the others are not making, each being off spawning
+         * children of its own. */
+        PMIX_PROC_LOAD(&procs[0], myproc.nspace, myproc.rank);
         PMIX_PROC_LOAD(&procs[1], nsp2, PMIX_RANK_WILDCARD);
         if (PMIX_SUCCESS != (rc = PMIx_Connect(procs, 2, NULL, 0))) {
             printf("SPWN FAIL connect %d %s\n", i, PMIx_Error_string(rc));
