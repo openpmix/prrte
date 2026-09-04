@@ -277,6 +277,65 @@ static int test_session_registry(void)
     return failures;
 }
 
+/* A session's job array holds BORROWED pointers, so the one thing that must
+ * never happen is a job being freed while the session still lists it: every
+ * later walk of that array then reads freed memory.  ASAN caught exactly that
+ * as a heap-use-after-free in check_complete_resume()'s walk, reported against
+ * PMIx because the freed byte is read by PMIx_Check_nspace.
+ *
+ * The job pool has always kept itself honest this way - a job clears its own
+ * slot as it goes - and the session array now does too, rather than depending
+ * on which state-machine path ran first. */
+static int test_session_job_backref(void)
+{
+    int failures = 0;
+    prte_session_t *s;
+    prte_job_t *j1, *j2;
+    int i1, i2;
+
+    reset_globals();
+
+    s = PMIX_NEW(prte_session_t);
+    s->session_id = 55;
+    CHECK("backref: session insert", PRTE_SUCCESS == prte_set_session_object(s));
+
+    /* one named job and one that has not been named yet - the state a spawn
+     * request is in between plm_base_receive putting it on the session and
+     * prte_plm_base_setup_job minting its namespace */
+    j1 = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(j1->nspace, "backref-named");
+    prte_set_job_session(j1, s);
+    i1 = pmix_pointer_array_add(s->jobs, j1);
+
+    j2 = PMIX_NEW(prte_job_t);   /* nspace deliberately left empty */
+    prte_set_job_session(j2, s);
+    i2 = pmix_pointer_array_add(s->jobs, j2);
+
+    CHECK("backref: both jobs listed", 0 <= i1 && 0 <= i2);
+    CHECK("backref: named job is where we put it",
+          j1 == (prte_job_t *) pmix_pointer_array_get_item(s->jobs, i1));
+    CHECK("backref: unnamed job is where we put it",
+          j2 == (prte_job_t *) pmix_pointer_array_get_item(s->jobs, i2));
+
+    /* Release the named job.  Its slot must be cleared, and - the part that
+     * matters - the UNNAMED job's slot must be left alone.  A namespace
+     * compare would have matched it, because PMIX_CHECK_NSPACE treats an
+     * empty namespace as a wildcard. */
+    PMIX_RELEASE(j1);
+    CHECK("backref: a freed job leaves no dangling entry",
+          NULL == pmix_pointer_array_get_item(s->jobs, i1));
+    CHECK("backref: the unnamed job was not swept up with it",
+          j2 == (prte_job_t *) pmix_pointer_array_get_item(s->jobs, i2));
+
+    /* and the unnamed one clears its own slot too */
+    PMIX_RELEASE(j2);
+    CHECK("backref: an unnamed job also clears its own entry",
+          NULL == pmix_pointer_array_get_item(s->jobs, i2));
+
+    reset_globals();
+    return failures;
+}
+
 static int test_session_ownership(void)
 {
     int failures = 0;
@@ -1954,6 +2013,7 @@ int main(void)
     failures += test_job_registry();
     failures += test_session_registry();
     failures += test_session_ownership();
+    failures += test_session_job_backref();
     failures += test_proc_lookups();
     failures += test_node_matching();
     failures += test_node_copy();
