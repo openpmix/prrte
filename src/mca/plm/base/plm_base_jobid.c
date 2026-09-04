@@ -71,38 +71,62 @@ int prte_plm_base_set_hnp_name(void)
 }
 
 /*
- * Create a jobid
+ * Name a job
+ *
+ * Naming is deliberately separate from entering the job in the global
+ * registry, and it happens as early as the HNP can possibly do it: the
+ * moment a job object exists here.  An unnamed job carries the EMPTY
+ * namespace, and PMIx reads an empty namespace as a WILDCARD -
+ * PMIx_Check_nspace() answers true against anything - so every identity
+ * test an unnamed job passes through silently succeeds.  That has bitten
+ * this code base repeatedly: it disabled a reservation's ownership gate,
+ * it let one application's early failure be taken for the daemon job and
+ * bring the whole DVM down, and it let a completing job clear another
+ * job's slot in session->jobs.  Each was repaired where it was found; a
+ * job that has a name from the outset cannot raise the next one.
+ *
+ * Registration in prte_job_data waits for INIT (prte_plm_base_setup_job).
+ * That array is what a daemon joining the DVM is caught up from
+ * (prte_util_pack_job_catchup) and what the job queries enumerate, and a
+ * job named at the door may still be waiting on an allocation, or parked
+ * in prte_cache until the DVM is ready, with no map to describe yet.
  */
 static bool reuse = false;
 
 int prte_plm_base_create_jobid(prte_job_t *jdata)
 {
-    uint32_t i;
+    uint32_t i, jid;
     pmix_nspace_t pjid;
-    prte_job_t *ptr;
     bool found;
     char *tmp;
-    int rc;
 
-    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
-        /* this job is being restarted - do not assign it
-         * a new jobid
-         */
+    if (!PMIX_NSPACE_INVALID(jdata->nspace)) {
+        /* already named - a restarted job keeps the name it had, and a job
+         * named at the DVM's door reaches INIT already carrying one */
         return PRTE_SUCCESS;
     }
 
     if (reuse) {
-        /* find the first unused jobid */
+        /* Find an unused jobid at or after next_jobid, wrapping past the
+         * end.  The scan has to start where we left off rather than at 1
+         * because a name is handed out here but not recorded in
+         * prte_job_data until the job reaches INIT: a scan that always
+         * restarted at 1 would hand the same hole to every job named while
+         * the first one is still waiting for its allocation. */
         found = false;
-        for (i = 1; i < UINT32_MAX; i++) {
-            ptr = NULL;
-            (void) snprintf(pjid, PMIX_MAX_NSLEN - 1, "%s@%u", prte_plm_globals.base_nspace, i);
-            ptr = prte_get_job_data_object(pjid);
-            if (NULL == ptr) {
+        jid = prte_plm_globals.next_jobid;
+        for (i = 0; i < UINT32_MAX; i++) {
+            if (0 == jid) {
+                /* "@0" is the DVM itself */
+                jid = 1;
+            }
+            (void) snprintf(pjid, PMIX_MAX_NSLEN - 1, "%s@%u", prte_plm_globals.base_nspace, jid);
+            if (NULL == prte_get_job_data_object(pjid)) {
                 found = true;
-                prte_plm_globals.next_jobid = i;
+                prte_plm_globals.next_jobid = jid;
                 break;
             }
+            ++jid;
         }
         if (!found) {
             /* we have run out of jobids! */
@@ -116,13 +140,6 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
     pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
     PMIX_LOAD_NSPACE(jdata->nspace, tmp);
     free(tmp);
-
-    /* store the job object */
-    rc = prte_set_job_data_object(jdata);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
 
     prte_plm_globals.next_jobid++;
     if (UINT32_MAX == prte_plm_globals.next_jobid) {

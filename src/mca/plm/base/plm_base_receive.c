@@ -681,6 +681,32 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         /* we own it until it is handed to a container below */
         own_jdata = true;
 
+        /* Name it, before anything else looks at it.
+         *
+         * This is the door every job comes through - a PMIx_Spawn from an
+         * application or a tool, a session instantiation carrying its own
+         * app definitions - and the requester cannot name what it sends: the
+         * jobid counter is the HNP's, so the job is packed unnamed and
+         * arrives carrying the EMPTY namespace.  PMIx reads an empty
+         * namespace as a WILDCARD (PMIx_Check_nspace answers true against
+         * anything), so until it is named, every identity test this job
+         * passes through succeeds against every other namespace in the DVM.
+         * It is not a hypothetical: an unnamed job has been mistaken for the
+         * daemon job by errmgr/dvm and taken the whole DVM down with it, has
+         * opened a reservation to every namespace by being recorded as its
+         * owner, and has cleared another job's slot in session->jobs.
+         *
+         * So the HNP names it at the first instant it can - here, where the
+         * object first exists on this side - rather than at INIT, several
+         * events and every one of the checks below later.  Entering it in
+         * prte_job_data still waits for INIT; see prte_plm_base_create_jobid
+         * and prte_plm_base_setup_job for why those are separate steps. */
+        rc = prte_plm_base_create_jobid(jdata);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            goto ANSWER_LAUNCH;
+        }
+
         /* record the sender so we know who to respond to */
         PMIX_LOAD_PROCID(&jdata->originator, sender->nspace, sender->rank);
 
@@ -816,7 +842,11 @@ moveon:
          *
          * The matching GRANT - the spawned job becoming an owner itself, so
          * it can spawn onto those nodes in turn - happens in
-         * prte_plm_base_setup_job, once the job has a namespace to record. */
+         * prte_plm_base_setup_job.  The job has a name by now, but nothing
+         * ever removes an owner, so the grant waits until the request is
+         * known to be going ahead: a job rejected below this point (a failed
+         * add-hosts, a malformed spawn allocation) must not leave itself
+         * recorded as an owner of a reservation on its way out. */
         if (NULL == jdata->target_sessions && NULL != session &&
             session != prte_default_session &&
             (PRTE_SESSION_FLAG_RESERVED & session->flags)) {

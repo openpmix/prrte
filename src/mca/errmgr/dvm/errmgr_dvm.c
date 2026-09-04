@@ -202,9 +202,11 @@ static void job_errors(int fd, short args, void *cbdata)
      * and room number rather than by its name.  prte_plm_base_spawn_alloc_failed()
      * reaches for it directly for exactly the same reason.
      *
-     * prte_plm_base_setup_job() is where this arises: it activates
-     * NEVER_LAUNCHED on two paths that run before prte_plm_base_create_jobid()
-     * has named the job. */
+     * The window this guards is now closed at its source: the HNP names a
+     * job the moment prte_plm_base_recv() unpacks it, rather than when it
+     * reaches INIT, so nothing should arrive here unnamed.  This stays as a
+     * backstop - it costs one comparison, and it is all that stands between
+     * a future unnamed job and the daemon arm below. */
     if (PMIX_NSPACE_INVALID(jdata->nspace)) {
         rc = prte_pmix_convert_job_state_to_error(jobstate);
         rc = prte_plm_base_spawn_response(rc, jdata);

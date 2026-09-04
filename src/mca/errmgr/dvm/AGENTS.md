@@ -242,9 +242,16 @@ which routes on the job's originator and room number rather than on its
 name. Nothing is running under such a job and nothing downstream can
 address it, so an answer is the whole of what is owed.
 
-`prte_plm_base_setup_job()` is where this arises: it activates
-`NEVER_LAUNCHED` on two paths that run *before* the job is named.
-`prte_plm_base_spawn_alloc_failed()` and the `dvm_held` unwind in
+**The window this guarded is now closed at its source**, and the guard
+stays as a backstop rather than as the load-bearing fix. A job used to be
+named only when it reached `INIT`, so everything between the HNP unpacking
+a spawn request and `prte_plm_base_setup_job()` ran against the wildcard —
+including `setup_job`'s own two `NEVER_LAUNCHED` paths, which is where
+this was found. `prte_plm_base_recv()` now names the job the moment it is
+unpacked (see [`plm/base`](../../plm/base/AGENTS.md)), so no job should
+reach here without one. Keep the screen: it costs one comparison, and it
+is the only thing standing between a future unnamed job and the daemon
+arm. `prte_plm_base_spawn_alloc_failed()` and the `dvm_held` unwind in
 `prte_ras_base_modify()` avoid the state machine for the same reason and
 call `prte_plm_base_spawn_response()` directly.
 
