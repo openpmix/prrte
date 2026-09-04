@@ -501,6 +501,20 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/devinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # spawnloop: repeated PMIx_Spawn from one long-lived process.
+            # Every other spawn client here spawns once, and the state that
+            # only exists BETWEEN spawns is where the interesting failures
+            # are: the requesting daemon tracks each spawn in a recycled slot
+            # of local_reqs (the room number), stamps that index on the job,
+            # and never clears it -- and the response only travels by RML,
+            # carrying that index, when the requesting process is not on the
+            # node running the DVM master.  Neither is reachable on one host.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> spawnloop (repeated spawn) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/spawnloop \
+                /prrte-src/contrib/dockerswarm/spawnloop.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # dataserver: a bare PMIx client for the publish/lookup service
             # in src/runtime/data_server.  The store is a single array on
             # the HNP and every client reaches it through its own daemon, so
