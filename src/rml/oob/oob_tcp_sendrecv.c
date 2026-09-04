@@ -461,6 +461,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
             /* update our state */
             peer->state = MCA_OOB_TCP_CONNECTED;
+            peer->ever_connected = true;
             pmix_mutex_unlock(&peer->lock);
         } else if (PRTE_ERR_UNREACH != rc) {
             /* we get an unreachable error returned if a connection

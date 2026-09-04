@@ -517,19 +517,53 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         if (NULL == host && NULL != peer->active_addr) {
             host = pmix_net_get_hostname((struct sockaddr *) &(peer->active_addr->addr));
         }
-        /* use an pmix_output here instead of show_help as we may well
-         * not be connected to the HNP at this point */
-        pmix_output(prte_clean_output,
-                    "------------------------------------------------------------\n"
-                    "A daemon was unable to complete a TCP connection\n"
-                    "to another daemon:\n"
-                    "  Local host:    %s\n"
-                    "  Remote host:   %s\n"
-                    "This is usually caused by a firewall on the remote host. Please\n"
-                    "check that any firewall (e.g., iptables) has been disabled and\n"
-                    "try again.\n"
-                    "------------------------------------------------------------",
-                    prte_process_info.nodename, (NULL == host) ? "<unknown>" : host);
+        /* Say which of the two failures this is, because they need opposite
+         * advice and only one of them is about the network.
+         *
+         * A peer we have NEVER reached may not have started yet, may have
+         * failed to start, or may be behind a firewall - the connection has
+         * never worked, so the configuration is a fair thing to suspect.
+         *
+         * A peer we HAVE reached is a different story: the connection worked,
+         * so the network and the firewall are exonerated by that fact alone.
+         * The daemon has gone away since. Telling that user to check iptables
+         * sends them at their network when the answer is almost always their
+         * node or their scheduler - a cancelled or expired allocation takes
+         * its daemons with it, and that is the common case on a managed
+         * cluster. (The errmgr's own "lost communication" report says this
+         * properly, but show_help aggregates by topic and this message
+         * usually gets there first, so this is the one the user reads.)
+         *
+         * pmix_output rather than show_help throughout: we may well not be
+         * connected to the HNP at this point. */
+        if (peer->ever_connected) {
+            pmix_output(prte_clean_output,
+                        "------------------------------------------------------------\n"
+                        "A daemon that was running is no longer reachable:\n"
+                        "  Local host:    %s\n"
+                        "  Remote host:   %s\n"
+                        "The connection to that daemon was working earlier, so this is\n"
+                        "not a firewall or network configuration problem. Something\n"
+                        "ended the daemon or the node it was on. The usual causes are\n"
+                        "that the node failed, that the daemon was killed, or that the\n"
+                        "resource manager reclaimed the allocation it was running in -\n"
+                        "a job that was cancelled, or that reached its time limit.\n"
+                        "------------------------------------------------------------",
+                        prte_process_info.nodename, (NULL == host) ? "<unknown>" : host);
+        } else {
+            pmix_output(prte_clean_output,
+                        "------------------------------------------------------------\n"
+                        "A daemon was unable to complete a TCP connection\n"
+                        "to another daemon:\n"
+                        "  Local host:    %s\n"
+                        "  Remote host:   %s\n"
+                        "This connection has never succeeded, so the daemon may have\n"
+                        "failed to start, or may not be reachable. This is usually\n"
+                        "caused by a firewall on the remote host. Please check that any\n"
+                        "firewall (e.g., iptables) has been disabled and try again.\n"
+                        "------------------------------------------------------------",
+                        prte_process_info.nodename, (NULL == host) ? "<unknown>" : host);
+        }
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
         /* let the TCP component know that this module failed to make
@@ -1326,6 +1360,7 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
     tcp_peer_rebind_events(peer);
     peer->state = MCA_OOB_TCP_CONNECTED;
     peer->established = true;
+    peer->ever_connected = true;
 
     /* initiate send of first message on queue */
     if (NULL == peer->send_msg) {
