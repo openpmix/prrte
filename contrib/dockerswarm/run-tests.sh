@@ -4496,7 +4496,8 @@ test_spawn_repeat() {
         bad "only $n of $iters spawns completed: $(echo "$out" | grep -E '^SPWN (FAIL|ITER)' | tail -3 | tr '\n' ' ')"
     fi
 
-    echo "$out" | grep -q "^SPWN DONE $iters\$" \
+    # matched as a prefix: the client appends a failed-spawn count
+    echo "$out" | grep -qE "^SPWN DONE $iters( |\$)" \
         && ok "...and the spawning process ran to the end" \
         || bad "the spawning process did not finish: $(echo "$out" | grep '^SPWN' | tail -3 | tr '\n' ' ')"
 
