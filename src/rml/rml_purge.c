@@ -21,9 +21,10 @@ void prte_rml_purge(pmix_proc_t* peer){
     PMIX_LIST_FOREACH_SAFE(
         post, next_post, &prte_rml_base.posted_recvs, prte_rml_posted_recv_t
     ) {
-        // Don't use PMIX_CHECK_PROCID, because we don't want to match wildcards
-        if(!PMIx_Check_nspace(post->peer.nspace, peer->nspace)) continue;
-        if(post->peer.rank   != peer->rank  ) continue;
+        // PMIX_CHECK_PROCID_STRICT, not PMIX_CHECK_PROCID: purging is by
+        // identity, and neither an unset nspace nor a wildcard rank may be
+        // allowed to stand for anybody else's posted receive
+        if(!PMIX_CHECK_PROCID_STRICT(&post->peer, peer)) continue;
 
         pmix_list_remove_item(&prte_rml_base.posted_recvs, &post->super);
         PMIX_RELEASE(post);
@@ -33,11 +34,10 @@ void prte_rml_purge(pmix_proc_t* peer){
     PMIX_LIST_FOREACH_SAFE(
         msg, next_msg, &prte_rml_base.unmatched_msgs, prte_rml_recv_t
     ) {
-        // as above: compare the nspace strings, not the addresses of the two
-        // char arrays - "!=" on those is a pointer comparison that is always
-        // true, so no held message was ever purged
-        if(!PMIx_Check_nspace(msg->sender.nspace, peer->nspace)) continue;
-        if(msg->sender.rank   != peer->rank  ) continue;
+        // as above; and note it compares the nspace strings rather than the
+        // addresses of the two char arrays - "!=" on those is a pointer
+        // comparison that is always true, so no held message was ever purged
+        if(!PMIX_CHECK_PROCID_STRICT(&msg->sender, peer)) continue;
 
         pmix_list_remove_item(&prte_rml_base.unmatched_msgs, &msg->super);
         PMIX_RELEASE(msg);
