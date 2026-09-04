@@ -212,10 +212,12 @@ void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
      * seed of the set below rather than as a second mechanism: a job that
      * nobody has since subscribed to has exactly this one destination,
      * which is the behavior this function has always had. */
-    if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
-        /* an originator outside the daemon namespace is a tool attached
-         * to us, so there is nothing to relay anywhere */
-        PMIX_CHECK_NSPACE(jdata->originator.nspace, PRTE_PROC_MY_NAME->nspace)) {
+    /* STRICT: an unset originator - a job nobody is waiting on - must not
+     * be read as the daemon namespace, which PMIX_CHECK_NSPACE's wildcard
+     * would do.  An originator outside the daemon namespace is a tool
+     * attached to us, so there is nothing to relay anywhere. */
+    if (PMIX_CHECK_NSPACE_STRICT(jdata->originator.nspace,
+                                 PRTE_PROC_MY_NAME->nspace)) {
         relay_one(jdata->originator.rank, source, stream, data, numbytes,
                   already_delivered);
     }
@@ -231,8 +233,8 @@ void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
             continue;
         }
         dmn = (pmix_rank_t) n;
-        if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
-            PMIX_CHECK_NSPACE(jdata->originator.nspace, PRTE_PROC_MY_NAME->nspace) &&
+        if (PMIX_CHECK_NSPACE_STRICT(jdata->originator.nspace,
+                                     PRTE_PROC_MY_NAME->nspace) &&
             dmn == jdata->originator.rank) {
             continue;   // already served as the seed above
         }

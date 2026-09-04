@@ -1155,21 +1155,6 @@ static void cleanup_job(int sd, short args, void *cbdata)
 }
 
 #ifdef PMIX_SPAWN_TREE_ROOT
-/* Do these two namespaces name the same thing?
- *
- * NOT PMIX_CHECK_NSPACE, which answers "true" the moment either side is
- * empty - wildcard semantics that are right for a match against a request
- * and wrong here.  Most jobs in a DVM carry an empty launcher, and reading
- * every one of them as a member of whatever tree we are asking about would
- * put a stranger's job in a tool's wait set. */
-static bool same_nspace(const char *a, const char *b)
-{
-    if (PMIX_NSPACE_INVALID(a) || PMIX_NSPACE_INVALID(b)) {
-        return false;
-    }
-    return (0 == strncmp(a, b, PMIX_MAX_NSLEN));
-}
-
 /* The root of the spawn tree JDATA belongs to.  prte_job_t::launcher already
  * holds it, recorded when the job was created and copied transitively from
  * the parent, so a grandchild names the same root as its parent does.  It is
@@ -1213,8 +1198,14 @@ static uint32_t spawn_tree_active(prte_job_t *jdata, const char *root)
             PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
             continue;
         }
-        if (!same_nspace(jptr->launcher, root) &&
-            !same_nspace(jptr->nspace, root)) {
+        /* PMIX_CHECK_NSPACE_STRICT, not PMIX_CHECK_NSPACE: the latter
+         * answers "true" the moment either side is empty - wildcard
+         * semantics that are right for a match against a request and wrong
+         * here.  Most jobs in a DVM carry an empty launcher, and reading
+         * every one of them as a member of whatever tree we are asking
+         * about would put a stranger's job in a tool's wait set. */
+        if (!PMIX_CHECK_NSPACE_STRICT(jptr->launcher, root) &&
+            !PMIX_CHECK_NSPACE_STRICT(jptr->nspace, root)) {
             continue;
         }
         if (jptr->state < PRTE_JOB_STATE_TERMINATED) {
