@@ -167,6 +167,24 @@ For the communication-loss family — `COMM_FAILED`, `HEARTBEAT_FAILED`,
 Any non-comm daemon state hits the `pmix_output(0, "UNSUPPORTED DAEMON
 ERROR STATE …")` branch — a real one indicates a bug upstream.
 
+**Step 2 versus step 6 is the most useful thing in a verbose log.** Both
+report the same event — a daemon's socket died — and which branch a given
+daemon takes says whether PRRTE *was told* it was going away:
+
+```
+Comm failure for already-departed daemon [...] - ignoring it   <- PRRTE released it
+Comm failure: daemon [...] - aborting                          <- nobody told PRRTE
+```
+
+A DVM that dies with both kinds in one trace is not usually an errmgr defect;
+it is something destroying daemons behind PRRTE's back, and the ones that were
+released prove the guard works. That contrast is what identified a test harness
+`scancel`ing allocations a live DVM had absorbed — the daemons PRRTE had
+genuinely released were all swallowed, and only the ones taken from underneath
+it were fatal. Aborting there is correct: a daemon that vanishes without being
+released *is* a fault for a non-recoverable DVM. Read the scheduler's log
+alongside PRRTE's before suspecting this component.
+
 ### Application proc errors
 
 First, idempotency: `pptr->state = state` only if

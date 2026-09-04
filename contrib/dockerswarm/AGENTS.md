@@ -929,7 +929,32 @@ The corollary for a **persistent** DVM: the diagnostic is produced on the
 HNP, and `prte --daemonize` has detached from stdio, so `>/tmp/prte.out`
 captures nothing. PRRTE relays the message back to the submitting tool, so
 assert on `prun`'s own output; if you need the HNP's stdio, start it in the
-foreground under `docker exec -d` (see §5).
+foreground under `docker exec -d` (see §5). `RUN_BG` does exactly that, and
+`prted_dvm_start_mca` does not — the `rml/oob` firewall-message case uses
+`RUN_BG` for precisely this reason.
+
+**`RUN_BG` appends its redirect to what you hand it**, so a command written
+across several lines sends only its *last* line to the file and the rest to
+nowhere. Keep such a command on one line. The symptom is a case that fails
+claiming the log does not exist.
+
+**Aggregation is a runtime option, not an MCA parameter.** `--rtos
+aggregate-help` controls it; `--prtemca prte_base_help_aggregate 0` is
+silently a no-op, so a diagnostic run that passes it is not doing what it
+looks like it is doing. With aggregation on, only the *first* message of a
+topic is printed in full and the rest collapse into a one-line summary naming
+that topic — so a case asserting on a message that lost the race to another
+one should accept either form.
+
+**Some paths cannot be reached by timing, and there are knobs for those.**
+`prte_oob_silent_loss_vpid` names a daemon whose departure the HNP must
+pretend not to have noticed, which is the only reliable way to make it
+attempt a *fresh* connection to a daemon that has gone (normally the node is
+marked down first and the send is refused before the oob sees it). See
+[`src/rml/oob/AGENTS.md`](../../src/rml/oob/AGENTS.md). Reach for a knob like
+this rather than writing a case that wins a race some of the time: nine
+attempts across five mechanisms failed to hit that path before the knob
+existed, which is a flaky test waiting to be committed.
 
 ---
 

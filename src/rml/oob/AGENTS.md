@@ -140,6 +140,48 @@ Two knobs modify this (both default to preserving the original behavior):
   timestamp) before giving up so the routing tree can heal to an ancestor. `0`
   means retry forever. The HNP is never subject to this — it is retried forever.
 
+## When a peer cannot be reached, say which kind of failure it is
+
+`try_connect` giving up produces the message the user actually reads about a
+lost daemon, and there are **two failures behind it that want opposite
+advice**:
+
+- A peer we have **never** reached may not have started yet, may have failed
+  to start, or may be behind a firewall. Suspecting the configuration is fair.
+- A peer we **have** reached is a different story. The connection worked once,
+  which exonerates the network and the firewall by that fact alone; the daemon
+  has gone away since. On a managed cluster the usual reason is that the
+  resource manager reclaimed the allocation it was living in — a job cancelled,
+  or one that hit its time limit. Telling *that* user to check `iptables`
+  points them away from the answer.
+
+`peer->ever_connected` is what separates them, and it is not the same question
+as `peer->established`: that one is cleared by `prte_oob_tcp_peer_close` so it
+always describes *the connection being closed*, which at the failure site is a
+connection that never came up — false in both cases. `ever_connected` is set
+wherever a connection reaches `CONNECTED` and is never cleared.
+
+Note also which layer the user hears first. `errmgr/dvm` reports the loss
+properly (`node-died`, "PRTE has lost communication with a remote daemon"), but
+`show_help` aggregates by topic and this message usually arrives ahead of it,
+so this is the text that gets read. Keep it accurate.
+
+### Reaching that path on purpose: `prte_oob_silent_loss_vpid`
+
+The second case is nearly impossible to arrange by timing. Losing a daemon
+normally goes the other way entirely: this process sees the socket close,
+reports the loss, the node is marked down, and every later message for it is
+refused (`PRTE_ERR_NODE_DOWN`) before it reaches the oob at all. The connect
+attempt only happens when a daemon has gone away while we still believe in it.
+
+`prte_oob_silent_loss_vpid` names a daemon vpid whose departure this process
+must pretend not to have noticed — `peer_close` skips the `lost_connection`
+notification for it. The node stays up, the next message opens a fresh
+connection, and the failure lands where the message lives. It is fault
+injection, not a tuning knob, and like `odls_base_fork_publish_delay` it is
+**deliberately not restricted to a debug build**: the behavior it exists to
+reach is in the build that ships. `contrib/dockerswarm`'s `test_rml` uses it.
+
 ## Bootstrap specifics
 
 In a launcher-less (bootstrapped) DVM daemons boot independently, so:

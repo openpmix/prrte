@@ -351,6 +351,41 @@ as "the grow did not happen", several cases further on. `slurm-alloc free
 --all` cancels *every* job in the queue, deliberately: this is a dedicated
 single-purpose cluster and there is nothing in it that is not the harness.
 
+### Never scancel an allocation the DVM is still using
+
+Between elastic groups the harness gives the scheduler back everything except
+the DVM's own allocation. It must do that **through the DVM**, not with
+`scancel`, and `drop_extra_jobs` is where that is enforced.
+
+Those extra jobs are not all leftovers. Some are expander allocations the
+*running* DVM has absorbed, whose daemons live inside those jobs' SLURM steps.
+Cancelling one behind PRRTE's back kills daemons it still believes in, and the
+HNP does the right thing with that — reports a communication failure on a
+daemon nobody released and takes a non-recoverable DVM down. Every group after
+that point is then testing a DVM that no longer exists. That is exactly what
+happened: four failures, all of them one death and its cascade, and the tell
+was in `slurmctld.log` rather than PRRTE's — `REQUEST_KILL_JOB`s for jobs PRRTE
+never logged killing, immediately followed by comm failures on those jobs'
+nodes.
+
+**Wait for the release to complete.** A release is asynchronous, and a
+`scancel` issued while one is in flight beats PRRTE to its own daemons and
+causes precisely the failure being avoided — the first attempt at this fix did
+exactly that. A completed release cancels the SLURM job with it, so nothing is
+left to cancel; the `scancel` survives only as the fallback for a job the DVM
+does not hold, such as a pending expander it never absorbed.
+
+Like almost everything else in this file, this was survivable for as long as a
+`prted` daemonized out of its step and so sat beyond `scancel`'s reach. It is
+not survivable now that a daemon stays inside the allocation it was launched
+in, and `elastic_external_cancel_group` is the case that states what the DVM
+owes a user whose allocation is revoked: notice it, say so, orphan nothing, and
+leave the user's own allocation alone. That case deliberately does **not**
+assert whether the DVM survives — it currently ends, which is defensible for a
+non-recoverable DVM, but an elastic DVM shrinking instead would be equally
+defensible, and freezing an answer to an open question in a test is the mistake
+this whole area started from.
+
 Two things about cgroups being off (§9): SLURM's process tracking is
 best-effort here, so a stray application process is SLURM's to lose — the
 per-node `pkill` sweep is what actually guarantees a clean slate — and
