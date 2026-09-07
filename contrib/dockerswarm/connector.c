@@ -13,6 +13,7 @@
  * that "connected" makes.
  *
  *   connector [--child-host <node>] [--disconnect] [--abort] [--wait <s>]
+ *   connector --siblings [--child-host <node>] [--wait <s>]
  *
  * The parent (no PMIX_PARENT_ID in its job info) spawns one copy of itself,
  * registers for PMIX_ERR_PROC_TERM_WO_SYNC, and connects to the child.  The
@@ -24,6 +25,17 @@
  * the assemblage as one application, so a failure that terminates the child
  * is to terminate the parent along with it.  The parent prints nothing more
  * in that case - it is killed - which is exactly what the harness checks.
+ *
+ * --siblings asks whether that termination is TRANSITIVE, which is the shape
+ * an MPI_Comm_spawn test produces and the shape a single spawn cannot.  The
+ * parent spawns TWO children and connects to neither explicitly: a spawn
+ * connects the child to the parent PROCESS by itself, so the assemblages are
+ * {parent, A} and {parent, B} and neither one names the other.  A aborts.
+ * Terminating the parent is then only the first step - B is connected to a
+ * job that is now being terminated for a failure, and has to come down with
+ * it.  Stop after one step and B runs on with nothing left to talk to, and
+ * the DVM waits on it forever: the run does not end at all.  So this case is
+ * as much about prterun exiting as about which processes die.
  *
  * That difference is the whole test.  The PMIx definition of "connected" is
  * that the host environment must generate PMIX_ERR_PROC_TERM_WO_SYNC to the
@@ -40,6 +52,7 @@
  *   CNCT <role> <rank> DISCONNECT <status>
  *   CNCT <role> <rank> EVENT <status> FROM <nspace>:<rank>
  *   CNCT <role> <rank> EVENTS <n>
+ *   CNCT <role> <rank> ALIVE <secs>
  *   CNCT <role> <rank> DONE <rc>
  *
  * Why this cannot be a unit test, or even a single-node run: the PMIx server
@@ -97,6 +110,35 @@ static void reg_cb(pmix_status_t status, size_t errhandler_ref, void *cbdata)
     handler_done = true;
 }
 
+/* Spawn one copy of ourselves, off this node where the harness asked for it.
+ * Returns the child namespace in "child". */
+static pmix_status_t spawn_self(char *self, const char *child_host,
+                                const char *extra, pmix_nspace_t child)
+{
+    pmix_app_t app;
+    pmix_info_t jobinfo;
+    pmix_status_t rc;
+
+    PMIX_APP_CONSTRUCT(&app);
+    app.cmd = strdup(self);
+    app.maxprocs = 1;
+    PMIx_Argv_append_nosize(&app.argv, self);
+    PMIx_Argv_append_nosize(&app.argv, "--siblings");
+    if (NULL != extra) {
+        PMIx_Argv_append_nosize(&app.argv, (char *) extra);
+    }
+    if (NULL != child_host) {
+        PMIX_INFO_CREATE(app.info, 1);
+        PMIX_INFO_LOAD(&app.info[0], PMIX_HOST, child_host, PMIX_STRING);
+        app.ninfo = 1;
+    }
+    PMIX_INFO_LOAD(&jobinfo, PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
+    rc = PMIx_Spawn(&jobinfo, 1, &app, 1, child);
+    PMIX_INFO_DESTRUCT(&jobinfo);
+    PMIX_APP_DESTRUCT(&app);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
@@ -109,6 +151,9 @@ int main(int argc, char **argv)
     bool disconnect = false;
     bool doabort = false;
     bool ischild = false;
+    bool siblings = false;
+    bool bystander = false;
+    pmix_nspace_t sibling;
     int wait_secs = 15;
     char *child_host = NULL;
     char host[256];
@@ -119,6 +164,10 @@ int main(int argc, char **argv)
             disconnect = true;
         } else if (0 == strcmp(argv[i], "--abort")) {
             doabort = true;
+        } else if (0 == strcmp(argv[i], "--siblings")) {
+            siblings = true;
+        } else if (0 == strcmp(argv[i], "--bystander")) {
+            bystander = true;
         } else if (0 == strcmp(argv[i], "--child-host") && i + 1 < argc) {
             child_host = argv[++i];
         } else if (0 == strcmp(argv[i], "--wait") && i + 1 < argc) {
@@ -144,6 +193,10 @@ int main(int argc, char **argv)
         PMIX_VALUE_RELEASE(val);
     }
 
+    if (ischild && bystander) {
+        role = "bystander";
+    }
+
     if (0 != gethostname(host, sizeof(host))) {
         strcpy(host, "unknown");
     }
@@ -154,6 +207,65 @@ int main(int argc, char **argv)
     PMIx_Register_event_handler(&code, 1, NULL, 0, evhandler, reg_cb, NULL);
     while (!handler_done) {
         usleep(10000);
+    }
+
+    /* The transitive case runs entirely here and never reaches the explicit
+     * connect below: the assemblages it is about are the ones the two spawns
+     * create by themselves, and an explicit connect on top of them would add
+     * a third that names both children and hide the very gap under test. */
+    if (siblings) {
+        if (!ischild) {
+            rc = spawn_self(argv[0], child_host, "--abort", child);
+            if (PMIX_SUCCESS != rc) {
+                printf("CNCT %s %u DONE %d\n", role, myproc.rank, rc);
+                fflush(stdout);
+                PMIx_Finalize(NULL, 0);
+                return 1;
+            }
+            printf("CNCT %s %u CHILD %s\n", role, myproc.rank, child);
+            fflush(stdout);
+
+            rc = spawn_self(argv[0], child_host, "--bystander", sibling);
+            if (PMIX_SUCCESS != rc) {
+                printf("CNCT %s %u DONE %d\n", role, myproc.rank, rc);
+                fflush(stdout);
+                PMIx_Finalize(NULL, 0);
+                return 1;
+            }
+            printf("CNCT %s %u CHILD %s\n", role, myproc.rank, sibling);
+            fflush(stdout);
+
+            /* the parent is expected to be killed somewhere in here */
+            for (i = 0; i < wait_secs; i++) {
+                sleep(1);
+                printf("CNCT %s %u ALIVE %d\n", role, myproc.rank, i + 1);
+                fflush(stdout);
+            }
+            printf("CNCT %s %u DONE 0\n", role, myproc.rank);
+            fflush(stdout);
+            PMIx_Finalize(NULL, 0);
+            return 0;
+        }
+        if (bystander) {
+            /* connected to the parent by the spawn, and to nothing else - so
+             * whether this job ends is entirely the runtime's decision */
+            for (i = 0; i < wait_secs; i++) {
+                sleep(1);
+                printf("CNCT %s %u ALIVE %d\n", role, myproc.rank, i + 1);
+                fflush(stdout);
+            }
+            printf("CNCT %s %u DONE 0\n", role, myproc.rank);
+            fflush(stdout);
+            PMIx_Finalize(NULL, 0);
+            return 0;
+        }
+        /* the one that fails - late enough that its sibling is up */
+        sleep(3);
+        printf("CNCT %s %u ABORTING\n", role, myproc.rank);
+        fflush(stdout);
+        raise(SIGSEGV);
+        sleep(5);
+        return 1;
     }
 
     if (!ischild) {

@@ -4432,6 +4432,38 @@ test_connect() {
         && bad "the parent ran to completion despite the failure" \
         || ok "...and it did not reach the end of its own run"
 
+    banner "connect: the termination that failure causes is transitive"
+    # A spawn connects the child to the parent PROCESS, so a parent with two
+    # children sits in the two assemblages {parent, A} and {parent, B} and
+    # neither of them names the other.  When A fails, terminating the parent
+    # is only the first step: B is connected to a job that is now coming down
+    # for a failure, and comes down with it.  Sweeping only the assemblages
+    # that name A stops after the parent, and B keeps running with nothing
+    # left to talk to -- so the DVM never sees its last job end and prterun
+    # does not exit at all.  That is how an mpi4py MPI_Comm_spawn test whose
+    # child aborts wedges a whole CI run rather than merely failing.
+    #
+    # No explicit connect here on purpose: the assemblages under test are the
+    # ones the two spawns create by themselves.
+    out=$(PRUN "--host node1:1 -n 1 $CN --siblings --child-host node2 --wait 25" 2>&1)
+    n=$(echo "$out" | grep -c 'CNCT parent 0 CHILD ')
+    if [ "$n" = 2 ]; then
+        ok "the parent spawned two children, in two assemblages that do not name each other"
+    else
+        skp "only $n child job(s) spawned -- the sibling case is not being tested"
+    fi
+    echo "$out" | grep -q 'CNCT bystander 0 ALIVE' \
+        && ok "...and the second child was running when the first one failed" \
+        || skp "the second child never reported running -- nothing to orphan"
+    echo "$out" | grep -q 'A job is being terminated because a job it was connected to has failed' \
+        && ok "...and the failure terminated the job connected to it" \
+        || bad "nothing was terminated by the failure: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+    # the assertion that separates the fix from the bug: orphaned, the second
+    # child runs its wait out and reports DONE
+    echo "$out" | grep -q 'CNCT bystander 0 DONE' \
+        && bad "the second child outlived its parent -- prterun waits on it, and the run hangs" \
+        || ok "...including the sibling of the job that failed"
+
     banner "connect: a member that disconnected first is left out of that"
     # ...and the same failure, after both halves have disconnected, is the
     # child's own business.  This is what shows the teardown is driven by the

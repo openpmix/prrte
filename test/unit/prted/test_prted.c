@@ -68,6 +68,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
 
+#include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/schizo/base/base.h"
@@ -2342,6 +2343,164 @@ static int test_connections(void)
 }
 
 /*
+ * Fate sharing is transitive.
+ *
+ * A spawn connects the child to the parent PROCESS, so a parent that spawns
+ * two children sits in two assemblages that do not name each other.  When one
+ * child fails, terminating the parent is only the first step: the parent is
+ * now gone too, so the assemblage it shares with its OTHER child has lost a
+ * member as well, and that child - which by then has nothing left to talk to -
+ * has to come down with it.  Stopping after one step leaves it running, and
+ * the DVM never exits because it is still waiting on a job that is alive.
+ */
+static char **fate_killed = NULL;
+
+static int fate_terminate_procs(pmix_pointer_array_t *procs)
+{
+    prte_proc_t *pobj;
+    int i;
+
+    for (i = 0; i < procs->size; i++) {
+        pobj = (prte_proc_t *) pmix_pointer_array_get_item(procs, i);
+        if (NULL != pobj) {
+            PMIx_Argv_append_nosize(&fate_killed, pobj->name.nspace);
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
+static bool fate_was_killed(const char *nspace)
+{
+    int i;
+
+    for (i = 0; NULL != fate_killed && NULL != fate_killed[i]; i++) {
+        if (0 == strcmp(fate_killed[i], nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static prte_job_t *fate_job(const char *nspace)
+{
+    prte_job_t *jdata;
+
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
+    if (PRTE_SUCCESS != prte_set_job_data_object(jdata)) {
+        PMIX_RELEASE(jdata);
+        return NULL;
+    }
+    return jdata;
+}
+
+static int test_connection_fate_sharing(void)
+{
+    int failures = 0;
+    pmix_proc_t members[2];
+    prte_job_t *parent, *victim, *middle, *grandchild;
+    prte_pmix_server_connection_t *cptr;
+    prte_plm_base_module_t saved_plm;
+    bool made_array = false;
+    int nterminating = 0;
+
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
+    prte_pmix_server_globals.initialized = true;
+    prte_pmix_server_globals.terminate_connected = true;
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
+        made_array = true;
+    }
+
+    /* the kills are what this is about, so catch them rather than sending
+     * them - the real module would put them on the wire */
+    saved_plm = prte_plm;
+    memset(&prte_plm, 0, sizeof(prte_plm));
+    prte_plm.terminate_procs = fate_terminate_procs;
+
+    parent = fate_job("unit-test-fate@1");
+    victim = fate_job("unit-test-fate@2");
+    middle = fate_job("unit-test-fate@3");
+    grandchild = fate_job("unit-test-fate@4");
+    CHECK("the fate-sharing jobs register",
+          NULL != parent && NULL != victim && NULL != middle && NULL != grandchild);
+    if (NULL == parent || NULL == victim || NULL == middle || NULL == grandchild) {
+        goto cleanup;
+    }
+
+    /* parent rank 0 spawned the victim, parent rank 1 spawned the middle
+     * job, and the middle job spawned a child of its own.  No two of these
+     * three assemblages name each other's far end. */
+    PMIX_LOAD_PROCID(&members[0], parent->nspace, 0);
+    PMIX_LOAD_PROCID(&members[1], victim->nspace, PMIX_RANK_WILDCARD);
+    prte_pmix_server_connection_record(members, 2);
+
+    PMIX_LOAD_PROCID(&members[0], parent->nspace, 1);
+    PMIX_LOAD_PROCID(&members[1], middle->nspace, PMIX_RANK_WILDCARD);
+    prte_pmix_server_connection_record(members, 2);
+
+    PMIX_LOAD_PROCID(&members[0], middle->nspace, 0);
+    PMIX_LOAD_PROCID(&members[1], grandchild->nspace, PMIX_RANK_WILDCARD);
+    prte_pmix_server_connection_record(members, 2);
+
+    CHECK("three assemblages recorded",
+          3 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    prte_pmix_server_connection_job_failed(victim->nspace);
+
+    CHECK("the parent of the failed job is terminated",
+          fate_was_killed(parent->nspace));
+    CHECK("so is the parent's other child",
+          fate_was_killed(middle->nspace));
+    CHECK("and so is that child's own child",
+          fate_was_killed(grandchild->nspace));
+    CHECK("the job that failed is not killed again",
+          !fate_was_killed(victim->nspace));
+
+    PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
+                      prte_pmix_server_connection_t) {
+        if (cptr->terminating) {
+            nterminating++;
+        }
+    }
+    CHECK("every assemblage in the closure is marked terminating",
+          3 == nterminating);
+
+cleanup:
+    prte_plm = saved_plm;
+    PMIx_Argv_free(fate_killed);
+    fate_killed = NULL;
+    if (NULL != parent) {
+        pmix_pointer_array_set_item(prte_job_data, parent->index, NULL);
+        PMIX_RELEASE(parent);
+    }
+    if (NULL != victim) {
+        pmix_pointer_array_set_item(prte_job_data, victim->index, NULL);
+        PMIX_RELEASE(victim);
+    }
+    if (NULL != middle) {
+        pmix_pointer_array_set_item(prte_job_data, middle->index, NULL);
+        PMIX_RELEASE(middle);
+    }
+    if (NULL != grandchild) {
+        pmix_pointer_array_set_item(prte_job_data, grandchild->index, NULL);
+        PMIX_RELEASE(grandchild);
+    }
+    prte_pmix_server_globals.initialized = false;
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.connections);
+    if (made_array) {
+        PMIX_RELEASE(prte_job_data);
+        prte_job_data = NULL;
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_connection_fate_sharing\n");
+    }
+    return failures;
+}
+
+/*
  * prte_parse_uint_option(): the numeric option values.
  *
  * strtoul() reports success and zero for a string with no digits in it, and
@@ -2567,6 +2726,7 @@ int main(void)
     failures += test_departed_jobs();
     failures += test_monitor_accounting();
     failures += test_connections();
+    failures += test_connection_fate_sharing();
     failures += test_tool_registration();
     failures += test_query_qualifiers();
     failures += test_group_left();

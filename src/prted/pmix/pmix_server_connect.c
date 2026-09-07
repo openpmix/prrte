@@ -440,14 +440,14 @@ done:
     PMIX_PROC_RELEASE(proxy);
 }
 
-/* Does this assemblage name this job at all? */
-static bool connection_names_job(prte_pmix_server_connection_t *cptr,
-                                 const pmix_nspace_t nspace)
+/* Is this job already coming down - the one the failure happened in, or one
+ * an earlier pass of the sweep below has already ordered killed? */
+static bool nspace_condemned(char **condemned, const pmix_nspace_t nspace)
 {
-    size_t n;
+    int i;
 
-    for (n = 0; n < cptr->nmembers; n++) {
-        if (same_nspace(cptr->members[n].nspace, nspace)) {
+    for (i = 0; NULL != condemned && NULL != condemned[i]; i++) {
+        if (same_nspace(condemned[i], nspace)) {
             return true;
         }
     }
@@ -461,8 +461,10 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
     pmix_proc_t target;
     pmix_pointer_array_t procs;
     prte_proc_t *pobj;
-    size_t n, m;
-    bool done;
+    char **condemned = NULL;
+    const char *cause;
+    size_t n;
+    bool swept;
     int i;
 
     if (!registry_live() || !prte_pmix_server_globals.terminate_connected) {
@@ -473,63 +475,103 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
         return;
     }
 
-    PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
-                      prte_pmix_server_connection_t) {
-        if (cptr->terminating || !connection_names_job(cptr, nspace)) {
-            continue;
-        }
-        /* the rest of this assemblage is coming down with it, and each of
-         * those jobs will report its own procs failing as it goes - none of
-         * which should drive this again */
-        cptr->terminating = true;
+    /* the closure starts with the job the failure actually happened in */
+    PMIx_Argv_append_nosize(&condemned, nspace);
 
-        for (n = 0; n < cptr->nmembers; n++) {
-            if (same_nspace(cptr->members[n].nspace, nspace)) {
+    /* Fate sharing has to be transitive.  Killing a job because a job it was
+     * connected to failed is itself the loss of that job, so whatever *it*
+     * was connected to has lost a member too and comes down in its turn.
+     *
+     * The case is ordinary rather than exotic, because a spawn connects the
+     * child to the parent *process*: a parent that spawns two children sits
+     * in the two assemblages {parent, A} and {parent, B}, and neither of them
+     * names the other.  Sweeping only the assemblages that name A takes the
+     * parent down and stops there - leaving B running with nothing left to
+     * talk to, and the DVM waiting on it forever.  That is a hang, not an
+     * untidiness: prterun does not exit while a job it launched is alive, so
+     * an MPI_Comm_spawn test whose child aborts wedges the whole run.
+     *
+     * So sweep to a fixed point.  Each pass condemns the assemblages naming a
+     * job that is already coming down, and the pass after it sees the jobs
+     * that pass just condemned.  It terminates because an assemblage is
+     * marked `terminating` as it is swept and is never revisited, so every
+     * pass either marks at least one more or is the last one. */
+    do {
+        swept = false;
+        PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
+                          prte_pmix_server_connection_t) {
+            if (cptr->terminating) {
                 continue;
             }
-            /* a namespace can appear more than once in a membership - one
-             * entry per rank - and it is to be killed once */
-            done = false;
-            for (m = 0; m < n; m++) {
-                if (same_nspace(cptr->members[m].nspace, cptr->members[n].nspace)) {
-                    done = true;
+            /* an assemblage is condemned by naming a job that is coming down,
+             * and the member that does so is the one to report as the cause -
+             * naming the original failure instead would point the user at a
+             * job this assemblage was never connected to */
+            cause = NULL;
+            for (n = 0; n < cptr->nmembers; n++) {
+                if (nspace_condemned(condemned, cptr->members[n].nspace)) {
+                    cause = cptr->members[n].nspace;
                     break;
                 }
             }
-            if (done) {
-                continue;
-            }
-            jptr = prte_get_job_data_object(cptr->members[n].nspace);
-            if (NULL == jptr || PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_ABORTED) ||
-                PRTE_JOB_STATE_TERMINATED <= jptr->state) {
-                /* already gone, or already on its way */
+            if (NULL == cause) {
                 continue;
             }
 
-            /* the user is about to lose a job they did not ask about, so say
-             * why - "connected" is not a property they can see in ps */
-            prte_show_help("help-prted.txt", "connected-term", true,
-                           nspace, jptr->nspace);
+            /* the rest of this assemblage is coming down with it, and each of
+             * those jobs will report its own procs failing as it goes - none of
+             * which should drive this again */
+            cptr->terminating = true;
+            swept = true;
 
-            PMIX_LOAD_PROCID(&target, jptr->nspace, PMIX_RANK_WILDCARD);
-            notify_assemblage(cptr->members, cptr->nmembers,
-                              PMIX_ERR_JOB_TERM_WO_SYNC, &target, -1);
-
-            PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
-            pmix_pointer_array_init(&procs, 1, 1, 1);
-            pobj = PMIX_NEW(prte_proc_t);
-            PMIX_XFER_PROCID(&pobj->name, &target);
-            pmix_pointer_array_add(&procs, pobj);
-            prte_plm.terminate_procs(&procs);
-            for (i = 0; i < procs.size; i++) {
-                pobj = (prte_proc_t *) pmix_pointer_array_get_item(&procs, i);
-                if (NULL != pobj) {
-                    PMIX_RELEASE(pobj);
+            for (n = 0; n < cptr->nmembers; n++) {
+                /* a namespace can appear more than once in a membership - one
+                 * entry per rank - and it is to be killed once.  The condemned
+                 * list is what keeps it to one, here and on every later pass */
+                if (nspace_condemned(condemned, cptr->members[n].nspace)) {
+                    continue;
                 }
+                jptr = prte_get_job_data_object(cptr->members[n].nspace);
+                if (NULL == jptr || PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_ABORTED) ||
+                    PRTE_JOB_STATE_TERMINATED <= jptr->state) {
+                    /* Already gone, or already on its way - and deliberately
+                     * NOT added to the condemned list.  The closure extends
+                     * only through jobs this sweep is itself taking down: a
+                     * member that ended on its own terms notified its
+                     * assemblages when it went and killed nobody, and reading
+                     * it now as a failure would reach through a job that is
+                     * no longer there to take down peers that survived it. */
+                    continue;
+                }
+                PMIx_Argv_append_nosize(&condemned, cptr->members[n].nspace);
+
+                /* the user is about to lose a job they did not ask about, so say
+                 * why - "connected" is not a property they can see in ps */
+                prte_show_help("help-prted.txt", "connected-term", true,
+                               cause, jptr->nspace);
+
+                PMIX_LOAD_PROCID(&target, jptr->nspace, PMIX_RANK_WILDCARD);
+                notify_assemblage(cptr->members, cptr->nmembers,
+                                  PMIX_ERR_JOB_TERM_WO_SYNC, &target, -1);
+
+                PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
+                pmix_pointer_array_init(&procs, 1, 1, 1);
+                pobj = PMIX_NEW(prte_proc_t);
+                PMIX_XFER_PROCID(&pobj->name, &target);
+                pmix_pointer_array_add(&procs, pobj);
+                prte_plm.terminate_procs(&procs);
+                for (i = 0; i < procs.size; i++) {
+                    pobj = (prte_proc_t *) pmix_pointer_array_get_item(&procs, i);
+                    if (NULL != pobj) {
+                        PMIX_RELEASE(pobj);
+                    }
+                }
+                PMIX_DESTRUCT(&procs);
             }
-            PMIX_DESTRUCT(&procs);
         }
-    }
+    } while (swept);
+
+    PMIx_Argv_free(condemned);
 }
 
 void prte_pmix_server_connection_purge(const pmix_nspace_t nspace)

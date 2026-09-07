@@ -982,6 +982,33 @@ Two things follow from that record, and they are the rest of the definition:
   The assemblage is marked `terminating` as it goes, so the failures its own
   teardown produces do not drive it again.
 
+  **That termination is transitive, and has to be.** Killing a job because a
+  job it was connected to failed is itself the loss of that job, so whatever
+  *it* was connected to has lost a member too. The case is ordinary rather
+  than exotic, because a spawn connects the child to the parent **process**: a
+  parent that spawns two children sits in `{parent, A}` and `{parent, B}`, and
+  neither assemblage names the other. Sweeping only the assemblages that name
+  A takes the parent down and stops — leaving B running with nothing left to
+  talk to, and the DVM waiting forever on a job that will never end. The
+  symptom is not an untidy exit but a **hang**: `prterun` does not return
+  while a job it launched is alive, which is how an `MPI_Comm_spawn` test
+  whose child aborts wedges an entire CI run instead of merely failing it.
+  So the sweep runs to a fixed point over the `condemned` set, each pass
+  seeing the jobs the pass before it condemned; `terminating` is what bounds
+  it, since an assemblage is marked as it is swept and never revisited.
+
+  The closure extends **only through jobs the sweep is itself taking down**.
+  A member that is already gone, or already flagged `PRTE_JOB_FLAG_ABORTED`,
+  is skipped and deliberately not added to `condemned`: a job that ended on
+  its own terms notified its assemblages when it went and killed nobody, and
+  reading it as a failure now would reach through a job that is no longer
+  there to take down peers that survived it.
+
+  `connector --siblings` in [`contrib/dockerswarm`](../../../contrib/dockerswarm/)
+  is the multi-node case, and `test_connection_fate_sharing()` in
+  [`test/unit/prted/`](../../../test/unit/prted/) the offline one; both fail
+  against a one-step sweep.
+
 **Dissolving is more generous than recording, deliberately.** Recording
 compares memberships exactly; a disconnect dissolves any assemblage all of
 whose members it *names*, wildcards covering ranks. That asymmetry is what
