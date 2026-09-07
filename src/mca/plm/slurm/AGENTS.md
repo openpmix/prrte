@@ -59,7 +59,9 @@ If no Slurm command can be run, or the version cannot be parsed
    `num_new_daemons == 0` by fast-forwarding to `DAEMONS_REPORTED`.
 2. **Build the `srun` argv:**
    - `srun`
-   - `--external-launcher` (unless `early`)
+   - `--external-launcher` (unless `early`) — a compact with SLURM about
+     the *command line*; see the rule below for what it does and does not
+     promise.
    - `--ntasks-per-node=1` (one `prted` per node)
    - `--no-kill --kill-on-bad-exit=0`, always — see the rule below.
    - `--mpi=none` (daemons aren't MPI tasks), `--cpu-bind=none` (don't
@@ -159,6 +161,25 @@ not srun).
   [`common/slurm`](../../common/slurm/AGENTS.md) parsed out of
   `srun --version`. Change a threshold there, not here — and remember a
   third component reads the same struct.
+- **`--external-launcher` freezes the command line, not the behavior.**
+  SLURM added the option precisely for projects like this one. SLURM wants
+  to keep changing `srun`'s command line at will — adding options,
+  removing them, changing what a flag means — and any of those changes can
+  break an integration that execs `srun` the way we do. Passing
+  `--external-launcher` declares that we are one of those integrations, and
+  in exchange SLURM undertakes that the `srun` command line we see will not
+  change under us. So when something goes wrong here, the argv we build is
+  an *unlikely* culprit — not impossible, but look elsewhere first.
+
+  What that guarantee explicitly does **not** cover is `srun`'s *behavior*.
+  SLURM does change it, occasionally in ways that reach us: how the procs
+  `srun` starts get bound is the standing example, and a binding change on
+  SLURM's side can require a matching change in what the `prted` does, or in
+  the `prted` command line we hand it. So a failure that survives an
+  unchanged argv is far more likely to be a behavioral change on SLURM's
+  side than a command-line one — diagnose it by looking at what `srun`
+  *did* to the daemons (binding, environment, step membership), not at what
+  we typed.
 - **The kill flags are unconditional, and must stay that way.**
   `--kill-on-bad-exit` tells `srun` to take down the *whole step* when any
   one task exits non-zero, and `--no-kill` is what stops a single node's
