@@ -107,21 +107,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**``register_nspace()`` checks the list it is building, not the entries it
-puts in it.**  ``prte_pmix_server_register_nspace``
-(``src/prted/pmix/pmix_server_register_fns.c``) makes roughly forty
-``PMIX_INFO_LIST_ADD`` calls and reads the status of three of them.  The
-review checked the two that decide whether the registration is coherent at
-all — that the list handle exists, and that the final conversion into the
-array handed to ``PMIx_server_register_nspace`` succeeded — and left the
-rest, on the argument that ``PMIx_Info_list_add`` fails only on a NULL list
-or out of memory, and that forty checks would treble the length of an
-already very long function to report a condition under which the daemon is
-failing everywhere at once.  The consequence if that argument is wrong is a
-job registered with a key silently missing.  What would settle it properly
-is not forty checks but an accumulator — one status the adds fold into,
-tested once — which is a change to the macro, not to this file.
-
 **A session control addressed to every session answers with no session id.**
 ``apply_to_all`` (``src/prted/pmix/pmix_server_session.c``) applies the
 operation to each session the requestor controls and then builds one answer

@@ -585,6 +585,20 @@ are load bearing:
   daemon, and `pmix_server_dmdx_recv()` arms the timer. That is why the
   attribute table registers `PMIX_TIMEOUT` under `PMIx_Get`.
 
+**The adds are answerable at the conversions, not one by one.**
+`register_nspace()` makes sixty-eight `PMIX_INFO_LIST_ADD` calls and tests
+three of them, and that is deliberate. An info list carries the first
+failure any add onto it hit, and `PMIX_INFO_LIST_CONVERT` reports it — so
+the four conversions in this function are where all sixty-eight are
+checked, and they are all checked. Adding a per-add test buys nothing;
+**leaving a conversion untested loses an entire array**, because the
+converter initializes the caller's `pmix_data_array_t` before anything can
+fail, so what an unchecked failure puts in the payload is an empty
+`PMIX_NODE_INFO_ARRAY` / `PMIX_APP_INFO_ARRAY` / `PMIX_PROC_INFO_ARRAY`
+under a registration that reports success. The three sub-list
+`PMIX_INFO_LIST_START` handles are screened for the same reason: a NULL one
+makes every add onto it fail, and the conversion is what says so.
+
 **`register_nspace()` is not called once per job.** The wildcard arm of
 `dmodex_req()` calls it again whenever a client asks a daemon that hosts none
 of the job's procs for job-level data the local server does not hold — once
