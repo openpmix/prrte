@@ -335,6 +335,15 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             }
             /* construct the node info array */
             PMIX_INFO_LIST_START(iarray);
+            if (NULL == iarray) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                if (NULL != tmp) {
+                    free(tmp);
+                }
+                PMIX_INFO_LIST_RELEASE(info);
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto errout;
+            }
             /* start with the hostname */
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_HOSTNAME, node->name, PMIX_STRING);
             /* add any aliases */
@@ -367,8 +376,21 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
                 PMIX_INFO_LIST_ADD(ret, iarray, PMIX_NODE_OVERSUBSCRIBED, NULL, PMIX_BOOL);
             }
-            /* add to the overall payload */
+            /* Add to the overall payload.  The conversion is the one place
+             * the adds above are answerable: an info list carries the first
+             * failure any add onto it hit, and reports it here.  Without this
+             * test the whole array goes in empty - not one key missing but
+             * every key of every node - under a registration that reports
+             * success. */
             PMIX_INFO_LIST_CONVERT(ret, iarray, &darray);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                PMIX_INFO_LIST_RELEASE(iarray);
+                PMIX_INFO_LIST_RELEASE(info);
+                rc = prte_pmix_convert_status(ret);
+                goto errout;
+            }
             PMIX_INFO_LIST_ADD(ret, info, PMIX_NODE_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
             PMIX_DATA_ARRAY_DESTRUCT(&darray);
             PMIX_INFO_LIST_RELEASE(iarray);
@@ -558,6 +580,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             continue;
         }
         PMIX_INFO_LIST_START(iarray);
+        if (NULL == iarray) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PMIX_INFO_LIST_RELEASE(info);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto errout;
+        }
         /* start with the app number */
         PMIX_INFO_LIST_ADD(ret, iarray, PMIX_APPNUM, &app->idx, PMIX_UINT32);
         /* add the app size */
@@ -642,8 +670,17 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             }
             PMIX_LIST_DESTRUCT(&members);
         }
-        /* add to the main payload */
+        /* add to the main payload - see the node array above for why the
+         * conversion is checked */
         PMIX_INFO_LIST_CONVERT(ret, iarray, &darray);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+            PMIX_INFO_LIST_RELEASE(iarray);
+            PMIX_INFO_LIST_RELEASE(info);
+            rc = prte_pmix_convert_status(ret);
+            goto errout;
+        }
         PMIX_INFO_LIST_ADD(ret, info, PMIX_APP_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
         PMIX_DATA_ARRAY_DESTRUCT(&darray);
         PMIX_INFO_LIST_RELEASE(iarray);
@@ -710,6 +747,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             }
             /* setup the proc map object */
             PMIX_INFO_LIST_START(pmap);
+            if (NULL == pmap) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                PMIX_INFO_LIST_RELEASE(info);
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto errout;
+            }
 
             /* must start with rank */
             PMIX_INFO_LIST_ADD(ret, pmap, PMIX_RANK, &pptr->name.rank, PMIX_PROC_RANK);
@@ -859,7 +902,16 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_DEVICE_ID, devarray, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_FREE(devarray);
             }
+            /* see the node array above for why the conversion is checked */
             PMIX_INFO_LIST_CONVERT(ret, pmap, &darray);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                PMIX_INFO_LIST_RELEASE(pmap);
+                PMIX_INFO_LIST_RELEASE(info);
+                rc = prte_pmix_convert_status(ret);
+                goto errout;
+            }
             PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
             PMIX_DATA_ARRAY_DESTRUCT(&darray);
             PMIX_INFO_LIST_RELEASE(pmap);
