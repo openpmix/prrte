@@ -849,7 +849,7 @@ static prte_job_t *build_session_job(prte_sessctrl_t *ctl, prte_session_t *sessi
         /* no component claims the requested personality. Every later use of
          * jdata->schizo is an unchecked dereference, so refuse here rather
          * than let a bad personality string take down the DVM */
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
                        (NULL == ctl->personality) ? "NULL"
                                                   : ctl->personality->value.data.string);
         *status = PMIX_ERR_NOT_FOUND;

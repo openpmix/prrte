@@ -95,7 +95,7 @@ int prte_pmix_server_init_pubsub(void)
     }
     server_init_rc = init_server();
     if (PRTE_SUCCESS != server_init_rc) {
-        prte_show_help("help-prted.txt", "noserver", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "noserver", true,
                        (NULL == prte_data_server_uri) ? "NULL" : prte_data_server_uri);
     }
     return server_init_rc;
@@ -128,7 +128,7 @@ static int init_server(void)
             filename = strchr(prte_data_server_uri, ':');
             if (NULL == filename) {
                 /* filename is not correctly formatted */
-                prte_show_help("help-prun.txt", "prun:ompi-server-filename-bad", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-filename-bad", true,
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -136,7 +136,7 @@ static int init_server(void)
 
             if (0 >= strlen(filename)) {
                 /* they forgot to give us the name! */
-                prte_show_help("help-prun.txt", "prun:ompi-server-filename-missing", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-filename-missing", true,
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -144,14 +144,14 @@ static int init_server(void)
             /* open the file and extract the uri */
             fp = fopen(filename, "r");
             if (NULL == fp) { /* can't find or read file! */
-                prte_show_help("help-prun.txt", "prun:ompi-server-filename-access", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-filename-access", true,
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
             if (NULL == fgets(input, 1024, fp)) {
                 /* something malformed about file */
                 fclose(fp);
-                prte_show_help("help-prun.txt", "prun:ompi-server-file-bad", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-file-bad", true,
                                prte_tool_basename, prte_data_server_uri, prte_tool_basename);
                 return PRTE_ERR_BAD_PARAM;
             }

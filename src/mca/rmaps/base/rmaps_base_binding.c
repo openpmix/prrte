@@ -127,7 +127,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     if (0 == nobjs) {
         // if this is not a default binding policy, then error out
         if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:binding-target-not-found",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:binding-target-not-found",
                            true, prte_hwloc_base_print_binding(jdata->map->binding), node->name);
             return PRTE_ERR_SILENT;
         }
@@ -226,7 +226,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         }
         /* there aren't any appropriate targets under this object */
         if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
             return PRTE_ERR_SILENT;
         } else {
             return PRTE_SUCCESS;
@@ -278,7 +278,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     if (NULL == tmp_obj) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
             return PRTE_ERR_SILENT;
         } else {
             return PRTE_SUCCESS;
@@ -363,7 +363,7 @@ static int bind_to_cpuset(prte_job_t *jdata,
         }
     }
     if (!included) {
-        prte_show_help("help-prte-rmaps-base.txt", "span-packages-cpuset", true,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "span-packages-cpuset", true,
                        prte_rmaps_base_print_mapping(jdata->map->mapping),
                        prte_hwloc_base_print_binding(jdata->map->binding),
                        options->cpuset);
@@ -452,7 +452,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
             /* if we get here, then there are no packages that can completely
              * cover the request - so return an error */
             hwloc_bitmap_free(result);
-            prte_show_help("help-prte-rmaps-base.txt", "span-packages-multiple", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "span-packages-multiple", true,
                            prte_rmaps_base_print_mapping(jdata->map->mapping),
                            prte_hwloc_base_print_binding(jdata->map->binding),
                            options->cpus_per_rank,
@@ -475,7 +475,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_bitmap_list_asprintf(&proc->cpuset, result);
     hwloc_bitmap_free(result);
     if (NULL == proc->cpuset || 0 == strlen(proc->cpuset)) {
-        prte_show_help("help-prte-rmaps-base.txt", "not-enough-cpus", true,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "not-enough-cpus", true,
                        options->pprn, hwloc_obj_type_string(options->maptype),
                        options->cpus_per_rank);
         return PRTE_ERR_SILENT;

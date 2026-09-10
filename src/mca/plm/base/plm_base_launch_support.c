@@ -1906,7 +1906,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                         goto CLEANUP;
                     }
                 } else {
-                    prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "failed-to-uncompress",
                                    true, prte_process_info.nodename);
                     prted_failed_launch = true;
                     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
@@ -3110,7 +3110,7 @@ process:
         }
         if (PMIX_RANK_VALID - 1 <= vpid) {
             /* no more daemons available */
-            prte_show_help("help-prte-rmaps-base.txt", "out-of-vpids", true);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "out-of-vpids", true);
             PMIX_RELEASE(proc);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_OUT_OF_RESOURCE;

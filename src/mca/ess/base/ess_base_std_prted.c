@@ -187,7 +187,7 @@ int prte_ess_base_prted_setup(void)
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
     if (NULL == jdata->schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         error = "select personality";
         ret = PRTE_ERR_SILENT;
         goto error;
@@ -412,7 +412,7 @@ error:
      * that here rather than following it with this generic one, the same way
      * every ess module's error path does. */
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                        error, PRTE_ERROR_NAME(ret), ret);
     }
     if (NULL != jdata) {

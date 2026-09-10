@@ -631,7 +631,7 @@ int prun_common(pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_WAIT_TO_CONNECT);
     if (NULL != opt) {
         if (PRTE_SUCCESS != prte_parse_uint_option(opt->values[0], UINT32_MAX, &ulval)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_WAIT_TO_CONNECT, opt->values[0], "a number of seconds");
             PMIX_INFO_LIST_RELEASE(tinfo);
             return PRTE_ERR_BAD_PARAM;
@@ -643,7 +643,7 @@ int prun_common(pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_NUM_CONNECT_RETRIES);
     if (NULL != opt) {
         if (PRTE_SUCCESS != prte_parse_uint_option(opt->values[0], UINT32_MAX, &ulval)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_NUM_CONNECT_RETRIES, opt->values[0], "a number of retries");
             PMIX_INFO_LIST_RELEASE(tinfo);
             return PRTE_ERR_BAD_PARAM;
@@ -660,18 +660,18 @@ int prun_common(pmix_cli_result_t *results,
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
             break;
         case PRTE_ERR_FILE_OPEN_FAILURE:
-            prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "file-open-error", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], param);
             PMIX_INFO_LIST_RELEASE(tinfo);
             return PRTE_ERR_BAD_PARAM;
         case PRTE_ERR_FILE_READ_FAILURE:
             /* we could not obtain the single conversion we require */
-            prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-file", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], param);
             PMIX_INFO_LIST_RELEASE(tinfo);
             return PRTE_ERR_BAD_PARAM;
         default: /* neither an integer nor a usable 'file:' spec */
-            prte_show_help("help-prun.txt", "bad-option-input", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true,
                            prte_tool_basename, "--" PRTE_CLI_PID,
                            opt->values[0], "file:path");
             PMIX_INFO_LIST_RELEASE(tinfo);
@@ -1058,7 +1058,7 @@ int prun_common(pmix_cli_result_t *results,
     while (NULL != child_statuses) {
         child_status_t *cs = child_statuses;
         child_statuses = cs->next;
-        prte_show_help("help-state-base.txt", "child-job-status", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "child-job-status", true,
                        PRTE_LOCAL_JOBID_PRINT(cs->nspace), cs->code);
         free(cs);
     }
@@ -1173,7 +1173,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
      * in an MPMD line, which we cannot honor - reject it rather than silently
      * applying just one. */
     if (1 < pmix_cmd_line_get_ninsts(results, PRTE_CLI_DISPLAY)) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_DISPLAY);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "multi-instances", true, PRTE_CLI_DISPLAY);
         return PRTE_ERR_BAD_PARAM;
     }
 
@@ -1235,7 +1235,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         pmix_rank_t stdintgt;
 
         if (PRTE_SUCCESS != stdin_target_rank(results, &stdintgt)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_STDIN, opt->values[0], "all, none, or a rank");
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1265,7 +1265,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_MAX_RESTARTS);
     if (NULL != opt) {
         if (PRTE_SUCCESS != prte_parse_uint_option(opt->values[0], UINT32_MAX, &ulval)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_MAX_RESTARTS, opt->values[0], "a number of restarts");
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1295,7 +1295,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_TIMEOUT);
     if (NULL != opt) {
         if (PRTE_SUCCESS != prte_parse_uint_option(opt->values[0], INT_MAX, &ulval)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_TIMEOUT, opt->values[0], "a number of seconds");
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1303,7 +1303,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         i = (int) ulval;
     } else if (NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
         if (PRTE_SUCCESS != prte_parse_uint_option(param, INT_MAX, &ulval)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "MPIEXEC_TIMEOUT", param, "a number of seconds");
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1329,7 +1329,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_SPAWN_TIMEOUT);
     if (NULL != opt) {
         if (PRTE_SUCCESS != prte_parse_uint_option(opt->values[0], INT_MAX, &ulval)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_SPAWN_TIMEOUT, opt->values[0], "a number of seconds");
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1356,7 +1356,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
          * value that is neither, the way every other boolean option here
          * does */
         if (PRTE_SUCCESS != prte_cli_bool_value(opt->values[0], &flag)) {
-            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_GPU_SUPPORT, opt->values[0], "true or false");
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1378,7 +1378,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     ntargets = 0;
     for (i = 0; NULL != alloc_target_opts[i]; i++) {
         if (1 < pmix_cmd_line_get_ninsts(results, alloc_target_opts[i])) {
-            prte_show_help("help-schizo-base.txt", "multi-instances", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "multi-instances", true,
                            alloc_target_opts[i]);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;
@@ -1388,7 +1388,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         }
     }
     if (1 < ntargets) {
-        prte_show_help("help-schizo-base.txt", "alloc-target-conflict", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "alloc-target-conflict", true,
                        PRTE_CLI_SESSION_ID, PRTE_CLI_TARGET_ALLOC, PRTE_CLI_ALLOC_REFID);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         return PRTE_ERR_BAD_PARAM;
@@ -1406,7 +1406,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         sid = strtoul(opt->values[0], &endptr, 10);
         if (!isdigit((unsigned char) opt->values[0][0]) || '\0' != *endptr ||
             0 != errno || sid != (unsigned long) (uint32_t) sid) {
-            prte_show_help("help-schizo-base.txt", "bad-session-id", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-session-id", true,
                            PRTE_CLI_SESSION_ID, opt->values[0]);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             return PRTE_ERR_BAD_PARAM;

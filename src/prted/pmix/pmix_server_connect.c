@@ -547,7 +547,7 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
 
                 /* the user is about to lose a job they did not ask about, so say
                  * why - "connected" is not a property they can see in ps */
-                prte_show_help("help-prted.txt", "connected-term", true,
+                prte_show_help(PRTE_JOB_NSPACE(jptr), "help-prted.txt", "connected-term", true,
                                cause, jptr->nspace);
 
                 PMIX_LOAD_PROCID(&target, jptr->nspace, PMIX_RANK_WILDCARD);

@@ -854,7 +854,7 @@ static void check_complete_resume(int fd, short args, void *cbdata)
          * spawned by it. */
         if (report_child_jobs_separately() && 1 != PRTE_LOCAL_JOBID(jdata->nspace)) {
             if (0 != jdata->exit_code) {
-                prte_show_help("help-state-base.txt", "child-job-status", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "child-job-status", true,
                                PRTE_LOCAL_JOBID_PRINT(jdata->nspace), jdata->exit_code);
             }
         } else {
@@ -1087,7 +1087,7 @@ release:
                 ++nprocs;
                 if (1 == nprocs) {
                     // output a warning message that at least one child is being terminated
-                    prte_show_help("help-state-base.txt", "child-term", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "child-term", true,
                                    jdata->nspace, jptr->nspace);
                 }
             }

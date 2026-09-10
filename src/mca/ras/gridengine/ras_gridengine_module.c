@@ -92,7 +92,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     /* check the PE_HOSTFILE before continuing on */
     fp = fopen(pe_hostfile, "r");
     if (NULL == fp) {
-        prte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile", true, pe_hostfile,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "cannot-read-pe-hostfile", true, pe_hostfile,
                        strerror(errno));
         rc = PRTE_ERROR;
         PRTE_ERROR_LOG(rc);
@@ -160,7 +160,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
      * is considered an unrecoverable error and we need to report it
      */
     if (pmix_list_is_empty(nodelist)) {
-        prte_show_help("help-ras-gridengine.txt", "no-nodes-found", true);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "no-nodes-found", true);
         return PRTE_ERR_NOT_FOUND;
     }
 

@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
     /* get our schizo module */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
@@ -315,7 +315,7 @@ int main(int argc, char *argv[])
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
         if (PRTE_ERR_SILENT != ret) {
-            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(ret), ret);
         }
@@ -444,7 +444,7 @@ int main(int argc, char *argv[])
                 core = strtoul(cores[i], NULL, 10);
                 if (NULL == (pu = prte_hwloc_base_get_pu(prte_hwloc_topology, false, core))) {
                     /* the message will now come out locally */
-                    prte_show_help("help-prted.txt", "orted:cannot-bind", true,
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "orted:cannot-bind", true,
                                    prte_process_info.nodename, prte_daemon_cores);
                     ret = PRTE_ERR_NOT_SUPPORTED;
                     hwloc_bitmap_free(ours);

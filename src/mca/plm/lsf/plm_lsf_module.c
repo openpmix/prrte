@@ -265,7 +265,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* every node in the map already has a daemon - there is nothing
          * for lsb_launch to do, and handing it an empty host list is not
          * something we should ask of it */
-        prte_show_help("help-plm-lsf.txt", "no-hosts-in-list", true);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-lsf.txt", "no-hosts-in-list", true);
         rc = PRTE_ERR_FAILED_TO_START;
         goto cleanup;
     }
@@ -401,7 +401,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
         flattened_nodelist = PMIx_Argv_join(nodelist_argv, '\n');
-        prte_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
                        PMIx_Argv_count(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
         rc = PRTE_ERR_FAILED_TO_START;

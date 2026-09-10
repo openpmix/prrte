@@ -1305,7 +1305,7 @@ static void check_complete(prte_grpcomm_group_t *coll)
                 }
                 // did we lose anyone?
                 if (nfinal != pmix_list_get_size(&nmlist)) {
-                    prte_show_help("help-prte-runtime.txt", "bad-final-order", true);
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bad-final-order", true);
                     coll->status = PMIX_ERR_BAD_PARAM;
                     PMIX_LIST_DESTRUCT(&nmlist);
                     goto answer;
