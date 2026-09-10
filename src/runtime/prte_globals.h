@@ -610,6 +610,28 @@ PRTE_EXPORT int prte_get_allocation_session(const char *allocid,
                                             prte_session_t **session);
 PRTE_EXPORT int prte_get_allocation_sessions(pmix_pointer_array_t **sessions);
 
+/* Reach a proc's runtime state - the fields nobody but the daemon hosting
+ * that proc ever writes.
+ *
+ * A daemon's copy of a job's proc array is the snapshot the launch message
+ * carried: pid, state and exit_code as the master packed them.  From then on
+ * a daemon advances those fields for its own local children and for nothing
+ * else, and no message carries a peer daemon's updates back down the tree -
+ * no daemon needs them.  So an entry for a proc hosted elsewhere still reads
+ * PRTE_PROC_STATE_INIT and pid 0 for the life of the DVM, which is
+ * indistinguishable from a real answer: a rank that exited long ago reports
+ * itself as one that has not started yet.
+ *
+ * The hosting daemon does tell the master (PRTE_PLM_UPDATE_PROC_STATE), so
+ * this succeeds on the master for every proc, and on a daemon only for a
+ * proc that daemon hosts.  Anywhere else it returns
+ * PRTE_ERR_NOT_AUTHORITATIVE having touched nothing, which is the caller's
+ * cue to ask the master instead.  Any out parameter may be NULL. */
+PRTE_EXPORT int prte_get_proc_runtime_state(const prte_proc_t *proc,
+                                            prte_proc_state_t *state,
+                                            pid_t *pid,
+                                            prte_exit_code_t *exit_code);
+
 /* Point a job at the session it runs in, maintaining the reference count on
  * both the outgoing and the incoming session.  Every assignment to
  * prte_job_t::session must go through this. */

@@ -470,6 +470,89 @@ static int test_proc_lookups(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* proc runtime-state authority                                       */
+/* ------------------------------------------------------------------ */
+
+/* A daemon's copy of a job carries a prte_proc_t for every proc, but it
+ * only ever advances pid, state and exit_code for the procs it hosts:
+ * nothing sends a peer daemon's updates back down the tree, because no
+ * daemon needs them.  So the entry for a proc on another node keeps the
+ * launch message's snapshot for the life of the DVM, and reading it
+ * yields a plausible-looking lie - PMIX_QUERY_PROC_TABLE reported a rank
+ * that had exited long ago as one that had not started yet.
+ *
+ * prte_get_proc_runtime_state() is the gate: the master hears about every
+ * proc, a daemon only about its own. */
+static int test_proc_runtime_authority(void)
+{
+    int failures = 0;
+    prte_proc_t *local, *remote;
+    prte_proc_state_t state;
+    prte_exit_code_t code;
+    pid_t pid;
+    prte_proc_type_t saved;
+
+    reset_globals();
+
+    local = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&local->name, "app.job", 0);
+    local->state = PRTE_PROC_STATE_TERMINATED;
+    local->pid = 4242;
+    local->exit_code = 7;
+    PRTE_FLAG_SET(local, PRTE_PROC_FLAG_LOCAL);
+
+    remote = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&remote->name, "app.job", 1);
+    remote->state = PRTE_PROC_STATE_INIT;
+    remote->pid = 0;
+    remote->exit_code = 0;
+
+    /* main() initialized this process as the master */
+    saved = prte_process_info.proc_type;
+    CHECK("runtime: the harness starts out as the master", PRTE_PROC_IS_MASTER);
+
+    state = PRTE_PROC_STATE_UNDEF;
+    pid = -1;
+    code = -1;
+    CHECK("runtime: the master answers for a proc it hosts",
+          PRTE_SUCCESS == prte_get_proc_runtime_state(local, &state, &pid, &code));
+    CHECK("runtime: ...with that proc's state", PRTE_PROC_STATE_TERMINATED == state);
+    CHECK("runtime: ...its pid", 4242 == pid);
+    CHECK("runtime: ...and its exit code", 7 == code);
+
+    CHECK("runtime: the master answers for a proc it does not host",
+          PRTE_SUCCESS == prte_get_proc_runtime_state(remote, &state, &pid, &code));
+
+    /* now stand where a prted stands */
+    prte_process_info.proc_type = PRTE_PROC_DAEMON;
+    CHECK("runtime: a daemon answers for its own child",
+          PRTE_SUCCESS == prte_get_proc_runtime_state(local, &state, &pid, &code));
+    CHECK("runtime: ...with the state it recorded", PRTE_PROC_STATE_TERMINATED == state);
+
+    state = PRTE_PROC_STATE_UNDEF;
+    pid = -1;
+    code = -1;
+    CHECK("runtime: a daemon refuses a proc it does not host",
+          PRTE_ERR_NOT_AUTHORITATIVE
+              == prte_get_proc_runtime_state(remote, &state, &pid, &code));
+    /* a refusal that had written the stale values first would leave the
+     * caller with exactly the plausible lie the gate exists to stop */
+    CHECK("runtime: ...having touched nothing",
+          PRTE_PROC_STATE_UNDEF == state && -1 == pid && -1 == code);
+
+    CHECK("runtime: every out parameter is optional",
+          PRTE_SUCCESS == prte_get_proc_runtime_state(local, NULL, NULL, NULL));
+    CHECK("runtime: a NULL proc is rejected",
+          PRTE_ERR_BAD_PARAM == prte_get_proc_runtime_state(NULL, &state, &pid, &code));
+
+    prte_process_info.proc_type = saved;
+    PMIX_RELEASE(local);
+    PMIX_RELEASE(remote);
+    reset_globals();
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
 /* node matching                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -2015,6 +2098,7 @@ int main(void)
     failures += test_session_ownership();
     failures += test_session_job_backref();
     failures += test_proc_lookups();
+    failures += test_proc_runtime_authority();
     failures += test_node_matching();
     failures += test_node_copy();
     failures += test_app_copy();

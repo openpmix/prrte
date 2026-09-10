@@ -418,6 +418,31 @@ int prte_get_allocation_sessions(pmix_pointer_array_t **sessions)
     return PRTE_SUCCESS;
 }
 
+/* See the block comment in prte_globals.h.  This is the same gate in a
+ * second dimension: what only the daemon hosting a proc, and the master it
+ * reports to, actually know about it. */
+int prte_get_proc_runtime_state(const prte_proc_t *proc, prte_proc_state_t *state,
+                                pid_t *pid, prte_exit_code_t *exit_code)
+{
+    if (NULL == proc) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* the master is told about every proc; a daemon knows only its own */
+    if (!PRTE_PROC_IS_MASTER && !PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_LOCAL)) {
+        return PRTE_ERR_NOT_AUTHORITATIVE;
+    }
+    if (NULL != state) {
+        *state = proc->state;
+    }
+    if (NULL != pid) {
+        *pid = proc->pid;
+    }
+    if (NULL != exit_code) {
+        *exit_code = proc->exit_code;
+    }
+    return PRTE_SUCCESS;
+}
+
 prte_session_t *prte_get_session_object_from_refid(const char *refid)
 {
     prte_session_t *session;
