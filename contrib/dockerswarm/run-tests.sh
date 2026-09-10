@@ -2645,6 +2645,48 @@ test_pmix() {
         && ok "...and no local proc reported UNDEF" \
         || bad "$undef local procs reported UNDEF"
 
+    banner "pmix: the proc table reports a departed proc as departed"
+    # A daemon's copy of a job is the launch message's snapshot, and it
+    # advances pid/state/exit_code for its OWN local children and nothing
+    # else -- no message carries a peer daemon's proc states back down the
+    # tree, because no daemon needs them.  Only the master is told.  So
+    # PMIX_QUERY_PROC_TABLE answered locally reported every off-node rank
+    # with the state the launch message shipped, for the life of the DVM: a
+    # rank that exited seconds ago came back as LAUNCH_UNDERWAY.  The whole
+    # key now goes to the master when the table reaches a proc this daemon
+    # does not host.
+    #
+    # This cannot be seen on one host -- there the only daemon IS the master
+    # -- and it does not show up in the two cases above either, because a
+    # freshly launched job is one whose stale entries happen to be right.
+    # Ranks 1 and 3 leave; rank 0 asks six seconds later.
+    #
+    # Run it BOTH ways.  The master's own answer was correct all along, so a
+    # case that only asks a non-master cannot tell a fix from a daemon that
+    # stopped answering at all -- and the point of the fix is that the two
+    # placements agree.
+    for site in node2:2,node3:2 node1:2,node2:2; do
+        case "$site" in
+            node1:*) who="the master" ;;
+            *)       who="a non-master daemon" ;;
+        esac
+        out=$(PRUN "--host $site -n 4 --map-by node $PT departed 6" 2>&1)
+        gone=$(echo "$out" | awk '$1=="PROC" && ($2==1 || $2==3) {print $5}')
+        n=$(echo "$gone" | grep -c 'TERMINATED' | tr -d ' ')
+        if [ "$n" = 2 ]; then
+            ok "$who reported both departed ranks as TERMINATED"
+        else
+            bad "$who reported the departed ranks as [$(echo "$gone" | tr '\n' ' ')]: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        # the survivors must still read as alive -- a table that called
+        # everything terminated would pass the assertion above
+        n=$(echo "$out" | awk '$1=="PROC" && ($2==0 || $2==2) {print $4}' \
+            | awk '$1 < 15' | grep -c . | tr -d ' ')
+        [ "$n" = 2 ] \
+            && ok "...and both surviving ranks as still running" \
+            || bad "$who reported $n of 2 survivors as alive: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    done
+
     banner "pmix: every daemon serves every node's PMIX_SERVER_URI"
     # The consumer of this query is a TOOL, not a daemon -- daemons reach
     # each other over the RML and never form PMIx connections to one another.

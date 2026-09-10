@@ -85,16 +85,26 @@ static void qrel(void *cbdata)
  * default one.  A key whose answer comes out of either therefore has to
  * be asked of the DVM master.
  *
+ * A daemon's copy of a job is stale in the same way, in one place: it
+ * holds a prte_proc_t for every proc of the job, but it advances pid,
+ * state and exit_code for the procs it hosts and for nothing else.  No
+ * message carries a peer daemon's proc states back down the tree,
+ * because no daemon needs them - only the master is told.  So an entry
+ * for a proc on another node reports the state the launch message
+ * shipped, forever.
+ *
  * Which keys those are is deliberately not written down anywhere.  Such
  * a list is a point-in-time snapshot that goes stale the first time
  * someone adds a key, and a stale entry does not fail loudly: it returns
  * a default-constructed zero that reads exactly like a real answer.  So
  * the decision is made by the *read* instead.  A branch reaches
  * allocation state only through prte_get_allocated_nodes() and its two
- * companions, which succeed on the master and return
- * PRTE_ERR_NOT_AUTHORITATIVE anywhere else; a branch that gets that back
- * jumps to the "defer" label and its key is forwarded.  A key added
- * tomorrow that reads capacity is relayed with no edit here, and one
+ * companions, and a proc's runtime fields only through
+ * prte_get_proc_runtime_state(); all of them succeed where the answer is
+ * authoritative and return PRTE_ERR_NOT_AUTHORITATIVE where it is not.
+ * A branch that gets that back jumps to the "defer" label and its key is
+ * forwarded.  A key added tomorrow that reads capacity, or that reports
+ * whether a proc is still alive, is relayed with no edit here, and one
  * that reads only what the nidmap and the launch message already deliver
  * stays local with no edit either.
  *
@@ -269,6 +279,9 @@ static void _query(int sd, short args, void *cbdata)
     prte_session_t *session;
     int matched;
     pmix_proc_info_t *procinfo;
+    prte_proc_state_t pstate;
+    pid_t ppid;
+    prte_exit_code_t pexit;
     /* PMIx initializes this before anything in PMIx_Info_list_convert() can
      * fail, but every path to the done: label depends on that and the early
      * ones reach it having never touched this - so initialize it here rather
@@ -780,6 +793,21 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == proct) {
                         continue;
                     }
+                    /* this table spans the whole job, so off the master it
+                     * reaches procs this daemon does not host - and their
+                     * pid, state and exit code are the launch message's
+                     * snapshot, which never changes again.  The first one
+                     * ends the branch and the key goes to the master. */
+                    prc = prte_get_proc_runtime_state(proct, &pstate, &ppid, &pexit);
+                    if (PRTE_ERR_NOT_AUTHORITATIVE == prc) {
+                        PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                        goto defer;
+                    }
+                    if (PRTE_SUCCESS != prc) {
+                        PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                        ret = prte_pmix_convert_rc(prc);
+                        goto done;
+                    }
                     PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
                     if (NULL != proct->node && NULL != proct->node->name) {
                         procinfo[p].hostname = strdup(proct->node->name);
@@ -793,9 +821,9 @@ static void _query(int sd, short args, void *cbdata)
                             procinfo[p].executable_name = pmix_os_path(false, app->cwd, app->app, NULL);
                         }
                     }
-                    procinfo[p].pid = proct->pid;
-                    procinfo[p].exit_code = proct->exit_code;
-                    procinfo[p].state = prte_pmix_convert_state(proct->state);
+                    procinfo[p].pid = ppid;
+                    procinfo[p].exit_code = pexit;
+                    procinfo[p].state = prte_pmix_convert_state(pstate);
                     ++p;
                 }
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_PROC_TABLE, &dry, PMIX_DATA_ARRAY);
@@ -828,6 +856,16 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_LOCAL)) {
+                        /* every entry here is a proc this daemon hosts, so
+                         * the accessor cannot refuse - but it is still how
+                         * the read is spelled, because "local" is exactly
+                         * the condition under which it succeeds */
+                        prc = prte_get_proc_runtime_state(proct, &pstate, &ppid, &pexit);
+                        if (PRTE_SUCCESS != prc) {
+                            PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                            ret = prte_pmix_convert_rc(prc);
+                            goto done;
+                        }
                         PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
                         if (NULL != proct->node && NULL != proct->node->name) {
                             procinfo[p].hostname = strdup(proct->node->name);
@@ -841,9 +879,9 @@ static void _query(int sd, short args, void *cbdata)
                                 procinfo[p].executable_name = pmix_os_path(false, app->cwd, app->app, NULL);
                             }
                         }
-                        procinfo[p].pid = proct->pid;
-                        procinfo[p].exit_code = proct->exit_code;
-                        procinfo[p].state = prte_pmix_convert_state(proct->state);
+                        procinfo[p].pid = ppid;
+                        procinfo[p].exit_code = pexit;
+                        procinfo[p].state = prte_pmix_convert_state(pstate);
                         ++p;
                     }
                 }
