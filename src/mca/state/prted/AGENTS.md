@@ -93,6 +93,20 @@ Keyed on `caddy->name` / `caddy->proc_state`. Per incoming proc state:
   the map), optionally run the fd-leak check, notify a data server, and
   release the job object.
 
+  **The batch is the point — do not report each proc as it exits.** One
+  message per node per job, sent once every one of that job's local procs
+  has finished, is a deliberate choice: reporting each termination as it
+  happened would put one message on the wire per terminated proc, and at
+  the scales PRRTE runs at that storm costs far more than the earlier
+  notice is worth. A consequence is that a rank which exits early reads
+  as still alive, on the master as much as anywhere, until its node-mates
+  finish. That is not a fidelity gap to be closed; the batch boundary is
+  also exactly the moment every proc on the node is gone, which is the
+  question anything waiting on this is really asking. Abnormal
+  terminations are a different path ([`errmgr/prted`](../../errmgr/prted/))
+  and *are* reported individually, because they are rare and the HNP has
+  to act on them at once.
+
 ### `track_jobs`
 Handles the two job states above. It walks `prte_local_children`, and for
 each child in the target job packs vpid + pid (+ state/exit-code for
