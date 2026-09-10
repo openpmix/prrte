@@ -775,12 +775,14 @@ static void _query(int sd, short args, void *cbdata)
                 /* construct a list of values with prte_proc_info_t
                  * entries for each proc in the indicated job */
                 jdata = prte_get_job_data_object(jobid);
-                if (NULL == jdata) {
-                    ret = PMIX_ERR_NOT_FOUND;
-                    goto done;
-                }
-                /* Check if there are any entries in global proctable */
-                if (0 == jdata->num_procs) {
+                if (NULL == jdata || 0 == jdata->num_procs) {
+                    /* a job's launch message goes only to the daemons that
+                     * host some of it, so "I have never heard of this job"
+                     * is a statement about this daemon, not about the DVM.
+                     * The master has heard of all of them. */
+                    if (!PRTE_PROC_IS_MASTER) {
+                        goto defer;
+                    }
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }

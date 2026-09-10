@@ -830,6 +830,12 @@ flagged `PRTE_PROC_FLAG_LOCAL` — which is exactly the condition under
 which the accessor succeeds. It must not defer: relaying it would answer
 about the *master's* local procs.
 
+That arm also defers when it has never heard of the job at all. A launch
+message goes only to the daemons that host part of the job, so "no such
+job" from a prted is a statement about that daemon, not about the DVM —
+the master has heard of all of them. The local arm keeps answering
+`PMIX_ERR_NOT_FOUND` there, because for it that is the truth.
+
 **The decision is made by the read, never by a list of keys.** Which keys
 need the master is not knowable in advance, and a written-down list goes
 stale the first time someone adds one — silently, because the stale case
