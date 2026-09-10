@@ -305,7 +305,7 @@ int prte_register_params(void)
     if (NULL != prte_if_include && NULL != prte_if_exclude) {
         /* Return ERR_NOT_AVAILABLE so that a warning message about
          "open" failing is not printed */
-        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "include-exclude", true,
                        prte_if_include, prte_if_exclude);
         return PRTE_ERR_SILENT;
     }
@@ -415,7 +415,7 @@ int prte_register_params(void)
     prte_process_info.shared_fs = pmix_path_nfs(prte_process_info.tmpdir_base, &fstype);
     if (prte_process_info.shared_fs && !prte_silence_shared_fs) {
         // this is a shared file system - warn the user
-        prte_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte:session:dir:shared", true,
                        prte_process_info.tmpdir_base, fstype, prte_tool_basename);
     }
     if (NULL != fstype) {

@@ -38,13 +38,24 @@ BEGIN_C_DECLS
  * So: on the HNP, on a tool, or in an application, deliver locally exactly
  * as pmix_show_help() would.  On any other daemon, ship the rendered text
  * to the HNP over the RML and let it do the delivering.  Aggregation and
- * duplicate suppression still happen once, on the HNP, keyed by the same
- * filename/topic pair - which is better than per-node suppression anyway.
+ * duplicate suppression still happen once, on the HNP - which is better
+ * than per-node suppression anyway.
+ *
+ * The nspace names the job the message is ABOUT, and it is what scopes
+ * that suppression.  It is not optional and it is not decoration: a DVM
+ * runs many jobs, in parallel and one after another for as long as it
+ * lives, and suppression keyed on the message alone told only the first
+ * job to trip a diagnostic about it - every later one got silence, for
+ * days.  Pass the job the message concerns; where the message is about
+ * the DVM itself, a tool, or the command line rather than about any
+ * job - a parse error, a startup failure - pass
+ * PRTE_PROC_MY_NAME->nspace, which is that job.
  *
  * Use this, not pmix_show_help(), for any message that a daemon can
  * produce.  It is safe (and identical) everywhere else.
  */
-PRTE_EXPORT int prte_show_help(const char *filename, const char *topic,
+PRTE_EXPORT int prte_show_help(const pmix_nspace_t nspace,
+                               const char *filename, const char *topic,
                                int want_error_header, ...);
 
 /* HNP-side receiver for the relayed text. Registered by the PMIx server

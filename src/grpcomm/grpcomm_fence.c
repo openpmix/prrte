@@ -716,7 +716,7 @@ static void fence(int sd, short args, void *cbdata)
      * reach a tracker its answer has to agree with the first. */
     if (!prte_grpcomm_fence_op_merge(coll,
                                      prte_grpcomm_fence_op_from_info(cd->info, cd->ninfo))) {
-        prte_show_help("help-prte-grpcomm.txt", "fence-op-mismatch", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt", "fence-op-mismatch", true,
                        prte_process_info.nodename);
         if (PMIX_SUCCESS == coll->status) {
             coll->status = PMIX_ERR_INVALID_ARG;
@@ -1027,7 +1027,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
          * same treatment a non-success PMIX_LOCAL_COLLECTIVE_STATUS gets, and
          * the status is deliberately the one PMIx answers for the local form
          * of the same disagreement. */
-        prte_show_help("help-prte-grpcomm.txt", "fence-op-mismatch", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt", "fence-op-mismatch", true,
                        prte_process_info.nodename);
         if (PMIX_SUCCESS == coll->status) {
             coll->status = PMIX_ERR_INVALID_ARG;

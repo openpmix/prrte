@@ -1817,7 +1817,7 @@ static void process_msg(op_t* op){
             (uint8_t**) &decomp_msg.bytes, &decomp_msg.size
         );
         if(!success){
-            prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "failed-to-uncompress",
                            true, prte_process_info.nodename);
             PMIX_BYTE_OBJECT_DESTRUCT(&decomp_msg);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);

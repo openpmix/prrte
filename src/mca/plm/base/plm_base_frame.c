@@ -291,7 +291,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     // otherwise, this is an error
-    prte_show_help("help-plm-base.txt", "no-available-pls", true);
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-base.txt", "no-available-pls", true);
     PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
     PMIX_RELEASE(state);
 }

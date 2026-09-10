@@ -455,40 +455,40 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
 
     switch (msg->which) {
     case PRTE_ODLS_CHILD_ERR_IOF_SETUP:
-        prte_show_help("help-prte-odls-default.txt", "iof setup failed", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "iof setup failed", true,
                        prte_process_info.nodename, cd->app->app);
         break;
     case PRTE_ODLS_CHILD_ERR_NEG_FD:
-        prte_show_help("help-prte-odls-default.txt", "neg-fd", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "neg-fd", true,
                        prte_process_info.nodename, "/dev/null");
         break;
     case PRTE_ODLS_CHILD_ERR_WDIR:
-        prte_show_help("help-prun.txt", "prun:wdir-not-found", true, "prted",
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:wdir-not-found", true, "prted",
                        (NULL == cd->wdir) ? "<none>" : cd->wdir,
                        prte_process_info.nodename, rank);
         break;
     case PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC:
-        prte_show_help("help-prun.txt", "prun:stop-on-exec", true, "prted",
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:stop-on-exec", true, "prted",
                        strerror(msg->errnum), prte_process_info.nodename, rank);
         break;
     case PRTE_ODLS_CHILD_ERR_BIND:
-        prte_show_help("help-prte-odls-default.txt", "binding generic error", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "binding generic error", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_ERR_BIND_MEM:
-        prte_show_help("help-prte-odls-default.txt", "memory binding error", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "memory binding error", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_NOT_BOUND:
-        prte_show_help("help-prte-odls-default.txt", "not bound", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "not bound", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND:
-        prte_show_help("help-prte-odls-default.txt", "memory not bound", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "memory not bound", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_INCORRECT:
-        prte_show_help("help-prte-odls-default.txt", "incorrectly bound", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "incorrectly bound", true,
                        prte_process_info.nodename, cd->app->app);
         break;
     case PRTE_ODLS_CHILD_ERR_EXEC:
@@ -525,7 +525,7 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
         } else {
             errmsg = strerror(msg->errnum);
         }
-        prte_show_help("help-prte-odls-default.txt", "execve error", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-default.txt", "execve error", true,
                        prte_process_info.nodename, wdir, cd->app->app, errmsg);
         break;
     }

@@ -1199,7 +1199,7 @@ int pmix_server_init(void)
     if (PMIX_SUCCESS == prc) {
         // check the version
         if (val->data.uint32 < PRTE_PMIX_MINIMUM_VERSION) {
-            prte_show_help("help-prted.txt", "min-pmix-violation", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "min-pmix-violation", true,
                            PRTE_PMIX_MINIMUM_VERSION, val->data.uint32);
             PMIX_VALUE_RELEASE(val);
             return PRTE_ERR_SILENT;

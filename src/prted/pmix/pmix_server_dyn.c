@@ -269,7 +269,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
              * that could be right. Refuse it rather than silently ignore
              * it: a caller asking for a specific mapper is asking for
              * something we cannot promise. */
-            prte_show_help("help-prte-rmaps-base.txt", "mapper-not-supported", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "mapper-not-supported", true,
                            (NULL == info->value.data.string) ? "NULL"
                                                              : info->value.data.string);
             return PRTE_ERR_NOT_SUPPORTED;
@@ -394,7 +394,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
             if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
                 /* not allowed to provide multiple mapping policies */
-                prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
                                info->value.data.string,
                                prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
                 return PRTE_ERR_BAD_PARAM;
@@ -407,7 +407,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
             if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
                 /* not allowed to provide multiple mapping policies */
-                prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
                                info->value.data.string,
                                prte_rmaps_base_print_mapping(jdata->map->mapping));
                 return PRTE_ERR_BAD_PARAM;
@@ -445,7 +445,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
             if (PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
                 /* not allowed to provide multiple mapping policies */
-                prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "ranking",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true, "ranking",
                                info->value.data.string,
                                prte_rmaps_base_print_ranking(jdata->map->ranking));
                 return PRTE_ERR_BAD_PARAM;
@@ -459,7 +459,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
             if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                 /* not allowed to provide multiple mapping policies */
-                prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "binding",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true, "binding",
                                info->value.data.string,
                                prte_hwloc_base_print_binding(jdata->map->binding));
                 return PRTE_ERR_BAD_PARAM;
@@ -944,7 +944,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     prc = pmix_getcwd(cwd, sizeof(cwd));
                     if (PMIX_SUCCESS != prc) {
                         rc = prte_pmix_convert_status(prc);
-                        prte_show_help("help-prted.txt", "cwd", true, "spawn", rc);
+                        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prted.txt", "cwd", true, "spawn", rc);
                         /* jdata belongs to our caller - it constructed it and
                          * will dispose of it on our error return.  Releasing
                          * it here would leave the caller with a dangling
@@ -984,7 +984,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY,
                                        (void **) &u16ptr, PMIX_UINT16) &&
                     PRTE_MAPPING_POLICY_IS_SET(appmap)) {
-                    prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true,
                                    "mapping", info->value.data.string,
                                    prte_rmaps_base_print_mapping(appmap));
                     return PRTE_ERR_BAD_PARAM;
@@ -1033,7 +1033,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 /* see prte_pmix_xfer_job_info(): the mapping policy is the
                  * choice of mapper, so naming a component is not something
                  * PRRTE can act on - per app any more than per job */
-                prte_show_help("help-prte-rmaps-base.txt", "mapper-not-supported", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "mapper-not-supported", true,
                                (NULL == info->value.data.string) ? "NULL"
                                                                  : info->value.data.string);
                 return PRTE_ERR_NOT_SUPPORTED;
@@ -1046,7 +1046,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY,
                                        (void **) &u16ptr, PMIX_UINT16) &&
                     PRTE_MAPPING_POLICY_IS_SET(appmap)) {
-                    prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true,
                                    "mapping", info->value.data.string,
                                    prte_rmaps_base_print_mapping(appmap));
                     return PRTE_ERR_BAD_PARAM;
@@ -1141,7 +1141,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
             } else {
                 /* unrecognized key */
                 if (9 < pmix_output_get_verbosity(prte_pmix_server_globals.output)) {
-                    prte_show_help("help-prted.txt", "bad-key", true, "spawn", "application",
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prted.txt", "bad-key", true, "spawn", "application",
                                    info->key);
                 }
             }
@@ -1195,7 +1195,7 @@ static void interim(int sd, short args, void *cbdata)
          * personality string in a spawn request must not take down the DVM */
         char *prsn = (NULL == jdata->personality)
                      ? NULL : PMIx_Argv_join(jdata->personality, ',');
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
                        (NULL == prsn) ? "NULL" : prsn);
         if (NULL != prsn) {
             free(prsn);

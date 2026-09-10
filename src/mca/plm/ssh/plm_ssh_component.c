@@ -207,7 +207,7 @@ static int ssh_component_open(void)
 
     /* lookup parameters */
     if (prte_mca_plm_ssh_component.num_concurrent <= 0) {
-        prte_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "concurrency-less-than-zero", true,
                        prte_mca_plm_ssh_component.num_concurrent);
         prte_mca_plm_ssh_component.num_concurrent = 1;
     }
@@ -298,7 +298,7 @@ lookup:
          * then we want to error out and not continue */
         if (NULL != prte_mca_plm_ssh_component.agent &&
             0 != strcmp(prte_mca_plm_ssh_component.agent, "ssh : rsh")) {
-            prte_show_help("help-plm-ssh.txt", "agent-not-found", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "agent-not-found", true,
                            prte_mca_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
             return PRTE_ERR_FATAL;

@@ -306,7 +306,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
         }
         if (0 == PMIx_Argv_count(nodelist_argv)) {
-            prte_show_help("help-plm-pals.txt", "no-hosts-in-list", true);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-pals.txt", "no-hosts-in-list", true);
             rc = PRTE_ERR_FAILED_TO_START;
             goto cleanup;
         }

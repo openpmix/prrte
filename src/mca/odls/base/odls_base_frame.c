@@ -205,7 +205,7 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
                 nm->name.rank = PMIX_RANK_WILDCARD;
             } else if (rank < 0) {
                 /* error out on bozo case */
-                prte_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
                                rank);
                 /* nm was never put on the list, and we still own the parsed
                  * range - do not walk out holding either */
@@ -226,7 +226,7 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
         prte_odls_globals.xtermcmd = NULL;
         tmp = pmix_find_absolute_path("xterm");
         if (NULL == tmp) {
-            prte_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-not-found", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-base.txt", "prte-odls-base:xterm-not-found", true,
                            prte_process_info.nodename);
             return PRTE_ERROR;
         }

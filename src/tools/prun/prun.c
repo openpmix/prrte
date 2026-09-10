@@ -181,7 +181,7 @@ int prun(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (NULL == personality) {
@@ -285,7 +285,7 @@ int prun(int argc, char *argv[])
         // parse the file and add its context to the argv array
         rc = prte_load_appfile(opt->values[0], &pargv);
         if (PRTE_SUCCESS != rc) {
-            prte_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "appfile-failure", true, opt->values[0]);
             PRTE_UPDATE_EXIT_STATUS(1);
             goto DONE;
         }

@@ -136,7 +136,7 @@ static int pick_host_address(prte_bootstrap_config_t *cfg, const char *host,
     hints.ai_family = family;
     hints.ai_socktype = SOCK_STREAM;
     if (0 != getaddrinfo(host, NULL, &hints, &res) || NULL == res) {
-        prte_show_help("help-prte-runtime.txt", "bootstrap-unresolved-host", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-unresolved-host", true,
                        prte_process_info.nodename, host);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -195,12 +195,12 @@ static int pick_host_address(prte_bootstrap_config_t *cfg, const char *host,
             }
         }
         if (0 == nmatch) {
-            prte_show_help("help-prte-runtime.txt", "bootstrap-no-matching-address", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-no-matching-address", true,
                            prte_process_info.nodename, host, cfg->dvm_networks);
             return PRTE_ERR_NOT_FOUND;
         }
         if (1 < nmatch) {
-            prte_show_help("help-prte-runtime.txt", "bootstrap-ambiguous-address", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-ambiguous-address", true,
                            prte_process_info.nodename, host, cfg->dvm_networks);
             return PRTE_ERR_BAD_PARAM;
         }
@@ -213,7 +213,7 @@ static int pick_host_address(prte_bootstrap_config_t *cfg, const char *host,
         *chosen_prefix = -1;
         return PRTE_SUCCESS;
     }
-    prte_show_help("help-prte-runtime.txt", "bootstrap-ambiguous-address", true,
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-ambiguous-address", true,
                    prte_process_info.nodename, host,
                    (NULL != cfg->dvm_networks) ? cfg->dvm_networks : "(none)");
     return PRTE_ERR_BAD_PARAM;
@@ -322,7 +322,7 @@ int prte_ess_base_bootstrap_params(void)
         PMIx_Setenv("PRTE_MCA_prte_disable_ipv6_family", "0", true, &environ);
         PMIx_Setenv("PRTE_MCA_prte_disable_ipv4_family", "1", true, &environ);
 #else
-        prte_show_help("help-prte-runtime.txt", "bootstrap-ipv6-unavailable", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-ipv6-unavailable", true,
                        prte_process_info.nodename);
         /* we are refusing this configuration, so do not leave it behind
          * looking valid to the phases that reuse it */
@@ -414,7 +414,7 @@ int prte_ess_base_bootstrap(bool *is_controller)
     /* determine our role and rank from the configuration */
     rc = prte_bootstrap_my_identity(&bootstrap_cfg, &ctrl, &rank);
     if (PRTE_SUCCESS != rc) {
-        prte_show_help("help-prte-runtime.txt", "bootstrap-node-not-member", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-node-not-member", true,
                        prte_process_info.nodename, bootstrap_cfg.ctrlhost);
         rc = PRTE_ERR_SILENT;
         goto cleanup;

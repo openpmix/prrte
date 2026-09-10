@@ -239,7 +239,7 @@ static void job_errors(int fd, short args, void *cbdata)
              * daemons fail to start would only bury it. */
             if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
                 || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state) {
-                prte_show_help("help-errmgr-base.txt", "failed-daemon-launch",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-errmgr-base.txt", "failed-daemon-launch",
                                true, prte_tool_basename);
             }
             prte_routing_is_enabled = false;
@@ -254,7 +254,7 @@ static void job_errors(int fd, short args, void *cbdata)
          * likely already output an error message */
         if (PRTE_JOB_STATE_ABORTED == jobstate && jdata->num_procs != jdata->num_reported) {
             prte_routing_is_enabled = false;
-            prte_show_help("help-errmgr-base.txt", "failed-daemon", true);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-errmgr-base.txt", "failed-daemon", true);
         }
         /* there really isn't much else we can do since the problem
          * is in the DVM itself, so best just to terminate */
@@ -520,7 +520,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                      * A daemon we have never placed has no node, and this
                      * message is the last thing that should turn a lost
                      * daemon into a segfault in the HNP */
-                    prte_show_help("help-errmgr-base.txt", "node-died", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-errmgr-base.txt", "node-died", true,
                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
                                    PRTE_NAME_PRINT(proc),
                                    NULL == pptr->node ? "unknown" : pptr->node->name);

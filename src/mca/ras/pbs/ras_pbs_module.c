@@ -100,7 +100,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      * is an unrecoverable error - report it
      */
     if (pmix_list_is_empty(nodes)) {
-        prte_show_help("help-ras-pbs.txt", "no-nodes-found", true, filename);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-pbs.txt", "no-nodes-found", true, filename);
         return PRTE_ERR_NOT_FOUND;
     }
 
@@ -156,7 +156,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
      */
     if (prte_mca_ras_pbs_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
-            prte_show_help("help-ras-pbs.txt", "smp-error", true);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-pbs.txt", "smp-error", true);
             return PRTE_ERR_NOT_FOUND;
         }
         ppn = strtol(cppn, NULL, 10);
@@ -170,7 +170,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
         /* try the Cobalt variant */
         filename = getenv("COBALT_NODEFILE");
         if (NULL == filename) {
-            prte_show_help("help-ras-pbs.txt", "no-nodefile", true);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-pbs.txt", "no-nodefile", true);
             return PRTE_ERR_NOT_FOUND;
         }
     }
@@ -199,7 +199,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
             if (0 == strcmp(node->name, hostname)) {
                 if (prte_mca_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
-                    prte_show_help("help-ras-pbs.txt", "smp-multi", true);
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-pbs.txt", "smp-multi", true);
                     fclose(fp);
                     free(hostname);
                     return PRTE_ERR_BAD_PARAM;

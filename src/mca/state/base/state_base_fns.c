@@ -571,7 +571,10 @@ void prte_state_base_orphaned_proc(pmix_proc_t *proc, prte_proc_state_t state)
         return;
     }
 
-    prte_show_help("help-state-base.txt", "orphaned-proc", true,
+    /* the proc's own nspace, not a job object: this path exists precisely
+     * because the job object is gone, and the report is still about that
+     * job - which is what has to scope its duplicate suppression */
+    prte_show_help(proc->nspace, "help-state-base.txt", "orphaned-proc", true,
                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc));
 
     /* Retire the proc ourselves.  Clearing PRTE_PROC_FLAG_ALIVE and dropping

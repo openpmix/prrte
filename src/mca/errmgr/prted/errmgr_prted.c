@@ -155,7 +155,7 @@ static void prted_abort(int error_code, char *fmt, ...)
     /* use the show-help system to get the message out.  Callers are not
      * required to supply a message, and the help topic has a %s in it, so
      * substitute something printable rather than handing show_help a NULL */
-    prte_show_help("help-errmgr-base.txt", "simple-message", true,
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-errmgr-base.txt", "simple-message", true,
                    NULL == outmsg ? "(no further information available)" : outmsg);
     if (NULL != outmsg) {
         free(outmsg);

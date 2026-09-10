@@ -969,7 +969,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
             goto REPORT_ERROR;
         }
         if (NULL == jdata->schizo) {
-            prte_show_help("help-schizo-base.txt", "no-proxy", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true,
                            prte_tool_basename, "NULL");
             rc = PRTE_ERR_NOT_FOUND;
             goto REPORT_ERROR;
@@ -989,7 +989,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
         }
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
-            prte_show_help("help-schizo-base.txt", "no-proxy", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true,
                            prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
             if (NULL != tmp) {
                 free(tmp);
@@ -1438,7 +1438,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
                 break;
             } else if (jobdat->num_procs <= nm->name.rank) { /* check for bozo case */
                 /* can't be done! */
-                prte_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-rank-out-of-bounds",
+                prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "prte-odls-base:xterm-rank-out-of-bounds",
                                true, prte_process_info.nodename, nm->name.rank, jobdat->num_procs);
                 rc = PRTE_ERR_BAD_PARAM;
                 state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
@@ -1458,7 +1458,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
         cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
-            prte_show_help("help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
+            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
                            prte_process_info.nodename, ptr);
             rc = PRTE_ERR_NOT_FOUND;
             state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
@@ -1475,7 +1475,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
         cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
-            prte_show_help("help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
+            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
                            prte_process_info.nodename, cd->argv[0]);
             rc = PRTE_ERR_NOT_FOUND;
             state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
@@ -1966,7 +1966,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_util_init_sys_limits(&msg))) {
             /* the "Application name" field is a %s - pass the app's
              * executable, not the app_context object itself */
-            prte_show_help("help-prte-odls-default.txt", "set limit", true,
+            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-default.txt", "set limit", true,
                            prte_process_info.nodename, app->app, __FILE__, __LINE__, msg);
             /* flag this app's procs and abort the whole job (see setup_fork) */
             PRTE_ODLS_SET_ERROR(job, rc, j);

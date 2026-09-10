@@ -375,7 +375,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     h = flux_open_ex(NULL, 0, &flux_error);
     if(NULL == h) {
-        prte_show_help("help-ras-flux.txt", "flux-broker-not-found", 1, flux_error.text);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-flux.txt", "flux-broker-not-found", 1, flux_error.text);
         ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
@@ -411,14 +411,14 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     f = flux_kvs_lookup(h, NULL, 0, "resource.R");
     if (NULL == f) {
         int errno_l = errno;
-        prte_show_help("help-ras-flux.txt", "flux-kvs-lookup-failure", 1, strerror(errno_l));
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-flux.txt", "flux-kvs-lookup-failure", 1, strerror(errno_l));
         ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
 
     if(flux_kvs_lookup_get (f, (const char **)&return_str) < 0){
         int errno_l = errno;
-        prte_show_help("help-ras-flux.txt", "flux-kvs-lookup-get-failure", 1, strerror(errno_l));
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-flux.txt", "flux-kvs-lookup-get-failure", 1, strerror(errno_l));
         ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
@@ -431,7 +431,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      */
     root = json_loads(return_str, JSON_DECODE_ANY, &json_err);
     if (NULL == root) {
-        prte_show_help("help-ras-flux.txt", "flux-json-parse-failure", 1, json_err.text);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-flux.txt", "flux-json-parse-failure", 1, json_err.text);
         ret = PRTE_ERR_UNPACK_FAILURE;
         goto err;
     }
