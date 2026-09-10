@@ -1780,6 +1780,52 @@ static int test_spawn_alloc(void)
 }
 
 
+/*
+ * ras/slurm's release path skips the HNP's node via prte_quickmatch().
+ * node_insert() truncates a fully qualified domain name to the short name
+ * and keeps the full one as an alias, so a strcmp on the pool entry's name
+ * would miss it and the guard would silently stop protecting anything.
+ */
+static int test_hnp_locality_match(void)
+{
+    int failures = 0;
+    prte_node_t *nd;
+    char *save;
+    char *fqdn;
+
+    save = prte_process_info.nodename;
+    prte_process_info.nodename = strdup("prte-unit-test-hnp");
+
+    /* the short name the pool would hold */
+    nd = PMIX_NEW(prte_node_t);
+    nd->name = strdup("prte-unit-test-hnp");
+    CHECK("hnp match: short name",
+          prte_quickmatch(nd, prte_process_info.nodename));
+    PMIX_RELEASE(nd);
+
+    /* the shape normalize_node() leaves behind: the case a strcmp misses */
+    nd = PMIX_NEW(prte_node_t);
+    nd->name = strdup("prte-unit-test-hnp");
+    fqdn = strdup("prte-unit-test-hnp.unit.test");
+    nd->rawname = strdup(fqdn);
+    PMIx_Argv_append_nosize(&nd->aliases, fqdn);
+    free(prte_process_info.nodename);
+    prte_process_info.nodename = fqdn;
+    CHECK("hnp match: qualified name resolves through the alias",
+          prte_quickmatch(nd, prte_process_info.nodename));
+    PMIX_RELEASE(nd);
+
+    nd = PMIX_NEW(prte_node_t);
+    nd->name = strdup("prte-unit-test-other");
+    CHECK("hnp match: unrelated node does not match",
+          !prte_quickmatch(nd, prte_process_info.nodename));
+    PMIX_RELEASE(nd);
+
+    free(prte_process_info.nodename);
+    prte_process_info.nodename = save;
+    return failures;
+}
+
 /* A reservation torn down while a job is still running in it.
  *
  * Teardown deregisters the session, which puts it beyond every later sweep
@@ -1910,6 +1956,7 @@ int main(void)
     failures += test_activate_nodes();
     failures += test_spawn_alloc();
     failures += test_teardown_reservation();
+    failures += test_hnp_locality_match();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */

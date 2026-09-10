@@ -18,6 +18,7 @@
 #include "ras_slurm_modify_release_tracker.h"
 #include "src/mca/preg/preg.h"
 #include "src/mca/ras/base/base.h"
+#include "src/runtime/prte_globals.h"
 
 /* Local functions */
 static bool prte_ras_slurm_session_contains_invoker(prte_session_t *session, const char *launching_jobid);
@@ -30,7 +31,7 @@ static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, c
 static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uint64_t node_count);
 static int prte_ras_slurm_append_session_targets(prte_session_t *session, char ***target_nodes);
 static int prte_ras_slurm_append_release_targets(prte_session_t *session, char **requested_nodes, char ***target_nodes);
-static int prte_ras_slurm_append_count_session_targets(prte_session_t *session, const char *protected_node, int nodes_to_remove, char ***target_nodes);
+static int prte_ras_slurm_append_count_session_targets(prte_session_t *session, int nodes_to_remove, char ***target_nodes);
 static int prte_ras_slurm_attach_shrink_tracker(prte_shrink_campaign_t *campaign, prte_ras_slurm_shrink_tracker_t *tracker);
 static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req, prte_ras_slurm_shrink_tracker_t *tracker, char **target_nodes);
 static int prte_ras_slurm_complete_release_request(prte_pmix_server_req_t *req);
@@ -296,13 +297,13 @@ static int prte_ras_slurm_append_release_targets(prte_session_t *session,
 /**
  * @brief Append count-selected nodes from a session.
  *
+ * Skips the node the HNP runs on.
+ *
  * @param[in] session Session to inspect.
- * @param[in] protected_node Node that must not be selected.
  * @param[in] nodes_to_remove Number of nodes to append.
  * @param[in,out] target_nodes Target node argv.
  */
 static int prte_ras_slurm_append_count_session_targets(prte_session_t *session,
-                                                       const char *protected_node,
                                                        int nodes_to_remove,
                                                        char ***target_nodes)
 {
@@ -320,7 +321,10 @@ static int prte_ras_slurm_append_count_session_targets(prte_session_t *session,
         if (NULL == node || NULL == node->name) {
             continue;
         }
-        if (NULL != protected_node && 0 == strcmp(node->name, protected_node)) {
+        /* Releasing the HNP's node kills the DVM. quickmatch also checks
+         * node->aliases, where node_insert leaves the fully qualified
+         * domain name when it shortens a node name. */
+        if (prte_quickmatch(node, prte_process_info.nodename)) {
             continue;
         }
 
@@ -912,7 +916,6 @@ static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char
     int err = PRTE_SUCCESS;
     int node_count;
     char *launching_jobid;
-    char *protected_node = NULL;
     char **target_nodes = NULL;
     char **processed_jobs = NULL;
     prte_ras_slurm_shrink_tracker_t *tracker = NULL;
@@ -933,6 +936,7 @@ static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char
 
     for (int i = 0; NULL != nodes[i]; i++) {
         prte_session_stack_item_t *session_item;
+        prte_node_t *nd;
 
         err = prte_ras_slurm_validate_hostname(nodes[i]);
         if (PRTE_SUCCESS != err) {
@@ -955,19 +959,13 @@ static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char
             return PRTE_ERR_RESOURCE_BUSY;
         }
 
-        if (prte_ras_slurm_session_contains_invoker(session_item->session, launching_jobid)) {
-            if (NULL == protected_node) {
-                protected_node = getenv("SLURMD_NODENAME");
-                if (NULL == protected_node) {
-                    return PRTE_ERR_BAD_PARAM;
-                }
-            }
-
-            if (0 == strcmp(nodes[i], protected_node)) {
-                pmix_output(0, "ras:slurm:remove_nodes_by_name: refusing to remove current node %s",
-                            protected_node);
-                return PRTE_ERR_BAD_PARAM;
-            }
+        /* Releasing the HNP's node kills the DVM. */
+        nd = prte_node_match(NULL, nodes[i]);
+        if (NULL != nd && NULL != nd->name &&
+            prte_quickmatch(nd, prte_process_info.nodename)) {
+            pmix_output(0, "ras:slurm:remove_nodes_by_name: refusing to remove %s, "
+                           "the node this DVM's HNP is running on", nodes[i]);
+            return PRTE_ERR_BAD_PARAM;
         }
     }
 
@@ -1282,27 +1280,14 @@ static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uin
             }
 
             /* Case 2: keep the Slurm job alive and shrink it to its survivors. */
-            char *protected_node = NULL;
-
-            if(contains_invoker) {
-                protected_node = getenv("SLURMD_NODENAME");
-
-                if (NULL == protected_node) {
-                    pmix_output(0,
-                                "ras:slurm:remove_nodes_by_count: SLURMD_NODENAME is not set. "
-                                "Refusing to shrink job %s because the current node cannot be "
-                                "excluded from the resize operation.",
-                                session->alloc_refid);
-                    err = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(err);
-                    goto cleanup; 
-                }
-            }
-
-            err = prte_ras_slurm_append_count_session_targets(session, protected_node,
-                                                             nodes_to_rem_from_session,
-                                                             &session_targets);
+            err = prte_ras_slurm_append_count_session_targets(session,
+                                                              nodes_to_rem_from_session,
+                                                              &session_targets);
             if (PRTE_SUCCESS != err) {
+                pmix_output(0, "ras:slurm:remove_nodes_by_count: could not select %d "
+                               "releasable nodes from job %s",
+                            nodes_to_rem_from_session, session->alloc_refid);
+                PRTE_ERROR_LOG(err);
                 PMIx_Argv_free(session_targets);
                 goto cleanup;
             }
