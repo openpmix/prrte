@@ -794,26 +794,55 @@ as `PMIX_SUCCESS`** — a wrong answer no caller can tell from a right one.
 The rank that happens to land on the master gets the truth; every other
 rank gets nothing, silently.
 
+The **job** table is stale in the same way, in one place. A daemon does
+hold a `prte_proc_t` for every proc of every job it hosts part of — the
+launch message ships the whole array — but it advances `pid`, `state` and
+`exit_code` for its own local children and for nothing else. No message
+carries a peer daemon's proc states back down the tree, because no daemon
+needs them: the hosting daemon reports them *up*, to the master, in
+`PRTE_PLM_UPDATE_PROC_STATE`. So an entry for a proc on another node
+keeps the state the launch message shipped for the life of the DVM.
+`PMIX_QUERY_PROC_TABLE` answered locally therefore reported every
+off-node rank as `PMIX_PROC_STATE_LAUNCH_UNDERWAY` — the conversion of
+`PRTE_PROC_STATE_INIT` — including ranks that had exited long ago, and
+that is the only signal PRRTE offers for "has this proc gone away"
+(`PMIX_EVENT_PROC_TERMINATED` is not implemented). A client co-located
+with the master saw the truth; every other client did not.
+
 So such an arm does not read that state directly. It goes through
-`prte_get_allocated_nodes()`, `prte_get_allocation_session()` or
-`prte_get_allocation_sessions()`
+`prte_get_allocated_nodes()`, `prte_get_allocation_session()`,
+`prte_get_allocation_sessions()` or `prte_get_proc_runtime_state()`
 ([`src/runtime/prte_globals.c`](../../runtime/prte_globals.c)), which
-succeed on the master and return `PRTE_ERR_NOT_AUTHORITATIVE` anywhere
-else. An arm that gets that back jumps to the `defer:` label at the foot
+succeed where the answer is authoritative — on the master, and for
+`prte_get_proc_runtime_state()` also on the daemon hosting that
+particular proc — and return `PRTE_ERR_NOT_AUTHORITATIVE` where it is
+not. An arm that gets that back jumps to the `defer:` label at the foot
 of the key loop; at `done:` the deferred keys go to the master on
 `PRTE_RML_TAG_QUERY`, and its reply is merged into the results gathered
 locally, so the client sees one answer covering every key it asked for.
+
+The proc-table arm defers on the *first* proc it does not host, having
+destructed the array it had begun to fill: the table is one answer, and
+half of it from here and half from the master would be a table whose
+entries disagree about what "now" means. `PMIX_QUERY_LOCAL_PROC_TABLE`
+reads the same fields and never defers, because it visits only procs
+flagged `PRTE_PROC_FLAG_LOCAL` — which is exactly the condition under
+which the accessor succeeds. It must not defer: relaying it would answer
+about the *master's* local procs.
 
 **The decision is made by the read, never by a list of keys.** Which keys
 need the master is not knowable in advance, and a written-down list goes
 stale the first time someone adds one — silently, because the stale case
 returns a plausible zero rather than failing. Which *reads* cannot be
-satisfied locally is exactly the three accessors above, and that is
-enforced where it is used. A key added tomorrow that reads capacity is
-relayed with no edit here; one that reads only what the nidmap and the
-launch message already deliver stays local with no edit either.
+satisfied locally is exactly the four accessors above, and that is
+enforced where it is used. A key added tomorrow that reads capacity, or
+that reports whether a proc is still alive, is relayed with no edit here;
+one that reads only what the nidmap and the launch message already
+deliver stays local with no edit either.
 [`test/unit/check_query_authority.py`](../../../test/unit/check_query_authority.py)
-fails `make check` if this file reaches that state any other way.
+fails `make check` if this file reaches that state any other way — it
+keys off `->pid`, `->exit_code` and `prte_pmix_convert_state()` for the
+proc half, because `->state` alone cannot be told from a node's.
 
 Deferral is per **key**, not per query and not per request, because the
 things a daemon must answer for *itself* can arrive in the same
@@ -830,7 +859,11 @@ locally. The relay uses the tracker pattern described under
 requestor so the master defaults the query to the right job rather than to
 the asking daemon. `contrib/dockerswarm`'s `slotinfo` client is the
 regression test: on one node every rank is on the master, and the bug
-cannot be seen at all.
+cannot be seen at all. Its `proctable departed` mode is the same test for
+the proc half — some of the job leaves, and the querier is placed once on
+a non-master node and once on the master, because the master's answer was
+right all along and a case that asks only one of them cannot tell a fix
+from a daemon that stopped answering.
 
 
 Several relays add an entry (usually `PMIX_REQUESTOR`) to an info array

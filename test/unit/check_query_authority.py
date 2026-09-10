@@ -19,16 +19,25 @@
 # default-constructed zero, which is indistinguishable from a real answer
 # and is returned to the client as one.
 #
+# A daemon's copy of a job is stale in the same way, in one place: it
+# holds a prte_proc_t for every proc of the job, but it advances pid,
+# state and exit_code only for the procs it hosts.  Nothing carries a peer
+# daemon's proc states back down the tree - only the master is told - so
+# an entry for a proc on another node reports what the launch message
+# shipped for the life of the DVM.  That is how PMIX_QUERY_PROC_TABLE came
+# to report a rank that had exited long ago as one that had not started.
+#
 # pmix_server_queries.c therefore reaches that state only through the
 # accessors in src/runtime/prte_globals.c, which return
-# PRTE_ERR_NOT_AUTHORITATIVE off the master so the key can be relayed to
-# it.  This checks that it still does.  The rule cannot be enforced by
-# the compiler - the fields are ordinary members of a struct the file
-# legitimately uses for node *identity* - so it is enforced here.
+# PRTE_ERR_NOT_AUTHORITATIVE where the answer is not authoritative so the
+# key can be relayed to the master.  This checks that it still does.  The
+# rule cannot be enforced by the compiler - the fields are ordinary
+# members of structs the file legitimately uses for node and proc
+# *identity* - so it is enforced here.
 #
 # Deliberately not a list of query keys.  Which keys need the master is
 # not knowable in advance and goes stale the moment someone adds one;
-# which *reads* cannot be satisfied locally is exactly the set below.
+# which *reads* cannot be satisfied locally is exactly the sets below.
 
 import os
 import re
@@ -42,6 +51,16 @@ SESSIONS = "prte_sessions"
 ACCESSORS = ("prte_get_allocated_nodes",
              "prte_get_allocation_session",
              "prte_get_allocation_sessions")
+
+# The proc half.  ->state is no good as a marker here because prte_node_t
+# has one too and this file reads it legitimately (inside a branch the
+# rule above already gates).  ->pid and ->exit_code belong to no other
+# struct the file touches, and prte_pmix_convert_state() takes a PRRTE
+# PROC state and nothing else - so those three name a proc's runtime
+# state unambiguously, which is what the checker needs.
+PROC_RUNTIME = (r"->\s*pid\b", r"->\s*exit_code\b",
+                r"\bprte_pmix_convert_state\s*\(")
+PROC_ACCESSOR = "prte_get_proc_runtime_state"
 
 TARGET = os.path.join("src", "prted", "pmix", "pmix_server_queries.c")
 
@@ -101,6 +120,23 @@ def main():
                       "PRTE_ERR_NOT_AUTHORITATIVE"
                       % (TARGET, n, hit.group(1), ", ".join(ACCESSORS)))
 
+    # The same rule for a proc's runtime fields, in the same per-branch
+    # shape: a branch that reports whether a proc is alive, what its pid
+    # is, or how it exited has to have settled authority first.
+    runtime = re.compile("|".join(PROC_RUNTIME))
+    for offset, chunk in chunks:
+        text = "".join(chunk)
+        hit = runtime.search(text)
+        if hit is None:
+            continue
+        if PROC_ACCESSOR in text:
+            continue
+        n = offset + text[:hit.start()].count("\n") + 1
+        errors.append("%s:%d: reports a proc's runtime state without first "
+                      "establishing authority; read it through %s() and "
+                      "defer on PRTE_ERR_NOT_AUTHORITATIVE"
+                      % (TARGET, n, PROC_ACCESSOR))
+
     if errors:
         for e in errors:
             print(e)
@@ -108,7 +144,7 @@ def main():
               "query_complete() in %s." % (len(errors), TARGET))
         return 1
 
-    print("check_query_authority: %s reaches master-only state only "
+    print("check_query_authority: %s reaches state it may not hold only "
           "through the accessors" % TARGET)
     return 0
 
