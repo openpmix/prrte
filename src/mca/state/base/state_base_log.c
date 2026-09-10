@@ -164,14 +164,14 @@ void prte_state_base_log_open(void)
     rc = prte_state_base_log_resolve_dir(prte_state_base.log_path,
                                          prte_process_info.tmpdir_base, &dir);
     if (PRTE_SUCCESS != rc) {
-        prte_show_help("help-state-base.txt", "state-log-no-path", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-no-path", true,
                        prte_process_info.nodename,
                        (NULL == prte_state_base.log_path) ? "(none)" : prte_state_base.log_path);
         goto disable;
     }
     rc = pmix_os_dirpath_create(dir, S_IRWXU);
     if (PMIX_SUCCESS != rc && PMIX_ERR_EXISTS != rc) {
-        prte_show_help("help-state-base.txt", "state-log-open-failed", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,
                        prte_process_info.nodename, dir, PMIx_Error_string(rc));
         goto disable;
     }
@@ -191,7 +191,7 @@ void prte_state_base_log_open(void)
      * erase the record of the first.  The banner below separates the runs. */
     prte_state_base.log_fp = fopen(prte_state_base.log_file, "a");
     if (NULL == prte_state_base.log_fp) {
-        prte_show_help("help-state-base.txt", "state-log-open-failed", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,
                        prte_process_info.nodename, prte_state_base.log_file, strerror(errno));
         goto disable;
     }

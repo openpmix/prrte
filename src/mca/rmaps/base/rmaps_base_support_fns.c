@@ -74,7 +74,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         /** check that anything is here */
         if (0 == pmix_list_get_size(nodes)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-hostfile", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
@@ -92,7 +92,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         /** check that anything is left! */
         if (0 == pmix_list_get_size(nodes)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-host", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
@@ -327,7 +327,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     /** check that anything is here */
     if (0 == pmix_list_get_size(allocated_nodes)) {
         if (!silent) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
         }
         return PRTE_ERR_SILENT;
@@ -441,7 +441,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                         (PRTE_MAPPING_NO_OVERSUBSCRIBE &
                          PRTE_GET_MAPPING_DIRECTIVE(policy))) {
                         if (prte_ras_base.scheduler_owned) {
-                            prte_show_help("help-dash-host.txt",
+                            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-dash-host.txt",
                                            "dash-host:slots-exceed-allocation", true,
                                            node->name, s,
                                            node->slots - node->slots_inuse);
@@ -449,7 +449,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                         }
                         if (0 != node->slots_max &&
                             node->slots_inuse + s > node->slots_max) {
-                            prte_show_help("help-dash-host.txt",
+                            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-dash-host.txt",
                                            "dash-host:slots-exceed-max", true,
                                            node->name, s,
                                            node->slots_max - node->slots_inuse,
@@ -517,7 +517,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
              */
             return PRTE_ERR_RESOURCE_BUSY;
         } else {
-            prte_show_help("help-prte-rmaps-base.txt",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
                            "prte-rmaps-base:all-available-resources-used", true);
             return PRTE_ERR_SILENT;
         }
@@ -901,7 +901,7 @@ int prte_rmaps_base_check_support(prte_job_t *jdata,
         if (PRTE_BINDING_REQUIRED(jdata->map->binding) &&
             PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             /* we are required to bind but cannot */
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported",
                            true, node->name);
             return PRTE_ERR_SILENT;
         }
@@ -918,11 +918,11 @@ int prte_rmaps_base_check_support(prte_job_t *jdata,
         !support->membind->set_thisthread_membind &&
         PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
         if (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa && !options->membind_warned) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
                            node->name);
             options->membind_warned = true;
         } else if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
                            true, node->name);
             return PRTE_ERR_SILENT;
         }
@@ -963,13 +963,13 @@ int prte_rmaps_base_check_oversubscribed(prte_job_t *jdata,
              * via hostfile/dash-host */
             if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN &
                   PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                true, app->num_procs, app->app, prte_process_info.nodename);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return PRTE_ERR_SILENT;
             } else if (!options->oversubscribe) {
                 /* if we were explicitly told not to oversubscribe, then don't */
-                prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                true, app->num_procs, app->app, prte_process_info.nodename);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return PRTE_ERR_SILENT;

@@ -83,7 +83,7 @@ static int rte_init(int argc, char **argv)
 
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 

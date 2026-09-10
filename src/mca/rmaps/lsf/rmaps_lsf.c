@@ -221,7 +221,7 @@ static int lsf_map(prte_job_t *jdata,
         if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_COMPUTED)) {
             app->num_procs = num_ranks;
             if (0 == app->num_procs) {
-                prte_show_help("help-rmaps_lsf.txt", "bad-syntax", true, affinity_file);
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "bad-syntax", true, affinity_file);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -242,7 +242,7 @@ static int lsf_map(prte_job_t *jdata,
                     slots = prte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
-                    prte_show_help("help-rmaps_lsf.txt", "missing-rank", true, entry,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "missing-rank", true, entry,
                                    affinity_file);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -303,7 +303,7 @@ static int lsf_map(prte_job_t *jdata,
                         relative_index = atoi(strtok(rfmap->node_name, "+n"));
                         if (relative_index >= (int) pmix_list_get_size(&node_list)
                             || (0 > relative_index)) {
-                            prte_show_help("help-rmaps_lsf.txt", "bad-index", true,
+                            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "bad-index", true,
                                            rfmap->node_name);
                             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                             rc = PRTE_ERR_BAD_PARAM;
@@ -321,7 +321,7 @@ static int lsf_map(prte_job_t *jdata,
             if (NULL == node) {
                 /* rfmap is NULL for a rank the file did not list, which the
                  * fallback above placed on a node of its own choosing */
-                prte_show_help("help-rmaps_lsf.txt", "resource-not-found", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "resource-not-found", true,
                                (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
@@ -339,7 +339,7 @@ static int lsf_map(prte_job_t *jdata,
                 goto error;
             }
             if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, NULL, options)) {
-                prte_show_help("help-rmaps_lsf.txt", "bad-host", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "bad-host", true,
                                (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
@@ -370,7 +370,7 @@ static int lsf_map(prte_job_t *jdata,
                 (PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding) || options->overload) ) {
                 if (NULL == node->topology || NULL == node->topology->topo) {
                     // Not allowed - for rank-file, we must have the topology
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-topology", true,
                                    node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -382,14 +382,14 @@ static int lsf_map(prte_job_t *jdata,
                 if (PRTE_ERR_NOT_FOUND == rc) {
                     char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                                          false, physical, node->topology->topo);
-                    prte_show_help("help-rmaps_lsf.txt", "missing-cpu", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "missing-cpu", true,
                                    prte_tool_basename, slots, tmp);
                     free(tmp);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
                 } else if (PRTE_ERROR == rc) {
-                    prte_show_help("help-rmaps_lsf.txt", "bad-syntax", true, affinity_file);
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "bad-syntax", true, affinity_file);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
@@ -430,7 +430,7 @@ static int lsf_map(prte_job_t *jdata,
                     overlap_bitmap = prte_hwloc_base_cpuset2ranges(node->topology->topo, bitmap,
                                                                    options->use_hwthreads, false);
 
-                    prte_show_help("help-rmaps_lsf.txt", "rmaps:proc-slots-overloaded", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "rmaps:proc-slots-overloaded", true,
                                    PRTE_NAME_PRINT(&proc->name),
                                    node->name,
                                    (NULL == req_bitmap) ? "NONE" : req_bitmap,
@@ -523,7 +523,7 @@ static int file_parse(const char *affinity_file)
     /* check to see if the file is empty - if it is,
      * then affinity wasn't actually set for this job */
     if (0 != stat(affinity_file, &buf)) {
-        prte_show_help("help-rmaps_lsf.txt", "lsf-affinity-file-not-found", true, affinity_file);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_lsf.txt", "lsf-affinity-file-not-found", true, affinity_file);
         return PRTE_ERR_SILENT;
     }
     if (0 == buf.st_size) {
@@ -611,7 +611,7 @@ static int file_parse(const char *affinity_file)
         }
         if (NULL == nptr) {
             /* wasn't found - that is an error */
-            prte_show_help("help-rmaps_lsf.txt",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_lsf.txt",
                            "resource-not-found", true,
                            hstname);
             fclose(fp);

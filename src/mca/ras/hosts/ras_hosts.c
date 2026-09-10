@@ -173,7 +173,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                  * here with one.)  The user asked for specific hosts and named
                  * none, so say so rather than carrying on with an allocation
                  * they did not ask for. */
-                prte_show_help("help-hostfile.txt", "no-hostfile", true, hosts);
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-hostfile.txt", "no-hostfile", true, hosts);
                 free(hosts);
                 return PRTE_ERR_SILENT;
             }
@@ -307,7 +307,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
      * syntax here */
     fp = fopen(hostfile, "r");
     if (NULL == fp) {
-        prte_show_help("help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
         return PMIX_ERR_SILENT;
     }
 
@@ -370,7 +370,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
             addslots = true;
         }
         if (!parse_slots(ptr, &slots)) {
-            prte_show_help("help-ras-base.txt", "ras-base:bad-slots", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:bad-slots", true,
                            cptr, hostfile, ptr);
             fclose(fp);
             free(line);
@@ -408,7 +408,7 @@ process:
             } else if (0 > slots && -1 != slots) {
                 // cannot have a new node with negative slots - the -1
                 // is a marker for a node without slots being specified
-                prte_show_help("help-ras-base.txt", "negative-slots", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "negative-slots", true,
                                hostfile, cptr);
                 PMIX_RELEASE(node);
                 free(line);

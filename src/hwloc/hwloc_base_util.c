@@ -223,7 +223,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
             break;
         }
         if (bad) {
-            prte_show_help("help-prte-hwloc-base.txt", "unfound-cpu", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-hwloc-base.txt", "unfound-cpu", true,
                            *cpulist, ranges[idx],
                            use_hwthread_cpus ? "hwthread" : "core");
             PMIx_Argv_free(ranges);
@@ -1174,7 +1174,7 @@ static int collect_sites(hwloc_topology_t topo, hwloc_const_cpuset_t bitmap,
             obj = obj->parent;
         }
         if (NULL == obj) {
-            prte_show_help("help-prte-hwloc-base.txt", "pu-not-found", true, (unsigned) id);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-hwloc-base.txt", "pu-not-found", true, (unsigned) id);
             free(indices);
             return -1;
         }

@@ -211,7 +211,7 @@ static int setup_base(void)
             /* check if prefix matches */
             if (0 == strncmp(prte_process_info.tmpdir_base, list[i], strlen(list[i]))) {
                 /* this is a prohibited location */
-                prte_show_help("help-prte-runtime.txt", "prte:session:dir:prohibited", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte:session:dir:prohibited", true,
                                prte_process_info.tmpdir_base, prte_prohibited_session_dirs);
                 PMIx_Argv_free(list);
                 return PRTE_ERR_FATAL;

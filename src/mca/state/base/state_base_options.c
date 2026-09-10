@@ -279,7 +279,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 ++ptr;
                 if ('\0' == *ptr) {
                     /* missing the value */
-                    prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value", true,
                                    "runtime options", options[n], "empty");
                     PMIx_Argv_free(options);
                     return PRTE_ERR_BAD_PARAM;
@@ -295,7 +295,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             if (NULL != ptr && !prte_schizo_base_directive_is_valued(options[n]) &&
                 !PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP) &&
                 PRTE_SUCCESS != prte_cli_bool_value(ptr, &flag)) {
-                prte_show_help("help-schizo-base.txt", "non-boolean-value", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "non-boolean-value", true,
                                PRTE_CLI_RTOS, options[n], ptr);
                 PMIX_VALUE_DESTRUCT(&value);
                 PMIx_Argv_free(options);
@@ -353,7 +353,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
                 if (NULL == ptr || '\0' == *ptr) {
                     /* missing the value */
-                    prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value", true,
                                    "runtime options", options[n], "empty");
                     PMIX_VALUE_DESTRUCT(&value);
                     PMIx_Argv_free(options);
@@ -501,7 +501,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                                    &flag, PMIX_BOOL);
 
             } else {
-                prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy", true,
                                "runtime options", spec);
                 PMIX_VALUE_DESTRUCT(&value);
                 PMIx_Argv_free(options);
@@ -520,7 +520,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, NULL, PMIX_BOOL) &&
         !prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL) &&
         !prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL)) {
-        prte_show_help("help-state-base.txt", "bad-combination", true);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "bad-combination", true);
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;

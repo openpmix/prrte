@@ -40,14 +40,15 @@
  * output and has nowhere else to go when no tool is subscribed. Both callers
  * below reached a point where they had concluded the message was theirs to
  * show; without this it was simply dropped. */
-static void deliver_locally(const char *filename, const char *topic,
-                            const char *output, bool emit_directly)
+static void deliver_locally(const char *nspace, const char *filename,
+                            const char *topic, const char *output,
+                            bool emit_directly)
 {
     if (emit_directly) {
         fprintf(stderr, "%s", output);
         fflush(stderr);
     }
-    pmix_show_help_norender(filename, topic, output);
+    pmix_show_help_norender(nspace, filename, topic, output);
 }
 
 /* Carries a rendered message from whatever thread produced it over to the
@@ -61,6 +62,7 @@ static void deliver_locally(const char *filename, const char *topic,
 typedef struct {
     pmix_object_t super;
     prte_event_t ev;
+    pmix_nspace_t nspace;
     char *filename;
     char *topic;
     char *output;
@@ -68,6 +70,7 @@ typedef struct {
 
 static void shcon(prte_show_help_caddy_t *p)
 {
+    PMIX_LOAD_NSPACE(p->nspace, NULL);
     p->filename = NULL;
     p->topic = NULL;
     p->output = NULL;
@@ -100,8 +103,15 @@ static void relay_to_hnp(int sd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(cd);
 
     PMIX_DATA_BUFFER_CREATE(buf);
-    /* the filename and topic travel with the text: the HNP needs them to
-     * key duplicate suppression, and they are what identify the message */
+    /* The job, filename and topic travel with the text: the HNP needs all
+     * three to key duplicate suppression, and the last two are what
+     * identify the message.  A DVM is single-version by rule, so this
+     * wire has no format marker - packer and unpacker change together or
+     * not at all (see prte_show_help_recv). */
+    prc = PMIx_Data_pack(NULL, buf, &cd->nspace, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != prc) {
+        goto fallback;
+    }
     prc = PMIx_Data_pack(NULL, buf, &cd->filename, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         goto fallback;
@@ -122,19 +132,19 @@ static void relay_to_hnp(int sd, short args, void *cbdata)
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);
         /* the relay is what would have shown it, and it did not go */
-        deliver_locally(cd->filename, cd->topic, cd->output, true);
+        deliver_locally(cd->nspace, cd->filename, cd->topic, cd->output, true);
     }
     PMIX_RELEASE(cd);
     return;
 
 fallback:
     PMIX_DATA_BUFFER_RELEASE(buf);
-    deliver_locally(cd->filename, cd->topic, cd->output, true);
+    deliver_locally(cd->nspace, cd->filename, cd->topic, cd->output, true);
     PMIX_RELEASE(cd);
 }
 
-int prte_show_help(const char *filename, const char *topic,
-                   int want_error_header, ...)
+int prte_show_help(const pmix_nspace_t nspace, const char *filename,
+                   const char *topic, int want_error_header, ...)
 {
     va_list arglist;
     char *output;
@@ -163,7 +173,7 @@ int prte_show_help(const char *filename, const char *topic,
          * goes false again on every grow, and a grow is exactly when these
          * messages fire. A tool or an application is its own endpoint and
          * PMIx writes for it. */
-        deliver_locally(filename, topic, output,
+        deliver_locally(nspace, filename, topic, output,
                         prte_persistent && !prte_dvm_started);
         free(output);
         return PRTE_SUCCESS;
@@ -179,7 +189,7 @@ int prte_show_help(const char *filename, const char *topic,
          * PMIX_IOF_LOCAL_OUTPUT=false, so handing this to PMIx is handing it
          * nowhere, and we have just established there is no HNP to relay to
          * either. Our stderr may well still be connected */
-        deliver_locally(filename, topic, output, true);
+        deliver_locally(nspace, filename, topic, output, true);
         free(output);
         return PRTE_SUCCESS;
     }
@@ -188,6 +198,7 @@ int prte_show_help(const char *filename, const char *topic,
      * one of the odls spawn-pool threads - render_child_msg() is called
      * from there - and the RML is progress-thread-only state. */
     cd = PMIX_NEW(prte_show_help_caddy_t);
+    PMIX_LOAD_NSPACE(cd->nspace, nspace);
     cd->filename = (NULL == filename) ? NULL : strdup(filename);
     cd->topic = (NULL == topic) ? NULL : strdup(topic);
     cd->output = output; /* the caddy takes it */
@@ -200,10 +211,19 @@ void prte_show_help_recv(int status, pmix_proc_t *sender,
                          prte_rml_tag_t tag, void *cbdata)
 {
     char *filename = NULL, *topic = NULL, *output = NULL;
+    pmix_nspace_t nspace;
     int32_t cnt;
     pmix_status_t rc;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
+    /* see the packer in relay_to_hnp: this wire carries no format
+     * marker, so the two change together */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto cleanup;
+    }
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &filename, &cnt, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
@@ -237,7 +257,7 @@ void prte_show_help_recv(int status, pmix_proc_t *sender,
          * one of our own: quiet once a tool is there to receive it, direct
          * while we are still starting and the terminal is all there is - a
          * daemon that fails to launch during DVM startup lands here */
-        deliver_locally(filename, topic, output,
+        deliver_locally(nspace, filename, topic, output,
                         prte_persistent && !prte_dvm_started);
     }
 

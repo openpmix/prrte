@@ -176,7 +176,7 @@ static int rte_init(int argc, char **argv)
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
     if (NULL == jdata->schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         error = "select personality";
         ret = PRTE_ERR_SILENT;
         goto error;
@@ -422,7 +422,7 @@ static int rte_init(int argc, char **argv)
 
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
     if (NULL != jdata) {

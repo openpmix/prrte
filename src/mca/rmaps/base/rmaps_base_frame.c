@@ -281,7 +281,7 @@ static int check_pe_list(const char *spec)
 
     entries = PMIx_Argv_split(spec, ',');
     if (NULL == entries) {
-        prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-value", true,
                        "mapping", "PE-LIST", spec);
         return PRTE_ERR_SILENT;
     }
@@ -303,7 +303,7 @@ static int check_pe_list(const char *spec)
     }
     PMIx_Argv_free(entries);
     if (PRTE_SUCCESS != rc) {
-        prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-value", true,
                        "mapping", "PE-LIST", spec);
     }
     return rc;
@@ -353,7 +353,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
             if (nooversubscribe_given) {
                 /* conflicting directives */
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "OVERSUBSCRIBE", "NOOVERSUBSCRIBE");
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -365,7 +365,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
             if (oversubscribe_given) {
                 /* conflicting directives */
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "OVERSUBSCRIBE", "NOOVERSUBSCRIBE");
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -379,7 +379,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_ORDERED)) {
             if (NULL == attrs) {
-                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -390,7 +390,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             /* Numeric value must immediately follow '=' (PE=2) */
             val = pmix_cli_qualifier_value(ck2[i]);
             if (NULL == val) {
-                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                "PE", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -398,7 +398,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             u16 = strtol(val, &ptr, 10);
             if ('\0' != *ptr) {
                 /* value is invalid */
-                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                "PE", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -414,7 +414,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
             if (noinherit_given) {
                 /* conflicting directives */
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "INHERIT", "NOINHERIT");
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -435,7 +435,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
             if (inherit_given) {
                 /* conflicting directives */
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "INHERIT", "NOINHERIT");
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -450,7 +450,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
             if (core_cpus_given) {
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -465,7 +465,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
             if (hwthread_cpus_given) {
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -496,7 +496,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             val = pmix_cli_qualifier_value(ck2[i]);
             if (NULL == val) {
                 /* missing the value */
-                prte_show_help("help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
                                "FILE", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -504,7 +504,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             if (NULL == attrs) {
                 if (NULL != prte_rmaps_base.file) {
                     // cannot specify it twice
-                    prte_show_help("help-prte-rmaps-base.txt", "multiply-defined", true, "mapping policy",
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "multiply-defined", true, "mapping policy",
                                    "FILE", prte_rmaps_base.file, ck2[i]);
                     PMIx_Argv_free(ck2);
                     return PRTE_ERR_SILENT;
@@ -530,13 +530,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 val = "package";
             }
             if (!prte_rmaps_base_interleave_level(val, NULL)) {
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:bad-interleave-level",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:bad-interleave-level",
                                true, val);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == attrs) {
-                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier",
                                true, "mapping policy", PRTE_CLI_INTERLEAVE);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -551,20 +551,20 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
              * the reason given below. */
             val = pmix_cli_qualifier_value(ck2[i]);
             if (NULL == val) {
-                prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value", true,
                                "mapping policy", "NDEV", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
             ndev = strtol(val, &eptr, 10);
             if ('\0' != *eptr || 0 >= ndev || UINT16_MAX < ndev) {
-                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true,
                                "mapping policy", "NDEV", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == attrs) {
-                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier",
                                true, "mapping policy", PRTE_CLI_NDEV);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -592,13 +592,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                        || 0 == strcasecmp(val, "no")) {
                 shared = false;
             } else {
-                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true,
                                "mapping policy", "SHARED", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == attrs) {
-                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier",
                                true, "mapping policy", PRTE_CLI_SHARED);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
@@ -681,7 +681,7 @@ int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
             if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(apppol)) {
                 appover = !(PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(apppol));
                 if (given && over != appover) {
-                    prte_show_help("help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
                                    true, appover ? "OVERSUBSCRIBE" : "NOOVERSUBSCRIBE",
                                    app->app, over ? "OVERSUBSCRIBE" : "NOOVERSUBSCRIBE");
                     return PRTE_ERR_SILENT;
@@ -707,7 +707,7 @@ int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
         /***   INHERIT / NOINHERIT   ***/
         if (prte_get_attribute(&app->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
             if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
                                true, "INHERIT", app->app, "NOINHERIT");
                 return PRTE_ERR_SILENT;
             }
@@ -717,7 +717,7 @@ int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
         }
         if (prte_get_attribute(&app->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
             if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
-                prte_show_help("help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
                                true, "NOINHERIT", app->app, "INHERIT");
                 return PRTE_ERR_SILENT;
             }
@@ -859,7 +859,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 /* this is an error - there had to be at least one
                  * colon to delimit the number from the object type
                  */
-                prte_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, inspec);
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-pattern", true, inspec);
                 PMIx_Argv_free(ck);
                 return PRTE_ERR_SILENT;
             }
@@ -894,7 +894,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, NULL, &tmp)) &&
             PRTE_ERR_TAKE_NEXT_OPTION != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
-                prte_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
                 rc = PRTE_ERR_SILENT;
             }
             PMIx_Argv_free(ck);
@@ -921,7 +921,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         if (PRTE_SUCCESS != (rc = check_modifiers(&inspec[1], jdata, NULL, &tmp)) &&
             PRTE_ERR_TAKE_NEXT_OPTION != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
-                prte_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
                 rc = PRTE_ERR_SILENT;
             }
             PMIx_Argv_free(ck);
@@ -940,7 +940,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         ++ptr;
         if ('\0' == *ptr) {
             /* malformed option */
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy",
                            true, "mapping", ck[0]);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -992,7 +992,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         /* check that the file was given */
         if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
             (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
-            prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rankfile-no-filename", true);
             PMIx_Argv_free(ck);
             free(cptr);
             if (NULL != val) {
@@ -1006,7 +1006,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING)) {
                 if (NULL == prte_rmaps_base.file) {
                     /* also not allowed */
-                    prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rankfile-no-filename", true);
                     PMIx_Argv_free(ck);
                     free(cptr);
                     if (NULL != val) {
@@ -1034,7 +1034,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PELIST)) {
         if (NULL == jdata) {
-            prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-policy", true,
                            "mapping", cptr);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1045,7 +1045,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
         if (NULL == val) {
             /* malformed option */
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy",
                            true, "mapping", ck[0]);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1073,7 +1073,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
          * directive's value, which is what lets a new class be supported by
          * adding a value rather than a directive. */
         if (NULL == jdata) {
-            prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-policy", true,
                            "mapping", cptr);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1084,7 +1084,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
         if (NULL == val || 0 == strlen(val)) {
             /* "device" with nothing after the "=" names no device at all */
-            prte_show_help("help-prte-rmaps-base.txt", "missing-value",
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value",
                            true, "mapping", ck[0]);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1099,7 +1099,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
     } else {
-        prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy",
                        true, "mapping", cptr);
         PMIx_Argv_free(ck);
         free(cptr);
@@ -1123,7 +1123,7 @@ setpolicy:
     if (NULL != jdata
         && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_INTERLEAVE, NULL, PMIX_STRING)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
@@ -1133,14 +1133,14 @@ setpolicy:
     if (NULL != jdata
         && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_SHARED, NULL, PMIX_BOOL)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
     if (NULL != jdata
         && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_NDEV, NULL, PMIX_UINT16)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
@@ -1225,7 +1225,7 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
         PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
 
     } else {
-        prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy", true,
                        "ranking", spec);
         return PRTE_ERR_SILENT;
     }
@@ -1267,7 +1267,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
     if (1 < PMIx_Argv_count(ck)) {
         if (0 == strcasecmp(ck[0], "ppr")) {
             if (3 > PMIx_Argv_count(ck)) {
-                prte_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, inspec);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-pattern", true, inspec);
                 PMIx_Argv_free(ck);
                 return PRTE_ERR_SILENT;
             }
@@ -1297,7 +1297,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         rc = check_modifiers(cptr, NULL, app, &tmp);
         if (PRTE_SUCCESS != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
-                prte_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier",
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-modifier",
                                true, cptr);
                 rc = PRTE_ERR_SILENT;
             }
@@ -1319,7 +1319,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         rc = check_modifiers(&inspec[1], NULL, app, &tmp);
         if (PRTE_SUCCESS != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
-                prte_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier",
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-modifier",
                                true, inspec);
                 rc = PRTE_ERR_SILENT;
             }
@@ -1337,7 +1337,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         *ptr = '=';
         ++ptr;
         if ('\0' == *ptr) {
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-policy",
                            true, "mapping", ck[0]);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1384,7 +1384,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
          * by, and a multi-app command line has nowhere else to say it */
         if (NULL == val) {
             /* malformed option */
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-policy",
                            true, "mapping", ck[0]);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1406,7 +1406,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
          * job-level arm above: a directive accepted at one level and refused
          * at the other is the recurring bug in this file */
         if (NULL == val || 0 == strlen(val)) {
-            prte_show_help("help-prte-rmaps-base.txt", "missing-value",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "missing-value",
                            true, "mapping", ck[0]);
             PMIx_Argv_free(ck);
             free(cptr);
@@ -1426,7 +1426,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
          * checked by the rank_file mapper itself when the app named none */
         if (!prte_get_attribute(&app->attributes, PRTE_APP_MAP_FILE, NULL, PMIX_STRING)) {
             if (NULL == prte_rmaps_base.file) {
-                prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rankfile-no-filename", true);
                 PMIx_Argv_free(ck);
                 free(cptr);
                 if (NULL != val) {
@@ -1441,7 +1441,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NOLOCAL)) {
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_NO_USE_LOCAL);
     } else {
-        prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-policy",
                        true, "mapping", cptr);
         PMIx_Argv_free(ck);
         free(cptr);
@@ -1462,19 +1462,19 @@ setpolicy:
      * see the job-level parser, which refuses it the same way */
     if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
     if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
     if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_NDEV, NULL, PMIX_UINT16)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
@@ -1499,7 +1499,7 @@ int prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app, char *spec)
     } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
         PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
     } else {
-        prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking", spec);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking", spec);
         return PRTE_ERR_SILENT;
     }
     PRTE_SET_RANKING_DIRECTIVE(tmp, PRTE_RANKING_GIVEN);
@@ -1542,7 +1542,7 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
                  * generic "unrecognized qualifier" below, which would be
                  * baffling now that the schizo whitelist lets the same
                  * spelling through on the job. */
-                prte_show_help("help-prte-rmaps-base.txt", "job-only-modifier", true,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "job-only-modifier", true,
                                "binding", quals[i]);
                 PMIx_Argv_free(quals);
                 free(myspec);
@@ -1550,7 +1550,7 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
                 p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {
-                    prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
@@ -1566,7 +1566,7 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
                 lval = strtol(p2, &endp, 10);
                 if (endp == p2 || '\0' != *endp || 0 != errno ||
                     0 >= lval || UINT16_MAX < lval) {
-                    prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
@@ -1576,7 +1576,7 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
                 prte_set_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT,
                                    PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
             } else {
-                prte_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
                 PMIx_Argv_free(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;
@@ -1608,7 +1608,7 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
     } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
     } else {
-        prte_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-hwloc-base.txt", "invalid binding_policy", true,
                        "binding", spec);
         free(myspec);
         return PRTE_ERR_BAD_PARAM;

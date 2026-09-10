@@ -327,7 +327,7 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
     if (0 != (type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))) {
         for (n = 0; n < dc->ndevs; n++) {
             if (NULL == dc->devs[n].vendor_id) {
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
                                true, opts->map_device, node->name,
                                dc->devs[n].dev.osname);
                 pmix_hwloc_release_devices(dc->devs, dc->ndevs);
@@ -383,7 +383,7 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
      * binding matching it is then legitimate. */
     for (n = 0; n < dc->ngroups; n++) {
         if (!binding_fits(node, dc->grouploc[n], opts)) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
                            prte_hwloc_base_print_binding(opts->bind),
                            opts->map_device, node->name);
             pmix_hwloc_release_devices(dc->devs, dc->ndevs);
@@ -402,7 +402,7 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
         }
     }
     if (degenerate && 1 < dc->ngroups) {
-        prte_show_help("help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
                        true, opts->map_device, node->name, (int) dc->ngroups);
     }
 

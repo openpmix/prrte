@@ -686,7 +686,7 @@ bool prte_ds_make_room(prte_data_object_t *data)
         }
         if (!u->warned) {
             u->warned = true;
-            prte_show_help("help-prte-data-server.txt", "datastore:evicting", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-data-server.txt", "datastore:evicting", true,
                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) data->uid,
                            (unsigned long) prte_data_store.max_size);
         }

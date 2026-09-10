@@ -215,7 +215,7 @@ int prte_grpcomm_init(void)
      * and would otherwise say it once each. */
     if (PRTE_PROC_IS_MASTER && prte_grpcomm_globals.low_radix_release
         && prte_rml_base.radix2 == prte_rml_base.radix) {
-        prte_show_help("help-prte-grpcomm.txt", "release-radix-noop", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt", "release-radix-noop", true,
                        prte_rml_base.radix, prte_rml_base.radix2);
     }
 
