@@ -20,6 +20,15 @@
  *       Same, but PMIX_QUERY_LOCAL_PROC_TABLE -- only the procs the
  *       answering daemon hosts.
  *
+ *   proctable departed [seconds]
+ *       The whole job fences, then every ODD rank finalizes and exits.
+ *       Rank 0 waits [seconds] (default 5) and then queries
+ *       PMIX_QUERY_PROC_TABLE for its own namespace, printing the table the
+ *       same way "procs" does. Every other rank just waits and exits.
+ *       Mapped by node, the ranks that leave are on a different node from
+ *       rank 0, so the answering daemon hosts none of them -- which is the
+ *       whole point. See the second block comment below.
+ *
  *   proctable serveruri [hostname] [seconds]
  *       PMIx_Query(PMIX_SERVER_URI), optionally qualified by PMIX_HOSTNAME so
  *       the answer must come from ANOTHER node's daemon record. Prints
@@ -50,6 +59,16 @@
  * on this path was reported to the tool as a bare PMIX_ERROR. On one host
  * the hostname qualifier resolves to the local daemon and the interesting
  * branch is never taken.
+ *
+ * "departed" is the same query asked after some of the job has left. A
+ * daemon's copy of a job's proc array is the snapshot the launch message
+ * carried, and it advances the state of its OWN local children and nothing
+ * else -- no message carries a peer daemon's proc states back down the tree,
+ * because no daemon needs them. So an entry for a proc hosted elsewhere kept
+ * the state it was launched with for the life of the DVM, and a client whose
+ * daemon is not the master was told that a rank which exited long ago was
+ * still starting up. The master's table was correct all along, which is why
+ * this cannot be seen on one host: there the only daemon IS the master.
  *
  * Note that PMIX_SERVER_URI is the rendezvous address of a node's PMIx
  * SERVER -- how a client or tool connects to it. It is not how daemons reach
@@ -182,6 +201,34 @@ static int do_proc_table(const char *key, int seconds)
     return 0;
 }
 
+/* Fence the job, let the odd ranks go, then ask for the whole table.  Rank 0
+ * is the only one that queries; mapped by node it sits on a different node
+ * from every rank that left, so its daemon hosts none of them. */
+static int do_departed(int seconds)
+{
+    pmix_status_t rc;
+
+    /* nobody leaves until everybody has arrived, so the table rank 0 asks
+     * for is one whose entries all reached RUNNING first */
+    rc = PMIx_Fence(NULL, 0, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        printf("ERR %d %s\n", (int) rc, PMIx_Error_string(rc));
+        return 1;
+    }
+    if (0 != myproc.rank % 2) {
+        printf("LEAVING %u\n", myproc.rank);
+        fflush(stdout);
+        return 0;
+    }
+    if (0 != myproc.rank) {
+        /* an even rank that is not the querier just has to outlive it */
+        sleep(seconds + 5);
+        return 0;
+    }
+    sleep(seconds);
+    return do_proc_table(PMIX_QUERY_PROC_TABLE, 0);
+}
+
 static int do_server_uri(const char *hostname, int seconds)
 {
     pmix_query_t query;
@@ -225,7 +272,7 @@ int main(int argc, char **argv)
     int ret = 1;
 
     if (2 > argc) {
-        fprintf(stderr, "usage: %s procs|localprocs|serveruri [args]\n", argv[0]);
+        fprintf(stderr, "usage: %s procs|localprocs|departed|serveruri [args]\n", argv[0]);
         return 2;
     }
 
@@ -239,6 +286,8 @@ int main(int argc, char **argv)
         ret = do_proc_table(PMIX_QUERY_PROC_TABLE, (3 <= argc) ? atoi(argv[2]) : 0);
     } else if (0 == strcmp(argv[1], "localprocs")) {
         ret = do_proc_table(PMIX_QUERY_LOCAL_PROC_TABLE, (3 <= argc) ? atoi(argv[2]) : 0);
+    } else if (0 == strcmp(argv[1], "departed")) {
+        ret = do_departed((3 <= argc) ? atoi(argv[2]) : 5);
     } else if (0 == strcmp(argv[1], "serveruri")) {
         const char *host = (3 <= argc && 0 != strcmp(argv[2], "-")) ? argv[2] : NULL;
         ret = do_server_uri(host, (4 <= argc) ? atoi(argv[3]) : 0);

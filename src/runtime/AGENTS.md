@@ -143,6 +143,41 @@ you were handed can be handed to somebody else later.
 The lookups are linear scans over the whole array. That is fine at DVM
 scale, but do not put one inside a per-proc loop on a launch path.
 
+### What a registry holds is not what it is authoritative for
+
+A `prted` has all three registries, and parts of all three are stale on it
+by design. Its node pool carries a node's *identity* — the nidmap ships
+names, aliases, daemon vpids and pool slots and nothing else — so `slots`,
+`slots_max`, `slots_inuse` and node `state` read back default-constructed.
+Its `prte_sessions` holds the default session and no other. And its copy
+of a job carries a `prte_proc_t` for every proc, but it advances `pid`,
+`state` and `exit_code` only for the procs it hosts: proc states travel
+*up* to the master in `PRTE_PLM_UPDATE_PROC_STATE` and are never sent back
+down, because no daemon needs a peer's. So an entry for a proc on another
+node reports what the launch message shipped, for the life of the DVM.
+
+None of that fails loudly. A stale read hands back a plausible zero — a
+node with no slots, a rank still `PRTE_PROC_STATE_INIT` — that no caller
+can tell from a real answer, and the rank that happens to land on the
+master gets the truth while every other rank silently does not. So the
+four reads that cannot be satisfied everywhere are behind accessors that
+say so:
+
+| Accessor | Authoritative on |
+|----------|------------------|
+| `prte_get_allocated_nodes()` | the master |
+| `prte_get_allocation_session()` | the master |
+| `prte_get_allocation_sessions()` | the master |
+| `prte_get_proc_runtime_state()` | the master, and the daemon hosting that proc |
+
+Anywhere else each returns `PRTE_ERR_NOT_AUTHORITATIVE` having touched
+nothing — the caller's cue to ask the master instead, which is what
+[`src/prted/pmix/pmix_server_queries.c`](../prted/pmix/pmix_server_queries.c)
+does with its `defer:` label. Reach past them for that state and the bug
+you write is invisible at the point of failure;
+[`test/unit/check_query_authority.py`](../../test/unit/check_query_authority.py)
+fails `make check` if the query file does.
+
 ---
 
 ## Sessions (reservations)
