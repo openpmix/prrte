@@ -113,7 +113,7 @@ static bool check_taint(char *name, char *evar)
         }
     }
 
-    prte_show_help("help-ras-slurm.txt", "tainted-envar", true,
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "tainted-envar", true,
                    name, prte_mca_ras_slurm_component.max_length);
     return true;
 }
@@ -191,7 +191,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     regexp = getenv("SLURM_NODELIST");
     if (NULL == regexp) {
-        prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
         return PRTE_ERR_NOT_FOUND;
     }
     // check for length violation - untaint the envar value
@@ -209,7 +209,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         tasks_per_node = getenv("SLURM_JOB_CPUS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
                            "SLURM_JOB_CPUS_PER_NODE");
             return PRTE_ERR_NOT_FOUND;
         }
@@ -229,7 +229,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         tasks_per_node = getenv("SLURM_TASKS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
                            "SLURM_TASKS_PER_NODE");
             return PRTE_ERR_NOT_FOUND;
         }
@@ -417,7 +417,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         }
         if (i == 0) {
             /* we found a special character at the beginning of the string */
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                            tasks_per_node, "SLURM_NODELIST");
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(orig);
@@ -434,7 +434,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
             }
             if (j >= len) {
                 /* we didn't find the end of the range */
-                prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                                tasks_per_node, "SLURM_NODELIST");
                 PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 free(orig);
@@ -443,7 +443,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
             ret = prte_ras_slurm_parse_ranges(base, base + i + 1, &names);
             if (PRTE_SUCCESS != ret) {
-                prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                                tasks_per_node, "SLURM_NODELIST");
                 PRTE_ERROR_LOG(ret);
                 free(orig);
@@ -527,7 +527,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         } else if (*endptr == '\0' || j >= num_nodes) {
             break;
         } else {
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                            tasks_per_node, "SLURM_TASKS_PER_NODE");
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(slots);

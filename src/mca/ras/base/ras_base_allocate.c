@@ -410,7 +410,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (prte_allocation_required) {
             /* an allocation is required, so this is fatal */
             PMIX_LIST_DESTRUCT(&nodes);
-            prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt", "ras-base:no-allocation", true);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PMIX_RELEASE(caddy);
             return;
@@ -764,7 +764,7 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
 
     if ((NULL == hosts || '\0' == *hosts) &&
         (NULL == hostfile || '\0' == *hostfile)) {
-        prte_show_help("help-ras-base.txt", "ras-base:activate-nothing-named", true);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-nothing-named", true);
         req->pstatus = PMIX_ERR_BAD_PARAM;
         return;
     }
@@ -2245,7 +2245,7 @@ static int ras_base_add_hosts_allowed(void)
     prte_ras_base_selected_module_t *mod;
 
     if (prte_ras_base.scheduler_owned) {
-        prte_show_help("help-ras-base.txt", "ras-base:add-host-managed", true);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:add-host-managed", true);
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
@@ -2255,7 +2255,7 @@ static int ras_base_add_hosts_allowed(void)
         }
     }
 
-    prte_show_help("help-ras-base.txt", "ras-base:add-host-unsupported", true);
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:add-host-unsupported", true);
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
@@ -2481,7 +2481,7 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
     if (!have_directive) {
         /* the one element that cannot be defaulted: a request whose directive
          * we had to guess would ask for something nobody asked for */
-        prte_show_help("help-ras-base.txt", "ras-base:spawn-alloc-nodirective", true);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt", "ras-base:spawn-alloc-nodirective", true);
         PMIX_INFO_FREE(info, nalloc);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -2706,7 +2706,7 @@ static int ras_base_activate_select(pmix_pointer_array_t *sel, prte_node_t *node
         return PRTE_SUCCESS;
     }
     if (!ras_base_activatable(node)) {
-        prte_show_help("help-ras-base.txt", "ras-base:activate-unavailable", true,
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-unavailable", true,
                        node->name, prte_node_state_to_str(node->state), token);
         return PRTE_ERR_SILENT;
     }
@@ -2729,7 +2729,7 @@ static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t
     int rc;
 
     if ('\0' == *hostfile) {
-        prte_show_help("help-ras-base.txt", "ras-base:activate-nofile", true);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-nofile", true);
         return PRTE_ERR_SILENT;
     }
 
@@ -2745,7 +2745,7 @@ static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t
     PMIX_LIST_FOREACH(nd, &nodes, prte_node_t) {
         node = prte_node_match(NULL, nd->name);
         if (NULL == node) {
-            prte_show_help("help-ras-base.txt", "ras-base:activate-unknown-in-file", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-unknown-in-file", true,
                            nd->name, hostfile);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_SILENT;
@@ -2812,13 +2812,13 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel)
              * --add-host where PRRTE owns the allocation and the slot count
              * really is PRRTE's to change. */
             if (NULL != strchr(tokens[k], ':')) {
-                prte_show_help("help-ras-base.txt", "ras-base:activate-slots", true, tokens[k]);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-slots", true, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
             node = prte_node_match(NULL, tokens[k]);
             if (NULL == node) {
-                prte_show_help("help-ras-base.txt", "ras-base:activate-unknown", true, tokens[k]);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-unknown", true, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
@@ -2845,7 +2845,7 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel)
         } else if ('n' == tokens[k][1] || 'N' == tokens[k][1]) {
             /* a specific node of the allocation, by index */
             if (!ras_base_read_count(&tokens[k][2], &nodeidx)) {
-                prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                true, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
@@ -2857,14 +2857,14 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel)
                 ++nodeidx;
             }
             if (nodeidx >= prte_node_pool->size) {
-                prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
                                true, nodeidx, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
             node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
             if (NULL == node) {
-                prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:relative-node-not-found",
                                true, nodeidx, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
@@ -2881,12 +2881,12 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel)
              * not a question about DVM membership at all: the nodes it picks
              * are mostly ones the DVM is already on, so honoring it here
              * would launch nothing and report success. */
-            prte_show_help("help-ras-base.txt", "ras-base:activate-empty", true, tokens[k]);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-empty", true, tokens[k]);
             rc = PRTE_ERR_SILENT;
             goto done;
 
         } else {
-            prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                            true, tokens[k]);
             rc = PRTE_ERR_SILENT;
             goto done;

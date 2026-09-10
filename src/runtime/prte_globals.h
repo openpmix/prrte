@@ -106,6 +106,19 @@ PRTE_EXPORT extern pmix_nspace_t
 #define PRTE_PROC_MY_NAME   (&prte_process_info.myproc)
 #define PRTE_PROC_MY_PROCID (&prte_process_info.myproc) // backward compatibility synonym
 
+/* The job to attribute a diagnostic to: the one it is about, or our own
+ * when there is no job in hand.
+ *
+ * prte_show_help() scopes duplicate suppression by job, so every call has
+ * to name one.  Many of them sit on paths where the job object may not
+ * exist yet, or where NULL means "set the DVM-wide default rather than
+ * this job's value" - policy parsing takes exactly that form - so a bare
+ * jdata->nspace at those sites is a crash on the error path, which is the
+ * one path nobody exercises.  Evaluates its argument twice; every caller
+ * passes a plain variable. */
+#define PRTE_JOB_NSPACE(j) \
+    ((NULL == (j)) ? PRTE_PROC_MY_NAME->nspace : (j)->nspace)
+
 /* define a special name that point to my parent (aka the process that spawned me) */
 #define PRTE_PROC_MY_PARENT (&prte_process_info.my_parent)
 

@@ -559,7 +559,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     (unsigned long) peer->recv_msg->hdr.nbytes);
                 if (peer->recv_msg->hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
-                    prte_show_help("help-oob-tcp.txt", "msg-too-big", true,
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "msg-too-big", true,
                                     PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     peer->recv_msg->hdr.nbytes, prte_oob_base.max_msg_size);
                     peer->state = MCA_OOB_TCP_FAILED;

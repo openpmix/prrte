@@ -427,7 +427,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
             }
         }
         if(orig_args && corrected_args) {
-            prte_show_help("help-schizo-base.txt", "single-dash-error", true,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "single-dash-error", true,
                             orig_args, corrected_args);
             free(orig_args);
             free(corrected_args);
@@ -664,7 +664,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         else if (0 == strcmp(option, "ppr")) {
             /* if they didn't specify a complete pattern, then this is an error */
             if (NULL == strchr(opt->values[0], ':')) {
-                prte_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
                 return PRTE_ERR_SILENT;
             }
             pmix_asprintf(&p2, "ppr:%s", opt->values[0]);
@@ -836,7 +836,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
          */
         else if (0 == strcmp(option, "debug")) {
             if (warn) {
-                prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "deprecated-inform", true, option,
                                "This CLI option will be deprecated starting in Open MPI v5");
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
@@ -988,7 +988,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     free(tmp);
                 }
                 else {
-                    prte_show_help("help-schizo-ompi.txt", "with-ft-bad-option", true, p1);
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-ompi.txt", "with-ft-bad-option", true, p1);
                     return PRTE_ERR_SILENT;
                 }
             }
@@ -1021,7 +1021,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             }
         } else if (0 == strcmp(option, "hetero-nodes")) {
             if (warn) {
-                prte_show_help("help-schizo-base.txt", "deprecated-hetero-nodes", true);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "deprecated-hetero-nodes", true);
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -1051,7 +1051,7 @@ static int check_cache_noadd(char ***c1, char ***c2, char *p1, char *p2)
                 /* we do have it - check for same value */
                 if (0 != strcmp(cachevals[k], p2)) {
                     /* this is an error */
-                    prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                    cachevals[k]);
                     return PRTE_ERR_BAD_PARAM;
                 }
@@ -1130,7 +1130,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                     }
                 }
                 if (!found) {
-                    prte_show_help("help-schizo-base.txt", "env-not-found", true, p1);
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "env-not-found", true, p1);
                     rc = PRTE_ERR_NOT_FOUND;
                 }
             }
@@ -1189,7 +1189,7 @@ static int process_env_list(const char *env_list, char ***xparams, char ***xvals
         rc = process_token(tokens[i], xparams, xvals);
         if (PRTE_SUCCESS != rc) {
             if (PRTE_ERR_NOT_FOUND == rc) {
-                prte_show_help("help-schizo-base.txt", "incorrect-env-list-param", true, tokens[i],
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "incorrect-env-list-param", true, tokens[i],
                                env_list);
             }
             break;
@@ -1224,7 +1224,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 p1 = pmix_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
                 fp = fopen(p1, "r");
                 if (NULL == fp) {
-                    prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
                     PMIx_Argv_free(tmp);
                     PMIx_Argv_free(cache);
                     PMIx_Argv_free(cachevals);
@@ -1235,7 +1235,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 }
                 free(p1);
             } else {
-                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
                 PMIx_Argv_free(tmp);
                 PMIx_Argv_free(cache);
                 PMIx_Argv_free(cachevals);
@@ -1251,7 +1251,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             }
             opts = PMIx_Argv_split_with_empty(line, ' ');
             if (NULL == opts) {
-                prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                 free(line);
                 PMIx_Argv_free(tmp);
                 PMIx_Argv_free(cache);
@@ -1269,7 +1269,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 if (0 == strcmp(opts[n], "-x")) {
                     /* the next value must be the envar */
                     if (NULL == opts[n + 1]) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
                         PMIx_Argv_free(tmp);
@@ -1287,7 +1287,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                      * the battle to correct their error, try to accommodate it here */
                     if (NULL != opts[n + 2] && 0 == strcmp(opts[n + 2], "=")) {
                         if (NULL == opts[n + 3]) {
-                            prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                            line);
                             free(line);
                             free(p1);
@@ -1323,7 +1323,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     ++n; // skip over the envar option
                 } else if (0 == strcmp(opts[n], "--mca")) {
                     if (NULL == opts[n + 1] || NULL == opts[n + 2]) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
                         PMIx_Argv_free(tmp);
@@ -1362,7 +1362,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     /* find the equal sign */
                     p1 = strchr(opts[n], '=');
                     if (NULL == p1) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
                         PMIx_Argv_free(tmp);
@@ -1390,7 +1390,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 } else {
                     rc = process_token(opts[n], &cache, &cachevals);
                     if (PRTE_SUCCESS != rc) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         fclose(fp);
                         PMIx_Argv_free(tmp);
@@ -1612,14 +1612,14 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
         uint16_t u16;
         if (prte_mca_schizo_ompi_component.warn_deprecations) {
-            prte_show_help("help-schizo-base.txt", "deprecated-inform", true, "stream-buffering",
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "deprecated-inform", true, "stream-buffering",
                            "This CLI option will be deprecated starting in Open MPI v5. "
                            "If you need this functionality use the Open MPI MCA option: ompi_stream_buffering");
         }
         u16 = strtol(opt->values[0], NULL, 10);
         if (0 != u16 && 1 != u16 && 2 != u16) {
             /* bad value */
-            prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
         }
         PMIx_Setenv("OMPI_MCA_ompi_stream_buffering", opt->values[0], true, dstenv);
     }

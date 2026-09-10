@@ -118,13 +118,13 @@ int prte_oob_tcp_start_listening(void)
     rc2 = create_listen6();
     if (PRTE_SUCCESS != rc && PRTE_SUCCESS != rc2) {
         /* we were unable to open any listening sockets */
-        prte_show_help("help-oob-tcp.txt", "no-listeners", true);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "no-listeners", true);
         return PRTE_ERR_FATAL;
     }
 #else
     if (PRTE_SUCCESS != rc) {
         /* we were unable to open any listening sockets */
-        prte_show_help("help-oob-tcp.txt", "no-listeners", true);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "no-listeners", true);
         return PRTE_ERR_FATAL;
     }
 #endif
@@ -665,7 +665,7 @@ static void *listen_thread(pmix_object_t *obj)
                     else if (EMFILE == prte_socket_errno) {
                         CLOSE_THE_SOCKET(sd);
                         PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-                        prte_show_help("help-oob-tcp.txt", "accept failed", true,
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
                                        prte_process_info.nodename, prte_socket_errno,
                                        strerror(prte_socket_errno), "Out of file descriptors");
                         goto done;
@@ -674,7 +674,7 @@ static void *listen_thread(pmix_object_t *obj)
                     /* For all other cases, print a
                        warning but try to continue */
                     else {
-                        prte_show_help("help-oob-tcp.txt", "accept failed", true,
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
                                        prte_process_info.nodename, prte_socket_errno,
                                        strerror(prte_socket_errno),
                                        "Unknown cause; job will try to continue");
@@ -701,7 +701,7 @@ static void *listen_thread(pmix_object_t *obj)
                     if (1024 < inport) {
                         /* someone tried to cross-connect privileges,
                          * say something */
-                        prte_show_help("help-oob-tcp.txt", "privilege failure", true,
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "privilege failure", true,
                                        prte_process_info.nodename, listener->port,
                                        pmix_net_get_hostname(
                                            (struct sockaddr *) &pending_connection->addr),
@@ -780,7 +780,7 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
         else if (EMFILE == prte_socket_errno) {
             CLOSE_THE_SOCKET(incoming_sd);
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-            prte_show_help("help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
                            prte_socket_errno, strerror(prte_socket_errno),
                            "Out of file descriptors");
             return;
@@ -790,7 +790,7 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
            try to continue */
         else {
             CLOSE_THE_SOCKET(incoming_sd);
-            prte_show_help("help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
                            prte_socket_errno, strerror(prte_socket_errno),
                            "Unknown cause; job will try to continue");
             return;

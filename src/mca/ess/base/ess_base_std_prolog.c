@@ -61,7 +61,7 @@ int prte_ess_base_std_prolog(void)
     return PRTE_SUCCESS;
 
 error:
-    prte_show_help("help-prte-runtime.txt",
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
                    "prte_init:startup:internal-failure", true,
                    error, PRTE_ERROR_NAME(ret), ret);
 
