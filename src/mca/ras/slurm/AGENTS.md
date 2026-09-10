@@ -88,8 +88,8 @@ deviation* and the framework guide.
   phases — see below.
 - **`PMIX_ALLOC_NEW`** → the same request; see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
-  with `scontrol update job`, removing nodes by count while protecting
-  the launching node (`SLURMD_NODENAME`).
+  with `scontrol update job`, removing nodes by count or by name while
+  protecting the node the HNP is running on.
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
   extend by request id, and answers it (see below).
 
