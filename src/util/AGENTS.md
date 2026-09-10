@@ -276,17 +276,49 @@ own output. The message is built and thrown away. The head node looks
 fine only because there the daemon's PMIx server is the one holding the
 tool connection (and under `prterun` it *is* the tool).
 
-`prte_show_help()` has the same signature and the same rendering, and:
+`prte_show_help()` has the same rendering, one extra leading argument
+(below), and:
 
 - on the **HNP**, on a **tool**, or in an **application**, delivers
   locally, exactly as `pmix_show_help()` would;
 - on any **other daemon**, renders locally and ships the text to the HNP
   over `PRTE_RML_TAG_SHOW_HELP`, where `prte_show_help_recv()` delivers
   it. Aggregation and duplicate suppression then happen **once**, on the
-  HNP, keyed by the same filename/topic — which is what you want anyway
-  when 500 nodes hit the same error.
+  HNP — which is what you want anyway when 500 nodes hit the same error.
+  The relayed buffer carries the nspace alongside the filename and topic;
+  a DVM is single-version by rule, so that wire has no format marker and
+  its packer and unpacker change together or not at all.
 - falls back to local delivery if there is no HNP to send to yet (early
   startup, or teardown), so a message is never simply lost.
+
+### The first argument names the job the message is about
+
+PMIx keys duplicate suppression on `(nspace, filename, topic)`, so every
+call has to say which job it is talking about. This is not bookkeeping: a
+DVM is one process that runs many jobs, in parallel and one after another
+for as long as it lives, and suppression that could not tell them apart
+told the first job to trip a diagnostic about it and left every later one
+in silence — for days, on a persistent DVM.
+
+Most messages are about the DVM or the tool rather than any job a user
+submitted — command-line parsing, startup failures, daemon launch — and
+those pass `PRTE_PROC_MY_NAME->nspace`, which *is* that job. It is a
+global reachable from anywhere, so no call site is unable to answer.
+
+A message that stems from a particular job names it, through
+`PRTE_JOB_NSPACE(jdata)`: all of `rmaps`, because a mapping failure is a
+failure to map one job; the binding-policy parsing in `src/hwloc` for the
+same reason; spawn, allocation, file pre-positioning, the `odls` binding
+and launch paths, and the `state`/`errmgr` reports of a job ending.
+
+**Use the macro, not `jdata->nspace`.** Policy parsing takes NULL for
+"set the DVM-wide default rather than this job's value" and branches on
+it, so a bare dereference at those sites is a crash on the error path —
+the one path nobody exercises. `PRTE_JOB_NSPACE()`
+([`src/runtime/prte_globals.h`](../runtime/prte_globals.h)) answers our
+own job for a NULL. Where the job object is *gone* rather than absent —
+`prte_state_base_orphaned_proc()` exists precisely for that case — pass
+the proc's own `nspace`; the report is still about that job.
 
 **The whole tree is converted** — every one of the ~420 call sites that
 used to say `pmix_show_help(` now says `prte_show_help(`, so a plain
@@ -298,8 +330,9 @@ identical outside a daemon, so there is no case where the PMIx spelling
 is the better choice.
 
 (`pmix_show_help_string()` and `pmix_show_help_norender()` are different
-functions with different signatures and are untouched; `prte_show_help()`
-is built on top of them.)
+functions with different signatures; `prte_show_help()` is built on top
+of them. `pmix_show_help_norender()` takes the nspace too — that is how
+the job reaches PMIx's suppression.)
 
 `prte-convert-help.py` recognizes both spellings when it scans for help
 citations, so converting a call site does not remove it from the
