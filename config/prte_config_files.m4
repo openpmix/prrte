@@ -20,6 +20,7 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         src/etc/Makefile
         src/util/Makefile
         src/util/hostfile/Makefile
+        src/util/rankfile/Makefile
         src/tools/pcc/Makefile
         src/tools/prted/Makefile
         src/tools/prun/Makefile

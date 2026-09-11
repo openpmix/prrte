@@ -212,8 +212,7 @@ src/include/frameworks.h
 src/include/prte_config.h
 src/include/prte_show_help_content.c
 
-src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
-src/mca/rmaps/rank_file/rankfile_lex.c
+src/util/rankfile/rankfile_lex.c
 
 src/tools/prun/prun
 src/tools/prun/prte-submit

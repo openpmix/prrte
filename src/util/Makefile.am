@@ -26,7 +26,7 @@
 # $HEADER$
 #
 
-SUBDIRS = hostfile
+SUBDIRS = hostfile rankfile
 
 noinst_LTLIBRARIES = libprrteutil.la
 
@@ -81,9 +81,11 @@ sources = \
 libprrteutil_la_SOURCES = $(headers) $(sources)
 
 libprrteutil_la_LIBADD = \
-        hostfile/libprrteutilhostfile.la
+        hostfile/libprrteutilhostfile.la \
+        rankfile/libprrteutilrankfile.la
 libprrteutil_la_DEPENDENCIES = \
-        hostfile/libprrteutilhostfile.la
+        hostfile/libprrteutilhostfile.la \
+        rankfile/libprrteutilrankfile.la
 
 prte_show_help_content.c: prte-convert-help.py
 if PRTE_PICKY_COMPILERS

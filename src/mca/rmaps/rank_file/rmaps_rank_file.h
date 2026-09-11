@@ -39,10 +39,6 @@
 
 BEGIN_C_DECLS
 
-#define RMAPS_RANK_FILE_MAX_SLOTS 64
-
-int prte_rmaps_rank_file_lex_destroy(void);
-
 struct prte_rmaps_rf_component_t {
     prte_rmaps_base_component_t super;
     char *slot_list;
@@ -53,15 +49,6 @@ PRTE_MODULE_EXPORT extern prte_rmaps_rf_component_t prte_mca_rmaps_rank_file_com
 extern prte_rmaps_base_module_t prte_rmaps_rank_file_module;
 
 typedef struct cpu_package_t cpu_package_t;
-
-struct prte_rmaps_rank_file_map_t {
-    pmix_object_t super;
-    char *node_name;
-    char slot_list[RMAPS_RANK_FILE_MAX_SLOTS];
-};
-typedef struct prte_rmaps_rank_file_map_t prte_rmaps_rank_file_map_t;
-
-PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rmaps_rank_file_map_t);
 
 END_C_DECLS
 
