@@ -10,9 +10,9 @@ this file and those disagree, **the docs win** — and please fix this file.
 
 ## What lives here
 
-The hostfile parser: a flex scanner (`hostfile_lex.l`) and three entry points
-over it (`hostfile.c`). A hostfile is one node per line, optionally with
-keyword modifiers.
+The hostfile parser: `hostfile.c`, reading one line at a time through
+[`src/util/textfile.h`](../textfile.h), and three entry points over it. A
+hostfile is one node per line, optionally with keyword modifiers.
 
 | Entry point | Used for | Behavior |
 |-------------|----------|----------|
@@ -20,13 +20,19 @@ keyword modifiers.
 | `prte_util_filter_hostfile_nodes()` | selecting for a job (`prun --hostfile`) | Removes from the caller's list every node the hostfile does not name, and caps the ones it keeps (see below). Returns `PRTE_ERR_TAKE_NEXT_OPTION` if the hostfile was empty, and refuses a hostfile naming a node the allocation does not have. |
 | `prte_util_get_ordered_host_list()` | `rmaps/seq`, `rmaps/rank_file` | Keeps duplicates and order: the list *is* the sequence of placements. |
 
-`hostfile_lex.c` is **generated** by flex from `hostfile_lex.l` and is not in
-git. Change the `.l` file, then `rm src/util/hostfile/hostfile_lex.c` and
-rebuild — the Make rule will not notice on its own in every configuration.
+There is no lexer any more. `prte_textfile_next()` hands back one logical
+line, already stripped of comments and split into fields with `=` always a
+field of its own, and this file decides what the fields mean: field 0 is the
+host entry, and the rest are `<key> = <value>` groups looked up in one
+keyword table. The four name *types* the scanner used to distinguish —
+string, hostname, IPv4, IPv6 — were never once told apart by this file or by
+the rankfile parser, both of which funnelled all four into the same branch;
+what replaces them is `valid_nodename()`, which asks only whether the field
+is made of characters a name may contain.
 
 ---
 
-## Syntax the lexer accepts
+## Syntax the parser accepts
 
 ```
 # comment                    // also a comment, and /* block */ comments
@@ -42,14 +48,28 @@ hostname port=2222                       ssh port
 rank 0=hostname                           rankfile form (the rank is ignored here)
 ```
 
-The `^` exclusion is easy to break and was in fact broken for a long time:
-the `^` was allowed only inside the *optional* `user@` group, and the `@`
-makes that group mandatory, so a bare `^host` line never matched the hostname
-rule at all — it fell through to the catch-all and the **whole hostfile** was
-rejected as a parse error. `hostfile_parse_line()` had always known how to
-strip the `^` and move the node to the exclude list; it simply never saw one.
-If you touch the hostname pattern, keep the leading `\^?` **outside** the
-`user@` group, and keep the swarm case that reads a hostfile with a `^` line.
+The `^` exclusion is easy to break and was in fact broken for a long time.
+Under the old scanner the `^` was allowed only inside the *optional* `user@`
+group, and the `@` makes that group mandatory, so a bare `^host` line never
+matched the hostname rule at all — it fell through to the catch-all and the
+**whole hostfile** was rejected as a parse error. `hostfile_parse_line()` had
+always known how to strip the `^` and move the node to the exclude list; it
+simply never saw one. `valid_nodename()` now takes a leading `^` on any name,
+with or without a `user@`, which is the shape that regex could not express in
+one rule. Keep the swarm case that reads a hostfile with a `^` line.
+
+## What the goldens are for
+
+`test/unit/util/test_hostfile_corpus.c` pairs 86 hostfile bodies with a
+canonical rendering of what parsing each one produces — every field the
+parser can set on a node, plus the return code. It exists because this parser
+was rewritten from a scanner to a line reader, and a rewrite of that size can
+only be done honestly against a written-down "before". Seven goldens changed
+in that rewrite and each is argued in the commit that changed it; the rest
+reproduce exactly.
+
+That makes it the right place to add a case for anything you change here, and
+the wrong place to quietly re-baseline. A golden that moves is a decision.
 
 ---
 
@@ -57,7 +77,7 @@ If you touch the hostname pattern, keep the leading `\^?` **outside** the
 
 A hostfile is user input, and every way of getting it wrong has to come back
 as a `prte_show_help()` message out of `help-hostfile.txt` carrying
-`cur_hostfile_name` and `prte_util_hostfile_line`. Two failures did not:
+`cur_hostfile_name` and `cur_hostfile_line`. Two failures did not:
 
 - A value with more than one `@` — `hostfile_parse_username()` takes one
   field as a hostname and two as `user@hostname`, and anything else is a
@@ -82,23 +102,25 @@ at our source for their typo.
 
 ## The parser state is process-global
 
-`prte_util_hostfile_in` (the `FILE*`), `prte_util_hostfile_line` (the line
-counter), `prte_util_hostfile_value` and the flex buffer are all globals, and
-`cur_hostfile_name` is a file-scope static. Consequences:
+The open file and its line counter now live in a `prte_textfile_t` on
+`hostfile_parse()`'s stack, which is what removed most of this section: there
+is no shared `FILE*`, no shared scanner buffer, and no line counter to forget
+to reset. What is left global is `cur_hostfile_name` and `cur_hostfile_line`,
+file-scope statics the error helpers read so that every message can name the
+file and the line without every call site passing them. Consequences:
 
-- **Close and destroy on every exit path**, not just the clean one. The error
-  paths used to `goto` straight past `fclose()` and
-  `prte_util_hostfile_lex_destroy()`, leaking a descriptor per failed parse
-  and leaving the flex buffer live for the next one.
-- **Reset the line counter per file.** It is only ever incremented, so every
-  hostfile after the first reported its parse errors at a line number carried
-  over from the ones before it.
+- **Close on every exit path**, not just the clean one — route every exit
+  through `cleanup:`. The error paths used to `goto` straight past
+  `fclose()` and `prte_util_hostfile_lex_destroy()`, leaking a descriptor
+  per failed parse and leaving the scanner buffer live for the next one.
+  `prte_textfile_close()` is safe on a file that was never opened, which is
+  what lets the error paths all go through one label.
 - The parser is **not reentrant** and must not be called from two threads.
   Everything that calls it runs on the PRRTE progress thread.
-- A top-level token the parser does not understand must set an error return.
-  It used to call `pmix_show_help()` and then fall out of the loop with
-  whatever `rc` the previous line left behind — reporting a parse error and
-  returning success.
+- A line the parser does not understand must set an error return. It used to
+  call `pmix_show_help()` and then fall out of the loop with whatever `rc`
+  the previous line left behind — reporting a parse error and returning
+  success.
 
 ---
 
@@ -196,6 +218,12 @@ appearing more than once.
   count *larger* than the node changes nothing. It lives under `rmaps`
   because the record/restore list is a framework global that needs the
   framework opened.
+- `test/unit/util/test_hostfile_corpus.c` is the golden corpus described
+  above — 86 bodies against their parse results. Add a case there for
+  anything you change.
+- `test/unit/util/test_textfile.c` covers the line reader underneath it:
+  where a line ends, where a comment does, and that there is no maximum line
+  length.
 - `test/unit/util/test_util.c` writes temporary hostfiles and parses them:
   slot counts, `max_slots`, comments, the `^` exclusion (including a duplicated
   excluded name), a `user@host` entry and the refusal of a second `@` in both
