@@ -416,11 +416,11 @@ the marker is stale.
        ``PMIX_QUERY_*_RESOURCE_USAGE``
      - two resource-usage queries are recognized and answer nothing
 
-Two families of marker are **not** ours, and are deliberately absent from
-that table: the ``TODO`` comments in ``hostfile_lex.c`` and
-``rmaps_rank_file_lex.c``, which come from flex's generated skeleton, and the
-``FIXME`` comments throughout ``config/libtool.m4`` and ``config/ltmain.sh``,
-which are vendored Autotools.
+One family of marker is **not** ours, and is deliberately absent from that
+table: the ``FIXME`` comments throughout ``config/libtool.m4`` and
+``config/ltmain.sh``, which are vendored Autotools.  (There used to be a
+second, the ``TODO`` comments flex left in its generated scanners; PRRTE no
+longer uses flex.)
 
 Review status
 -------------

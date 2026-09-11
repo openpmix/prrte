@@ -303,7 +303,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
     prte_node_t *nptr, *node;
 
     /* We don't use the hostfile parsing code in src/util because it
-     * uses flex and that has problems handling the range of allowed
+     * has a stricter idea of the range of allowed
      * syntax here */
     fp = fopen(hostfile, "r");
     if (NULL == fp) {

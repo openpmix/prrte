@@ -75,7 +75,7 @@ through `ras/pmix` any more; that component now answers `PMIX_ERR_UNREACH`
 when it is selected and its scheduler is out of touch.) It serves:
 
 - `PMIX_ADD_HOSTFILE` — comma-list of hostfiles parsed by the local
-  `process_hostfile` (a hand parser, *not* the flex hostfile code,
+  `process_hostfile` (its own parser, *not* `src/util/hostfile`,
   because it must accept `slots=+N`/`-N` adjustment syntax). Matches
   existing pool nodes by name/alias and adjusts slots, or appends new
   `PRTE_NODE_STATE_ADDED` nodes. Rejects a new node given negative slots.
@@ -100,7 +100,7 @@ handled something, else `PMIX_ERR_TAKE_NEXT_OPTION`.
   rankfile branch.
 - **`process_hostfile` is deliberately a separate parser** from
   `src/util/hostfile` — it supports the `+N`/`-N` slot-adjust syntax the
-  flex parser can't. Keep the two in sync in spirit. Being a hand parser,
+  the shared one can't. Keep the two in sync in spirit. Being its own parser,
   it owns its own hygiene:
   - every `isspace()` call must cast its argument to `unsigned char` (a
     plain `char` is UB for bytes ≥ 0x80);
