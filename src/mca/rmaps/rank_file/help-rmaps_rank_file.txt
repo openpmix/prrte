@@ -40,6 +40,11 @@ Error, rank %d is already assigned to %s, check %s
 #
 [bad-syntax]
 Error, invalid syntax in the rankfile (%s)
+
+Line number %d could not be understood. The parser stopped at:
+
+   %s
+
 syntax must be the following
 
 rank i=host_i slot=string

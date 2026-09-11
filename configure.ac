@@ -651,28 +651,10 @@ AC_PROG_GREP
 AC_PROG_EGREP
 
 #
-# We need as and lex
+# We need as
 #
 
 AM_PROG_AS
-AC_PROG_LEX(noyywrap)
-
-# If we don't have Flex and we don't have a generated .c file
-# (distribution tarballs will have the .c file included, but git
-# clones will not), then error.  Must have Flex -- other versions of
-# Lex are not workable (all things being equal, since this is *only*
-# required for developers, we decided that it really was not worth it
-# to be portable between different versions of lex ;-).
-
-if test "x$LEX" != xflex && test ! -e $PRTE_TOP_SRCDIR/src/util/rankfile/rankfile_lex.c; then
-    AC_MSG_WARN([*** Could not find Flex on your system.])
-    AC_MSG_WARN([*** Flex is required for developer builds of PRRTE.])
-    AC_MSG_WARN([*** Other versions of Lex are not supported.])
-    AC_MSG_WARN([*** NOTE: If you are building from an official tarball])
-    AC_MSG_WARN([*** (not the ones made by GitHub!) downloaded from the])
-    AC_MSG_WARN([*** PRRTE web site, you do not need Flex.])
-    AC_MSG_ERROR([Cannot continue])
-fi
 
 #
 # Do we have RLIMIT_NPROC in <sys/resources.h>?

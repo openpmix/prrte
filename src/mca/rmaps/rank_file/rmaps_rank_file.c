@@ -293,7 +293,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     goto error;
                 }
             } else {
-                if (0 < strlen(rfmap->slot_list)) {
+                if (NULL != rfmap->slot_list) {
                     slots = rfmap->slot_list;
                 } else {
                     slots = NULL;
