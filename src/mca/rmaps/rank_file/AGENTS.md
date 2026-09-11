@@ -27,35 +27,32 @@ Files:
 | File | Contents |
 |------|----------|
 | `rmaps_rank_file_component.c` | Registration, `priority` param (default 95), `query`; also the `slot_list` MCA param. |
-| `rmaps_rank_file.c` | `prte_rmaps_rf_map()` and the rankfile parser `prte_rmaps_rank_file_parse()`. |
-| `rmaps_rank_file_lex.l` / `rmaps_rank_file_lex.c` | Flex lexer for the rankfile grammar (`.c` is generated — edit the `.l`, not the `.c`). |
-| `rmaps_rank_file.h` | `prte_rmaps_rank_file_map_t` (`{rank, node_name, slot_list[64]}`), `RMAPS_RANK_FILE_MAX_SLOTS`, lexer externs. |
+| `rmaps_rank_file.c` | `prte_rmaps_rf_map()` — all of the mapping, and none of the parsing. |
+| `rmaps_rank_file.h` | The component struct and the module. |
+
+**The rankfile parser is not here.** It lives in
+[`src/util/rankfile/`](../../../util/rankfile/AGENTS.md), beside the hostfile
+reader, because reading a file the user wrote is not a mapping policy — and
+because a parser reachable only by selecting a mapper, in a component that
+`--enable-mca-dso` builds as a separate shared object, cannot be tested on
+its own. This component calls `prte_util_parse_rankfile()` and spends its
+own code on what the records mean.
 
 ---
 
 ## Two-phase structure
 
-### Phase 1 — parse (`prte_rmaps_rank_file_parse`)
-Drives the flex lexer over the rankfile and fills a `pmix_pointer_array_t
-rankmap` indexed **by rank** with `prte_rmaps_rank_file_map_t` entries
-(node name + slot-list string). It rejects unsupported tokens (quoted
-strings, usernames), enforces `rank N=...` before `slot=...`, resolves
-`localhost` to the HNP node name, strips FQDNs when
-`!prte_keep_fqdn_hostnames`, and catches duplicate rank assignments via a
-scratch `assigned_ranks_array`. `num_ranks` counts entries. **The lexer
-`.c`/`.h` are generated — never hand-edit them; change `rmaps_rank_file_lex.l`
-and regenerate.**
+### Phase 1 — parse (`prte_util_parse_rankfile`)
+Fills a `pmix_pointer_array_t rankmap` indexed **by rank** with
+`prte_rankfile_map_t` entries (node name + slot-list string), and counts them
+in `num_ranks`. Both are the caller's: this component constructs the array,
+passes it in, and reclaims it. They used to be module statics here, which is
+why reclaiming them took two near-identical loops on two different paths.
 
-Two things about that duplicate check are easy to get wrong, and both were:
-the record has to be filed **under the rank it describes** (filing every
-record at index 0 made a file whose first `slot=` line was for any rank but
-0 reject its own rank 0 line as a duplicate, and let a real duplicate of any
-other rank through), and it has to be a **copy** — the formatted string
-lives in a stack buffer the next line reuses.
-
-Every exit from the parser has to close `prte_rmaps_rank_file_in` and call
-`prte_rmaps_rank_file_lex_destroy()`; the error paths all reach the `unlock:`
-label, which does it once.
+What it does with a line is the parser's business and documented there. What
+matters on this side is that a rank with no entry in the array is a rank the
+file did not place, and that `slot_list` is NULL when the line named a node
+and stopped.
 
 ### Phase 2 — map (`prte_rmaps_rf_map`)
 Gate: defer (`TAKE_NEXT_OPTION`) on restart, non-`BYUSER` `options->map`,

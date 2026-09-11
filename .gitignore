@@ -199,7 +199,6 @@ src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s
 src/sys/powerpc/atomic-32-64.s
 
-src/mca/base/mca_base_parse_paramfile_lex.c
 
 src/mca/prteinstalldirs/config/install_dirs.h
 
@@ -212,7 +211,6 @@ src/include/frameworks.h
 src/include/prte_config.h
 src/include/prte_show_help_content.c
 
-src/util/rankfile/rankfile_lex.c
 
 src/tools/prun/prun
 src/tools/prun/prte-submit
@@ -225,8 +223,6 @@ src/tools/pcc/pcc-wrapper-data.txt
 src/tools/pterm/pterm
 src/tools/pterm/prte-term
 
-src/util/keyval/keyval_lex.c
-src/util/show_help_lex.c
 src/util/prte_show_help_content.c
 
 test/double-get
