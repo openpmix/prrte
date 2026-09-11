@@ -27,18 +27,10 @@
 EXTRA_DIST = \
         help-rmaps_rank_file.txt
 
-AM_LFLAGS = -Pprte_rmaps_rank_file_
-LEX_OUTPUT_ROOT = lex.prte_rmaps_rank_file_
-
-# we do NOT want picky compilers down here due to flex
-CFLAGS = $(PMIX_CFLAGS_BEFORE_PICKY)
-
 sources = \
         rmaps_rank_file.c \
         rmaps_rank_file.h \
-        rmaps_rank_file_component.c \
-        rmaps_rank_file_lex.l \
-        rmaps_rank_file_lex.h
+        rmaps_rank_file_component.c
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
@@ -61,6 +53,3 @@ prte_mca_rmaps_rank_file_la_LIBADD = $(top_builddir)/src/libprrte.la
 noinst_LTLIBRARIES = $(component_noinst)
 libprtemca_rmaps_rank_file_la_SOURCES =$(sources)
 libprtemca_rmaps_rank_file_la_LDFLAGS = -module -avoid-version
-
-maintainer-clean-local:
-	rm -f rmaps_rank_file_lex.c
