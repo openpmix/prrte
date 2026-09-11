@@ -42,6 +42,11 @@
  *    case only -- so "+N0" never becomes a RELATIVE token and the parser's
  *    uppercase branch cannot be reached.
  *
+ *  - a stray field after the host entry is thrown away in silence.  The
+ *    parser ignores any bare word or number where it expects a keyword,
+ *    so "hostA hostB" on one line reads hostA and discards hostB without
+ *    a word, and "hostA foo" is accepted as plain hostA.
+ *
  *  - a hostfile with CRLF line endings is rejected outright.  The lexer's
  *    whitespace class is [\f\t\v ], so a carriage return matches nothing
  *    but the catch-all error rule -- meaning a hostfile written or edited
@@ -285,6 +290,12 @@ static const corpus_case_t corpus[] = {
     {"a negative slot count", CORPUS_ADD, "hostA slots=-1\n", "rc=err43"},
     {"slots given twice", CORPUS_ADD, "hostA slots=2 slots=4\n", "rc=err43"},
     {"max below slots", CORPUS_ADD, "hostA slots=8 max_slots=2\n", "rc=err43"},
+    {"a bare word after the entry", CORPUS_ADD, "hostA foo\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"a bare number after the entry", CORPUS_ADD, "hostA 42\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"two hosts on one line", CORPUS_ADD, "hostA hostB\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"a key with no value", CORPUS_ADD, "hostA slots=\n", "rc=err43"},
+    {"a value with no key", CORPUS_ADD, "hostA = 4\n", "rc=err43"},
+    {"slots given as a word", CORPUS_ADD, "hostA slots=four\n", "rc=err43"},
     {"an unknown keyword", CORPUS_ADD, "hostA nosuchkey=4\n", "rc=err43"},
     {"sockets=", CORPUS_ADD, "hostA sockets=2\n", "rc=err43"},
     {"cores=", CORPUS_ADD, "hostA cores=2\n", "rc=err43"},
