@@ -22,7 +22,7 @@
 #include <unistd.h>
 */
 
-pmix_proc_t this_proc;
+static pmix_proc_t this_proc;
 
 int main(int argc, char *argv[]) {
 
