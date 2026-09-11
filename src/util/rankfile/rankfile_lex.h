@@ -22,8 +22,8 @@
  * $HEADER$
  */
 
-#ifndef PRTE_MCA_RANK_FILE_RANKFILE_LEX_H_
-#define PRTE_MCA_RANK_FILE_RANKFILE_LEX_H_
+#ifndef PRTE_UTIL_RANKFILE_LEX_H_
+#define PRTE_UTIL_RANKFILE_LEX_H_
 #include "prte_config.h"
 
 #ifdef malloc
@@ -43,15 +43,16 @@ BEGIN_C_DECLS
 typedef union {
     int ival;
     char *sval;
-} prte_rmaps_rank_file_value_t;
+} prte_util_rankfile_value_t;
 
-extern int prte_rmaps_rank_file_lex(void);
-extern FILE *prte_rmaps_rank_file_in;
-extern int prte_rmaps_rank_file_line;
-extern bool prte_rmaps_rank_file_done;
-extern prte_rmaps_rank_file_value_t prte_rmaps_rank_file_value;
+extern int prte_util_rankfile_lex(void);
+extern FILE *prte_util_rankfile_in;
+extern int prte_util_rankfile_line;
+extern bool prte_util_rankfile_done;
+extern prte_util_rankfile_value_t prte_util_rankfile_value;
+extern int prte_util_rankfile_lex_destroy(void);
 
-int prte_rmaps_rank_file_wrap(void);
+int prte_util_rankfile_wrap(void);
 
 /*
  * Make lex-generated files not issue compiler warnings
