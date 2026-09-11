@@ -225,7 +225,6 @@ src/tools/pcc/pcc-wrapper-data.txt
 src/tools/pterm/pterm
 src/tools/pterm/prte-term
 
-src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c
 src/util/show_help_lex.c
 src/util/prte_show_help_content.c
