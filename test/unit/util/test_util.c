@@ -96,6 +96,7 @@
 #include "src/util/sys_limits.h"
 
 extern int test_hostfile_corpus(void);
+extern int test_rankfile_corpus(void);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -1213,6 +1214,7 @@ int main(void)
     failures += test_dash_host();
     failures += test_hostfile();
     failures += test_hostfile_corpus();
+    failures += test_rankfile_corpus();
     failures += test_sys_limits();
 
     prte_finalize();
