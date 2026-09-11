@@ -1,7 +1,0 @@
-# Ignore symbols in libopen-rte that are auto-generated and we can't
-# do anything about them (e.g., flex/bison symbols).
-prte_util_keyval_yyleng
-prte_util_keyval_yytext
-pmix_show_help_yyleng
-pmix_show_help_yytext
-
