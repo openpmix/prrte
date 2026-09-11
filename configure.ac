@@ -664,7 +664,7 @@ AC_PROG_LEX(noyywrap)
 # required for developers, we decided that it really was not worth it
 # to be portable between different versions of lex ;-).
 
-if test "x$LEX" != xflex && test ! -e $PRTE_TOP_SRCDIR/src/util/hostfile/hostfile_lex.c; then
+if test "x$LEX" != xflex && test ! -e $PRTE_TOP_SRCDIR/src/util/rankfile/rankfile_lex.c; then
     AC_MSG_WARN([*** Could not find Flex on your system.])
     AC_MSG_WARN([*** Flex is required for developer builds of PRRTE.])
     AC_MSG_WARN([*** Other versions of Lex are not supported.])
