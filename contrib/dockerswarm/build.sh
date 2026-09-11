@@ -152,7 +152,10 @@ srcdir_has_intree() {
 #
 # A tree that has been built in place at least once already carries the file,
 # which is why this only ever bites a *fresh* clone -- precisely what PMIX_SRC
-# usually points at.  Generate it here on the host the way automake would; the
+# usually points at.  PRRTE's own tree no longer has any *.l at all, so the
+# call on it is a no-op kept for the second tree's sake: PMIx still reads its
+# MCA parameter files with a flex scanner.  Generate it here on the host the
+# way automake would; the
 # -P symbol prefix lives in the sibling Makefile.am AM_LFLAGS.  These are
 # git-ignored maintainer files, so writing them into the checkout is exactly
 # what building it normally does.

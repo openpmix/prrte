@@ -36,16 +36,6 @@
 #    error "prte_config_bottom.h should only be included from prte_config.h"
 #endif
 
-/*
- * Flex is trying to include the unistd.h file. As there is no configure
- * option or this, the flex generated files will try to include the file
- * even on platforms without unistd.h. Therefore, if we
- * know this file is not available, we can prevent flex from including it.
- */
-#ifndef HAVE_UNISTD_H
-#    define YY_NO_UNISTD_H
-#endif
-
 /***********************************************************************
  *
  * The C-linkage and compiler-attribute wrappers.
