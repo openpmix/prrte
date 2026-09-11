@@ -95,6 +95,8 @@
 #include "src/util/proc_info.h"
 #include "src/util/sys_limits.h"
 
+extern int test_hostfile_corpus(void);
+
 #define CHECK(label, cond)                                              \
     do {                                                                \
         if (!(cond)) {                                                  \
@@ -1210,6 +1212,7 @@ int main(void)
     failures += test_attr_round_trip();
     failures += test_dash_host();
     failures += test_hostfile();
+    failures += test_hostfile_corpus();
     failures += test_sys_limits();
 
     prte_finalize();
