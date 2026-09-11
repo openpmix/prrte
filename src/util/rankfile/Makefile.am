@@ -20,20 +20,10 @@
 #
 
 
-AM_LFLAGS = -Pprte_util_rankfile_
-LEX_OUTPUT_ROOT = lex.prte_util_rankfile_
-# we do NOT want picky compilers down here
-CFLAGS = $(PRTE_CFLAGS_BEFORE_PICKY)
-
 noinst_LTLIBRARIES = libprrteutilrankfile.la
 
 # Source code files
 
 libprrteutilrankfile_la_SOURCES = \
-	rankfile_lex.h \
-        rankfile_lex.l \
         rankfile.h \
         rankfile.c
-
-maintainer-clean-local:
-	rm -f rankfile_lex.c

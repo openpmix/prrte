@@ -19,28 +19,44 @@
  * runs on and the cpus it binds to -- so the rendering is just that, indexed
  * by rank, plus the return code and the count of ranks the file named.
  *
- * Goldens recorded here that are wrong, and are recorded anyway so that the
- * rewrite has to decide about them out loud:
+ * What is still wrong as things stand:
  *
- *  - "username=" is refused with a message that calls it "not supported",
- *    but "user@host" on the same line is accepted and the user half is
- *    silently discarded.  The hostfile parser keeps it as a node attribute;
- *    here it is read, split off and dropped.
+ *  - "username=" is refused with a message calling it unsupported, while
+ *    "user@host" on the same line is accepted and the user half discarded.
+ *    The hostfile parser keeps the user as a node attribute; a rankfile
+ *    record has nowhere to put one, so the two spellings of the same thing
+ *    get two different answers.  Changing that means giving the record
+ *    somewhere to keep it.
  *
- *  - a slot list longer than PRTE_RANKFILE_MAX_SLOTS (64) is truncated into
- *    the record's fixed buffer without a word to the user, so a long cpu
- *    list binds to something other than what it says.
+ *  - "rank" with no number is refused, but a line that names a rank and a
+ *    node and then stops is accepted and contributes a record with no slot
+ *    list at all.
  *
- *  - "rank" with no rank number, and a "slot=" with no preceding rank, are
- *    refused; but a line that names a rank and then stops is accepted and
- *    contributes a record with a node and no slot list at all.
+ * Seven goldens changed when the parser was rewritten to read lines, each
+ * a defect this corpus was written to catch:
  *
- *  - naming the same rank twice is caught only when both lines carry a
- *    "slot=", because that is where the duplicate check lives.  Two lines
- *    that name rank 0 and stop are accepted silently: the second record
- *    overwrites the first in the map (leaking it -- the slot is replaced
- *    without releasing what was there), the rank count is incremented for
- *    both, and the file's answer is quietly the last one.
+ *  - naming the same rank twice was caught only when both lines carried a
+ *    "slot=", because that is where the duplicate check lived.  Two lines
+ *    naming rank 0 and stopping were accepted in silence: the second record
+ *    overwrote the first in the map -- and leaked it, the slot being
+ *    replaced without releasing what was there -- the rank count was
+ *    incremented for both, and the file's answer was quietly the last one.
+ *    A duplicate is now refused wherever it appears, and the record already
+ *    filed for that rank is left as it was.
+ *
+ *  - a refused line used to leave a half-built record behind.  The parser
+ *    filed a record the moment it read the rank and filled it in as the
+ *    rest of the line arrived, so a line refused after that point left the
+ *    map holding a record with no node name, or no slot list, counted in
+ *    the rank total.  A line now contributes its record only once the whole
+ *    line has been accepted.
+ *
+ *  - a slot list longer than 64 characters was copied into the record's
+ *    fixed buffer up to the limit and no further, with nothing said, so a
+ *    rank given a long explicit cpu list was bound to a prefix of what was
+ *    asked for.  The list is allocated now and there is no limit.
+ *
+ * Each is argued in the commit that changed it.
  *
  * Failures are rendered as "err<N>", N being the offset from PRTE_ERR_BASE
  * in src/include/constants.h -- err5 is PRTE_ERR_BAD_PARAM, err13 is
@@ -99,7 +115,7 @@ static char *render(int rc, pmix_pointer_array_t *rankmap, int num_ranks)
         }
         pmix_asprintf(&tmp, "%s | %d:%s/%s", out, i,
                       (NULL == rfmap->node_name) ? "-" : rfmap->node_name,
-                      ('\0' == rfmap->slot_list[0]) ? "-" : rfmap->slot_list);
+                      (NULL == rfmap->slot_list) ? "-" : rfmap->slot_list);
         free(out);
         out = tmp;
     }
@@ -201,18 +217,18 @@ static const corpus_case_t corpus[] = {
     {"a missing file is refused", NULL, "rc=err13 nranks=0"},
     {"rank with no number", "rank=nodeA slot=0\n", "rc=err5 nranks=0"},
     {"slot with no rank", "slot=0\n", "rc=err5 nranks=0"},
-    {"a duplicate rank", "rank 0=nodeA slot=0\nrank 0=nodeB slot=1\n", "rc=err5 nranks=2 | 0:nodeB/-"},
-    {"a duplicate rank with no slot list", "rank 0=nodeA\nrank 0=nodeB\n", "rc=ok nranks=2 | 0:nodeB/-"},
+    {"a duplicate rank", "rank 0=nodeA slot=0\nrank 0=nodeB slot=1\n", "rc=err5 nranks=1 | 0:nodeA/0"},
+    {"a duplicate rank with no slot list", "rank 0=nodeA\nrank 0=nodeB\n", "rc=err5 nranks=1 | 0:nodeA/-"},
     {"slot before rank on a line", "slot=0 rank 0=nodeA\n", "rc=err5 nranks=0"},
     {"uppercase rank keyword", "RANK 0=nodeA slot=0\n", "rc=err5 nranks=0"},
     {"a rank line that stops after the node", "rank 0=nodeA\n", "rc=ok nranks=1 | 0:nodeA/-"},
-    {"username is refused", "rank 0=nodeA username=bob slot=0\n", "rc=err5 nranks=1 | 0:nodeA/-"},
-    {"a quoted string is refused", "rank 0=\"nodeA\" slot=0\n", "rc=err5 nranks=1 | 0:-/-"},
-    {"a stray character", "rank 0=nodeA $ slot=0\n", "rc=err5 nranks=1 | 0:nodeA/-"},
-    {"a second @", "rank 0=a@b@nodeA slot=0\n", "rc=err5 nranks=1 | 0:-/-"},
+    {"username is refused", "rank 0=nodeA username=bob slot=0\n", "rc=err5 nranks=0"},
+    {"a quoted string is refused", "rank 0=\"nodeA\" slot=0\n", "rc=err5 nranks=0"},
+    {"a stray character", "rank 0=nodeA $ slot=0\n", "rc=err5 nranks=0"},
+    {"a second @", "rank 0=a@b@nodeA slot=0\n", "rc=err5 nranks=0"},
     {"an over-long slot list",
      "rank 0=nodeA slot=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25\n",
-     "rc=ok nranks=1 | 0:nodeA/0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"},
+     "rc=ok nranks=1 | 0:nodeA/0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25"},
     {"a relative node spec", "rank 0=+n0 slot=0\n", "rc=ok nranks=1 | 0:+n0/0"},
 };
 

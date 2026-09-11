@@ -27,6 +27,8 @@ linked into `libprrte`. There are no MCA components here.
 | **Attributes** | `attr.[ch]` | The typed key/value store hung off `prte_job_t`, `prte_app_context_t`, `prte_node_t` and `prte_proc_t`. Get/set/append/prepend/fetch/remove, the load/unload marshalling, the key→name renderer, and the flag pretty-printers. |
 | **Names** | `name_fns.[ch]` | Rendering and parsing of `pmix_proc_t`/`pmix_nspace_t`, and `prte_util_compare_name_fields()`. |
 | **Node specifications** | [`hostfile/`](hostfile/AGENTS.md), [`dash_host/`](dash_host/AGENTS.md) | The two ways a user names machines. Each has its own AGENTS.md. |
+| **Rankfile** | [`rankfile/`](rankfile/AGENTS.md) | Reading the per-rank placement file. Here rather than in `rmaps/rank_file` because parsing a file the user wrote is not a mapping policy. |
+| **Line-oriented files** | `textfile.[ch]` | One logical line at a time, comments stripped and fields split, for the two parsers above. What replaced PRRTE's flex scanners. |
 | **Nidmap** | `nidmap.[ch]` | The compressed node-name/daemon-vpid map the HNP ships to every daemon. |
 | **Errors and states** | `error.[ch]`, `error_strings.[ch]` | `prte_strerror()`, `PRTE_ERROR_LOG()`, and the four state→name renderers. |
 | **Process info** | `proc_info.[ch]` | The `prte_process_info` global: hostname and its aliases, uid/gid, session-dir paths, proc type. |
