@@ -202,7 +202,6 @@ Prefix: %{_prefix}
 Provides: prrte = %{version}
 BuildRoot: /var/tmp/%{name}-%{version}-%{release}-root
 BuildRequires: gcc
-BuildRequires: flex
 BuildRequires: libevent-devel
 BuildRequires: pmix >= 4.2.0
 BuildRequires: hwloc-devel

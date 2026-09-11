@@ -27,7 +27,7 @@ Files:
 
 `allocate` simply calls
 `prte_util_add_hostfile_nodes(nodes, prte_mca_ras_testrm_component.hostfile)`
-and returns its status — the standard flex hostfile parser fills the
+and returns its status — the standard hostfile parser fills the
 list with `prte_node_t`s (honoring `slots=` etc.), and the base's
 `node_insert` places them. There is no dedup, no env probing, no
 managed-allocation marking: it behaves like a scheduler allocation but
