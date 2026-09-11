@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 check_PROGRAMS = test_util
 
 test_util_SOURCES = \
-    test_util.c
+    test_util.c \
+    test_hostfile_corpus.c
 
 test_util_LDADD = $(top_builddir)/src/libprrte.la
 
