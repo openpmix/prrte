@@ -275,9 +275,9 @@ PRTE detected a bad parameter in the hostfile:
 
    %s
 
-The port parameter is less than 0:
+The port parameter is not a whole number:
 
-   port=%d
+   port=%s
 #
 [slots]
 
@@ -285,9 +285,9 @@ PRTE detected a bad parameter in the hostfile:
 
    %s
 
-The slots parameter is less than 0:
+The slots parameter is not a whole number:
 
-   slots=%d
+   slots=%s
 #
 [max_slots]
 
@@ -295,9 +295,9 @@ PRTE detected a bad parameter in the hostfile:
 
    %s
 
-The max_slots parameter is less than 0:
+The max_slots parameter is not a whole number:
 
-   max_slots=%d
+   max_slots=%s
 #
 [max_slots_lt]
 
@@ -309,26 +309,6 @@ The max_slots parameter is less than the slots parameter:
 
    slots=%d
    max_slots=%d
-#
-[parse_error_string]
-
-PRTE detected a parse error in the hostfile:
-
-   %s
-
-It occurred on line number %d on token %d:
-
-   %s
-#
-[parse_error_int]
-
-PRTE detected a parse error in the hostfile:
-
-   %s
-
-It occurred on line number %d on token %d:
-
-   %d
 #
 [user-host]
 
@@ -349,7 +329,12 @@ PRTE detected a parse error in the hostfile:
 
    %s
 
-It occurred on line number %d on token %d.
+Line number %d could not be understood. The parser stopped at:
+
+   %s
+
+A line names one host, optionally followed by any of "slots=",
+"max_slots=", "username=" and "port=", each with a value.
 #
 [not-all-mapped-alloc]
 

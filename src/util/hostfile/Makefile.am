@@ -22,20 +22,10 @@
 #
 
 
-AM_LFLAGS = -Pprte_util_hostfile_
-LEX_OUTPUT_ROOT = lex.prte_util_hostfile_
-# we do NOT want picky compilers down here
-CFLAGS = $(PRTE_CFLAGS_BEFORE_PICKY)
-
 noinst_LTLIBRARIES = libprrteutilhostfile.la
 
 # Source code files
 
 libprrteutilhostfile_la_SOURCES = \
-	hostfile_lex.h \
-        hostfile_lex.l \
         hostfile.h \
         hostfile.c
-
-maintainer-clean-local:
-	rm -f hostfile_lex.c

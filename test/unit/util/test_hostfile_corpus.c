@@ -24,48 +24,29 @@
  *
  * Several of these goldens record behavior that is wrong.  They are recorded
  * anyway, and deliberately: a corpus holding only the good cases cannot tell
- * "we fixed that" from "we broke that".  The ones known to be wrong when
- * this was captured:
+ * "we fixed that" from "we broke that".  What is still wrong as things
+ * stand:
  *
- *  - "username with a dot" parses clean and silently drops the username.
- *    hostfile_parse_string() demands the lexer's STRING token, but a value
- *    containing a "." lexes as HOSTNAME, so it returns NULL and the caller
- *    treats that as "no username given" rather than as a parse failure.
- *
- *  - "sockets=", "cores=" and "boards=" are fatal parse errors that discard
- *    the node.  The lexer has a dedicated rule and token for each of the
- *    three, and hostfile_parse_line()'s switch has a case for none of them,
- *    so they reach its default arm.
- *
- *  - "ordered relative uppercase N" is refused.  The parser tests for both
- *    'n' and 'N' after the '+', but the lexer's rule is \+n[0-9]+ -- lower
- *    case only -- so "+N0" never becomes a RELATIVE token and the parser's
- *    uppercase branch cannot be reached.
- *
- *  - a stray field after the host entry is thrown away in silence.  The
- *    parser ignores any bare word or number where it expects a keyword,
- *    so "hostA hostB" on one line reads hostA and discards hostB without
- *    a word, and "hostA foo" is accepted as plain hostA.
- *
- *  - a hostfile with CRLF line endings is rejected outright.  The lexer's
- *    whitespace class is [\f\t\v ], so a carriage return matches nothing
- *    but the catch-all error rule -- meaning a hostfile written or edited
- *    on Windows fails with a generic parse error that says nothing about
- *    why, which is among the likelier ways a real user reaches this code.
- *
- *  - a block comment is only accepted between entries.  An opening comment
- *    marker ends the current line as far as the parser is concerned, so a
- *    host name followed by a block comment and then "slots=4" refuses the
- *    line, while the same comment placed before the host name parses fine.
+ *  - "sockets=", "cores=" and "boards=" are refused, and the refusal
+ *    discards the node.  These read like things a hostfile ought to accept
+ *    and the lexer once had a dedicated token for each; the parser has
+ *    never had a case for any of them.  Refusing is at least honest, and
+ *    is what the parser has always done, so it is left alone here.
  *
  *  - "ordered relative out of range" and "ordered too many empty" return an
  *    error AND leave the unresolved "+n9" / "+e:9" placeholder on the
  *    caller's list, alongside whichever nodes were expanded before the
  *    failure.
  *
- * Each of those is a decision the rewrite has to make on purpose.  When one
- * of these goldens changes, the change belongs in the commit message; it is
- * never a fixture to be quietly re-baselined.
+ * Seven goldens changed when the parser was rewritten to read lines, each
+ * of them a refusal or a silence that was an artifact of the scanner rather
+ * than anybody's intent: a username containing a dot is now kept instead of
+ * silently dropped, a file with CRLF line endings parses, a block comment
+ * may sit in the middle of a line, "+N0" is accepted as "+n0" already was,
+ * and a stray field after the host entry is now refused by name instead of
+ * thrown away -- which is what makes "hostA hostB" on one line say so
+ * rather than quietly losing hostB.  Each is argued in the commit that
+ * changed it.
  *
  * Failures are rendered as "err<N>", where N is the offset from
  * PRTE_ERR_BASE in src/include/constants.h -- err43 is PRTE_ERR_SILENT,
@@ -234,13 +215,13 @@ static const corpus_case_t corpus[] = {
     {"slash-slash comment", CORPUS_ADD, "// comment\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
     {"block comment on its own line", CORPUS_ADD, "/* comment */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
     {"block comment spanning lines", CORPUS_ADD, "/* one\n   two */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"block comment mid-line", CORPUS_ADD, "hostA /* x */ slots=4\n", "rc=err43"},
+    {"block comment mid-line", CORPUS_ADD, "hostA /* x */ slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
     {"block comment before an entry", CORPUS_ADD, "/* x */ hostA slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
     {"unterminated block comment", CORPUS_ADD, "hostA\n/* never closed\nhostB\n", "rc=ok | hostA slots=1 max=0 given=0"},
     {"a hash inside a name", CORPUS_ADD, "host#A\n", "rc=ok | host slots=1 max=0 given=0"},
     {"a line of only whitespace", CORPUS_ADD, "   \nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
     {"tab separated", CORPUS_ADD, "hostA\tslots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"crlf line endings", CORPUS_ADD, "hostA slots=4\r\nhostB\r\n", "rc=err43"},
+    {"crlf line endings", CORPUS_ADD, "hostA slots=4\r\nhostB\r\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=1 max=0 given=0"},
     {"a lone carriage return", CORPUS_ADD, "hostA slots=4\rhostB\n", "rc=err43"},
     {"trailing comment after an entry", CORPUS_ADD, "hostA slots=4 # four of them\n", "rc=ok | hostA slots=4 max=0 given=1"},
     {"blank lines", CORPUS_ADD, "\n\nhostA\n\n\nhostB\n\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0"},
@@ -275,7 +256,7 @@ static const corpus_case_t corpus[] = {
     {"username keyword", CORPUS_ADD, "hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
     {"user-name keyword", CORPUS_ADD, "hostA user-name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
     {"user_name keyword", CORPUS_ADD, "hostA user_name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"username with a dot", CORPUS_ADD, "hostA username=bob.smith\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"username with a dot", CORPUS_ADD, "hostA username=bob.smith\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob.smith"},
     {"username keyword beats user@", CORPUS_ADD, "alice@hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
 
     /* --- a rankfile read as a hostfile ------------------------------ */
@@ -290,9 +271,9 @@ static const corpus_case_t corpus[] = {
     {"a negative slot count", CORPUS_ADD, "hostA slots=-1\n", "rc=err43"},
     {"slots given twice", CORPUS_ADD, "hostA slots=2 slots=4\n", "rc=err43"},
     {"max below slots", CORPUS_ADD, "hostA slots=8 max_slots=2\n", "rc=err43"},
-    {"a bare word after the entry", CORPUS_ADD, "hostA foo\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"a bare number after the entry", CORPUS_ADD, "hostA 42\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"two hosts on one line", CORPUS_ADD, "hostA hostB\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"a bare word after the entry", CORPUS_ADD, "hostA foo\n", "rc=err43"},
+    {"a bare number after the entry", CORPUS_ADD, "hostA 42\n", "rc=err43"},
+    {"two hosts on one line", CORPUS_ADD, "hostA hostB\n", "rc=err43"},
     {"a key with no value", CORPUS_ADD, "hostA slots=\n", "rc=err43"},
     {"a value with no key", CORPUS_ADD, "hostA = 4\n", "rc=err43"},
     {"slots given as a word", CORPUS_ADD, "hostA slots=four\n", "rc=err43"},
@@ -313,7 +294,7 @@ static const corpus_case_t corpus[] = {
     {"ordered relative by index, second", CORPUS_ORDERED, "+n1\n", "rc=ok | poolC slots=8 max=0 given=1"},
     {"ordered relative out of range", CORPUS_ORDERED, "+n9\n", "rc=err43 | +n9 slots=0 max=0 given=0"},
     {"ordered relative with a slot count", CORPUS_ORDERED, "+n0 slots=2\n", "rc=ok | poolB slots=2 max=0 given=1"},
-    {"ordered relative uppercase N", CORPUS_ORDERED, "+N0\n", "rc=err43"},
+    {"ordered relative uppercase N", CORPUS_ORDERED, "+N0\n", "rc=ok | poolB slots=6 max=0 given=1"},
     {"ordered relative bad letter", CORPUS_ORDERED, "+x0\n", "rc=err43"},
     {"ordered all empty", CORPUS_ORDERED, "+e\n", "rc=ok | poolB slots=6 max=0 given=1 | poolC slots=8 max=0 given=1"},
     {"ordered n empty", CORPUS_ORDERED, "+e:1\n", "rc=ok | poolB slots=6 max=0 given=1"},
