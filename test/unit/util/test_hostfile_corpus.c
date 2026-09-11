@@ -42,6 +42,17 @@
  *    case only -- so "+N0" never becomes a RELATIVE token and the parser's
  *    uppercase branch cannot be reached.
  *
+ *  - a hostfile with CRLF line endings is rejected outright.  The lexer's
+ *    whitespace class is [\f\t\v ], so a carriage return matches nothing
+ *    but the catch-all error rule -- meaning a hostfile written or edited
+ *    on Windows fails with a generic parse error that says nothing about
+ *    why, which is among the likelier ways a real user reaches this code.
+ *
+ *  - a block comment is only accepted between entries.  An opening comment
+ *    marker ends the current line as far as the parser is concerned, so a
+ *    host name followed by a block comment and then "slots=4" refuses the
+ *    line, while the same comment placed before the host name parses fine.
+ *
  *  - "ordered relative out of range" and "ordered too many empty" return an
  *    error AND leave the unresolved "+n9" / "+e:9" placeholder on the
  *    caller's list, alongside whichever nodes were expanded before the
@@ -218,6 +229,14 @@ static const corpus_case_t corpus[] = {
     {"slash-slash comment", CORPUS_ADD, "// comment\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
     {"block comment on its own line", CORPUS_ADD, "/* comment */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
     {"block comment spanning lines", CORPUS_ADD, "/* one\n   two */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"block comment mid-line", CORPUS_ADD, "hostA /* x */ slots=4\n", "rc=err43"},
+    {"block comment before an entry", CORPUS_ADD, "/* x */ hostA slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"unterminated block comment", CORPUS_ADD, "hostA\n/* never closed\nhostB\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"a hash inside a name", CORPUS_ADD, "host#A\n", "rc=ok | host slots=1 max=0 given=0"},
+    {"a line of only whitespace", CORPUS_ADD, "   \nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"tab separated", CORPUS_ADD, "hostA\tslots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"crlf line endings", CORPUS_ADD, "hostA slots=4\r\nhostB\r\n", "rc=err43"},
+    {"a lone carriage return", CORPUS_ADD, "hostA slots=4\rhostB\n", "rc=err43"},
     {"trailing comment after an entry", CORPUS_ADD, "hostA slots=4 # four of them\n", "rc=ok | hostA slots=4 max=0 given=1"},
     {"blank lines", CORPUS_ADD, "\n\nhostA\n\n\nhostB\n\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0"},
     {"leading whitespace", CORPUS_ADD, "   hostA slots=4\n\thostB\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=1 max=0 given=0"},
