@@ -402,6 +402,14 @@ AC_DEFUN([PRTE_SETUP_CC],[
     PRTE_ENSURE_CONTAINS_OPTFLAGS("$PRTE_CFLAGS_BEFORE_PICKY")
     PRTE_CFLAGS_BEFORE_PICKY="$co_result"
 
+    # PRTE_CFLAGS_BEFORE_PICKY is used by Makefile.am's in directories
+    # that do not want "picky" compiler flags (e.g., because they
+    # contain flex-generated code).  It must be AC_SUBST'ed so that
+    # those Makefiles actually receive a value instead of silently
+    # compiling with an empty CFLAGS (which drops all hardening
+    # flags, such as those for control-flow protection).
+    AC_SUBST([PRTE_CFLAGS_BEFORE_PICKY])
+
     AC_MSG_CHECKING([for C optimization flags])
     PRTE_ENSURE_CONTAINS_OPTFLAGS(["$CFLAGS"])
     AC_MSG_RESULT([$co_result])

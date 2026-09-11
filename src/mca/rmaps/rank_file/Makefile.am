@@ -31,7 +31,7 @@ AM_LFLAGS = -Pprte_rmaps_rank_file_
 LEX_OUTPUT_ROOT = lex.prte_rmaps_rank_file_
 
 # we do NOT want picky compilers down here due to flex
-CFLAGS = $(PMIX_CFLAGS_BEFORE_PICKY)
+CFLAGS = $(PRTE_CFLAGS_BEFORE_PICKY)
 
 sources = \
         rmaps_rank_file.c \
