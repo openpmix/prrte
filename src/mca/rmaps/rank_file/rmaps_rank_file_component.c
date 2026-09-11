@@ -38,7 +38,6 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/rank_file/rmaps_rank_file.h"
-#include "src/mca/rmaps/rank_file/rmaps_rank_file_lex.h"
 
 /*
  * Local functions
@@ -69,15 +68,3 @@ static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *prio
     *module = (pmix_mca_base_module_t *) &prte_rmaps_rank_file_module;
     return PRTE_SUCCESS;
 }
-
-static void rf_map_construct(prte_rmaps_rank_file_map_t *ptr)
-{
-    ptr->node_name = NULL;
-    memset(ptr->slot_list, (char) 0x00, RMAPS_RANK_FILE_MAX_SLOTS);
-}
-static void rf_map_destruct(prte_rmaps_rank_file_map_t *ptr)
-{
-    if (NULL != ptr->node_name)
-        free(ptr->node_name);
-}
-PMIX_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, pmix_object_t, rf_map_construct, rf_map_destruct);

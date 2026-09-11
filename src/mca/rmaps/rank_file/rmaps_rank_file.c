@@ -53,7 +53,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/rank_file/rmaps_rank_file.h"
-#include "src/mca/rmaps/rank_file/rmaps_rank_file_lex.h"
+#include "src/util/rankfile/rankfile.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
@@ -64,9 +64,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
 prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
     .map_job = prte_rmaps_rf_map
 };
-
-static int prte_rmaps_rank_file_parse(const char *);
-static char *prte_rmaps_rank_file_parse_string_or_int(void);
 
 /*
  * Local variable
@@ -86,7 +83,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     prte_node_t *node, *nd, *root_node;
     pmix_rank_t rank, entry, vpid_start, rank_base;
     int32_t num_slots;
-    prte_rmaps_rank_file_map_t *rfmap;
+    prte_rankfile_map_t *rfmap;
     int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
@@ -96,7 +93,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
      * re-add nodes a previous app already placed in the job map */
     bool initial_map = (0 == jdata->map->num_nodes);
     char *rankfile = NULL;
-    char *affinity_file = NULL;
     hwloc_cpuset_t proc_bitmap, bitmap;
     char *cpu_bitmap;
     char *avail_bitmap = NULL;
@@ -204,7 +200,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     }
 
     /* parse the rankfile, storing its results in the rankmap */
-    if (PRTE_SUCCESS != (rc = prte_rmaps_rank_file_parse(rankfile))) {
+    if (PRTE_SUCCESS != (rc = prte_util_parse_rankfile(rankfile, &rankmap, &num_ranks))) {
         rc = PRTE_ERR_SILENT;
         goto error;
     }
@@ -246,7 +242,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             entry = vpid_start + k;
             rank = rank_base + k;
             /* get the rankfile entry for this rank */
-            rfmap = (prte_rmaps_rank_file_map_t *) pmix_pointer_array_get_item(&rankmap, entry);
+            rfmap = (prte_rankfile_map_t *) pmix_pointer_array_get_item(&rankmap, entry);
             if (NULL == rfmap) {
                 /* if this job was given a slot-list, then use it */
                 if (NULL != options->cpuset) {
@@ -531,236 +527,4 @@ error:
     }
 
     return rc;
-}
-
-static int prte_rmaps_rank_file_parse(const char *rankfile)
-{
-    int token;
-    int rc = PRTE_SUCCESS;
-    int cnt;
-    char *node_name = NULL;
-    char **argv;
-    char buff[RMAPS_RANK_FILE_MAX_SLOTS];
-    char *value;
-    int rank = -1;
-    int i;
-    prte_node_t *hnp_node;
-    prte_rmaps_rank_file_map_t *rfmap = NULL;
-    pmix_pointer_array_t *assigned_ranks_array;
-    char tmp_rank_assignment[RMAPS_RANK_FILE_MAX_SLOTS];
-
-    /* keep track of rank assignments */
-    assigned_ranks_array = PMIX_NEW(pmix_pointer_array_t);
-    rc = pmix_pointer_array_init(assigned_ranks_array,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_RELEASE(assigned_ranks_array);
-        return PRTE_ERROR;
-    }
-
-    /* get the hnp node's info */
-    hnp_node = (prte_node_t *) (prte_node_pool->addr[0]);
-
-    prte_rmaps_rank_file_done = false;
-    prte_rmaps_rank_file_in = fopen(rankfile, "r");
-
-    if (NULL == prte_rmaps_rank_file_in) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "no-rankfile", true,
-                       prte_tool_basename, rankfile, prte_tool_basename);
-        rc = PRTE_ERR_NOT_FOUND;
-        goto unlock;
-    }
-
-    while (!prte_rmaps_rank_file_done) {
-        token = prte_rmaps_rank_file_lex();
-
-        switch (token) {
-        case PRTE_RANKFILE_ERROR:
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_QUOTED_STRING:
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "not-supported-rankfile", true,
-                           "QUOTED_STRING", rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_NEWLINE:
-            rank = -1;
-            if (NULL != node_name) {
-                free(node_name);
-            }
-            node_name = NULL;
-            rfmap = NULL;
-            break;
-        case PRTE_RANKFILE_RANK:
-            token = prte_rmaps_rank_file_lex();
-            if (PRTE_RANKFILE_INT == token) {
-                rank = prte_rmaps_rank_file_value.ival;
-                rfmap = PMIX_NEW(prte_rmaps_rank_file_map_t);
-                pmix_pointer_array_set_item(&rankmap, rank, rfmap);
-                num_ranks++; // keep track of number of provided ranks
-            } else {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-            break;
-        case PRTE_RANKFILE_USERNAME:
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "not-supported-rankfile", true, "USERNAME",
-                           rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_EQUAL:
-            if (rank < 0) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-            token = prte_rmaps_rank_file_lex();
-            switch (token) {
-            case PRTE_RANKFILE_HOSTNAME:
-            case PRTE_RANKFILE_IPV4:
-            case PRTE_RANKFILE_IPV6:
-            case PRTE_RANKFILE_STRING:
-            case PRTE_RANKFILE_INT:
-            case PRTE_RANKFILE_RELATIVE:
-                if (PRTE_RANKFILE_INT == token) {
-                    snprintf(buff,RMAPS_RANK_FILE_MAX_SLOTS,  "%d", prte_rmaps_rank_file_value.ival);
-                    value = buff;
-                } else {
-                    value = prte_rmaps_rank_file_value.sval;
-                }
-                argv = PMIx_Argv_split(value, '@');
-                cnt = PMIx_Argv_count(argv);
-                if (NULL != node_name) {
-                    free(node_name);
-                }
-                if (1 == cnt) {
-                    node_name = strdup(argv[0]);
-                } else if (2 == cnt) {
-                    node_name = strdup(argv[1]);
-                } else {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(rc);
-                    PMIx_Argv_free(argv);
-                    node_name = NULL;
-                    goto unlock;
-                }
-                PMIx_Argv_free(argv);
-
-                // Strip off the FQDN if present, ignore IP addresses
-                if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
-                    char *ptr;
-                    if (NULL != (ptr = strchr(node_name, '.'))) {
-                        *ptr = '\0';
-                    }
-                }
-
-                /* check the rank item */
-                if (NULL == rfmap) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(rc);
-                    goto unlock;
-                }
-                /* check if this is the local node */
-                if (prte_check_host_is_local(node_name)) {
-                    rfmap->node_name = strdup(hnp_node->name);
-                } else {
-                    rfmap->node_name = strdup(node_name);
-                }
-            }
-            break;
-        case PRTE_RANKFILE_SLOT:
-            if (NULL == node_name || rank < 0
-                || NULL == (value = prte_rmaps_rank_file_parse_string_or_int())) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-
-            /* check for a duplicate rank assignment. The record has to be
-             * filed under the rank it describes, and it has to be a copy:
-             * indexing every record at 0 (and pointing them all at one reused
-             * stack buffer) meant a rankfile whose first "slot=" line was for
-             * any rank but 0 rejected its own rank 0 line as a duplicate, and
-             * a genuine duplicate of any other rank went unnoticed */
-            if (NULL != pmix_pointer_array_get_item(assigned_ranks_array, rank)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-assign", true, rank,
-                               pmix_pointer_array_get_item(assigned_ranks_array, rank), rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                free(value);
-                goto unlock;
-            } else {
-                /* prepare rank assignment string for the help message in case of a bad-assign */
-                snprintf(tmp_rank_assignment, RMAPS_RANK_FILE_MAX_SLOTS, "%s slot=%s", node_name, value);
-                pmix_pointer_array_set_item(assigned_ranks_array, rank,
-                                            strdup(tmp_rank_assignment));
-            }
-
-            /* check the rank item */
-            if (NULL == rfmap) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                free(value);
-                goto unlock;
-            }
-            for (i = 0; i < RMAPS_RANK_FILE_MAX_SLOTS && '\0' != value[i]; i++) {
-                rfmap->slot_list[i] = value[i];
-            }
-            free(value);
-            break;
-        }
-    }
-unlock:
-    /* every exit has to give the file and the lexer back - the error paths
-     * used to jump straight past the close, leaking a descriptor and the
-     * lexer's buffers for every malformed rankfile */
-    if (NULL != prte_rmaps_rank_file_in) {
-        fclose(prte_rmaps_rank_file_in);
-        prte_rmaps_rank_file_in = NULL;
-        prte_rmaps_rank_file_lex_destroy();
-    }
-    if (NULL != node_name) {
-        free(node_name);
-    }
-    for (i = 0; i < assigned_ranks_array->size; i++) {
-        value = (char *) pmix_pointer_array_get_item(assigned_ranks_array, i);
-        if (NULL != value) {
-            free(value);
-        }
-    }
-    PMIX_RELEASE(assigned_ranks_array);
-    return rc;
-}
-
-static char *prte_rmaps_rank_file_parse_string_or_int(void)
-{
-    int rc;
-    char tmp_str[RMAPS_RANK_FILE_MAX_SLOTS];
-
-    if (PRTE_RANKFILE_EQUAL != prte_rmaps_rank_file_lex()) {
-        return NULL;
-    }
-
-    rc = prte_rmaps_rank_file_lex();
-    switch (rc) {
-    case PRTE_RANKFILE_STRING:
-        return strdup(prte_rmaps_rank_file_value.sval);
-    case PRTE_RANKFILE_INT:
-        snprintf(tmp_str, RMAPS_RANK_FILE_MAX_SLOTS, "%d", prte_rmaps_rank_file_value.ival);
-        return strdup(tmp_str);
-    default:
-        return NULL;
-    }
 }
