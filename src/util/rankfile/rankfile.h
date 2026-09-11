@@ -42,14 +42,20 @@
 
 BEGIN_C_DECLS
 
-#define PRTE_RANKFILE_MAX_SLOTS 64
-
-/* One line of a rankfile: where the rank named by this record's position in
- * the map is to run, and the cpus it is to be bound to. */
+/*
+ * One line of a rankfile: where the rank named by this record's position in
+ * the map is to run, and the cpus it is to be bound to.  NULL slot_list
+ * means the line named a node and stopped.
+ *
+ * The cpu list is allocated rather than a fixed 64-byte array.  It was the
+ * array, copied into up to its length and no further with nothing said, so
+ * a rank given a long explicit cpu list -- "0,1,2,...,25" is already over
+ * the limit -- was bound to a prefix of what the user asked for.
+ */
 typedef struct {
     pmix_object_t super;
     char *node_name;
-    char slot_list[PRTE_RANKFILE_MAX_SLOTS];
+    char *slot_list;
 } prte_rankfile_map_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rankfile_map_t);
 

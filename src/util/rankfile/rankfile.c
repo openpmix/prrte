@@ -26,6 +26,9 @@
 
 #include "prte_config.h"
 
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,252 +41,248 @@
 #include "src/util/pmix_net.h"
 #include "src/util/prte_show_help.h"
 #include "src/util/rankfile/rankfile.h"
-#include "src/util/rankfile/rankfile_lex.h"
-
-static char *rankfile_parse_string_or_int(void);
+#include "src/util/textfile.h"
 
 static void rf_map_construct(prte_rankfile_map_t *ptr)
 {
     ptr->node_name = NULL;
-    memset(ptr->slot_list, (char) 0x00, PRTE_RANKFILE_MAX_SLOTS);
+    ptr->slot_list = NULL;
 }
 static void rf_map_destruct(prte_rankfile_map_t *ptr)
 {
     if (NULL != ptr->node_name) {
         free(ptr->node_name);
     }
+    if (NULL != ptr->slot_list) {
+        free(ptr->slot_list);
+    }
 }
 PMIX_CLASS_INSTANCE(prte_rankfile_map_t, pmix_object_t, rf_map_construct, rf_map_destruct);
+
+/* the file and line the messages name, so that every call site does not
+ * have to carry them */
+static const char *cur_rankfile_name = NULL;
+static int cur_rankfile_line = 0;
+
+static void rankfile_syntax_error(const char *offender)
+{
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true,
+                   cur_rankfile_name, cur_rankfile_line, offender);
+}
+
+/*
+ * Is this field a name we will take for a node?  The same question the
+ * hostfile parser asks, and for the same reason: the scanner this replaces
+ * sorted names into four token types and this parser listed all four in one
+ * switch arm, so what it actually needed to know was only whether the field
+ * is made of characters a name may contain.  A relative "+n<K>" is a name
+ * here too -- it is stored as written and resolved by the mapper.
+ */
+static bool valid_nodename(const char *s)
+{
+    size_t i;
+
+    if ('\0' == s[0]) {
+        return false;
+    }
+    if ('+' == s[0]) {
+        if ('n' != s[1] && 'N' != s[1]) {
+            return false;
+        }
+        if ('\0' == s[2]) {
+            return false;
+        }
+        for (i = 2; '\0' != s[i]; i++) {
+            if (!isdigit((unsigned char) s[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+    for (i = 0; '\0' != s[i]; i++) {
+        if (!isalnum((unsigned char) s[i]) && NULL == strchr("_-.,:*@", s[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int parse_rank(const char *value, int *result)
+{
+    char *end;
+    long v;
+
+    errno = 0;
+    v = strtol(value, &end, 10);
+    if (0 != errno || end == value || '\0' != *end || 0 > v || INT_MAX < v) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *result = (int) v;
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Take the node name out of a "<host>" or "<user>@<host>" field.
+ *
+ * The user half is dropped.  That is what this parser has always done, and
+ * it is worth knowing that it differs from the hostfile parser, which keeps
+ * it as a node attribute: a rankfile record has nowhere to put it.  Saying
+ * "username=" outright is refused as unsupported, so the two spellings of
+ * the same thing get two different answers; changing that means giving the
+ * record somewhere to keep it.
+ */
+static char *node_from_entry(const char *entry)
+{
+    char **argv;
+    char *name = NULL;
+    int cnt;
+
+    argv = PMIx_Argv_split(entry, '@');
+    cnt = PMIx_Argv_count(argv);
+    if (1 == cnt) {
+        name = strdup(argv[0]);
+    } else if (2 == cnt) {
+        name = strdup(argv[1]);
+    }
+    PMIx_Argv_free(argv);
+    return name;
+}
 
 int prte_util_parse_rankfile(const char *rankfile, pmix_pointer_array_t *rankmap,
                              int *num_ranks)
 {
-    int token;
-    int rc = PRTE_SUCCESS;
-    int cnt;
-    char *node_name = NULL;
-    char **argv;
-    char buff[PRTE_RANKFILE_MAX_SLOTS];
-    char *value;
-    int rank = -1;
-    int i;
+    prte_textfile_t tf;
     prte_node_t *hnp_node;
-    prte_rankfile_map_t *rfmap = NULL;
-    pmix_pointer_array_t *assigned_ranks_array;
-    char tmp_rank_assignment[PRTE_RANKFILE_MAX_SLOTS];
+    prte_rankfile_map_t *rfmap;
+    char **fields;
+    char *node_name = NULL;
+    char *ptr;
+    int rc, rank, i;
 
-    /* keep track of rank assignments */
-    assigned_ranks_array = PMIX_NEW(pmix_pointer_array_t);
-    rc = pmix_pointer_array_init(assigned_ranks_array,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_RELEASE(assigned_ranks_array);
-        return PRTE_ERROR;
-    }
+    cur_rankfile_name = rankfile;
+    cur_rankfile_line = 0;
 
-    /* get the hnp node's info */
-    hnp_node = (prte_node_t *) (prte_node_pool->addr[0]);
-
-    prte_util_rankfile_done = false;
-    prte_util_rankfile_in = fopen(rankfile, "r");
-
-    if (NULL == prte_util_rankfile_in) {
+    rc = prte_textfile_open(&tf, rankfile);
+    if (PRTE_SUCCESS != rc) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "no-rankfile", true,
                        prte_tool_basename, rankfile, prte_tool_basename);
         rc = PRTE_ERR_NOT_FOUND;
-        goto unlock;
+        goto cleanup;
     }
 
-    while (!prte_util_rankfile_done) {
-        token = prte_util_rankfile_lex();
+    /* the name to substitute for any entry that turns out to be this
+     * machine, so that a rankfile naming the head node by any of its names
+     * lands on the same node object the daemon reports itself as */
+    hnp_node = (prte_node_t *) (prte_node_pool->addr[0]);
 
-        switch (token) {
-        case PRTE_RANKFILE_ERROR:
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_QUOTED_STRING:
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "not-supported-rankfile", true,
-                           "QUOTED_STRING", rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_NEWLINE:
-            rank = -1;
-            if (NULL != node_name) {
-                free(node_name);
-            }
-            node_name = NULL;
-            rfmap = NULL;
-            break;
-        case PRTE_RANKFILE_RANK:
-            token = prte_util_rankfile_lex();
-            if (PRTE_RANKFILE_INT == token) {
-                rank = prte_util_rankfile_value.ival;
-                rfmap = PMIX_NEW(prte_rankfile_map_t);
-                pmix_pointer_array_set_item(rankmap, rank, rfmap);
-                (*num_ranks)++; // keep track of number of provided ranks
-            } else {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-            break;
-        case PRTE_RANKFILE_USERNAME:
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "not-supported-rankfile", true, "USERNAME",
-                           rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_EQUAL:
-            if (rank < 0) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-            token = prte_util_rankfile_lex();
-            switch (token) {
-            case PRTE_RANKFILE_HOSTNAME:
-            case PRTE_RANKFILE_IPV4:
-            case PRTE_RANKFILE_IPV6:
-            case PRTE_RANKFILE_STRING:
-            case PRTE_RANKFILE_INT:
-            case PRTE_RANKFILE_RELATIVE:
-                if (PRTE_RANKFILE_INT == token) {
-                    snprintf(buff,PRTE_RANKFILE_MAX_SLOTS,  "%d", prte_util_rankfile_value.ival);
-                    value = buff;
-                } else {
-                    value = prte_util_rankfile_value.sval;
-                }
-                argv = PMIx_Argv_split(value, '@');
-                cnt = PMIx_Argv_count(argv);
-                if (NULL != node_name) {
-                    free(node_name);
-                }
-                if (1 == cnt) {
-                    node_name = strdup(argv[0]);
-                } else if (2 == cnt) {
-                    node_name = strdup(argv[1]);
-                } else {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(rc);
-                    PMIx_Argv_free(argv);
-                    node_name = NULL;
-                    goto unlock;
-                }
-                PMIx_Argv_free(argv);
+    /*
+     * Every line is "rank <N> = <host>", optionally followed by
+     * "slot = <list>".  The scanner this replaces produced a token stream
+     * in which those four things were four separate cases carrying state
+     * between them, reset on a newline token -- which is to say it was
+     * reading lines, the hard way.
+     */
+    while (NULL != (fields = prte_textfile_next(&tf))) {
+        cur_rankfile_line = tf.lineno;
+        rc = PRTE_ERR_BAD_PARAM;
 
-                // Strip off the FQDN if present, ignore IP addresses
-                if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
-                    char *ptr;
-                    if (NULL != (ptr = strchr(node_name, '.'))) {
-                        *ptr = '\0';
-                    }
-                }
-
-                /* check the rank item */
-                if (NULL == rfmap) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(rc);
-                    goto unlock;
-                }
-                /* check if this is the local node */
-                if (prte_check_host_is_local(node_name)) {
-                    rfmap->node_name = strdup(hnp_node->name);
-                } else {
-                    rfmap->node_name = strdup(node_name);
-                }
-            }
-            break;
-        case PRTE_RANKFILE_SLOT:
-            if (NULL == node_name || rank < 0
-                || NULL == (value = rankfile_parse_string_or_int())) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-
-            /* check for a duplicate rank assignment. The record has to be
-             * filed under the rank it describes, and it has to be a copy:
-             * indexing every record at 0 (and pointing them all at one reused
-             * stack buffer) meant a rankfile whose first "slot=" line was for
-             * any rank but 0 rejected its own rank 0 line as a duplicate, and
-             * a genuine duplicate of any other rank went unnoticed */
-            if (NULL != pmix_pointer_array_get_item(assigned_ranks_array, rank)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-assign", true, rank,
-                               pmix_pointer_array_get_item(assigned_ranks_array, rank), rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                free(value);
-                goto unlock;
-            } else {
-                /* prepare rank assignment string for the help message in case of a bad-assign */
-                snprintf(tmp_rank_assignment, PRTE_RANKFILE_MAX_SLOTS, "%s slot=%s", node_name, value);
-                pmix_pointer_array_set_item(assigned_ranks_array, rank,
-                                            strdup(tmp_rank_assignment));
-            }
-
-            /* check the rank item */
-            if (NULL == rfmap) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                free(value);
-                goto unlock;
-            }
-            for (i = 0; i < PRTE_RANKFILE_MAX_SLOTS && '\0' != value[i]; i++) {
-                rfmap->slot_list[i] = value[i];
-            }
-            free(value);
-            break;
+        if (0 != strcmp("rank", fields[0])) {
+            rankfile_syntax_error(fields[0]);
+            goto cleanup;
         }
+        if (NULL == fields[1] || PRTE_SUCCESS != parse_rank(fields[1], &rank)) {
+            rankfile_syntax_error((NULL == fields[1]) ? fields[0] : fields[1]);
+            goto cleanup;
+        }
+        if (NULL == fields[2] || 0 != strcmp("=", fields[2])) {
+            rankfile_syntax_error((NULL == fields[2]) ? fields[1] : fields[2]);
+            goto cleanup;
+        }
+        if (NULL == fields[3] || !valid_nodename(fields[3])) {
+            rankfile_syntax_error((NULL == fields[3]) ? fields[2] : fields[3]);
+            goto cleanup;
+        }
+
+        /*
+         * Refuse a rank the file has already placed.
+         *
+         * The check this replaces lived on the "slot=" path alone, so two
+         * lines naming the same rank and then stopping were accepted in
+         * silence: the second record overwrote the first in the map -- and
+         * leaked it, the slot being replaced without releasing what was
+         * there -- the rank count was incremented for both, and the file's
+         * answer was quietly the last one.  A rankfile that says rank 0
+         * twice should not be answered by picking one.
+         */
+        rfmap = (prte_rankfile_map_t *) pmix_pointer_array_get_item(rankmap, rank);
+        if (NULL != rfmap) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-assign",
+                           true, rank, rfmap->node_name, rankfile);
+            goto cleanup;
+        }
+
+        node_name = node_from_entry(fields[3]);
+        if (NULL == node_name) {
+            /* more than one "@": neither a hostname nor a "user@hostname" */
+            rankfile_syntax_error(fields[3]);
+            goto cleanup;
+        }
+
+        /* strip the FQDN if we are not keeping them, but never off an
+         * address, whose dots are not domain separators */
+        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
+            if (NULL != (ptr = strchr(node_name, '.'))) {
+                *ptr = '\0';
+            }
+        }
+
+        rfmap = PMIX_NEW(prte_rankfile_map_t);
+        if (prte_check_host_is_local(node_name)) {
+            rfmap->node_name = strdup(hnp_node->name);
+        } else {
+            rfmap->node_name = strdup(node_name);
+        }
+        free(node_name);
+        node_name = NULL;
+
+        /* "slot = <list>", if the line carries one.  "slots" is taken as a
+         * synonym, as it always has been. */
+        i = 4;
+        if (NULL != fields[i]) {
+            if (0 == strcmp("username", fields[i]) || 0 == strcmp("user-name", fields[i])
+                || 0 == strcmp("user_name", fields[i])) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt",
+                               "not-supported-rankfile", true, "USERNAME", rankfile);
+                PMIX_RELEASE(rfmap);
+                goto cleanup;
+            }
+            if ((0 != strcmp("slot", fields[i]) && 0 != strcmp("slots", fields[i]))
+                || NULL == fields[i + 1] || 0 != strcmp("=", fields[i + 1])
+                || NULL == fields[i + 2]) {
+                rankfile_syntax_error(fields[i]);
+                PMIX_RELEASE(rfmap);
+                goto cleanup;
+            }
+            rfmap->slot_list = strdup(fields[i + 2]);
+            i += 3;
+            if (NULL != fields[i]) {
+                rankfile_syntax_error(fields[i]);
+                PMIX_RELEASE(rfmap);
+                goto cleanup;
+            }
+        }
+
+        pmix_pointer_array_set_item(rankmap, rank, rfmap);
+        (*num_ranks)++;
     }
-unlock:
-    /* every exit has to give the file and the lexer back - the error paths
-     * used to jump straight past the close, leaking a descriptor and the
-     * lexer's buffers for every malformed rankfile */
-    if (NULL != prte_util_rankfile_in) {
-        fclose(prte_util_rankfile_in);
-        prte_util_rankfile_in = NULL;
-        prte_util_rankfile_lex_destroy();
-    }
+    rc = PRTE_SUCCESS;
+
+cleanup:
     if (NULL != node_name) {
         free(node_name);
     }
-    for (i = 0; i < assigned_ranks_array->size; i++) {
-        value = (char *) pmix_pointer_array_get_item(assigned_ranks_array, i);
-        if (NULL != value) {
-            free(value);
-        }
-    }
-    PMIX_RELEASE(assigned_ranks_array);
+    prte_textfile_close(&tf);
+    cur_rankfile_name = NULL;
+    cur_rankfile_line = 0;
     return rc;
-}
-
-static char *rankfile_parse_string_or_int(void)
-{
-    int rc;
-    char tmp_str[PRTE_RANKFILE_MAX_SLOTS];
-
-    if (PRTE_RANKFILE_EQUAL != prte_util_rankfile_lex()) {
-        return NULL;
-    }
-
-    rc = prte_util_rankfile_lex();
-    switch (rc) {
-    case PRTE_RANKFILE_STRING:
-        return strdup(prte_util_rankfile_value.sval);
-    case PRTE_RANKFILE_INT:
-        snprintf(tmp_str, PRTE_RANKFILE_MAX_SLOTS, "%d", prte_util_rankfile_value.ival);
-        return strdup(tmp_str);
-    default:
-        return NULL;
-    }
 }
