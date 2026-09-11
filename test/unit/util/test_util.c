@@ -97,6 +97,7 @@
 
 extern int test_hostfile_corpus(void);
 extern int test_rankfile_corpus(void);
+extern int test_textfile(void);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -1213,6 +1214,7 @@ int main(void)
     failures += test_attr_round_trip();
     failures += test_dash_host();
     failures += test_hostfile();
+    failures += test_textfile();
     failures += test_hostfile_corpus();
     failures += test_rankfile_corpus();
     failures += test_sys_limits();

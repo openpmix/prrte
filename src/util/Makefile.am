@@ -58,7 +58,8 @@ headers = \
         prte_show_help.h \
         session_dir.h \
         stacktrace.h \
-        sys_limits.h
+        sys_limits.h \
+        textfile.h
 
 sources = \
         attr.c \
@@ -76,6 +77,7 @@ sources = \
         session_dir.c \
         stacktrace.c \
         sys_limits.c \
+        textfile.c \
         prte_show_help_content.c
 
 libprrteutil_la_SOURCES = $(headers) $(sources)
