@@ -44,9 +44,12 @@ New capabilities
   Slurm: expander jobs allocated with ``salloc --no-shell``, release by
   node list or by allocation id, reuse of shrunk nodes on a later
   extend, cancellation by user-provided request id, and completion of an
-  extend when its ``salloc`` exits rather than by polling. This support
-  is gated by the ``prte_elastic_mode`` MCA parameter, and requires
-  jansson and Slurm v24.05 or later (see ``--enable-slurm-extensions``).
+  extend when its ``salloc`` exits rather than by polling. The node
+  hosting the HNP is identified by locality -- so that a shortened or
+  fully qualified spelling of its name still matches -- and is never
+  handed back, whichever session holds it. This support is gated by the
+  ``prte_elastic_mode`` MCA parameter, and requires jansson and Slurm
+  v24.05 or later (see ``--enable-slurm-extensions``).
 
 * **Node reservation and session targeting.** A job may name the
   allocation onto which it is to be mapped. An allocation has exactly
@@ -105,6 +108,25 @@ Reworked subsystems
   forwarding is inherited by spawned jobs unless refused, and a tool
   connected to a non-master daemon gets working I/O in both directions.
 
+* **Hostfile and rankfile parsing.** Both files are line-oriented
+  formats, and both are now read a line at a time by one shared reader
+  instead of by a flex scanner whose token stream flattened the line
+  structure each parser then rebuilt. Several long-standing defects go
+  with the rewrite: a hostfile written with CRLF line endings parses
+  rather than failing with a message that explained nothing, a username
+  containing a dot is kept rather than silently dropped, a block comment
+  may sit anywhere on a line, ``+N0`` is accepted as ``+n0`` always was,
+  and a second host name written on the same line is refused by name
+  rather than discarded in silence. In a rankfile, naming the same rank
+  twice is refused wherever it appears rather than only when both lines
+  carry a ``slot=``, a line refused part way through no longer leaves a
+  half-built record in the map, and a long cpu list is no longer
+  truncated at 64 bytes. Both parsers now report a syntax error by
+  naming the line and the text they stopped at, rather than an internal
+  token number. The rankfile reader has moved out of ``rmaps/rank_file``
+  into ``libprrte``, which is what makes it testable at all; both are
+  now covered by golden corpora under ``test/unit/``.
+
 * **Data server.** Published data now honors the lifetime and
   persistence its publisher asked for, access is decided by permissions
   and then by range, what one user may hold is bounded, and an external
@@ -133,10 +155,25 @@ projects built on it; 46 of them previously held the value of a live
 PMIx status meaning something else. Every framework now states its
 interface version and checks it against the components it loads.
 
+Two answers that depended on which daemon a client happened to reach are
+now the same everywhere. ``PMIX_QUERY_PROC_TABLE`` asked of a daemon that
+does not host the procs it names is relayed to the DVM master rather than
+answered out of the stale states the launch message shipped, so a client
+is no longer told that every off-node rank of its own job is still
+starting up -- that table being the only signal PRRTE offers for "has
+this proc gone away". A daemon that has never heard of a job at all now
+defers to the master instead of reporting the job as not found.
+
+Every ``show_help`` message now names the job it is about. PMIx keys
+duplicate suppression on the job, and a DVM runs many jobs over its
+lifetime: without the job, the first job to trip a diagnostic got the
+message and every later one was left in silence, for as long as the DVM
+lived.
+
 Testing
 ^^^^^^^
 
-PRRTE had no automated tests at v4.0.0. It now ships four harnesses:
+PRRTE had no automated tests at v4.0.0. It now ships five harnesses:
 
 * ``make check`` runs per-framework unit tests under ``test/unit/``,
   which reach components through the MCA framework rather than through
@@ -176,6 +213,12 @@ Requirement changes and removals
 
 * The minimum PMIx version for both build and execution is now v7.0.0,
   and the minimum Python needed to build from a Git clone is v3.6.
+
+* Flex is no longer needed to build PRRTE from a Git clone. The hostfile
+  and rankfile scanners were the last flex input in the tree, and with
+  them gone so are ``AC_PROG_LEX``, the version floor in ``VERSION``, and
+  the per-directory compiler-flag overrides that existed to tolerate
+  generated scanner output.
 
 * Java support has been removed, as has the vestigial ``prtedl``
   dynamic-loader framework, the stale ``dist`` mapping policy, the
