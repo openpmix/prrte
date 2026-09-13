@@ -269,6 +269,17 @@ The hostfile given is not a regular file:
 A directory (or a device, socket, or similar) cannot be read as a hostfile.
 Check to make sure the path and filename are correct.
 #
+[read-error]
+
+PRTE could not read the hostfile to its end:
+
+   %s
+
+The read stopped after line %d. Nothing in the file was used, because a
+hostfile that was only partly read would name only some of the nodes it
+lists. Check that the file is still readable - on a network file system,
+that the server is reachable - and try again.
+#
 [port]
 
 PRTE detected a bad parameter in the hostfile:
@@ -316,12 +327,13 @@ PRTE detected a parse error in the hostfile:
 
    %s
 
-The entry on line number %d contains more than one "@" separator:
+The entry on line number %d is not a hostname or a "user@hostname":
 
    %s
 
-An entry may name at most one user, in the form "user@hostname". Please
-correct the hostfile and try again.
+An entry may name at most one user, in the form "user@hostname", and both
+the user and the hostname must be given. Please correct the hostfile and
+try again.
 #
 [parse_error]
 

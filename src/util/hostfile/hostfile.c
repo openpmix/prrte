@@ -212,29 +212,35 @@ static int parse_count(const char *value, int *result)
  * Split a host entry into its optional username and the node name.
  *
  * A name may carry the account to reach it with, written in front and
- * separated by a single "@".  Anything with a second "@" is neither a
+ * separated by a single "@".  Anything else with an "@" in it is neither a
  * hostname nor a "user@hostname", and has to be refused by name, file and
  * line like every other failure here.
+ *
+ * Do not reach for PMIx_Argv_split() to do this.  It drops empty fields, so
+ * "someone@" is one field and "@hostA" and "someone@@hostA" are two, and
+ * all three were accepted: the first as a node named "someone", which a
+ * launcher then tries to reach.
  */
 static int hostfile_parse_username(const char *value, char **username, char **node_name)
 {
-    char **argv;
-    int cnt;
+    const char *at;
+    size_t len;
 
-    argv = PMIx_Argv_split(value, '@');
-    cnt = PMIx_Argv_count(argv);
-    if (1 == cnt) {
-        *node_name = strdup(argv[0]);
-    } else if (2 == cnt) {
-        *username = strdup(argv[0]);
-        *node_name = strdup(argv[1]);
-    } else {
+    at = strchr(value, '@');
+    if (NULL == at) {
+        *node_name = strdup(value);
+        return PRTE_SUCCESS;
+    }
+    if (at == value || '\0' == at[1] || NULL != strchr(at + 1, '@')) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "user-host", true,
                        cur_hostfile_name, cur_hostfile_line, value);
-        PMIx_Argv_free(argv);
         return PRTE_ERR_SILENT;
     }
-    PMIx_Argv_free(argv);
+    len = (size_t) (at - value);
+    *username = (char *) malloc(len + 1);
+    memcpy(*username, value, len);
+    (*username)[len] = '\0';
+    *node_name = strdup(at + 1);
     return PRTE_SUCCESS;
 }
 
@@ -274,6 +280,7 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
     prte_node_t *node;
     bool got_max = false;
     bool rank_form = false;
+    bool excluded;
     char *node_name = NULL;
     char *username = NULL;
     const char *entry;
@@ -321,15 +328,18 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
         return PRTE_ERR_SILENT;
     }
 
-    rc = hostfile_parse_username(entry, &username, &node_name);
+    /* A leading "^" excludes the named host, and it leads the whole entry:
+     * "^user@host" excludes host.  Take it off before the user is split
+     * away, not after -- looking for it on the node name found it only when
+     * there was no user, and otherwise gave the user a name starting with
+     * "^" and counted the host as one more slot of a node to use. */
+    excluded = ('^' == entry[0]);
+    rc = hostfile_parse_username(excluded ? entry + 1 : entry, &username, &node_name);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
 
-    /* A leading "^" excludes the named host.  Remove it so the name is
-     * usable, and put the node on the exclude list. */
-    if ('^' == node_name[0]) {
-        memmove(node_name, node_name + 1, strlen(node_name));
+    if (excluded) {
         if (prte_check_host_is_local(node_name)) {
             free(node_name);
             node_name = strdup(prte_process_info.nodename);
@@ -500,7 +510,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
             /* it is the default hostfile, but it was asked for by name */
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "no-hostfile", true,
                            hostfile);
-            rc = PRTE_ERR_NOT_FOUND;
+            rc = PRTE_ERR_SILENT;
             goto cleanup;
         }
         /* otherwise, not finding it is okay */
@@ -514,6 +524,14 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
         if (PRTE_SUCCESS != rc) {
             goto cleanup;
         }
+    }
+    if (tf.failed) {
+        /* the nodes read so far stay on the caller's lists, and the caller
+         * disposes of them as it does after any other refusal */
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "read-error", true,
+                       hostfile, tf.lineno);
+        rc = PRTE_ERR_SILENT;
+        goto cleanup;
     }
     rc = PRTE_SUCCESS;
 
@@ -614,7 +632,7 @@ cleanup:
 int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove)
 {
     pmix_list_t newnodes, exclude;
-    pmix_list_item_t *item1, *item2, *next, *item3;
+    pmix_list_item_t *item1, *item2 = NULL, *next, *item3;
     prte_node_t *node_from_list, *node_from_file, *node_from_pool, *node3;
     int rc = PRTE_SUCCESS;
     char *cptr;
@@ -627,21 +645,55 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                          "%s hostfile: filtering nodes through hostfile %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostfile));
 
-    /* parse the hostfile and create local list of findings */
+    /* parse the hostfile and create local list of findings.  These lists
+     * hold nodes, so they go through PMIX_LIST_DESTRUCT on every exit: a
+     * plain PMIX_DESTRUCT releases none of the items, and a hostfile that
+     * failed on its tenth line leaked the nine nodes before it, per job. */
     PMIX_CONSTRUCT(&newnodes, pmix_list_t);
     PMIX_CONSTRUCT(&exclude, pmix_list_t);
+    PMIX_CONSTRUCT(&keep, pmix_list_t);
     if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude, false))) {
-        PMIX_DESTRUCT(&newnodes);
-        PMIX_DESTRUCT(&exclude);
-        return rc;
+        goto cleanup;
     }
 
-    /* if the hostfile was empty, then treat it as a no-op filter */
     if (0 == pmix_list_get_size(&newnodes)) {
-        PMIX_DESTRUCT(&newnodes);
-        PMIX_DESTRUCT(&exclude);
-        /* indicate that the hostfile was empty */
-        return PRTE_ERR_TAKE_NEXT_OPTION;
+        if (0 == pmix_list_get_size(&exclude)) {
+            /* the hostfile was empty: treat it as a no-op filter */
+            rc = PRTE_ERR_TAKE_NEXT_OPTION;
+            goto cleanup;
+        }
+        /*
+         * The hostfile only excludes.  It names no node to select, but it
+         * is not empty and must not be taken for empty: that answer mapped
+         * the job across every node, the excluded ones included.  What a
+         * file of nothing but "^host" lines says is "any node but these",
+         * so every node on the caller's list is selected except the ones it
+         * excludes.  (Where the file also names nodes, an exclusion takes a
+         * node back out of what it named, below.)
+         */
+        item1 = pmix_list_get_first(nodes);
+        while (item1 != pmix_list_get_end(nodes)) {
+            node_from_list = (prte_node_t *) item1;
+            next = pmix_list_get_next(item1);
+            found = false;
+            PMIX_LIST_FOREACH(node_from_file, &exclude, prte_node_t) {
+                if (prte_nptr_match(node_from_file, node_from_list)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                if (remove) {
+                    pmix_list_remove_item(nodes, item1);
+                    PMIX_RELEASE(item1);
+                }
+            } else if (!remove) {
+                PRTE_FLAG_SET(node_from_list, PRTE_NODE_FLAG_MAPPED);
+            }
+            item1 = next;
+        }
+        rc = PRTE_SUCCESS;
+        goto cleanup;
     }
 
     /* remove from the list of newnodes those that are in the exclude list
@@ -665,7 +717,6 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     /* now check our nodes and keep or mark those that match. We can
      * destruct our hostfile list as we go since this won't be needed
      */
-    PMIX_CONSTRUCT(&keep, pmix_list_t);
     while (NULL != (item2 = pmix_list_remove_first(&newnodes))) {
         node_from_file = (prte_node_t *) item2;
 
@@ -753,6 +804,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                     goto cleanup;
                 }
                 /* search the list of nodes provided to us and find it */
+                found = false;
                 for (item1 = pmix_list_get_first(nodes); item1 != pmix_list_get_end(nodes);
                      item1 = pmix_list_get_next(item1)) {
                     node_from_list = (prte_node_t *) item1;
@@ -766,8 +818,20 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                             /* mark as included */
                             PRTE_FLAG_SET(node_from_list, PRTE_NODE_FLAG_MAPPED);
                         }
+                        found = true;
                         break;
                     }
+                }
+                /* A node named by its position is as much a request as one
+                 * named outright, and a node named outright that is not on
+                 * the list is refused below.  This one used to be dropped
+                 * without a word, so a hostfile of "+n1" and "+n2" mapped a
+                 * job onto one node if the other was not available to it. */
+                if (!found) {
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:extra-node-not-found", true, hostfile,
+                                   node_from_pool->name);
+                    rc = PRTE_ERR_SILENT;
+                    goto cleanup;
                 }
             } else {
                 /* invalid relative node syntax */
@@ -846,6 +910,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
         }
         /* cleanup the newnode list */
         PMIX_RELEASE(item2);
+        item2 = NULL;
     }
 
     /* if we still have entries on our hostfile list, then
@@ -875,6 +940,12 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     }
 
 cleanup:
+    /* "item2" is the hostfile entry being resolved when a refusal jumped
+     * here: it has been taken off newnodes, so nothing below would release
+     * it, and each of those refusals used to leak it */
+    if (NULL != item2) {
+        PMIX_RELEASE(item2);
+    }
     /* "keep" holds nodes this routine took *off* the caller's list, so on
      * any path that does not put them back they are the caller's nodes being
      * dropped on the floor - every error return used to leak them, along
@@ -1062,7 +1133,8 @@ int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
     }
 
 cleanup:
-    PMIX_DESTRUCT(&exclude);
+    /* holds nodes on every path that did not reach the exclusion pass */
+    PMIX_LIST_DESTRUCT(&exclude);
 
     return rc;
 }

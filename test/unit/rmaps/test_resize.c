@@ -200,6 +200,33 @@ int test_hostfile_cap(void)
           0 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
     PMIX_LIST_DESTRUCT(&nodes);
 
+    /* an empty hostfile filters nothing, and must not stop a -host given
+     * alongside it from filtering either.  The hostfile's "take next option"
+     * used to be returned straight out of prte_rmaps_base_filter_nodes() -
+     * logged as a PRTE ERROR on the way - before the -host was looked at */
+    if (NULL == write_hostfile("# nothing but a comment\n", path, sizeof(path))) {
+        fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+        return failures + 1;
+    }
+    {
+        prte_app_context_t *app = PMIX_NEW(prte_app_context_t);
+
+        prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, path,
+                           PMIX_STRING);
+        prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, "hostB",
+                           PMIX_STRING);
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        one_node(&nodes, "hostA", 4);
+        nd = one_node(&nodes, "hostB", 4);
+        rc = prte_rmaps_base_filter_nodes(app, &nodes, true);
+        CHECK("empty hostfile: the -host still filtered", PRTE_SUCCESS == rc);
+        CHECK("empty hostfile: only the -host node is left",
+              1 == pmix_list_get_size(&nodes)
+                  && nd == (prte_node_t *) pmix_list_get_first(&nodes));
+        PMIX_LIST_DESTRUCT(&nodes);
+        PMIX_RELEASE(app);
+    }
+
     unlink(path);
 
     if (0 == failures) {
