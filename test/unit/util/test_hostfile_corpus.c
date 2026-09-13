@@ -302,6 +302,8 @@ static const corpus_case_t corpus[] = {
     {"ordered relative with a slot count", CORPUS_ORDERED, "+n0 slots=2\n", "rc=ok | poolB slots=2 max=0 given=1"},
     {"ordered relative uppercase N", CORPUS_ORDERED, "+N0\n", "rc=ok | poolB slots=6 max=0 given=1"},
     {"ordered relative bad letter", CORPUS_ORDERED, "+x0\n", "rc=err43"},
+    {"ordered relative index too large", CORPUS_ORDERED, "+n2147483647\n", "rc=err43"},
+    {"ordered empty count too large", CORPUS_ORDERED, "+e:99999999999\n", "rc=err43"},
     {"ordered all empty", CORPUS_ORDERED, "+e\n", "rc=ok | poolB slots=6 max=0 given=1 | poolC slots=8 max=0 given=1"},
     {"ordered n empty", CORPUS_ORDERED, "+e:1\n", "rc=ok | poolB slots=6 max=0 given=1"},
     {"ordered too many empty", CORPUS_ORDERED, "+e:9\n", "rc=err43 | +e:9 slots=0 max=0 given=0 | poolB slots=6 max=0 given=1 | poolC slots=8 max=0 given=1"},
