@@ -603,6 +603,7 @@ static void group(int sd, short args, void *cbdata)
     prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t*)cbdata;
     prte_grpcomm_group_signature_t sig;
     prte_grpcomm_group_t *coll = NULL;
+    prte_grpcomm_grp_pending_t *pnd = NULL;
     pmix_data_buffer_t *relay, *framed;
     pmix_status_t rc, st = PMIX_SUCCESS;
     int timeout = 0;
@@ -664,8 +665,24 @@ static void group(int sd, short args, void *cbdata)
         rc = PMIX_ERR_NOT_FOUND;
         goto error;
     }
-    coll->cbfunc = cd->cbfunc;
-    coll->cbdata = cd->cbdata;
+    /* Queue this call's completion rather than storing it. get_tracker()
+     * keys on {groupID, op}, so several up-calls land on one tracker - a
+     * bootstrap group makes one per participating proc - and assigning here
+     * discarded every completion but the last. The PMIx server library
+     * covers for that by answering all of its blocks off whichever
+     * completion does arrive, but the callbacks we drop are ones we took
+     * ownership of, and the blocks behind them are then never released. */
+    if (NULL != cd->cbfunc) {
+        pnd = PMIX_NEW(prte_grpcomm_grp_pending_t);
+        if (NULL == pnd) {
+            PMIX_DESTRUCT(&sig);
+            rc = PMIX_ERR_NOMEM;
+            goto error;
+        }
+        pnd->cbfunc = cd->cbfunc;
+        pnd->cbdata = cd->cbdata;
+        pmix_list_append(&coll->pending, &pnd->super);
+    }
 
     // create the relay buffer
     PMIX_DATA_BUFFER_CREATE(relay);
@@ -836,10 +853,15 @@ error:
      * first: the tracker itself stays (a release from the controller, which
      * can still abort the operation, has to find it), and a release arriving
      * later would otherwise complete the same client a second time with the
-     * same cbdata. This is the same rule the fence entry point follows. */
-    if (NULL != coll) {
-        coll->cbfunc = NULL;
-        coll->cbdata = NULL;
+     * same cbdata. This is the same rule the fence entry point follows.
+     *
+     * Only OUR entry comes off. Clearing the tracker's callback outright
+     * took every other queued participant's with it, so one participant
+     * failing here left the rest of a bootstrap group waiting on a
+     * collective that would complete and have nobody left to tell. */
+    if (NULL != pnd) {
+        pmix_list_remove_item(&coll->pending, &pnd->super);
+        PMIX_RELEASE(pnd);
     }
     if (NULL != cd->cbfunc) {
         cd->cbfunc(rc, NULL, 0, cd->cbdata, NULL, NULL);
@@ -1749,6 +1771,7 @@ void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
                                      prte_rml_tag_t tag, void *cbdata)
 {
     prte_grpcomm_group_t *coll;
+    prte_grpcomm_grp_pending_t *pnd, *pnext;
     prte_grpcomm_group_signature_t *sig = NULL;
     prte_grpcomm_release_caddy_t *cd;
     int32_t cnt;
@@ -1793,9 +1816,15 @@ void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
                 break;
             }
         }
-        if (NULL != coll && NULL != coll->cbfunc) {
-            /* return to the local procs in the collective */
-            coll->cbfunc(st, NULL, 0, coll->cbdata, NULL, NULL);
+        if (NULL != coll) {
+            /* return to the local procs in the collective - every up-call
+             * this tracker absorbed is owed its own completion */
+            PMIX_LIST_FOREACH_SAFE(pnd, pnext, &coll->pending,
+                                   prte_grpcomm_grp_pending_t) {
+                pmix_list_remove_item(&coll->pending, &pnd->super);
+                pnd->cbfunc(st, NULL, 0, pnd->cbdata, NULL, NULL);
+                PMIX_RELEASE(pnd);
+            }
         }
         // remove the tracker, if found
         find_delete_tracker(sig);
@@ -2088,6 +2117,7 @@ static void notify_members_lost(prte_grpcomm_release_caddy_t *cd)
 static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
 {
     prte_grpcomm_group_t *coll;
+    prte_grpcomm_grp_pending_t *pnd, *pnext;
     prte_pmix_grp_caddy_t *ccd;
     prte_pmix_server_pset_t *pset;
     pmix_data_array_t darray;
@@ -2118,26 +2148,44 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
     // regardless of prior error, we MUST notify any pending clients
     // so they don't hang
 
-    if (NULL != coll && NULL != coll->cbfunc) {
+    if (NULL != coll && 0 < pmix_list_get_size(&coll->pending)) {
         // service the procs that are part of the collective
 
-        // convert for returning to PMIx server library
-        ccd = PMIX_NEW(prte_pmix_grp_caddy_t);
-        if (PMIX_SUCCESS == cd->st) {
-            PMIX_INFO_LIST_CONVERT(rc, cd->nlist, &darray);
-            if (PMIX_SUCCESS != rc) {
-                if (PMIX_ERR_EMPTY != rc) {
-                    PMIX_ERROR_LOG(rc);
-                }
-            } else {
-                ccd->info = (pmix_info_t*)darray.array;
-                ccd->ninfo = darray.size;
+        /* One completion per up-call the PMIx server made for this
+         * tracker, each with a release object of its own: the callback
+         * takes ownership of what it is handed and discharges relcb
+         * exactly once, so the converted array cannot be shared between
+         * them. PMIx_Info_list_convert copies, so converting once per
+         * entry is what produces independent arrays. */
+        PMIX_LIST_FOREACH_SAFE(pnd, pnext, &coll->pending,
+                               prte_grpcomm_grp_pending_t) {
+            // convert for returning to PMIx server library
+            ccd = PMIX_NEW(prte_pmix_grp_caddy_t);
+            if (NULL == ccd) {
+                /* we cannot answer this one, and saying so is all we can
+                 * do - the client behind it stays blocked */
+                PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                continue;
             }
-        }
+            if (PMIX_SUCCESS == cd->st) {
+                PMIX_INFO_LIST_CONVERT(rc, cd->nlist, &darray);
+                if (PMIX_SUCCESS != rc) {
+                    if (PMIX_ERR_EMPTY != rc) {
+                        PMIX_ERROR_LOG(rc);
+                    }
+                } else {
+                    ccd->info = (pmix_info_t*)darray.array;
+                    ccd->ninfo = darray.size;
+                }
+            }
 
-        /* return to the PMIx server library for relay to
-         * local procs in the operation */
-        coll->cbfunc(cd->st, ccd->info, ccd->ninfo, coll->cbdata, relcb, (void*)ccd);
+            /* return to the PMIx server library for relay to
+             * local procs in the operation */
+            pmix_list_remove_item(&coll->pending, &pnd->super);
+            pnd->cbfunc(cd->st, ccd->info, ccd->ninfo, pnd->cbdata,
+                        relcb, (void*)ccd);
+            PMIX_RELEASE(pnd);
+        }
 
         /* Tell our own participants who they lost. This is done after the
          * construct's completion has been dispatched, so a client sees
