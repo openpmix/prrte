@@ -29,26 +29,39 @@ static bool read_raw_line(prte_textfile_t *tf)
 {
     size_t used = 0;
     size_t want;
+    char *grown;
 
     for (;;) {
         if (used + 2 > tf->rawsize) {
             want = (0 == tf->rawsize) ? 256 : tf->rawsize * 2;
-            tf->raw = (char *) realloc(tf->raw, want);
-            if (NULL == tf->raw) {
-                tf->rawsize = 0;
+            grown = (char *) realloc(tf->raw, want);
+            if (NULL == grown) {
+                /* tf->raw is still ours, and prte_textfile_close() frees it */
+                tf->failed = true;
                 return false;
             }
+            tf->raw = grown;
             tf->rawsize = want;
         }
         if (NULL == fgets(tf->raw + used, (int) (tf->rawsize - used), tf->fp)) {
-            /* end of file, or an error - either way, what we have is all
-             * there is.  A final line with no newline is still a line. */
+            if (ferror(tf->fp)) {
+                /* not the end of the file: whatever is left of it was never
+                 * read, so neither this fragment nor the lines before it
+                 * are the whole of what the file says */
+                tf->failed = true;
+                return false;
+            }
+            /* A final line with no newline is still a line. */
             return (0 < used);
         }
         used += strlen(tf->raw + used);
         if (0 < used && '\n' == tf->raw[used - 1]) {
             tf->raw[used - 1] = '\0';
             return true;
+        }
+        if (ferror(tf->fp)) {
+            tf->failed = true;
+            return false;
         }
         if (feof(tf->fp)) {
             return (0 < used);
@@ -165,6 +178,8 @@ int prte_textfile_open(prte_textfile_t *tf, const char *path)
 char **prte_textfile_next(prte_textfile_t *tf)
 {
     size_t need;
+    char *code;
+    char **fields;
 
     if (NULL == tf->fp) {
         return NULL;
@@ -174,13 +189,22 @@ char **prte_textfile_next(prte_textfile_t *tf)
         tf->lineno++;
 
         /* the stripped line is never longer than the raw one, and it can
-         * hold at most one field per character plus the NULL */
+         * hold at most one field per character plus the NULL.  Assign each
+         * buffer only once its realloc has worked, so a failure leaves the
+         * old one where prte_textfile_close() will find and free it. */
         need = strlen(tf->raw) + 1;
-        tf->code = (char *) realloc(tf->code, need);
-        tf->fields = (char **) realloc(tf->fields, (need + 1) * sizeof(char *));
-        if (NULL == tf->code || NULL == tf->fields) {
+        code = (char *) realloc(tf->code, need);
+        if (NULL == code) {
+            tf->failed = true;
             return NULL;
         }
+        tf->code = code;
+        fields = (char **) realloc(tf->fields, (need + 1) * sizeof(char *));
+        if (NULL == fields) {
+            tf->failed = true;
+            return NULL;
+        }
+        tf->fields = fields;
 
         strip_comments(tf);
         split_fields(tf);
@@ -214,4 +238,6 @@ void prte_textfile_close(prte_textfile_t *tf)
     tf->rawsize = 0;
     tf->nfields = 0;
     tf->in_comment = false;
+    /* "failed" is left as it is: it is the answer to a question a caller
+     * may still be asking after closing the file */
 }

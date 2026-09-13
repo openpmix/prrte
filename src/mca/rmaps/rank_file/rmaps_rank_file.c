@@ -68,7 +68,7 @@ prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
 /*
  * Local variable
  */
-static pmix_pointer_array_t rankmap;
+static pmix_hash_table_t rankmap;
 static int num_ranks = 0;
 
 /*
@@ -85,6 +85,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     int32_t num_slots;
     prte_rankfile_map_t *rfmap;
     int32_t relative_index, tmp_cnt;
+    long lval;
     int rc;
     prte_proc_t *proc;
     char *slots = NULL;
@@ -187,11 +188,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
      * a stale count from a previous job in this DVM would be handed to an app
      * that gave no -n as its process count */
     num_ranks = 0;
-    PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
-    rc = pmix_pointer_array_init(&rankmap,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    PMIX_CONSTRUCT(&rankmap, pmix_hash_table_t);
+    rc = pmix_hash_table_init(&rankmap, PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_DESTRUCT(&rankmap);
         PMIX_LIST_DESTRUCT(&node_list);
@@ -242,7 +240,10 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             entry = vpid_start + k;
             rank = rank_base + k;
             /* get the rankfile entry for this rank */
-            rfmap = (prte_rankfile_map_t *) pmix_pointer_array_get_item(&rankmap, entry);
+            if (PMIX_SUCCESS != pmix_hash_table_get_value_uint32(&rankmap, entry,
+                                                                 (void **) &rfmap)) {
+                rfmap = NULL;
+            }
             if (NULL == rfmap) {
                 /* if this job was given a slot-list, then use it */
                 if (NULL != options->cpuset) {
@@ -310,15 +311,24 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                                    && (('n' == rfmap->node_name[1])
                                        || ('N' == rfmap->node_name[1])))) {
 
-                        relative_index = atoi(strtok(rfmap->node_name, "+n"));
-                        if (relative_index >= (int) pmix_list_get_size(&node_list)
-                            || (0 > relative_index)) {
+                        /* the parser accepts "+n" or "+N" followed only by
+                         * digits.  This used to be atoi(strtok(name, "+n")),
+                         * whose delimiters skip a lower-case 'n' and not an
+                         * upper-case one - so "+N3" became atoi("N3"), zero,
+                         * and the rank went to the first node without a
+                         * word.  atoi() also had no answer for an index too
+                         * large for an int. */
+                        errno = 0;
+                        lval = strtol(rfmap->node_name + 2, NULL, 10);
+                        if (0 != errno || lval >= (long) pmix_list_get_size(&node_list)
+                            || 0 > lval) {
                             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-index", true,
                                            rfmap->node_name);
                             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                             rc = PRTE_ERR_BAD_PARAM;
                             goto error;
                         }
+                        relative_index = (int32_t) lval;
                         root_node = (prte_node_t *) pmix_list_get_first(&node_list);
                         for (tmp_cnt = 0; tmp_cnt < relative_index; tmp_cnt++) {
                             root_node = (prte_node_t *) pmix_list_get_next(root_node);
@@ -494,11 +504,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     PMIX_LIST_DESTRUCT(&node_list);
 
     /* cleanup the rankmap */
-    for (i = 0; i < rankmap.size; i++) {
-        if (NULL != (rfmap = pmix_pointer_array_get_item(&rankmap, i))) {
-            PMIX_RELEASE(rfmap);
-        }
-    }
+    prte_util_rankfile_clear(&rankmap);
     PMIX_DESTRUCT(&rankmap);
     if (NULL != rankfile) {
         free(rankfile);
@@ -515,11 +521,7 @@ error:
     PMIX_LIST_DESTRUCT(&node_list);
     /* the rankmap is module-static, so a map that failed part way through
      * has to hand back its entries here or they survive into the next job */
-    for (i = 0; i < rankmap.size; i++) {
-        if (NULL != (rfmap = pmix_pointer_array_get_item(&rankmap, i))) {
-            PMIX_RELEASE(rfmap);
-        }
-    }
+    prte_util_rankfile_clear(&rankmap);
     PMIX_DESTRUCT(&rankmap);
     num_ranks = 0;
     if (NULL != rankfile) {
