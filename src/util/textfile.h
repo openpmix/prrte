@@ -50,6 +50,7 @@ typedef struct {
     int nfields;
     int lineno;      /* 1-based, of the line the fields came from */
     bool in_comment; /* a block comment is open across this line break */
+    bool failed;     /* reading stopped short of the end of the file */
 } prte_textfile_t;
 
 /*
@@ -68,6 +69,13 @@ PRTE_EXPORT int prte_textfile_open(prte_textfile_t *tf, const char *path);
  * of fields, or NULL at end of file.  Blank lines and lines holding only a
  * comment are skipped, so every array returned has at least one field.
  * The array belongs to the file and is replaced by the next call.
+ *
+ * NULL is also what a read error or a failed allocation returns, and a
+ * caller must tell the two apart by checking "failed" once the loop ends.
+ * Taking an early NULL for the end of the file accepts whatever was read
+ * before the failure as the whole file: a hostfile on a network file system
+ * that stops answering halfway through would be an allocation of half its
+ * nodes, reported as a success.
  */
 PRTE_EXPORT char **prte_textfile_next(prte_textfile_t *tf);
 

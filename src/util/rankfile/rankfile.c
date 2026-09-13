@@ -34,6 +34,7 @@
 #include <string.h>
 
 #include "constants.h"
+#include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
@@ -122,7 +123,8 @@ static int parse_rank(const char *value, int *result)
 }
 
 /*
- * Take the node name out of a "<host>" or "<user>@<host>" field.
+ * Take the node name out of a "<host>" or "<user>@<host>" field, or return
+ * NULL if the field is neither.
  *
  * The user half is dropped.  That is what this parser has always done, and
  * it is worth knowing that it differs from the hostfile parser, which keeps
@@ -130,25 +132,42 @@ static int parse_rank(const char *value, int *result)
  * "username=" outright is refused as unsupported, so the two spellings of
  * the same thing get two different answers; changing that means giving the
  * record somewhere to keep it.
+ *
+ * Both halves must be there, and there is one "@".  PMIx_Argv_split() is
+ * not the tool for this: it drops empty fields, so "someone@" came back as
+ * a node named "someone", and "@nodeA" and "someone@@nodeA" as nodeA.
  */
 static char *node_from_entry(const char *entry)
 {
-    char **argv;
-    char *name = NULL;
-    int cnt;
+    const char *at;
 
-    argv = PMIx_Argv_split(entry, '@');
-    cnt = PMIx_Argv_count(argv);
-    if (1 == cnt) {
-        name = strdup(argv[0]);
-    } else if (2 == cnt) {
-        name = strdup(argv[1]);
+    at = strchr(entry, '@');
+    if (NULL == at) {
+        return strdup(entry);
     }
-    PMIx_Argv_free(argv);
-    return name;
+    if (at == entry || '\0' == at[1] || NULL != strchr(at + 1, '@')) {
+        return NULL;
+    }
+    return strdup(at + 1);
 }
 
-int prte_util_parse_rankfile(const char *rankfile, pmix_pointer_array_t *rankmap,
+void prte_util_rankfile_clear(pmix_hash_table_t *rankmap)
+{
+    prte_rankfile_map_t *rfmap;
+    uint32_t key;
+    void *node, *next;
+    int rc;
+
+    rc = pmix_hash_table_get_first_key_uint32(rankmap, &key, (void **) &rfmap, &node);
+    while (PMIX_SUCCESS == rc) {
+        PMIX_RELEASE(rfmap);
+        rc = pmix_hash_table_get_next_key_uint32(rankmap, &key, (void **) &rfmap, node, &next);
+        node = next;
+    }
+    pmix_hash_table_remove_all(rankmap);
+}
+
+int prte_util_parse_rankfile(const char *rankfile, pmix_hash_table_t *rankmap,
                              int *num_ranks)
 {
     prte_textfile_t tf;
@@ -214,8 +233,8 @@ int prte_util_parse_rankfile(const char *rankfile, pmix_pointer_array_t *rankmap
          * answer was quietly the last one.  A rankfile that says rank 0
          * twice should not be answered by picking one.
          */
-        rfmap = (prte_rankfile_map_t *) pmix_pointer_array_get_item(rankmap, rank);
-        if (NULL != rfmap) {
+        if (PMIX_SUCCESS == pmix_hash_table_get_value_uint32(rankmap, (uint32_t) rank,
+                                                             (void **) &rfmap)) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-assign",
                            true, rank, rfmap->node_name, rankfile);
             goto cleanup;
@@ -272,8 +291,19 @@ int prte_util_parse_rankfile(const char *rankfile, pmix_pointer_array_t *rankmap
             }
         }
 
-        pmix_pointer_array_set_item(rankmap, rank, rfmap);
+        if (PMIX_SUCCESS != pmix_hash_table_set_value_uint32(rankmap, (uint32_t) rank, rfmap)) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PMIX_RELEASE(rfmap);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
         (*num_ranks)++;
+    }
+    if (tf.failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "read-error", true,
+                       prte_tool_basename, rankfile, tf.lineno);
+        rc = PRTE_ERR_FILE_READ_FAILURE;
+        goto cleanup;
     }
     rc = PRTE_SUCCESS;
 

@@ -75,6 +75,7 @@
 #include <unistd.h>
 
 #include "constants.h"
+#include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_printf.h"
@@ -96,11 +97,20 @@ typedef struct {
  * it under the wrong rank -- shows as a diff rather than as a missing line
  * nobody looked for.
  */
-static char *render(int rc, pmix_pointer_array_t *rankmap, int num_ranks)
+static int cmp_rank(const void *a, const void *b)
+{
+    uint32_t x = *(const uint32_t *) a, y = *(const uint32_t *) b;
+
+    return (x < y) ? -1 : (x > y);
+}
+
+static char *render(int rc, pmix_hash_table_t *rankmap, int num_ranks)
 {
     prte_rankfile_map_t *rfmap;
     char *out = NULL, *tmp;
-    int i;
+    uint32_t key, *keys;
+    void *node, *next;
+    size_t n = 0, i;
 
     if (PRTE_SUCCESS == rc) {
         pmix_asprintf(&out, "rc=ok nranks=%d", num_ranks);
@@ -108,29 +118,37 @@ static char *render(int rc, pmix_pointer_array_t *rankmap, int num_ranks)
         pmix_asprintf(&out, "rc=err%d nranks=%d", PRTE_ERR_BASE - rc, num_ranks);
     }
 
-    for (i = 0; i < rankmap->size; i++) {
-        rfmap = (prte_rankfile_map_t *) pmix_pointer_array_get_item(rankmap, i);
-        if (NULL == rfmap) {
-            continue;
-        }
-        pmix_asprintf(&tmp, "%s | %d:%s/%s", out, i,
+    /* the map is keyed, and a hash table has no order of its own - list the
+     * records by rank so the rendering is the same whatever the table does */
+    keys = (uint32_t *) malloc((pmix_hash_table_get_size(rankmap) + 1) * sizeof(uint32_t));
+    rc = pmix_hash_table_get_first_key_uint32(rankmap, &key, (void **) &rfmap, &node);
+    while (PMIX_SUCCESS == rc) {
+        keys[n++] = key;
+        rc = pmix_hash_table_get_next_key_uint32(rankmap, &key, (void **) &rfmap, node, &next);
+        node = next;
+    }
+    qsort(keys, n, sizeof(uint32_t), cmp_rank);
+
+    for (i = 0; i < n; i++) {
+        pmix_hash_table_get_value_uint32(rankmap, keys[i], (void **) &rfmap);
+        pmix_asprintf(&tmp, "%s | %u:%s/%s", out, keys[i],
                       (NULL == rfmap->node_name) ? "-" : rfmap->node_name,
                       (NULL == rfmap->slot_list) ? "-" : rfmap->slot_list);
         free(out);
         out = tmp;
     }
+    free(keys);
 
     return out;
 }
 
 static int run_case(const corpus_case_t *c, bool regen)
 {
-    pmix_pointer_array_t rankmap;
-    prte_rankfile_map_t *rfmap;
+    pmix_hash_table_t rankmap;
     char path[256];
     char *got;
     FILE *fp;
-    int rc, i, num_ranks = 0, failed = 0;
+    int rc, num_ranks = 0, failed = 0;
 
     snprintf(path, sizeof(path), "prte_rfcorpus_%lu_%p.txt", (unsigned long) getpid(),
              (void *) c);
@@ -145,19 +163,14 @@ static int run_case(const corpus_case_t *c, bool regen)
         fclose(fp);
     }
 
-    PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
-    pmix_pointer_array_init(&rankmap, 8, INT_MAX, 8);
+    PMIX_CONSTRUCT(&rankmap, pmix_hash_table_t);
+    pmix_hash_table_init(&rankmap, 8);
 
     rc = prte_util_parse_rankfile(path, &rankmap, &num_ranks);
     got = render(rc, &rankmap, num_ranks);
 
     /* the map is the caller's, on the failure paths as much as the clean one */
-    for (i = 0; i < rankmap.size; i++) {
-        rfmap = (prte_rankfile_map_t *) pmix_pointer_array_get_item(&rankmap, i);
-        if (NULL != rfmap) {
-            PMIX_RELEASE(rfmap);
-        }
-    }
+    prte_util_rankfile_clear(&rankmap);
     PMIX_DESTRUCT(&rankmap);
     if (NULL != c->body) {
         unlink(path);
@@ -226,6 +239,13 @@ static const corpus_case_t corpus[] = {
     {"a quoted string is refused", "rank 0=\"nodeA\" slot=0\n", "rc=err5 nranks=0"},
     {"a stray character", "rank 0=nodeA $ slot=0\n", "rc=err5 nranks=0"},
     {"a second @", "rank 0=a@b@nodeA slot=0\n", "rc=err5 nranks=0"},
+    {"a user@ with no host", "rank 0=someone@ slot=0\n", "rc=err5 nranks=0"},
+    {"an @ with no user", "rank 0=@nodeA slot=0\n", "rc=err5 nranks=0"},
+    {"a doubled @", "rank 0=someone@@nodeA slot=0\n", "rc=err5 nranks=0"},
+    {"a rank past INT_MAX", "rank 2147483648=nodeA slot=0\n", "rc=err5 nranks=0"},
+    {"a very large rank", "rank 1000000000=nodeA slot=0\n", "rc=ok nranks=1 | 1000000000:nodeA/0"},
+    {"the largest rank", "rank 2147483647=nodeA\n", "rc=ok nranks=1 | 2147483647:nodeA/-"},
+    {"an upper-case relative node spec", "rank 0=+N1 slot=0\n", "rc=ok nranks=1 | 0:+N1/0"},
     {"an over-long slot list",
      "rank 0=nodeA slot=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25\n",
      "rc=ok nranks=1 | 0:nodeA/0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25"},

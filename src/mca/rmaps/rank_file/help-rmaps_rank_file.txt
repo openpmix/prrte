@@ -23,6 +23,15 @@ usage:  %s --map-by rankfile:file=<path> ./app
 #include#prrte#help-placement.txt#placement-rankfiles
 
 #
+[read-error]
+%s could not read the rankfile to its end:
+  Filename: %s
+
+The read stopped after line %d. Nothing in the file was used, because a
+rankfile that was only partly read would place only some of the ranks it
+lists. Check that the file is still readable - on a network file system,
+that the server is reachable - and try again.
+#
 [bad-host]
 The rankfile that was used claimed that a host was either not
 allocated or oversubscribed its slots.  Please review your rank-slot

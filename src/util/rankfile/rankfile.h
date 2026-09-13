@@ -37,8 +37,8 @@
 
 #include "prte_config.h"
 
+#include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_object.h"
-#include "src/class/pmix_pointer_array.h"
 
 BEGIN_C_DECLS
 
@@ -61,9 +61,16 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rankfile_map_t);
 
 /*
  * Read a rankfile into "rankmap", which the caller supplies already
- * constructed and initialized: each line's record is filed at the index of
- * the rank it describes.  "num_ranks" is incremented once per rank the file
- * names, so a caller reusing a map across calls sees the running total.
+ * constructed and initialized: each line's record is filed under the rank
+ * it describes, as a uint32 key.  "num_ranks" is incremented once per rank
+ * the file names, so a caller reusing a map across calls sees the running
+ * total.
+ *
+ * The map is keyed rather than indexed because the ranks a file names need
+ * not be dense, and are not bounded by anything the parser can know: an
+ * array indexed by rank is as large as the largest rank, so a single
+ * "rank 1000000000" line had the head node allocate and zero eight
+ * gigabytes before the mapper ever looked at it.
  *
  * Returns PRTE_SUCCESS, or an error after saying what was wrong with the
  * file through prte_show_help().  On failure the map holds whatever was
@@ -71,8 +78,12 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rankfile_map_t);
  * is what owns it.
  */
 PRTE_EXPORT int prte_util_parse_rankfile(const char *rankfile,
-                                         pmix_pointer_array_t *rankmap,
+                                         pmix_hash_table_t *rankmap,
                                          int *num_ranks);
+
+/* Release every record filed in "rankmap" and leave it empty, still
+ * initialized and ready to be parsed into again. */
+PRTE_EXPORT void prte_util_rankfile_clear(pmix_hash_table_t *rankmap);
 
 END_C_DECLS
 
