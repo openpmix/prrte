@@ -38,7 +38,6 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_net.h"
 #include "src/util/prte_show_help.h"
 #include "src/util/rankfile/rankfile.h"

@@ -86,7 +86,7 @@ on the way, and the `-host` given beside an empty hostfile was never applied.
 
 ## What the goldens are for
 
-`test/unit/util/test_hostfile_corpus.c` pairs 92 hostfile bodies with a
+`test/unit/util/test_hostfile_corpus.c` pairs 94 hostfile bodies with a
 canonical rendering of what parsing each one produces — every field the
 parser can set on a node, plus the return code. It exists because this parser
 was rewritten from a scanner to a line reader, and a rewrite of that size can
@@ -268,7 +268,7 @@ appearing more than once.
   because the record/restore list is a framework global that needs the
   framework opened.
 - `test/unit/util/test_hostfile_corpus.c` is the golden corpus described
-  above — 92 bodies against their parse results. Add a case there for
+  above — 94 bodies against their parse results. Add a case there for
   anything you change.
 - `test/unit/util/test_textfile.c` covers the line reader underneath it:
   where a line ends, where a comment does, and that there is no maximum line
