@@ -209,6 +209,7 @@ static const corpus_case_t corpus[] = {
     {"repeat accumulates slots", CORPUS_ADD, "hostA\nhostA\nhostA\n", "rc=ok | hostA slots=3 max=0 given=1"},
     {"exclusion", CORPUS_ADD, "hostA\nhostB\n^hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
     {"exclusion of a name not present", CORPUS_ADD, "hostA\n^hostZ\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"exclusion carrying a user@", CORPUS_ADD, "hostA\nhostB\n^someone@hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
 
     /* --- comments and whitespace ---------------------------------- */
     {"hash comment", CORPUS_ADD, "# comment\nhostA\n# another\n", "rc=ok | hostA slots=1 max=0 given=0"},
@@ -267,6 +268,10 @@ static const corpus_case_t corpus[] = {
 
     /* --- refusals --------------------------------------------------- */
     {"a second @", CORPUS_ADD, "a@b@hostA\n", "rc=err43"},
+    {"a user@ with no host", CORPUS_ADD, "someone@\n", "rc=err43"},
+    {"an @ with no user", CORPUS_ADD, "@hostA\n", "rc=err43"},
+    {"a doubled @", CORPUS_ADD, "someone@@hostA\n", "rc=err43"},
+    {"a ^ after the @", CORPUS_ADD, "someone@^hostA\n", "rc=err43"},
     {"a non-numeric slot count", CORPUS_ADD, "hostA slots=many\n", "rc=err43"},
     {"a negative slot count", CORPUS_ADD, "hostA slots=-1\n", "rc=err43"},
     {"slots given twice", CORPUS_ADD, "hostA slots=2 slots=4\n", "rc=err43"},
@@ -290,6 +295,7 @@ static const corpus_case_t corpus[] = {
     /* --- ordered-list mode ------------------------------------------ */
     {"ordered keeps duplicates", CORPUS_ORDERED, "hostA\nhostB\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0 | hostA slots=1 max=0 given=0"},
     {"ordered applies exclusion", CORPUS_ORDERED, "hostA\nhostB\nhostA\n^hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
+    {"ordered exclusion carrying a user@", CORPUS_ORDERED, "hostA\nhostB\n^someone@hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
     {"ordered relative by index", CORPUS_ORDERED, "+n0\n", "rc=ok | poolB slots=6 max=0 given=1"},
     {"ordered relative by index, second", CORPUS_ORDERED, "+n1\n", "rc=ok | poolC slots=8 max=0 given=1"},
     {"ordered relative out of range", CORPUS_ORDERED, "+n9\n", "rc=err43 | +n9 slots=0 max=0 given=0"},

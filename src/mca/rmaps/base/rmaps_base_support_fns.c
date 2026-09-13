@@ -67,13 +67,18 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         /* yes - filter the node list through the file, removing
          * any nodes not found in the file
          */
-        if (PRTE_SUCCESS != (rc = prte_util_filter_hostfile_nodes(nodes, hosts, remove))) {
+        rc = prte_util_filter_hostfile_nodes(nodes, hosts, remove);
+        if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
+            /* the hostfile was empty and filtered nothing - which is no
+             * reason to skip a -host given alongside it.  Returning here
+             * dropped the -host entirely, and logged a PRTE ERROR for a
+             * code that is not one on the way out. */
+        } else if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
             return rc;
-        }
-        /** check that anything is here */
-        if (0 == pmix_list_get_size(nodes)) {
+        } else if (0 == pmix_list_get_size(nodes)) {
+            /** check that anything is here */
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-hostfile", hosts);
             free(hosts);
