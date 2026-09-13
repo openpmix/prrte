@@ -1066,6 +1066,116 @@ static int test_hostfile(void)
     }
     PMIX_LIST_DESTRUCT(&nodes);
 
+    /*
+     * A hostfile that only excludes still says something.  It used to name
+     * nothing positively, so the filter took it for an empty file and
+     * returned "take next option" - the job was mapped across every node,
+     * the excluded ones included, and the excluded nodes were leaked.
+     */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    if (PRTE_SUCCESS == rc) {
+        char filterpath[256];
+
+        if (NULL != write_hostfile("^hostB\n", filterpath, sizeof(filterpath))) {
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            CHECK("an exclusion-only hostfile filters", PRTE_SUCCESS == rc);
+            CHECK("...leaving every node it did not exclude",
+                  2 == pmix_list_get_size(&nodes) && NULL != find_node(&nodes, "hostA")
+                      && NULL != find_node(&nodes, "hostC"));
+            CHECK("...and not the one it did", NULL == find_node(&nodes, "hostB"));
+            unlink(filterpath);
+        }
+    }
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* marking for a daemon (remove == false) honors the exclusion too */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    if (PRTE_SUCCESS == rc) {
+        char filterpath[256];
+
+        if (NULL != write_hostfile("^hostB\n", filterpath, sizeof(filterpath))) {
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, false);
+            CHECK("an exclusion-only hostfile marks", PRTE_SUCCESS == rc);
+            nd = find_node(&nodes, "hostA");
+            CHECK("...the nodes it did not exclude",
+                  NULL != nd && PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_MAPPED));
+            nd = find_node(&nodes, "hostB");
+            CHECK("...and not the one it did",
+                  NULL != nd && !PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_MAPPED));
+            unlink(filterpath);
+        }
+    }
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /*
+     * A node named by position that the job cannot have is refused, as one
+     * named outright is.  It used to be skipped without a word, so "+n0"
+     * and "+n1" selected one node when the other was not on the list.
+     * prte_hnp_is_allocated is false here, so "+n<K>" is pool slot K+1.
+     */
+    {
+        prte_node_t *pool[3];
+        static const char *poolnames[3] = {"poolHNP", "poolX", "poolY"};
+        char filterpath[256];
+        int j;
+
+        for (j = 0; j < 3; j++) {
+            pool[j] = PMIX_NEW(prte_node_t);
+            pool[j]->name = strdup(poolnames[j]);
+            pool[j]->slots = 4;
+            pool[j]->index = pmix_pointer_array_add(prte_node_pool, pool[j]);
+        }
+        if (NULL != write_hostfile("+n0\n+n1\n", filterpath, sizeof(filterpath))) {
+            /* the job's list holds poolX only */
+            PMIX_CONSTRUCT(&nodes, pmix_list_t);
+            PMIX_RETAIN(pool[1]);
+            pmix_list_append(&nodes, &pool[1]->super);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            CHECK("a relative node the job does not have is refused", PRTE_ERR_SILENT == rc);
+            PMIX_LIST_DESTRUCT(&nodes);
+            unlink(filterpath);
+        }
+        if (NULL != write_hostfile("+n0\n", filterpath, sizeof(filterpath))) {
+            PMIX_CONSTRUCT(&nodes, pmix_list_t);
+            PMIX_RETAIN(pool[1]);
+            pmix_list_append(&nodes, &pool[1]->super);
+            PMIX_RETAIN(pool[2]);
+            pmix_list_append(&nodes, &pool[2]->super);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            CHECK("a relative node the job has is selected",
+                  PRTE_SUCCESS == rc && 1 == pmix_list_get_size(&nodes)
+                      && NULL != find_node(&nodes, "poolX"));
+            PMIX_LIST_DESTRUCT(&nodes);
+            unlink(filterpath);
+        }
+        for (j = 0; j < 3; j++) {
+            pmix_pointer_array_set_item(prte_node_pool, pool[j]->index, NULL);
+            PMIX_RELEASE(pool[j]);
+        }
+    }
+
+    /*
+     * The default hostfile, asked for by name and not there, is reported
+     * through show_help - so it must come back silent, or the allocator
+     * logs "PRTE ERROR: Not found" against its own source on top of it.
+     */
+    {
+        char *saved_default = prte_default_hostfile;
+        bool saved_given = prte_default_hostfile_given;
+
+        prte_default_hostfile = "prte-no-such-default-hostfile";
+        prte_default_hostfile_given = true;
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        rc = prte_util_add_hostfile_nodes(&nodes, prte_default_hostfile);
+        CHECK("a missing default hostfile asked for by name is refused silently",
+              PRTE_ERR_SILENT == rc);
+        PMIX_LIST_DESTRUCT(&nodes);
+        prte_default_hostfile = saved_default;
+        prte_default_hostfile_given = saved_given;
+    }
+
     /* a hostfile naming a host the allocation does not have is refused */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     rc = prte_util_add_hostfile_nodes(&nodes, path);
