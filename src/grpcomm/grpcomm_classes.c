@@ -195,8 +195,7 @@ static void gccon(prte_grpcomm_group_t *p)
     p->ndeparted = 0;
     p->grpinfo = PMIx_Info_list_start();
     p->endpts = PMIx_Info_list_start();
-    p->cbfunc = NULL;
-    p->cbdata = NULL;
+    PMIX_CONSTRUCT(&p->pending, pmix_list_t);
 }
 static void gcdes(prte_grpcomm_group_t *p)
 {
@@ -219,10 +218,26 @@ static void gcdes(prte_grpcomm_group_t *p)
     if (NULL != p->dmns) {
         free(p->dmns);
     }
+    /* Anything still here is a completion nobody drove, which means the
+     * client behind it is still blocked. Every path that finishes a
+     * collective empties this list by invoking each entry; a tracker torn
+     * down with entries left is a bug upstream of here, not something this
+     * destructor can repair - it has no status to report and no ordering
+     * guarantee about when it runs. */
+    PMIX_LIST_DESTRUCT(&p->pending);
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_group_t,
                     pmix_list_item_t,
                     gccon, gcdes);
+
+static void pendcon(prte_grpcomm_grp_pending_t *p)
+{
+    p->cbfunc = NULL;
+    p->cbdata = NULL;
+}
+PMIX_CLASS_INSTANCE(prte_grpcomm_grp_pending_t,
+                    pmix_list_item_t,
+                    pendcon, NULL);
 
 static void memocon(prte_grpcomm_group_memo_t *p)
 {

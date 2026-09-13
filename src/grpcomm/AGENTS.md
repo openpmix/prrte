@@ -1018,11 +1018,29 @@ client if the handler bails out: a silent `return` leaves it blocked in
 `PMIx_Group_construct` with no collective in flight to release it. Every
 failure therefore leaves by the `error:` label. That label does two things
 and both are load-bearing — it invokes `cd->cbfunc` with the reason, and it
-first clears `coll->cbfunc`/`coll->cbdata`, because the tracker itself
-*stays* (a release from the controller, which can still abort the
+first takes this call's entry off `coll->pending`, because the tracker
+itself *stays* (a release from the controller, which can still abort the
 operation, has to find it) and a release arriving later would otherwise
 complete the same client a second time with the same `cbdata`. This is the
 same rule the fence entry point follows — see *Retire before you deliver*.
+
+**Only this call's entry comes off, and that is why it is a list.** The
+group tracker is keyed on `{groupID, op}`, and a bootstrap group produces
+**one PMIx up-call per participating proc** — its leaders and its
+add-members all name the same group — so several completions can be queued
+on one tracker at once. `coll` used to hold a single `cbfunc`/`cbdata`
+pair, which got both halves of this wrong: each new participant *overwrote*
+the previous one's callback, and this error label cleared *everyone's*.
+`pmix_server_grp_fn_t` promises the host will invoke the callback it was
+given, with the cbdata it was given, once per call, so a dropped one is a
+completion PRRTE took ownership of and never discharged — the PMIx block
+behind it is never released. PMIx covers for the *participants* (its
+`_grpcbfunc` answers every block sharing the group id off whichever
+completion does arrive, precisely because this host answers once), but it
+cannot free a block whose completion never comes, so those leak for the
+life of the server. Hence `prte_grpcomm_grp_pending_t` and
+`coll->pending`: append on the way in, walk and invoke the whole list on
+completion, remove only your own on the error label.
 
 **A controller that cannot build the release must abort, not return.** By
 the time `check_complete()` starts packing, `converged` is latched, so
@@ -1173,8 +1191,9 @@ previous one of that name is over.
   outlives it (a signature, a tracker) has to hold a copy. Both halves of
   that rule have been broken historically.
 - **Every entry-point handler owns its caddy/op — release it on *all*
-  paths.** The tracker caches only `cbfunc`/`cbdata`, never the caddy, so
-  the handler is the last owner. Historic leaks here — `begin_xcast` never
+  paths.** The tracker caches only the completion (`cbfunc`/`cbdata`, on
+  `coll->pending` for a group), never the caddy, so the handler is the last
+  owner. Historic leaks here — `begin_xcast` never
   releasing the initiating `op_t`, the `group()` success returns never
   releasing `cd`, `fence_recv` never freeing its unpacked `info` — were all
   "return added, free forgotten" mistakes. Trace each new `return` back to

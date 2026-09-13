@@ -482,12 +482,29 @@ typedef struct {
     size_t ndeparted;
     void *grpinfo;  // info list of group info
     void *endpts;   // info list of endpts
-    /* callback function */
-    pmix_info_cbfunc_t cbfunc;
-    /* user-provided callback data */
-    void *cbdata;
+    /* Every completion this tracker still owes, one per up-call the PMIx
+     * server made for it - see prte_grpcomm_grp_pending_t. A single pair
+     * here was wrong: get_tracker() keys on {groupID, op}, and a bootstrap
+     * group produces one up-call per participating proc, so each new
+     * participant overwrote the previous one's callback and every client
+     * but the last was left blocked in PMIx_Group_construct. */
+    pmix_list_t pending;
 } prte_grpcomm_group_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_group_t);
+
+/* One completion owed to the PMIx server library.
+ *
+ * pmix_server_grp_fn_t promises the host will invoke the callback it was
+ * given, with the cbdata it was given, exactly once per call. Several calls
+ * can land on one tracker (a bootstrap group's leaders and followers all
+ * name the same {groupID, op}), so the tracker holds a list of them rather
+ * than a single pair, and completion walks the whole list. */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_info_cbfunc_t cbfunc;
+    void *cbdata;
+} prte_grpcomm_grp_pending_t;
+PMIX_CLASS_DECLARATION(prte_grpcomm_grp_pending_t);
 
 typedef struct {
     pmix_object_t super;
