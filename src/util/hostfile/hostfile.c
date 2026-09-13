@@ -150,48 +150,6 @@ static bool valid_nodename(const char *s)
     return true;
 }
 
-/*
- * "+n<N>" names a node by its position in the pool and "+e", or "+e:<N>",
- * asks for empty ones.  Both letters are taken in either case: the lexer
- * accepted "+E" but only lower-case "+n", so the parser's own test for
- * 'N' could never fire, and there was no reason for the two forms to
- * differ.
- */
-static bool valid_relative(const char *s)
-{
-    size_t i;
-
-    if ('+' != s[0]) {
-        return false;
-    }
-    if ('n' == s[1] || 'N' == s[1]) {
-        if ('\0' == s[2]) {
-            return false;
-        }
-        for (i = 2; '\0' != s[i]; i++) {
-            if (!isdigit((unsigned char) s[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-    if ('e' == s[1] || 'E' == s[1]) {
-        if ('\0' == s[2]) {
-            return true;
-        }
-        if (':' != s[2] || '\0' == s[3]) {
-            return false;
-        }
-        for (i = 3; '\0' != s[i]; i++) {
-            if (!isdigit((unsigned char) s[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-    return false;
-}
-
 /* Read a count. Refuses anything that is not entirely digits, which the
  * lexer did by simply not matching it as a number. */
 static int parse_count(const char *value, int *result)
@@ -206,6 +164,53 @@ static int parse_count(const char *value, int *result)
     }
     *result = (int) v;
     return PRTE_SUCCESS;
+}
+
+/*
+ * "+n<N>" names a node by its position in the pool and "+e", or "+e:<N>",
+ * asks for empty ones.  Both letters are taken in either case: the lexer
+ * accepted "+E" but only lower-case "+n", so the parser's own test for
+ * 'N' could never fire, and there was no reason for the two forms to
+ * differ.
+ */
+static bool valid_relative(const char *s)
+{
+    size_t i;
+    int v;
+
+    if ('+' != s[0]) {
+        return false;
+    }
+    if ('n' == s[1] || 'N' == s[1]) {
+        if ('\0' == s[2]) {
+            return false;
+        }
+        for (i = 2; '\0' != s[i]; i++) {
+            if (!isdigit((unsigned char) s[i])) {
+                return false;
+            }
+        }
+        /* the resolvers read the index into an int and may add one to it
+         * to step over the head node's pool slot */
+        return (PRTE_SUCCESS == parse_count(s + 2, &v) && INT_MAX > v);
+    }
+    if ('e' == s[1] || 'E' == s[1]) {
+        if ('\0' == s[2]) {
+            return true;
+        }
+        if (':' != s[2] || '\0' == s[3]) {
+            return false;
+        }
+        for (i = 3; '\0' != s[i]; i++) {
+            if (!isdigit((unsigned char) s[i])) {
+                return false;
+            }
+        }
+        /* a count too large for an int came back from strtol() truncated,
+         * possibly negative, which asked for no nodes and got none */
+        return (PRTE_SUCCESS == parse_count(s + 3, &v));
+    }
+    return false;
 }
 
 /*
@@ -720,8 +725,6 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     while (NULL != (item2 = pmix_list_remove_first(&newnodes))) {
         node_from_file = (prte_node_t *) item2;
 
-        next = pmix_list_get_next(item2);
-
         /* see if this is a relative node syntax */
         if ('+' == node_from_file->name[0]) {
             /* see if we specified empty nodes */
@@ -730,9 +733,11 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                  * all of them?
                  */
                 if (NULL != (cptr = strchr(node_from_file->name, ':'))) {
-                    /* the colon indicates a specific # are requested */
+                    /* the colon indicates a specific # are requested - and
+                     * says so for this line, whatever an earlier "+e" asked */
                     cptr++; /* step past : */
                     num_empty = strtol(cptr, NULL, 10);
+                    want_all_empty = false;
                 } else {
                     /* want them all - set num_empty to max */
                     num_empty = INT_MAX;
@@ -997,9 +1002,11 @@ int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
              * all of them?
              */
             if (NULL != (cptr = strchr(node->name, ':'))) {
-                /* the colon indicates a specific # are requested */
+                /* the colon indicates a specific # are requested - and
+                 * says so for this line, whatever an earlier "+e" asked */
                 cptr++; /* step past : */
                 num_empty = strtol(cptr, NULL, 10);
+                want_all_empty = false;
             } else {
                 /* want them all - set num_empty to max */
                 num_empty = INT_MAX;

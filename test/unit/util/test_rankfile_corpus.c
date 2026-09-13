@@ -111,6 +111,7 @@ static char *render(int rc, pmix_hash_table_t *rankmap, int num_ranks)
     uint32_t key, *keys;
     void *node, *next;
     size_t n = 0, i;
+    int hrc;
 
     if (PRTE_SUCCESS == rc) {
         pmix_asprintf(&out, "rc=ok nranks=%d", num_ranks);
@@ -121,17 +122,17 @@ static char *render(int rc, pmix_hash_table_t *rankmap, int num_ranks)
     /* the map is keyed, and a hash table has no order of its own - list the
      * records by rank so the rendering is the same whatever the table does */
     keys = (uint32_t *) malloc((pmix_hash_table_get_size(rankmap) + 1) * sizeof(uint32_t));
-    rc = pmix_hash_table_get_first_key_uint32(rankmap, &key, (void **) &rfmap, &node);
-    while (PMIX_SUCCESS == rc) {
+    hrc = pmix_hash_table_get_first_key_uint32(rankmap, &key, (void **) &rfmap, &node);
+    while (PMIX_SUCCESS == hrc) {
         keys[n++] = key;
-        rc = pmix_hash_table_get_next_key_uint32(rankmap, &key, (void **) &rfmap, node, &next);
+        hrc = pmix_hash_table_get_next_key_uint32(rankmap, &key, (void **) &rfmap, node, &next);
         node = next;
     }
     qsort(keys, n, sizeof(uint32_t), cmp_rank);
 
     for (i = 0; i < n; i++) {
         pmix_hash_table_get_value_uint32(rankmap, keys[i], (void **) &rfmap);
-        pmix_asprintf(&tmp, "%s | %u:%s/%s", out, keys[i],
+        pmix_asprintf(&tmp, "%s | %lu:%s/%s", out, (unsigned long) keys[i],
                       (NULL == rfmap->node_name) ? "-" : rfmap->node_name,
                       (NULL == rfmap->slot_list) ? "-" : rfmap->slot_list);
         free(out);
