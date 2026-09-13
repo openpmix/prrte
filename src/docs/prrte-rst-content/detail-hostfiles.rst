@@ -42,8 +42,26 @@ node, written in front of it and separated by a single ``@``:
 
    user01@node01  slots=4
 
-An entry may contain at most one ``@``; a second one is reported as a
-parse error naming the hostfile and the line it is on.
+An entry may contain at most one ``@``, and both the account and the
+node name must be given: a second ``@``, or an ``@`` with nothing on
+one side of it, is reported as a parse error naming the hostfile and
+the line it is on.
+
+A node name written with a leading ``^`` is *excluded* rather than
+used.  The ``^`` goes in front of the whole entry, account included:
+
+.. code:: sh
+
+   node01  slots=4
+   node02  slots=4
+   node03  slots=4
+   ^user01@node02
+
+Where the hostfile also names nodes, an exclusion takes a node back
+out of what it named |mdash| the file above names ``node01`` and
+``node03``.  A hostfile given to a job in a running DVM may consist of
+nothing but exclusions, and then it selects every node of the
+allocation except the ones it excludes.
 
 A "slot" is the PRRTE term for an allocatable unit where we can launch
 a process.  See the section on definition of the term ``slot`` for a

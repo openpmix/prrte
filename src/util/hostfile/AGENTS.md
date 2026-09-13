@@ -18,7 +18,7 @@ hostfile is one node per line, optionally with keyword modifiers.
 |-------------|----------|----------|
 | `prte_util_add_hostfile_nodes()` | building an allocation (`prte --hostfile`, `--add-hostfile`) | Adds every named node to the caller's list, merging duplicates and dropping the excluded ones. |
 | `prte_util_filter_hostfile_nodes()` | selecting for a job (`prun --hostfile`) | Removes from the caller's list every node the hostfile does not name, and caps the ones it keeps (see below). Returns `PRTE_ERR_TAKE_NEXT_OPTION` if the hostfile was empty, and refuses a hostfile naming a node the allocation does not have. |
-| `prte_util_get_ordered_host_list()` | `rmaps/seq`, `rmaps/rank_file` | Keeps duplicates and order: the list *is* the sequence of placements. |
+| `prte_util_get_ordered_host_list()` | nothing in the tree — only the unit tests call it | Keeps duplicates and order: the list *is* the sequence of placements. `rmaps/seq` reads its sequence file with its own reader, and `rmaps/rank_file` uses the rankfile parser. |
 
 There is no lexer any more. `prte_textfile_next()` hands back one logical
 line, already stripped of comments and split into fields with `=` always a
@@ -42,6 +42,7 @@ hostname slots=4 max_slots=8             also slots-max=, max-slots=, cpu_max=
 user@hostname                            username recorded as PRTE_NODE_USERNAME
 hostname port=2222                       ssh port
 ^hostname                                EXCLUDE this node
+^user@hostname                           also EXCLUDE: the "^" leads the whole entry
 192.168.1.10   /  fe80::1                IPv4 and IPv6, with or without user@
 +n3                                      relative: the 3rd node of the allocation
 +e   /  +e:2                             relative: all / N currently-empty nodes
@@ -58,9 +59,34 @@ simply never saw one. `valid_nodename()` now takes a leading `^` on any name,
 with or without a `user@`, which is the shape that regex could not express in
 one rule. Keep the swarm case that reads a hostfile with a `^` line.
 
+**Take the `^` off the entry before the user is split away.** The parser
+used to look for it on the node name after the split, which found it only
+when there was no user: `^someone@hostA` gave the user the name `^someone`,
+and — since hostA was already on the list — counted it as one more slot of
+a node to use. The exclusion that was asked for became an addition. `user@^host`
+is not a spelling of this and is refused, as the scanner refused it.
+
+## An exclusion-only hostfile is a selection, not an empty file
+
+`prte_util_filter_hostfile_nodes()` answers `PRTE_ERR_TAKE_NEXT_OPTION` for
+a hostfile that names nothing, and its caller treats that as "no filter". A
+file of nothing but `^host` lines also names nothing positively, and used to
+get the same answer — so `prun --hostfile` with `^nodeA` in it mapped the job
+across every node, `nodeA` included, and leaked the exclude list. It now
+selects every node on the caller's list except the excluded ones (with
+`remove`, the others are released; without, the survivors are marked
+`PRTE_NODE_FLAG_MAPPED`). Where a file names nodes *and* excludes some, an
+exclusion only takes a node back out of what the file named — which is why
+the two cases are handled apart.
+
+`PRTE_ERR_TAKE_NEXT_OPTION` is therefore only "the file was empty", and
+`prte_rmaps_base_filter_nodes()` must go on to the `-host` filter when it
+gets one. It used to return it straight away, logging it as a `PRTE ERROR`
+on the way, and the `-host` given beside an empty hostfile was never applied.
+
 ## What the goldens are for
 
-`test/unit/util/test_hostfile_corpus.c` pairs 86 hostfile bodies with a
+`test/unit/util/test_hostfile_corpus.c` pairs 92 hostfile bodies with a
 canonical rendering of what parsing each one produces — every field the
 parser can set on a node, plus the return code. It exists because this parser
 was rewritten from a scanner to a line reader, and a rewrite of that size can
@@ -79,13 +105,16 @@ A hostfile is user input, and every way of getting it wrong has to come back
 as a `prte_show_help()` message out of `help-hostfile.txt` carrying
 `cur_hostfile_name` and `cur_hostfile_line`. Two failures did not:
 
-- A value with more than one `@` — `hostfile_parse_username()` takes one
-  field as a hostname and two as `user@hostname`, and anything else is a
-  typo. It used to print `WARNING: Unhandled user@host-combination` through
-  `pmix_output` at two sites (the plain host entry and the `rank N=<host>`
-  form), naming neither the file nor the line, and it is the failure a user
-  is most likely to reach by typo. Both sites now go through the one helper
-  and the `user-host` topic.
+- A value that is neither `host` nor `user@host` — a second `@`, or an `@`
+  with nothing before or after it. It used to print `WARNING: Unhandled
+  user@host-combination` through `pmix_output` at two sites (the plain host
+  entry and the `rank N=<host>` form), naming neither the file nor the line,
+  and it is the failure a user is most likely to reach by typo. Both sites
+  now go through `hostfile_parse_username()` and the `user-host` topic.
+  That helper finds the `@` itself: `PMIx_Argv_split()` drops empty fields,
+  so while it was used `someone@` was a node named `someone` — added to the
+  allocation for a launcher to try to reach — and `@hostA` and
+  `someone@@hostA` were accepted as `hostA`.
 - A `rank N` whose `=` never arrives. The loop that skips to the `=` runs to
   the end of the file, and the `done` arm returned a bare error with no
   message at all.
@@ -96,7 +125,15 @@ drops `PRTE_ERR_SILENT` and prints everything else, and the callers
 (`prte_ras_base_allocate`, `prte_rmaps_base_filter_nodes`) log whatever they
 are handed — so a `PRTE_ERROR` return put `PRTE ERROR: Error in file
 ras_base_allocate.c at line 408` above the user's own diagnostic, pointing
-at our source for their typo.
+at our source for their typo. The default hostfile, asked for by name and
+missing, returned `PRTE_ERR_NOT_FOUND` after its message for the same
+effect; it is silent now too.
+
+A read that fails part way is refused the same way (`read-error`), not taken
+for the end of the file: `prte_textfile_next()` returns NULL for both, and
+`hostfile_parse()` checks `tf.failed` after its loop. A hostfile on a network
+file system that stopped answering was otherwise an allocation of the nodes
+that happened to arrive.
 
 ---
 
@@ -163,6 +200,11 @@ All three places that resolve `+n<K>` — here, `prte_util_get_ordered_host_list
 and dash-host's `parse_dash_host()` — must make the same adjustment, or the
 same index means a different node depending on which one the user typed it at.
 
+In the filter, a `+n<K>` whose node is not on the caller's list is refused
+with `hostfile:extra-node-not-found`, exactly as a node named outright is.
+It used to be skipped without a word, so a file of `+n1` and `+n2` mapped a
+job onto one node when the other was not available to it.
+
 ---
 
 ## A `slots=` that selects is a cap on the *job*, and it must be given back
@@ -202,6 +244,12 @@ Every early return therefore has to either restore or release that list —
 those are the **caller's** nodes, and dropping them on the floor leaks node
 objects. Route every exit through the single `cleanup:` label.
 
+A list of nodes is torn down with `PMIX_LIST_DESTRUCT`, never
+`PMIX_DESTRUCT`: the plain destructor releases none of the items. The filter
+used the plain one on its parse-failure and empty-file returns, which leaked
+every node read before a bad line, once per job; so did the ordered list's
+exclude list on its error paths.
+
 The same applies to walking a list while removing from it: save the successor
 *before* releasing the item. The exclusion pass in
 `prte_util_get_ordered_host_list()` kept iterating from the item it had just
@@ -214,12 +262,13 @@ appearing more than once.
 
 - `test/unit/rmaps/test_resize.c` (`test_hostfile_cap`) covers the section
   above: that the cap applies and is recorded when selecting for a map, that
-  it is restored, that VM-setup marking leaves the node alone, and that a
-  count *larger* than the node changes nothing. It lives under `rmaps`
+  it is restored, that VM-setup marking leaves the node alone, that a
+  count *larger* than the node changes nothing, and that an empty hostfile
+  does not stop a `-host` beside it from filtering. It lives under `rmaps`
   because the record/restore list is a framework global that needs the
   framework opened.
 - `test/unit/util/test_hostfile_corpus.c` is the golden corpus described
-  above — 86 bodies against their parse results. Add a case there for
+  above — 92 bodies against their parse results. Add a case there for
   anything you change.
 - `test/unit/util/test_textfile.c` covers the line reader underneath it:
   where a line ends, where a comment does, and that there is no maximum line
@@ -228,7 +277,9 @@ appearing more than once.
   slot counts, `max_slots`, comments, the `^` exclusion (including a duplicated
   excluded name), a `user@host` entry and the refusal of a second `@` in both
   the plain and the `rank N=` form, a `rank` entry with no host, a malformed
-  file, and a good file parsed straight after a failed one.
+  file, a good file parsed straight after a failed one, an exclusion-only
+  filter both selecting and marking, and a missing default hostfile
+  refused silently.
 - `contrib/dockerswarm/run-tests.sh` `test_util` covers what a single node
   cannot: that a `^host` line removes *that* machine and no other, and that a
   failed parse does not poison the next one across a real launch.
