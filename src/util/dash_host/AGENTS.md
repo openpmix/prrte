@@ -18,7 +18,7 @@ four entry points:
 |-------------|----------|----------|
 | `prte_util_add_dash_host_nodes()` | building an allocation | Adds the named nodes to the caller's list, merging duplicates. Relative tokens are **ignored** here: they select from an allocation and cannot contribute to one. |
 | `prte_util_filter_dash_host_nodes()` | selecting for a job | Removes from the caller's list every node the specification does not name, in the order the user gave, and reports by name any host the allocation does not have. |
-| `prte_util_get_ordered_dash_host_list()` | `rmaps/seq`, `rmaps/rank_file` | Keeps order and duplicates: the list *is* the sequence. |
+| `prte_util_get_ordered_dash_host_list()` | `rmaps/seq` | Keeps order and duplicates: the list *is* the sequence. |
 | `prte_util_dash_host_compute_slots()` | the mapper | How many slots one node contributes under this specification. |
 
 ---
