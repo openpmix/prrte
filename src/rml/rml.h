@@ -495,6 +495,15 @@ PRTE_EXPORT void prte_rml_send_callback(int status, pmix_proc_t *peer,
                                         prte_rml_tag_t tag, void *cbdata);
 PRTE_EXPORT void prte_rml_compute_routing_tree(void);
 PRTE_EXPORT void prte_rml_update_ancestors(pmix_data_array_t* ancestors);
+/* Resize a PMIX_PROC_RANK data array, keeping the entries that still fit and
+ * filling any new slots with PMIX_RANK_INVALID. */
+PRTE_EXPORT void prte_rml_resize_ranks(pmix_data_array_t* arr, size_t size);
+/* Drop every trailing PMIX_RANK_INVALID, leaving the valid entries at the
+ * indices they had.  An array built by filling slots of a pre-sized one is
+ * trimmed with this before it is packed, so the one implementation is the one
+ * everybody's arrays are trimmed by - a second copy of it once drifted into
+ * stopping half way, and put PMIX_RANK_INVALID into failure notices. */
+PRTE_EXPORT void prte_rml_shrink_ranks(pmix_data_array_t* arr);
 /* Reconcile a peer's report of THIS daemon's ancestor list (root first, not
  * including us) against prte_rml_base.ancestors.  Both notices that reshape the
  * tree carry such a list - the adoption notice a parent sends down, and the

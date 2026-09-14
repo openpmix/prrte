@@ -1532,6 +1532,62 @@ static int test_release_tree(void)
     return failures;
 }
 
+/* Trimming a rank array drops EVERY trailing PMIX_RANK_INVALID.
+ *
+ * A failure notice's rank list is built by filling slots of a pre-sized array
+ * - one per candidate, only the ones in the sender's subtree written - and
+ * trimmed before it is packed.  rml_fault_handler.c used to trim with its own
+ * copy of the helper, which bounded its loop on the very count it was
+ * decrementing and so gave up about half way through a run of trailing
+ * INVALIDs.  Two failures reported to a daemon neither was below left [INVALID]
+ * in the notice it sent its parent, which took it for a death it had never
+ * heard of and ran a whole recovery pass over it.  The copy is gone; this pins
+ * the one that is left, at the lengths the copy got wrong.
+ */
+static int test_shrink_ranks(void)
+{
+    int failures = 0;
+    pmix_data_array_t arr = PMIX_DATA_ARRAY_STATIC_INIT;
+    pmix_rank_t *r;
+
+    /* nothing valid at all, at every length up to a few */
+    for (size_t n = 1; n <= 5; n++) {
+        prte_rml_resize_ranks(&arr, n);
+        prte_rml_shrink_ranks(&arr);
+        CHECK("an all-INVALID array trims to nothing", 0 == arr.size);
+    }
+
+    /* one valid entry, then a long invalid tail */
+    prte_rml_resize_ranks(&arr, 4);
+    r = (pmix_rank_t *) arr.array;
+    r[0] = 5;
+    prte_rml_shrink_ranks(&arr);
+    CHECK("[5, INV, INV, INV] trims to [5]",
+          1 == arr.size && 5 == ((pmix_rank_t *) arr.array)[0]);
+
+    /* an interior INVALID is kept - only the tail goes */
+    prte_rml_resize_ranks(&arr, 5);
+    r = (pmix_rank_t *) arr.array;
+    r[0] = 1;
+    r[1] = PMIX_RANK_INVALID;
+    r[2] = 3;
+    prte_rml_shrink_ranks(&arr);
+    r = (pmix_rank_t *) arr.array;
+    CHECK("an interior INVALID stays where it is",
+          3 == arr.size && 1 == r[0] && PMIX_RANK_INVALID == r[1] && 3 == r[2]);
+
+    /* already minimal: untouched */
+    prte_rml_shrink_ranks(&arr);
+    CHECK("a trimmed array trims no further", 3 == arr.size);
+
+    PMIx_Data_array_destruct(&arr);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_shrink_ranks\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1552,6 +1608,7 @@ int main(void)
     failures += test_departed_ranks_survive_recompute();
     failures += test_global_failures_survive_recompute();
     failures += test_reconcile_ancestry();
+    failures += test_shrink_ranks();
     failures += test_dead_dmns_round_trip();
     failures += test_num_contributors();
     failures += test_lateral_links();
