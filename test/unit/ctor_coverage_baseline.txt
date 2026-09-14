@@ -42,7 +42,6 @@ src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_op_t.peer
 src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.name
 src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.recv_event
 src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.send_event
-src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_t.timer_event
 src/rml/oob/oob_tcp_sendrecv.c prte_oob_tcp_send_t.activate
 src/rml/oob/oob_tcp_sendrecv.c prte_oob_tcp_send_t.peer
 src/rml/relm/types.c prte_relm_msg_t.eviction_ev

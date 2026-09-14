@@ -50,11 +50,17 @@ typedef struct {
 } prte_oob_tcp_conn_op_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
 
+/* PMIx's src/mca/ptl/ptl_types.h defines this too, and every file here
+ * reaches that header first, so it is PMIx's definition that is used.  Keep
+ * this one identical to it: callers rely on the variable being left at -1. */
 #ifndef CLOSE_THE_SOCKET
-#define CLOSE_THE_SOCKET(socket) \
-    do {                         \
-        shutdown(socket, 2);     \
-        close(socket);           \
+#define CLOSE_THE_SOCKET(s)   \
+    do {                      \
+        if (0 <= (s)) {       \
+            shutdown((s), 2); \
+            close((s));       \
+            (s) = -1;         \
+        }                     \
     } while (0)
 #endif
 
