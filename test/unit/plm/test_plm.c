@@ -63,6 +63,7 @@
 #include "src/util/proc_info.h"
 
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/state/state.h"
 
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -979,6 +980,60 @@ done:
     return failures;
 }
 
+/*
+ * The job's RUNNING and REGISTERED transitions are counted up from per-proc
+ * reports, and nothing makes those reports arrive before the procs finish.
+ * A short job whose launch report was held up - the spawn thread stuck in a
+ * PMIx call while the proc ran and exited - reaches TERMINATED first, and
+ * the late RUNNING then overwrote it.  The termination still in progress
+ * (check_complete resumes only after PMIx deregisters the namespace) then
+ * found the job "alive", took the path for a DVM with other work left, and
+ * a prterun never exited.  The handlers must never move a job back out of
+ * termination - and must still move a live one forward.
+ */
+static void run_job_state(void (*handler)(int, short, void *), prte_job_t *jdata,
+                          prte_job_state_t state)
+{
+    prte_state_caddy_t *caddy = PMIX_NEW(prte_state_caddy_t);
+
+    PMIX_RETAIN(jdata);
+    caddy->jdata = jdata;
+    caddy->job_state = state;
+    handler(-1, 0, caddy);
+}
+
+static int test_late_report_keeps_termination(void)
+{
+    int failures = 0;
+    prte_job_t *jdata = PMIX_NEW(prte_job_t);
+
+    PMIX_LOAD_NSPACE(jdata->nspace, "plm-test-late-report");
+
+    jdata->state = PRTE_JOB_STATE_SEND_LAUNCH_MSG;
+    run_job_state(prte_plm_base_post_launch, jdata, PRTE_JOB_STATE_RUNNING);
+    CHECK("a launching job goes RUNNING", PRTE_JOB_STATE_RUNNING == jdata->state);
+    run_job_state(prte_plm_base_registered, jdata, PRTE_JOB_STATE_REGISTERED);
+    CHECK("a running job goes REGISTERED", PRTE_JOB_STATE_REGISTERED == jdata->state);
+
+    jdata->state = PRTE_JOB_STATE_TERMINATED;
+    run_job_state(prte_plm_base_post_launch, jdata, PRTE_JOB_STATE_RUNNING);
+    CHECK("a late RUNNING leaves a terminated job TERMINATED",
+          PRTE_JOB_STATE_TERMINATED == jdata->state);
+    run_job_state(prte_plm_base_registered, jdata, PRTE_JOB_STATE_REGISTERED);
+    CHECK("a late REGISTERED leaves it TERMINATED", PRTE_JOB_STATE_TERMINATED == jdata->state);
+
+    /* nor may it clear a diagnosis */
+    jdata->state = PRTE_JOB_STATE_ABORTED;
+    run_job_state(prte_plm_base_post_launch, jdata, PRTE_JOB_STATE_RUNNING);
+    CHECK("a late RUNNING leaves an aborted job ABORTED", PRTE_JOB_STATE_ABORTED == jdata->state);
+
+    PMIX_RELEASE(jdata);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_late_report_keeps_termination\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1017,6 +1072,7 @@ int main(void)
     failures += test_append_basic_args();
     failures += test_naming();
     failures += test_state_update_wire();
+    failures += test_late_report_keeps_termination();
     /* leaves the global job/node pools populated, so run it last */
     failures += test_setup_vm();
 

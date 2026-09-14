@@ -211,6 +211,15 @@ not interchangeable:
 `PRTE_JOB_SPAWN_NOTIFIED` makes the whole thing single-shot on both the
 local and the relayed path.
 
+That single-shot matters because a short job can be answered twice over:
+`state/dvm`'s `check_complete` responds when the job ends, and a launch
+report that arrived late still drives `prte_plm_base_post_launch` for a job
+that has already terminated. `post_launch` (and `prte_plm_base_registered`)
+must therefore not write the job's state once it has reached
+`PRTE_JOB_STATE_UNTERMINATED` - see "A job's state must never go backwards"
+in [`../../state/AGENTS.md`](../../state/AGENTS.md). `test_plm`'s
+`test_late_report_keeps_termination` pins it.
+
 ---
 
 ## The `UPDATE_PROC_STATE` writers live here on purpose

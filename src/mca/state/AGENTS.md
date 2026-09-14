@@ -547,6 +547,22 @@ contention — the process's role decides which machine it runs.
   it was found through hwloc's `memory not bound` warning, which adds a pipe
   record and a `show_help` render to `do_parent` before the `RUNNING`
   activation.
+- **A job's state must never go backwards either.** The job-level `RUNNING`
+  and `REGISTERED` are counted up from per-proc reports, so they inherit the
+  same disorder: a proc can exit, and the job reach `TERMINATED`, while its
+  launch report is still held up (on the DVM master the spawn thread can sit
+  in a PMIx call - a stalled PMIx progress thread is enough). `track_procs`
+  then counts the late `RUNNING` and activates the job `RUNNING`, and
+  `prte_plm_base_post_launch` used to write that over `TERMINATED`.
+  `state/dvm`'s `check_complete` finishes asynchronously, after PMIx
+  deregisters the namespace, and its continuation decides whether anything
+  is still alive by testing `state < TERMINATED` - it found the job itself,
+  took the "other work remains" path, and a `prterun` never exited. So the
+  handlers that write a job's forward states (`post_launch`, `registered` in
+  `plm/base`) leave a job at or past `PRTE_JOB_STATE_UNTERMINATED` alone. Do
+  not "fix" this at the activation instead: the job's state is written only
+  when a handler runs, so at activation time the termination may still be
+  queued behind it.
 - **Never do real work in the activator.** Activation only queues an
   event; the handler runs later on the progress thread. Don't assume the
   handler has run when `PRTE_ACTIVATE_*_STATE` returns, and don't read
