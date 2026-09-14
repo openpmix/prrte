@@ -159,7 +159,7 @@ int main(int argc, char **argv)
         pmix_proc_t peer;
         pmix_value_t *got = NULL;
         uint32_t universe = 0, r;
-        int found = 0, missing = 0;
+        int found = 0, missing = 0, miss1st = 0, miss2nd = 0;
         pmix_status_t rc1st, rc2nd;
 
         PMIX_LOAD_PROCID(&peer, me.nspace, PMIX_RANK_WILDCARD);
@@ -195,10 +195,12 @@ int main(int argc, char **argv)
                     found++;
                 } else {
                     missing++;
+                    miss1st++;
                 }
                 PMIX_VALUE_RELEASE(got);
             } else {
                 missing++;
+                miss1st++;
             }
             if (!twice) {
                 continue;
@@ -228,14 +230,21 @@ int main(int argc, char **argv)
                     found++;
                 } else {
                     missing++;
+                    miss2nd++;
                 }
                 PMIX_VALUE_RELEASE(got);
             } else {
                 missing++;
+                miss2nd++;
             }
         }
-        printf("FENCER modex rank %u peers-ok %d peers-bad %d of %u\n",
-               me.rank, found, missing, universe ? universe - 1 : 0);
+        /* The two keys are counted together, so say which one went missing
+         * as well: "peers-bad 3" after a second fence reads the same whether
+         * the round-two keys were lost or the round-one keys were, and those
+         * are opposite failures - the first is the straggler this client was
+         * written to catch, the second is data a failed round never sent. */
+        printf("FENCER modex rank %u peers-ok %d peers-bad %d of %u (first-bad %d second-bad %d)\n",
+               me.rank, found, missing, universe ? universe - 1 : 0, miss1st, miss2nd);
         if (0 != missing) {
             rc = PMIX_ERROR;
         }
