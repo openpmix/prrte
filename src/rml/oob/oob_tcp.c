@@ -658,12 +658,30 @@ static void recv_handler(int sd, short flags, void *user);
  */
 void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *addr)
 {
+    int flags;
+
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s accept_connection: %s:%d\n", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         pmix_net_get_hostname(addr), pmix_net_get_port(addr));
 
     /* setup socket options */
     prte_oob_tcp_set_socket_options(accepted_fd);
+
+    /* The handshake is read as its bytes arrive, which only works on a
+     * socket that says so when it has none - and an accepted socket need not
+     * inherit the listener's non-blocking flag (on Linux it never does).  A
+     * blocking one would park the progress thread in recv() until the far end
+     * sent the rest, which anything able to reach the port could simply never
+     * do.  So a socket that cannot be made non-blocking is not used at all. */
+    flags = fcntl(accepted_fd, F_GETFL, 0);
+    if (0 > flags || 0 > fcntl(accepted_fd, F_SETFL, flags | O_NONBLOCK)) {
+        pmix_output(0, "%s accept_connection: unable to make socket %d non-blocking: %s (%d)",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), accepted_fd,
+                    strerror(prte_socket_errno), prte_socket_errno);
+        shutdown(accepted_fd, 2);
+        close(accepted_fd);
+        return;
+    }
 
     /* use a one-time event to wait for receipt of peer's
      *  process ident message to complete this connection
@@ -681,9 +699,9 @@ void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *ad
 static void recv_handler(int sd, short flg, void *cbdata)
 {
     prte_oob_tcp_conn_op_t *op = (prte_oob_tcp_conn_op_t *) cbdata;
-    int flags;
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
+    int rc;
     PRTE_HIDE_UNUSED_PARAMS(flg);
 
     PMIX_ACQUIRE_OBJECT(op);
@@ -692,7 +710,15 @@ static void recv_handler(int sd, short flg, void *cbdata)
                         "%s:tcp:recv:handler called", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* get the handshake */
-    if (PRTE_SUCCESS != prte_oob_tcp_peer_recv_connect_ack(NULL, sd, &hdr)) {
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sd, &op->hshake, &hdr);
+    if (PRTE_ERR_WOULD_BLOCK == rc) {
+        /* the rest of it has not arrived - the op holds what has, so wait
+         * for the socket to become readable again */
+        PMIX_POST_OBJECT(op);
+        prte_event_add(&op->ev, 0);
+        return;
+    }
+    if (PRTE_SUCCESS != rc) {
         goto cleanup;
     }
 
@@ -707,31 +733,30 @@ static void recv_handler(int sd, short flg, void *cbdata)
             /* should never happen */
             goto cleanup;
         }
-        /* set socket up to be non-blocking */
-        if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-            pmix_output(0, "%s prte_oob_tcp_recv_connect: fcntl(F_GETFL) failed: %s (%d)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), strerror(prte_socket_errno),
-                        prte_socket_errno);
-        } else {
-            flags |= O_NONBLOCK;
-            if (fcntl(sd, F_SETFL, flags) < 0) {
-                pmix_output(0, "%s prte_oob_tcp_recv_connect: fcntl(F_SETFL) failed: %s (%d)",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), strerror(prte_socket_errno),
-                            prte_socket_errno);
-            }
-        }
-        /* is the peer instance willing to accept this connection */
-        peer->sd = sd;
-        if (prte_oob_tcp_peer_accept(peer) == false) {
-            if (OOB_TCP_DEBUG_CONNECT
-                <= pmix_output_get_verbosity(prte_oob_base.output)) {
-                pmix_output(0,
-                            "%s-%s prte_oob_tcp_recv_connect: "
-                            "rejected connection from %s connection state %d",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
-                            PRTE_NAME_PRINT(&sender), peer->state);
-            }
+        /* the socket was made non-blocking when it was accepted */
+        /* is the peer instance willing to accept this connection.  A peer
+         * that is already connected is not, and its socket must not be
+         * overwritten on the way to finding that out - that would strand the
+         * working connection behind a descriptor we are about to close */
+        if (MCA_OOB_TCP_CONNECTED == peer->state) {
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                                "%s-%s prte_oob_tcp_recv_connect: "
+                                "rejected connection from %s - already connected",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(&(peer->name)), PRTE_NAME_PRINT(&sender));
             CLOSE_THE_SOCKET(sd);
+            goto cleanup;
+        }
+        peer->sd = sd;
+        if (!prte_oob_tcp_peer_accept(peer)) {
+            /* peer_accept has closed the peer, and this socket with it:
+             * closing sd again would close whatever descriptor another
+             * thread has been handed that number since */
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                                "%s-%s prte_oob_tcp_recv_connect: "
+                                "unable to accept connection from %s",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(&(peer->name)), PRTE_NAME_PRINT(&sender));
         }
     }
 
