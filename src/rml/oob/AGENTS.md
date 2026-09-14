@@ -85,7 +85,7 @@ Five rules that are not obvious from the struct:
   and rides *every* RML message — for a cpuset slice with 101 bytes of
   payload it was 85% of the message.
 - **The connect handshake does carry one, and that is where it is checked.**
-  `tcp_peer_recv_connect_ack` refuses a peer whose nspace is not ours (and
+  `tcp_peer_read_handshake` refuses a peer whose nspace is not ours (and
   refuses one that gives none, which would otherwise fall back to ours and
   defeat the check). Once per connection, instead of restated on every
   message. Do not remove it to "simplify": it is the enforcement that lets
@@ -110,6 +110,70 @@ Five rules that are not obvious from the struct:
   builds its header on the stack, so zero it before filling it in; leaving a
   field (or the padding) undefined ships uninitialized bytes and trips every
   memory checker.
+
+## The connect handshake is read without waiting
+
+The listening port accepts a connection from anything that can reach it, and
+the IDENT handshake that follows is read on the **main progress thread**. So
+it is read as its bytes arrive and never by waiting for them:
+`prte_oob_tcp_peer_recv_connect_ack` takes whatever the socket has into a
+`prte_oob_tcp_handshake_t` and returns `PRTE_ERR_WOULD_BLOCK` when that is not
+yet everything; the caller comes back on the socket's next read event. It used
+to loop in `recv()` until the handshake was complete, and one byte sent to the
+port by anything at all - then silence - stopped the daemon dead: blocked in
+the kernel on Linux, spinning on `EAGAIN` on macOS, where an accepted socket
+inherits the listener's non-blocking flag. A job that should have ended in
+three seconds ran until the stray connection closed.
+
+Where the partial handshake lives depends on which way the connection runs,
+because an inbound one arrives before we know whose it is:
+
+| direction | record | re-entered by |
+|---|---|---|
+| inbound (`recv_handler` in `oob_tcp.c`) | the accept op's `hshake` | re-adding the op's one-shot read event |
+| outbound, our dial (`CONNECT_ACK` in `oob_tcp_sendrecv.c`) | `peer->hshake` | the peer's persistent read event |
+
+Three things keep that sound:
+
+- **An accepted socket is made non-blocking before its handshake is read**
+  (`prte_oob_accept_connection`), and one that cannot be is closed instead.
+  Linux never lets an accepted socket inherit `O_NONBLOCK`, and a blocking one
+  turns "read what has arrived" back into "wait for it".
+- **The header is judged before any payload is sized from it.** The nspace
+  check, the message type, the ack flag's minimum length and the
+  `prte_max_msg_size` cap all run as soon as the fixed header and its nspace
+  are in, so a connection that is not ours never gets to name an allocation.
+  The payload is allocated one byte longer than sent and terminated, which lets
+  the version compare be a plain `strcmp`.
+- **`peer->hshake` is emptied whenever a new socket is made for the peer**
+  (`tcp_peer_create_socket`), so a reply half-read on an abandoned attempt
+  cannot be finished with the next attempt's bytes.
+
+## A failed handshake has already been dealt with - do not close it again
+
+Every failure `prte_oob_tcp_peer_recv_connect_ack` returns other than
+`PRTE_ERR_WOULD_BLOCK` has already disposed of the connection: the peer
+closed, or the bare socket when there is no peer. `tcp_peer_send_connect_ack`
+by contrast closes nothing, and each of its three callers closes the peer once.
+
+This is not tidiness. Closing a peer whose connection is still being
+established **starts a new connection attempt** - that is how
+`prte_oob_tcp_peer_close` rotates to the peer's next address - so a second
+close schedules a second attempt alongside the first. The second one then
+closes the first's socket, whose send event is armed, and re-sets that event:
+an assertion in a debug build and a corrupted event queue in an optimized one.
+Three places did exactly that: `tcp_peer_send_connect_ack` closed the peer and
+then its callers closed it again (and `try_connect` dialed again on top, on
+the theory that a failed send meant a simultaneous connect), and the
+`CONNECT_ACK` handler closed after every handshake failure the ack had already
+handled.
+
+For the same reason **`prte_oob_tcp_peer_try_connect` dials only a peer in
+`CONNECTING`**, which every path that schedules it sets first. A retry parked
+on a timer outlives the attempt that parked it, and by the time it fires the
+peer may have connected by dialing *us* - `retry()` lets that win - or have
+nacked us so that it does the dialing. Without the test the stale retry closed
+the live connection's socket to open its own.
 
 ## Message-size bound
 
@@ -259,6 +323,44 @@ Four rules keep that safe, and all four are load-bearing:
   false`. If you add a third place that queues onto a peer, it needs the same
   tail.
 
+Three more rules came out of races between a worker closing a peer and the
+main thread reconnecting it:
+
+- **A working connection is taken apart before it is published CLOSED.**
+  `CLOSED` is what the main thread acts on - the next message for the peer
+  starts a new connection, which reuses `peer->sd` and both event structures -
+  so `prte_oob_tcp_peer_close`'s established branch deletes the events, closes
+  the socket and drops the partial recv *under the peer lock*, and sets
+  `CLOSED` last. Published first, a worker preempted mid-teardown let the main
+  thread re-set events the worker was still deleting, and let the worker's
+  `close` land on the new attempt's descriptor. Holding the lock across those
+  deletes is safe in that branch alone: a connection that reached `CONNECTED`
+  is closed only by the thread servicing its socket, where its events live, so
+  there is no other thread's handler to wait on. The branch for a connection
+  still being established must keep dropping the lock first, as it does.
+  Anything that decides on `CONNECTED` without the lock - `start_connect` -
+  looks again once it holds it.
+- **Only `tcp_peer_connected` publishes `CONNECTED`, and it arms both socket
+  events while it holds the lock.** From that instant a worker may own the
+  socket and may already have failed a send and closed the peer, so a caller
+  that arms the read event afterwards, or writes `CONNECTED` again, can arm an
+  event on a dead descriptor or bring a closed peer back to life with no
+  socket at all.
+- **The routing tree is not the worker's to read.** Sends stranded by a lost
+  connection are failed with `NODE_DOWN` or `UNREACH` according to
+  `prte_rml_is_node_up()`, which reads a bitmap a DVM resize reallocates. So
+  `tcp_peer_fail_lost_sends` lifts them on the closing thread and asks that
+  question on `prte_event_base`. The loss report that would mark the node down
+  is posted after it, to the same queue, so the answer is the same one the
+  close would have got.
+
+`retry()`, adopting an inbound socket for a peer that may still read
+`CONNECTED`, follows the first rule's order too: out of `CONNECTED` under the
+lock, then the deletes (which wait out a handler in flight). It also throws
+away the old stream's half-read message and restarts its half-sent one from
+the header - the far end discarded both with its end of that connection, and
+carried across they would splice two streams together.
+
 With an empty pool, `peer->evbase` **is** `prte_event_base`:
 `PRTE_OOB_COMPLETE_SEND` completes inline instead of posting, the rebind is a
 delete/re-set onto the base the events were already on, and the mutex is
@@ -288,17 +390,29 @@ a socket handler call has to be safe off the main thread or has to be shifted.
   `PRTE_OOB_COMPLETE_SEND(peer, msg)` instead: it completes inline when the peer
   is on the main base and posts the completion there when it is not.
 - **Every path that gives up on a peer drains its queue**, through
-  `tcp_peer_fail_queued_sends()` — the one place that does it, so the rule above
-  cannot be honored in one arm and forgotten in the next. It is not only
-  `prte_oob_tcp_peer_close()`: `prte_oob_tcp_peer_try_connect()` gives up in
-  five places of its own (out of memory, `socket()` or an unrecoverable
-  `bind()` failing, no address succeeding, the IDENT handshake failing), and
-  all but one of those used to return without touching the queue. They are
+  `tcp_peer_lift_queued_sends()` — the one place that collects it, shared by
+  `tcp_peer_fail_queued_sends()` and, for a lost connection,
+  `tcp_peer_fail_lost_sends()` — so the rule above cannot be honored in one
+  arm and forgotten in the next. It is not only `prte_oob_tcp_peer_close()`:
+  `prte_oob_tcp_peer_try_connect()` gives up in four places of its own (out of
+  memory, `socket()` or an unrecoverable `bind()` failing, no address
+  succeeding), and all but one of those used to return without touching the
+  queue. (A failed IDENT send is not one of them: that fails only the address,
+  and `peer_close` moves on to the next with the queue intact.) They are
   reconnect paths as well as first-connect ones, so what is queued there can
   be real work rather than a handshake. Collect the on-deck `peer->send_msg`
   as well as `peer->send_queue` — it is not on the list and is the one most
   easily missed — lift both under `peer->lock`, and complete them outside it,
   since completion runs the originator's callback.
+- **`CLOSE_THE_SOCKET` is PMIx's, and it clears the variable.** Every file
+  here reaches PMIx's `src/mca/ptl/ptl_types.h` before
+  `oob_tcp_connection.h`, whose own definition is `#ifndef`-guarded and so
+  never used: the macro in effect skips a negative descriptor, closes, and
+  sets its argument to `-1`. So `CLOSE_THE_SOCKET(peer->sd)` does leave
+  `peer->sd` at `-1` - a review once took the dead definition at its word and
+  "fixed" a stale descriptor that was never stale - and its argument must be
+  an lvalue, which is why `prte_oob_accept_connection` closes its `const`
+  descriptor with plain `shutdown`/`close`.
 - **The recv object owns its payload.** `prte_oob_tcp_recv_t`'s destructor
   frees `data`; the paths that hand the payload on (`PMIx_Data_load` for local
   delivery, the relay) null the pointer first. Add a third path and it has to
@@ -334,6 +448,10 @@ a socket handler call has to be safe off the main thread or has to be shifted.
 
 `prte_oob_split_and_resolve` — the interface-selection parser — is covered by
 `test/unit/rml/test_rml`, which runs under `make check` with no DVM. So is the
+handshake reader (`test_handshake_never_waits`, over a `socketpair`: a valid
+IDENT one byte at a time, a lone byte, a foreign namespace, a payload too
+short for its ack flag), the dial guard (`test_stale_attempt_does_not_dial`),
+and the
 queued-send drain above (`test_queued_sends_complete_on_close`), driven through
 `prte_oob_tcp_peer_close()` because that is the one give-up path reachable
 without sockets; the arms in `prte_oob_tcp_peer_try_connect()` share the same
