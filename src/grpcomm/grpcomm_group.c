@@ -2162,9 +2162,15 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
             // convert for returning to PMIx server library
             ccd = PMIX_NEW(prte_pmix_grp_caddy_t);
             if (NULL == ccd) {
-                /* we cannot answer this one, and saying so is all we can
-                 * do - the client behind it stays blocked */
+                /* Without a release object we cannot hand back the group's
+                 * info, but the completion needs none: answer it with the
+                 * failure and no info, as the destruct path does. Skipping
+                 * it left the client blocked in PMIx_Group_construct and
+                 * the PMIx block behind it never released. */
                 PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                pmix_list_remove_item(&coll->pending, &pnd->super);
+                pnd->cbfunc(PMIX_ERR_NOMEM, NULL, 0, pnd->cbdata, NULL, NULL);
+                PMIX_RELEASE(pnd);
                 continue;
             }
             if (PMIX_SUCCESS == cd->st) {
