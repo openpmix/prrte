@@ -1469,8 +1469,18 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
         PMIX_RELEASE(caddy);
         return;
     }
-    /* update job state */
-    caddy->jdata->state = caddy->job_state;
+    /* update job state - but never back out of termination. The job goes
+     * RUNNING once every proc's launch has been counted, and nothing makes
+     * that count arrive before the procs finish: a proc that exits while its
+     * launch report is still on its way (the spawn thread held up in a
+     * PMIx call, say) completes the job first. check_complete has then
+     * already marked it TERMINATED, and overwriting that with RUNNING makes
+     * the rest of the termination believe the job is still alive - so a
+     * prterun never shuts down. Everything else here still applies to a job
+     * that ended quickly. */
+    if (PRTE_JOB_STATE_UNTERMINATED > caddy->jdata->state) {
+        caddy->jdata->state = caddy->job_state;
+    }
 
     /* complete wiring up the iof */
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -1551,8 +1561,12 @@ void prte_plm_base_registered(int fd, short args, void *cbdata)
         PMIX_RELEASE(caddy);
         return;
     }
-    /* update job state */
-    jdata->state = caddy->job_state;
+    /* update job state, unless the job has already terminated - every proc
+     * registering is no more guaranteed to be counted before they all exit
+     * than their launch is (see prte_plm_base_post_launch) */
+    if (PRTE_JOB_STATE_UNTERMINATED > jdata->state) {
+        jdata->state = caddy->job_state;
+    }
 
     PMIX_RELEASE(caddy);
 }
