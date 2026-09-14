@@ -21,6 +21,12 @@
  * The state machine is stood up by hand with PMIX_NEW rather than through
  * prte_relm_open(), which would also post two persistent RML receives and so
  * would need an RML that is open.
+ *
+ * The protocol cases at the end drive prte_relm_handle_state_update directly,
+ * from a chosen position in a small radix-2 tree.  Whatever they send is only
+ * queued on prte_event_base, which the test never runs, so what they can
+ * check is the state each message is left in -- and that nothing activated a
+ * job state, which RELM only ever does to fail the job.
  */
 
 #include "prte_config.h"
@@ -29,6 +35,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "src/event/event-internal.h"
+#include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
@@ -36,6 +44,7 @@
 #include "src/rml/rml.h"
 #include "src/rml/relm/state_machine.h"
 #include "src/rml/relm/types.h"
+#include "src/rml/relm/util.h"
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -67,6 +76,14 @@ static prte_relm_msg_t *find_msg(pmix_rank_t src, prte_relm_uid_t uid, pmix_rank
 {
     prte_relm_signature_t sig = {.src = src, .uid = uid, .dst = dst};
     return prte_relm_find_msg(&sig);
+}
+
+/* RELM activates a job state only to fail the job, so count them */
+static int forced_exits = 0;
+static void count_job_state(prte_job_t *jdata, prte_job_state_t state)
+{
+    PRTE_HIDE_UNUSED_PARAMS(jdata, state);
+    forced_exits++;
 }
 
 /*
@@ -261,27 +278,320 @@ static int test_release_chain(void)
     return failures;
 }
 
+/*
+ * Stand the routing tree up from rank me's point of view.  At radix 2 over 8
+ * daemons the tree is 0 -> {1,2}, 1 -> {3,5}, 2 -> {4,6}, 3 -> {7}, so a
+ * message from 0 to 3 travels 0 -> 1 -> 3.
+ */
+static void build_tree(pmix_rank_t me)
+{
+    prte_rml_base.radix = 2;
+    prte_process_info.num_daemons = NDMNS;
+    PRTE_PROC_MY_NAME->rank = me;
+    prte_rml_compute_routing_tree();
+    sm_reset();
+    forced_exits = 0;
+}
+
+/* Give msg a payload framed the way prte_relm_start_msg frames one, so that
+ * posting it can unpack the tag and the bytes */
+static void load_payload(prte_relm_msg_t *msg, prte_relm_uid_t uid)
+{
+    pmix_data_buffer_t *data = PMIx_Data_buffer_create();
+    prte_rml_tag_t tag = PRTE_RML_TAG_RELM_STATE;
+    pmix_byte_object_t bo;
+
+    bo.bytes = (char *) &uid;
+    bo.size = sizeof(uid);
+    PMIx_Data_pack(NULL, data, &tag, 1, PRTE_RML_TAG);
+    PMIx_Data_pack(NULL, data, &bo, 1, PMIX_BYTE_OBJECT);
+    PMIx_Data_unload(data, &msg->data);
+    PMIx_Data_buffer_release(data);
+}
+
+/*
+ * A link update from a new upstream neighbour says SENT for every message it
+ * has passed on.  A daemon with no record of one never received it: the only
+ * copy died with the daemon that used to sit between them.  It has to ask for
+ * a replay, and nobody else will -- below it nothing can have the message,
+ * and a link update is only sent to links that changed.  The destination
+ * used to reject the update as an error (a SENT is something it never does)
+ * and an intermediate recorded SENT and waited, and either way the message
+ * was never delivered.
+ */
+static int test_link_update_sent_requests_replay(void)
+{
+    int failures = 0;
+    prte_relm_msg_t *msg;
+
+    /* the destination, hearing from its new parent */
+    build_tree(3);
+    msg = get_msg(0, 5, 3);
+    prte_relm_handle_state_update(NULL, msg, PRTE_RELM_STATE_SENT, 1);
+    CHECK("the destination asks for a message it never received",
+          PRTE_RELM_STATE_REQUESTED == msg->state);
+
+    /* the destination already has it: the ACK may have died with the same
+     * daemon, so it goes up again -- and the message stays where it is */
+    msg = get_msg(0, 6, 3);
+    msg->state = PRTE_RELM_STATE_ACKED;
+    prte_relm_handle_state_update(NULL, msg, PRTE_RELM_STATE_SENT, 1);
+    CHECK("a message already posted is left ACKED", PRTE_RELM_STATE_ACKED == msg->state);
+
+    /* an intermediate daemon, hearing from its new parent */
+    build_tree(1);
+    msg = get_msg(0, 7, 3);
+    prte_relm_handle_state_update(NULL, msg, PRTE_RELM_STATE_SENT, 0);
+    CHECK("an intermediate asks for a message it never received",
+          PRTE_RELM_STATE_REQUESTED == msg->state);
+
+    CHECK("...and none of it fails the job", 0 == forced_exits);
+
+    /* A request for a message whose source has died is addressed to a rank
+     * that cannot answer, and the route toward it leads to that dead rank or
+     * to none.  Every daemon purges such a message once it hears of the
+     * death, but a daemon that has not heard yet can still ask a neighbour
+     * that already has -- and refusing that send used to fail the job. */
+    build_tree(3);
+    msg = get_msg(1, 8, 3);
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 1);
+    prte_relm_update_state(msg, PRTE_RELM_STATE_REQUESTED);
+    pmix_bitmap_clear_bit(&prte_rml_base.failed_dmns, 1);
+    CHECK("asking a dead source for a replay does not fail the job", 0 == forced_exits);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_link_update_sent_requests_replay\n");
+    }
+    return failures;
+}
+
+/* Pack one state update the way a neighbour's link update carries it */
+static void pack_update(pmix_data_buffer_t *buf, pmix_rank_t src, prte_relm_uid_t uid,
+                        pmix_rank_t dst, prte_relm_state_t state)
+{
+    prte_relm_msg_t *msg = PMIX_NEW(prte_relm_msg_t);
+
+    msg->src = src;
+    msg->uid = uid;
+    msg->dst = dst;
+    msg->prev_uid = PRTE_RELM_UID_NONE;
+    msg->state = state;
+    if (PRTE_RELM_STATE_SENDING == state) {
+        load_payload(msg, uid);
+    }
+    prte_relm_pack_state_update(buf, msg);
+    PMIX_RELEASE(msg);
+}
+
+/*
+ * An update from a rank that is no longer a link on the message's path is
+ * ignored -- but it used to be ignored only after the message had been looked
+ * up, and the lookup creates a message it has no record of.  Every lingering
+ * update left an INVALID message (and its predecessor) in the table that
+ * nothing ever released.  The same goes for an update about a message whose
+ * source has died, which the fault handler has already purged.  Skipping one
+ * must also consume all of it, data included, or the next update in the same
+ * link update is read from the wrong place.
+ */
+static int test_lingering_updates_create_nothing(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t *buf;
+    prte_relm_msg_t *msg;
+
+    /* rank 3: parent 1, child 7 */
+    build_tree(3);
+    buf = PMIx_Data_buffer_create();
+    /* a message from our child 7 to us has no business arriving from our
+     * parent - and it carries data, to prove the skip consumes it */
+    pack_update(buf, 7, 40, 3, PRTE_RELM_STATE_SENDING);
+    /* a message from 5, which the parent is the way to, but 5 has died */
+    pack_update(buf, 5, 41, 3, PRTE_RELM_STATE_SENT);
+    /* and one the parent really is upstream of */
+    pack_update(buf, 0, 42, 3, PRTE_RELM_STATE_SENT);
+
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 5);
+    prte_relm_message_handler(1, buf);
+    prte_relm_message_handler(1, buf);
+    prte_relm_message_handler(1, buf);
+    pmix_bitmap_clear_bit(&prte_rml_base.failed_dmns, 5);
+
+    CHECK("an update from a link off the path creates no message",
+          NULL == find_msg(7, 40, 3));
+    CHECK("...nor does one for a dead source", NULL == find_msg(5, 41, 3));
+    msg = find_msg(0, 42, 3);
+    CHECK("the update after them is read in step and acted on",
+          NULL != msg && PRTE_RELM_STATE_REQUESTED == msg->state);
+    CHECK("...and the buffer is used up exactly",
+          buf->unpack_ptr == buf->base_ptr + buf->bytes_used);
+    CHECK("...with nothing failing the job", 0 == forced_exits);
+    PMIx_Data_buffer_release(buf);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_lingering_updates_create_nothing\n");
+    }
+    return failures;
+}
+
+/*
+ * ACKACKED is an ephemeral state, but prte_relm_send_state_downstream packs
+ * whatever msg->state holds, so it is stored for the length of that call.  It
+ * used to be left there, on a message that can outlive its release: a send
+ * still in flight holds a reference, and a cached message is evicted from its
+ * destructor through prte_relm_update_state -- which refuses a message in an
+ * ephemeral state and fails the job, leaving the freed message on the cache
+ * list.
+ */
+static int test_ackacked_leaves_no_ephemeral_state(void)
+{
+    int failures = 0;
+    prte_relm_msg_t *msg;
+
+    /* rank 1, between the source 0 and the destination 3 */
+    build_tree(1);
+    msg = get_msg(0, 9, 3);
+    load_payload(msg, 9);
+    msg->state = PRTE_RELM_STATE_SENT;
+    prte_relm_update_state(msg, PRTE_RELM_STATE_CACHED);
+    CHECK("the forwarded message is cached", msg->cached);
+    /* ACKED without the eviction a local ACK performs, as a link update from
+     * upstream leaves it */
+    prte_relm_handle_state_update(NULL, msg, PRTE_RELM_STATE_ACKED, 0);
+    CHECK("...and still cached once upstream says ACKED", msg->cached);
+
+    /* stand in for a send that has not completed */
+    PMIX_RETAIN(msg);
+    prte_relm_handle_state_update(NULL, msg, PRTE_RELM_STATE_ACKACKED, 0);
+    CHECK("the ACKACK releases the message", NULL == find_msg(0, 9, 3));
+    CHECK("...leaving no ephemeral state on what survives",
+          PRTE_RELM_EPHEMERAL_STATES_START > msg->state);
+
+    PMIX_RELEASE(msg);
+    CHECK("the last release evicts it from the cache",
+          0 == pmix_list_get_size(&prte_relm_sm->cached_messages));
+    CHECK("...and nothing failed the job", 0 == forced_exits);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_ackacked_leaves_no_ephemeral_state\n");
+    }
+    return failures;
+}
+
+/*
+ * Messages that arrive ahead of a lost predecessor wait PENDING, and its
+ * replay releases the whole backlog at once.  That drain used to recurse --
+ * posting each message ACKed it, and the ACK posted the next -- several stack
+ * frames per message, so the stack a replay needed grew with the backlog.
+ * The count here is well past what that recursion survives on an 8 MB stack.
+ */
+#define BACKLOG 50000
+
+static int test_pending_backlog_drains(void)
+{
+    int failures = 0;
+    prte_relm_msg_t *msg, *head;
+    prte_relm_uid_t uid;
+    bool all_acked = true;
+
+    /* the destination */
+    build_tree(3);
+    head = get_msg(0, 0, 3);
+    if (NULL == head) {
+        fprintf(stderr, "FAIL [backlog]: could not create the head\n");
+        return failures + 1;
+    }
+    head->prev_uid = PRTE_RELM_UID_NONE;
+    load_payload(head, 0);
+
+    for (uid = 1; uid < BACKLOG; uid++) {
+        msg = get_msg(0, uid, 3);
+        if (NULL == msg) {
+            fprintf(stderr, "FAIL [backlog]: could not create message %u\n", uid);
+            return failures + 1;
+        }
+        msg->prev_uid = uid - 1;
+        find_msg(0, uid - 1, 3)->next_uid = uid;
+        load_payload(msg, uid);
+        msg->state = PRTE_RELM_STATE_PENDING;
+    }
+
+    /* the replay of the head arrives */
+    prte_relm_handle_state_update(NULL, head, PRTE_RELM_STATE_SENDING, 3);
+
+    for (uid = 0; uid < BACKLOG; uid++) {
+        msg = find_msg(0, uid, 3);
+        if (NULL == msg || PRTE_RELM_STATE_ACKED != msg->state) {
+            all_acked = false;
+            break;
+        }
+    }
+    CHECK("every message behind the replay is posted and ACKED", all_acked);
+    CHECK("...and nothing failed the job", 0 == forced_exits);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_pending_backlog_drains\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
+    pmix_status_t prc;
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
         return 1;
     }
+    /* the protocol cases pack, and PMIx_Data_pack refuses to run until PMIx
+     * itself is up.  A daemon reaches that state through PMIx_server_init, so
+     * do the same */
+    prc = PMIx_server_init(NULL, NULL, 0);
+    if (PMIX_SUCCESS != prc) {
+        fprintf(stderr, "PMIx_server_init failed: %s\n", PMIx_Error_string(prc));
+        prte_finalize();
+        return 1;
+    }
+    rc = prte_event_base_open();
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "prte_event_base_open failed: %d\n", rc);
+        return 1;
+    }
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-relm-unit-test");
     PRTE_PROC_MY_NAME->rank = 0;
     prte_rml_base.radix = 64;
     prte_rml_base.n_dmns = NDMNS;
+    prte_state.activate_job_state = count_job_state;
 
     failures += test_uid_wrap();
     failures += test_signature_identity();
     failures += test_ordering_chain();
     failures += test_release_chain();
 
+    /* the protocol cases route, so they need the failure bitmaps
+     * prte_rml_open() would construct */
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    PMIX_CONSTRUCT(&prte_rml_base.global_failed_dmns, pmix_bitmap_t);
+    PMIX_CONSTRUCT(&prte_rml_base.dead_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.dead_dmns, 64);
+    PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.absent_dmns, 64);
+
+    failures += test_link_update_sent_requests_replay();
+    failures += test_lingering_updates_create_nothing();
+    failures += test_ackacked_leaves_no_ephemeral_state();
+    failures += test_pending_backlog_drains();
+
     PMIX_RELEASE(prte_relm_sm);
     prte_relm_sm = NULL;
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
+    PMIx_Data_array_destruct(&prte_rml_base.ancestors);
+    PMIx_Data_array_destruct(&prte_rml_base.children);
+    PMIx_server_finalize();
     prte_finalize();
 
     if (0 == failures) {

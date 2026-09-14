@@ -41,11 +41,19 @@ static void local_update(
 // Callback for cache timeout events. Calls a state update on msg in cb_data
 static void evict(int fd, short args, void* cb_data);
 
+// Set while local_update is posting a run of PENDING messages, so the ACK of
+// each one leaves the walk to the loop rather than recursing into the next
+static bool waking_pending = false;
+
 int prte_relm_pack_state_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg
 ) {
+    /* every caller treats the answer as a PMIx status, and the packers below
+     * produce one, so the argument check has to speak the same language */
     int ret = PMIX_SUCCESS;
-    if(NULL == buf || NULL == msg) ret = PRTE_ERR_BAD_PARAM;
+    if (NULL == buf || NULL == msg) {
+        ret = PMIX_ERR_BAD_PARAM;
+    }
 
     if(PMIX_SUCCESS == ret) ret = prte_relm_pack_signature(buf, msg);
     if(PMIX_SUCCESS == ret) ret = prte_relm_pack_uid(buf, msg->prev_uid);
@@ -56,7 +64,7 @@ int prte_relm_pack_state_update(
     }
 
     if(PMIX_SUCCESS != ret){
-        PRTE_RELM_MSG_ERROR_LOG(msg, ret);
+        PRTE_RELM_MSG_ERROR_LOG(msg, prte_pmix_convert_status(ret));
     }
     return ret;
 }
@@ -144,7 +152,31 @@ static void upstream_update(
     // The rest will only be sent from upstream during a link update,
     // which lets us simplify the logic at times
     case PRTE_RELM_STATE_SENT:
-        prte_relm_update_state(msg, PRTE_RELM_STATE_SENT);
+        /* Upstream is telling a new neighbour that it passed this message
+         * on. If we have no record of it, it did not arrive: the daemon that
+         * held it died between us. Nothing below us can have it either - we
+         * are the only way down - and a link update only goes to links that
+         * changed, so no one further down may ever hear of it. Recording SENT
+         * and waiting, which is what the generic transition does, strands the
+         * message for good with its data pinned at the source. Ask for the
+         * replay instead: a duplicate is harmless, because a message that has
+         * already been posted only ACKs again.
+         *
+         * The destination cannot take the generic transition at all, since
+         * a local SENT means *we* passed the message on and the destination
+         * never does. What upstream needs from it is whatever it has already
+         * told the link that died - an ACK, or a request for a replay. */
+        if (PRTE_RELM_STATE_INVALID == msg->state) {
+            PRTE_RELM_MSG_OUTPUT(1, msg, "requesting replay of a lost message");
+            prte_relm_update_state(msg, PRTE_RELM_STATE_REQUESTED);
+        } else if (PRTE_PROC_MY_NAME->rank == msg->dst) {
+            if (PRTE_RELM_STATE_ACKED == msg->state ||
+                PRTE_RELM_STATE_REQUESTED == msg->state) {
+                prte_relm_send_state_upstream(msg);
+            }
+        } else {
+            prte_relm_update_state(msg, PRTE_RELM_STATE_SENT);
+        }
         break;
 
     case PRTE_RELM_STATE_ACKED:
@@ -251,10 +283,35 @@ static void local_update(
             prte_relm_update_state(prev, PRTE_RELM_STATE_EVICTED);
         }
 
-        prte_relm_msg_t* next = prte_relm_find_next_msg(msg);
-        if(NULL != next && PRTE_RELM_STATE_PENDING == next->state){
-            prte_relm_update_state(next, PRTE_RELM_STATE_SENDING);
+        /* Posting the next PENDING message ACKs it, and that ACK arrives
+         * right back here to post the one after. Done as recursion that is
+         * several frames per message, so the stack grows with the backlog -
+         * and a backlog is exactly what builds up behind a message lost to a
+         * daemon failure, until its replay arrives and releases the lot at
+         * once. Walk the chain from the outermost ACK instead; the nested
+         * ACKs only get as far as this point. */
+        if (waking_pending) {
+            break;
         }
+        waking_pending = true;
+        prte_relm_msg_t* next = prte_relm_find_next_msg(msg);
+        while (NULL != next && PRTE_RELM_STATE_PENDING == next->state) {
+            prte_relm_signature_t sig = {
+                .src = next->src,
+                .uid = next->uid,
+                .dst = next->dst
+            };
+            prte_relm_update_state(next, PRTE_RELM_STATE_SENDING);
+            /* look it up again rather than trust the pointer: an update is
+             * free to complete and release the message it was given */
+            next = prte_relm_find_msg(&sig);
+            if (NULL == next || PRTE_RELM_STATE_ACKED != next->state) {
+                // gone, or still waiting on its predecessor
+                break;
+            }
+            next = prte_relm_find_next_msg(next);
+        }
+        waking_pending = false;
         break;
     }
 
@@ -276,7 +333,17 @@ static void local_update(
             // We need the msg data for this state update
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
         } else {
-            PMIx_Data_unload(buf, &msg->data);
+            int rc = PMIx_Data_unload(buf, &msg->data);
+            if (PMIX_SUCCESS != rc) {
+                /* without the payload there is nothing to send, and carrying
+                 * on sends a replay request to ourselves - which fails the
+                 * job anyway, reporting the wrong thing. The message was
+                 * never linked in, so it goes back out the way it came. */
+                PRTE_RELM_MSG_ERROR_LOG(msg, prte_pmix_convert_status(rc));
+                prte_relm_release_msg(msg);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                break;
+            }
 
             prte_relm_rank_t* rank = prte_relm_get_rank(msg->dst);
             msg->prev_uid = rank->my_last_msg;
@@ -293,8 +360,19 @@ static void local_update(
 
     case PRTE_RELM_STATE_ACKACKED:
         if(PRTE_PROC_MY_NAME->rank != msg->dst){
+            /* send_state_downstream packs msg->state, so ACKACKED has to be
+             * in place while it runs - and only while it runs. It is an
+             * ephemeral state, and the message can outlive the release
+             * below: a send still in flight holds a reference, and so can a
+             * cache entry's eviction. Anything that reaches the message
+             * through prte_relm_update_state finds an ephemeral state stored
+             * and fails the job instead - and when that is the destructor's
+             * eviction, the refusal also leaves the freed message linked on
+             * the cache list. */
+            prte_relm_state_t held = msg->state;
             msg->state = state;
             prte_relm_send_state_downstream(msg);
+            msg->state = held;
         }
         if(PRTE_PROC_MY_NAME->rank == msg->src){
             prte_relm_rank_t* rank = prte_relm_get_rank(msg->dst);
