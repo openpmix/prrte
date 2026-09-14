@@ -312,7 +312,7 @@ Both rebuild from the fault-free radix positions and then route around whatever
 is currently failed. Two consequences to keep in mind when editing that helper:
 
 - It must **fully overwrite** the children array, not just write as many slots
-  as there are children. `resize_ranks` fills only the slots it newly creates
+  as there are children. `prte_rml_resize_ranks` fills only the slots it newly creates
   and is a no-op when the array is already `radix` long, so a partially-written
   array keeps the previous computation's children in its tail.
 - It is the only place a returned (revived) rank can reappear.
@@ -515,6 +515,19 @@ worth stating rather than re-deriving:
 - **`prte_reachable_t` is a refcounted object**, not a plain struct — dispose
   of it with `PMIX_RELEASE`. `free()`ing it leaks the single block backing the
   whole weight matrix.
+- **Rank arrays have one resize and one trim: `prte_rml_resize_ranks` and
+  `prte_rml_shrink_ranks`.** Every notice's rank list is built by filling
+  slots of a pre-sized array and trimmed before it is packed, so a trim that
+  stops early puts `PMIX_RANK_INVALID` on the wire. `rml_fault_handler.c` once
+  carried its own copy of both helpers, and the copy's trim bounded its loop on
+  the count it was decrementing: two failures reported to a daemon below
+  neither sent its parent `[PMIX_RANK_INVALID]`, which the parent - never
+  having recorded that "rank" - repaired around, bumping its tree version and
+  re-driving every in-flight release-tree broadcast. Do not copy them again.
+  (What stopped it being worse is worth knowing too: `radix_subtree_contains`
+  refuses any rank `>= n_dmns`, so the parent never forwarded the bogus rank
+  on, and `pmix_bitmap_set_bit` takes an `int`, so `PMIX_RANK_INVALID` arrives
+  there negative and is refused rather than growing the bitmap.)
 - **Compare `pmix_proc_t` nspaces with `PMIx_Check_nspace`.** `nspace` is a
   `char[]`; `a.nspace != b.nspace` compiles fine and compares two array
   *addresses*, which is always true.
