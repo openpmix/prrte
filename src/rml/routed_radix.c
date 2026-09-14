@@ -41,19 +41,22 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 
 
-void prte_rml_resize_ranks(pmix_data_array_t* arr, size_t size){
-    if(size == arr->size) return;
+void prte_rml_resize_ranks(pmix_data_array_t* arr, size_t size)
+{
+    if (size == arr->size) {
+        return;
+    }
     pmix_data_array_t old_arr = *arr;
 
     PMIx_Data_array_init(arr, PMIX_PROC_RANK);
     PMIx_Data_array_construct(arr, size, PMIX_PROC_RANK);
 
     size_t min_size = arr->size < old_arr.size ? arr->size : old_arr.size;
-    for(size_t i = 0; i < min_size; i++){
+    for (size_t i = 0; i < min_size; i++) {
         // Copy as much old data as fits
         ((pmix_rank_t*)arr->array)[i] = ((pmix_rank_t*)old_arr.array)[i];
     }
-    for(size_t i = min_size; i < arr->size; i++){
+    for (size_t i = min_size; i < arr->size; i++) {
         // Fill any new data with invalids
         ((pmix_rank_t*)arr->array)[i] = PMIX_RANK_INVALID;
     }
@@ -62,10 +65,11 @@ void prte_rml_resize_ranks(pmix_data_array_t* arr, size_t size){
 }
 
 // Shrink array to minimum size while maintaining valid entries at the same idx
-void prte_rml_shrink_ranks(pmix_data_array_t* arr){
+void prte_rml_shrink_ranks(pmix_data_array_t* arr)
+{
     size_t size = arr->size;
-    for(size_t idx = 1; idx <= arr->size; idx++){
-        if(PMIX_RANK_INVALID != ((pmix_rank_t*)arr->array)[arr->size - idx]){
+    for (size_t idx = 1; idx <= arr->size; idx++) {
+        if (PMIX_RANK_INVALID != ((pmix_rank_t*)arr->array)[arr->size - idx]) {
             break;
         }
         size--;
@@ -73,27 +77,28 @@ void prte_rml_shrink_ranks(pmix_data_array_t* arr){
     prte_rml_resize_ranks(arr, size);
 }
 
-pmix_rank_t prte_rml_get_route(pmix_rank_t target){
+pmix_rank_t prte_rml_get_route(pmix_rank_t target)
+{
     pmix_rank_t ret = PMIX_RANK_INVALID;
 
     if (PRTE_PROC_MY_NAME->rank == target) {
         ret = target;
-    } else if(!radix_subtree_contains(&prte_rml_base.cur_node, target)){
+    } else if (!radix_subtree_contains(&prte_rml_base.cur_node, target)) {
         ret = PRTE_PROC_MY_PARENT->rank;
     } else {
         // This could still be an ancestor promoted up out of my current subtree
         pmix_rank_t* ancestors = (pmix_rank_t*)prte_rml_base.ancestors.array;
-        for(size_t i = 0; i < prte_rml_base.ancestors.size; i++){
-            if(ancestors[i] == target){
+        for (size_t i = 0; i < prte_rml_base.ancestors.size; i++) {
+            if (ancestors[i] == target) {
                 ret = PRTE_PROC_MY_PARENT->rank;
                 break;
             }
         }
     }
 
-    if(PMIX_RANK_INVALID == ret) {
+    if (PMIX_RANK_INVALID == ret) {
         pmix_rank_t idx = radix_subtree_index(&prte_rml_base.cur_node, target);
-        if(idx >= prte_rml_base.children.size){
+        if (idx >= prte_rml_base.children.size) {
             // this is a failed rank that we can't get any closer to
             ret = PMIX_RANK_INVALID;
         } else {
@@ -110,37 +115,39 @@ pmix_rank_t prte_rml_get_route(pmix_rank_t target){
     return ret;
 }
 
-int prte_rml_get_subtree_index(pmix_rank_t target){
+int prte_rml_get_subtree_index(pmix_rank_t target)
+{
     const pmix_rank_t r = radix_subtree_index(&prte_rml_base.cur_node, target);
     return r < prte_rml_base.children.size ? (int)r : -1;
 }
 
 // Update list of ancestors after failures
-void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr){
+void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr)
+{
     pmix_rank_t* ancestors = (pmix_rank_t*) ancestors_arr->array;
 
     radix_node_t prev_anc = radix_node(0);
-    for(size_t i = 1; i < ancestors_arr->size; i++){
+    for (size_t i = 1; i < ancestors_arr->size; i++) {
         radix_node_t anc = radix_node(ancestors[i]);
 
-        if(PMIX_RANK_INVALID == anc.rank){
+        if (PMIX_RANK_INVALID == anc.rank) {
             // If the previous ancestor was promoted up past this depth, this
             // ancestor is prev ancestor's next inheritor.
             anc = prev_anc;
             radix_to_next_living(&anc);
-        } else if(!radix_is_living(&anc)){
+        } else if (!radix_is_living(&anc)) {
             // Otherwise replace with this ancestor's next inheritor if dead
             radix_to_next_living(&anc);
         }
 
-        if(anc.rank == PRTE_PROC_MY_NAME->rank){
+        if (anc.rank == PRTE_PROC_MY_NAME->rank) {
             // I'm next in line, so I've been promoted and have fewer ancestors
-            for(size_t j = i; j < ancestors_arr->size; j++){
+            for (size_t j = i; j < ancestors_arr->size; j++) {
                 ancestors[j] = PMIX_RANK_INVALID;
             }
             break;
         }
-        if(anc.rank == ancestors[i]) {
+        if (anc.rank == ancestors[i]) {
             //No change to this ancestor
             prev_anc = anc;
             continue;
@@ -152,12 +159,12 @@ void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr){
 
         // If this ancestor was promoted up my tree, mark anything along its
         // path as invalid
-        for(size_t j = i+1; j < ancestors_arr->size; j++){
+        for (size_t j = i+1; j < ancestors_arr->size; j++) {
             radix_node_t virt_anc = radix_at_depth(&prte_rml_base.cur_node, j);
-            if(!radix_subtree_contains(&virt_anc, anc.rank)){
+            if (!radix_subtree_contains(&virt_anc, anc.rank)) {
                 // This ancestor came from a higher depth's other subtree
                 break;
-            } else if(ancestors[j] == anc.rank){
+            } else if (ancestors[j] == anc.rank) {
                 ancestors[j] = PMIX_RANK_INVALID;
                 break;
             }
@@ -168,7 +175,7 @@ void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr){
     // Shrink out any now invalid ancestors at the end of the array
     prte_rml_shrink_ranks(ancestors_arr);
 
-    if(ancestors_arr == &prte_rml_base.ancestors){
+    if (ancestors_arr == &prte_rml_base.ancestors) {
         // Update lifeline/parent only if we're updating my actual ancestors
         ancestors = (pmix_rank_t*) ancestors_arr->array;
         pmix_rank_t lifeline = ancestors_arr->size > 0 ?
@@ -178,9 +185,12 @@ void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr){
 }
 
 // See if we need to promote ourselves after changing the ancestry list
-static void handle_promotion(void){
+static void handle_promotion(void)
+{
     pmix_rank_t depth = prte_rml_base.ancestors.size;
-    if(depth == prte_rml_base.cur_node.depth) return;
+    if (depth == prte_rml_base.cur_node.depth) {
+        return;
+    }
 
     // Make sure we can fit up to our max # children
     prte_rml_resize_ranks(&prte_rml_base.children, prte_rml_base.radix);
@@ -191,8 +201,8 @@ static void handle_promotion(void){
 
     size_t idx = 0;
     radix_node_t iter;
-    RADIX_CHILD_FOREACH(prte_rml_base.cur_node, iter){
-        if(iter.rank == old_subtree.rank){
+    RADIX_CHILD_FOREACH(prte_rml_base.cur_node, iter) {
+        if (iter.rank == old_subtree.rank) {
             radix_node_t me = radix_node(PRTE_PROC_MY_NAME->rank);
             children[idx++] =
                 radix_rooted_get_next_living(&old_subtree, &me).rank;
@@ -202,9 +212,14 @@ static void handle_promotion(void){
             children[idx++] = iter.rank;
         }
     }
-    for(; idx < prte_rml_base.children.size; idx++){
+    for (; idx < prte_rml_base.children.size; idx++) {
         children[idx] = PMIX_RANK_INVALID;
     }
+}
+
+uint32_t prte_rml_tree_version(void)
+{
+    return prte_rml_base.tree_version;
 }
 
 /* This daemon's place in the *release* tree - the low-radix one a collective
@@ -226,11 +241,6 @@ static void handle_promotion(void){
  * and for the same reason: there is no originator to settle a disagreement.
  *
  * The caller frees `children`. */
-uint32_t prte_rml_tree_version(void)
-{
-    return prte_rml_base.tree_version;
-}
-
 int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
                           pmix_rank_t **children, size_t *nchildren)
 {
@@ -326,17 +336,22 @@ int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
 }
 
 // Replace failed children after promotion or failures
-static void update_descendants(void){
+static void update_descendants(void)
+{
     pmix_rank_t* children = (pmix_rank_t*)prte_rml_base.children.array;
     size_t size = prte_rml_base.children.size;
 
     prte_rml_base.n_children = 0;
-    for(size_t i = 0; i < size; i++){
-        if(PMIX_RANK_INVALID == children[i]) continue;
-        if(pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, children[i])){
+    for (size_t i = 0; i < size; i++) {
+        if (PMIX_RANK_INVALID == children[i]) {
+            continue;
+        }
+        if (pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, children[i])) {
             radix_node_t child = radix_node(children[i]);
             children[i] = radix_rooted_get_next_living(&child, &child).rank;
-            if(PMIX_RANK_INVALID == children[i]) continue;
+            if (PMIX_RANK_INVALID == children[i]) {
+                continue;
+            }
         }
         prte_rml_base.n_children++;
     }
@@ -348,13 +363,15 @@ static void update_descendants(void){
 static void build_tree_from_base(void);
 
 void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
-                                  uint32_t epoch){
-    if(global){
+                                  uint32_t epoch) {
+    if (global) {
         // Make sure these are given local notice first, but mark as globally
         // failed just before, to avoid redundant failure notices up the tree
         pmix_rank_t* ranks = (pmix_rank_t*) failed_ranks->array;
-        for(size_t i = 0; i < failed_ranks->size; i++){
-            pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, ranks[i]);
+        for (size_t i = 0; i < failed_ranks->size; i++) {
+            if (PMIX_RANK_INVALID != ranks[i]) {
+                pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, ranks[i]);
+            }
         }
         // the local pass never moves the epoch, so it needs no value
         prte_rml_repair_routing_tree(failed_ranks, false, 0);
@@ -362,17 +379,23 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
 
     prte_rml_recovery_status_t status;
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
-    if(global){
+    if (global) {
         status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
         status.epoch = epoch;
     }
 
     prte_rml_resize_ranks(&status.failed_ranks, failed_ranks->size);
     size_t j = 0;
-    for(size_t i = 0; i < failed_ranks->size; i++){
+    for (size_t i = 0; i < failed_ranks->size; i++) {
         pmix_rank_t r = ((pmix_rank_t*)failed_ranks->array)[i];
-        if(!global){
-            if(pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, r)){
+        /* PMIX_RANK_INVALID is an unfilled slot, not a departure - skipped
+         * here as report_new_departures skips it, so the two never disagree
+         * about whether a list named a death */
+        if (PMIX_RANK_INVALID == r) {
+            continue;
+        }
+        if (!global) {
+            if (pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, r)) {
                 // Don't notify twice for the same rank
                 continue;
             }
@@ -389,7 +412,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
             // launched/elastic DVM a departed vpid is permanent -- no launcher
             // can re-place a daemon at a specific existing vpid -- so it goes to
             // dead_dmns exactly as before.
-            if(prte_bootstrap_setup){
+            if (prte_bootstrap_setup) {
                 pmix_bitmap_set_bit(&prte_rml_base.absent_dmns, r);
             } else {
                 pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
@@ -404,7 +427,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
     prte_rml_shrink_ranks(&status.failed_ranks);
 
     //If no new information, just return
-    if(status.failed_ranks.size == 0){
+    if (status.failed_ranks.size == 0) {
         // the status carries heap copies of the previous ancestor/child arrays,
         // so even the do-nothing path has to destruct it - a duplicate failure
         // notice is the common case, not a rare one
@@ -412,7 +435,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
         return;
     }
 
-    if(!global){
+    if (!global) {
         /* Count the departures we have just learned of.  Only on the local
          * pass: a global notice runs the local one first, which screens the
          * ranks it already knew, and the global list is not screened at all -
@@ -425,14 +448,14 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
         update_descendants();
     }
 
-    if(status.prev_ancestors.size != prte_rml_base.ancestors.size){
+    if (status.prev_ancestors.size != prte_rml_base.ancestors.size) {
         status.ancestors_changed = true;
         status.promoted = true;
     } else {
-        for(size_t i = 0; i < status.prev_ancestors.size; i++){
+        for (size_t i = 0; i < status.prev_ancestors.size; i++) {
             pmix_rank_t prev = ((pmix_rank_t*)status.prev_ancestors.array)[i];
             pmix_rank_t cur = ((pmix_rank_t*)prte_rml_base.ancestors.array)[i];
-            if(prev != cur){
+            if (prev != cur) {
                 status.ancestors_changed = true;
                 break;
             }
@@ -441,44 +464,44 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
 
     status.parent_changed = status.prev_parent != prte_rml_base.lifeline;
 
-    if(status.prev_children.size != prte_rml_base.children.size){
+    if (status.prev_children.size != prte_rml_base.children.size) {
         status.children_changed = true;
         // A convenience for fault handlers that will be using this status,
         // so they can always safely iterate up to children.size
-        if(status.prev_children.size < prte_rml_base.children.size){
+        if (status.prev_children.size < prte_rml_base.children.size) {
             prte_rml_resize_ranks(&status.prev_children, prte_rml_base.children.size);
         }
     } else {
-        for(size_t i = 0; i < status.prev_children.size; i++){
+        for (size_t i = 0; i < status.prev_children.size; i++) {
             pmix_rank_t prev = ((pmix_rank_t*)status.prev_children.array)[i];
             pmix_rank_t cur = ((pmix_rank_t*)prte_rml_base.children.array)[i];
-            if(prev != cur){
+            if (prev != cur) {
                 status.children_changed = true;
                 break;
             }
         }
     }
 
-    if(status.parent_changed){
+    if (status.parent_changed) {
         PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                              "%s routed:radix: recovering with parent update"
                              " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_VPID_PRINT(status.prev_parent),
                              PRTE_VPID_PRINT(prte_rml_base.lifeline)));
     }
-    if(status.children_changed){
+    if (status.children_changed) {
         pmix_rank_t* c = (pmix_rank_t*) prte_rml_base.children.array;
         size_t n_c = prte_rml_base.children.size;
         pmix_rank_t* pc = (pmix_rank_t*) status.prev_children.array;
         size_t n_pc = status.prev_children.size;
-        for(size_t i = 0; i < n_c; i++){
+        for (size_t i = 0; i < n_c; i++) {
             PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                                  "%s routed:radix: recovering with child update"
                                  " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_VPID_PRINT(pc[i]),
                                  PRTE_VPID_PRINT(c[i])));
         }
-        for(size_t i = n_c; i < n_pc; i++){
+        for (size_t i = n_c; i < n_pc; i++) {
             PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                                  "%s routed:radix: recovering with child update"
                                  " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -486,7 +509,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
                                  PRTE_VPID_PRINT(PMIX_RANK_INVALID)));
         }
     }
-    if(status.promoted){
+    if (status.promoted) {
         PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                              "%s routed:radix: recovering with new depth"
                              " %lu->%lu", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -533,12 +556,13 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
     PMIX_DESTRUCT(&status);
 }
 
-void prte_rml_revive_routing_tree(pmix_rank_t rank){
+void prte_rml_revive_routing_tree(pmix_rank_t rank)
+{
     // Only a bootstrap-absent rank can return. A rank that never failed, or one
     // that is permanently dead (a launched/elastic departure, which is never
     // recorded as absent), has nothing to revive -- treat it as a no-op so the
     // operation is idempotent under duplicate/late return notices.
-    if(!pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, rank)){
+    if (!pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, rank)) {
         return;
     }
 
@@ -584,14 +608,14 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     // Compute the delta. A revival can only *lengthen* our ancestor list -- the
     // returned rank re-inserts above us -- so a size change means we were
     // demoted, the mirror of the promotion a fault produces.
-    if(status.prev_ancestors.size != prte_rml_base.ancestors.size){
+    if (status.prev_ancestors.size != prte_rml_base.ancestors.size) {
         status.ancestors_changed = true;
         status.demoted = true;
     } else {
-        for(size_t i = 0; i < status.prev_ancestors.size; i++){
+        for (size_t i = 0; i < status.prev_ancestors.size; i++) {
             pmix_rank_t prev = ((pmix_rank_t*)status.prev_ancestors.array)[i];
             pmix_rank_t cur = ((pmix_rank_t*)prte_rml_base.ancestors.array)[i];
-            if(prev != cur){
+            if (prev != cur) {
                 status.ancestors_changed = true;
                 break;
             }
@@ -600,25 +624,25 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
 
     status.parent_changed = status.prev_parent != prte_rml_base.lifeline;
 
-    if(status.prev_children.size != prte_rml_base.children.size){
+    if (status.prev_children.size != prte_rml_base.children.size) {
         status.children_changed = true;
         // A convenience for fault handlers, so they can always safely iterate
         // up to the larger of the two child arrays.
-        if(status.prev_children.size < prte_rml_base.children.size){
+        if (status.prev_children.size < prte_rml_base.children.size) {
             prte_rml_resize_ranks(&status.prev_children, prte_rml_base.children.size);
         }
     } else {
-        for(size_t i = 0; i < status.prev_children.size; i++){
+        for (size_t i = 0; i < status.prev_children.size; i++) {
             pmix_rank_t prev = ((pmix_rank_t*)status.prev_children.array)[i];
             pmix_rank_t cur = ((pmix_rank_t*)prte_rml_base.children.array)[i];
-            if(prev != cur){
+            if (prev != cur) {
                 status.children_changed = true;
                 break;
             }
         }
     }
 
-    if(status.parent_changed){
+    if (status.parent_changed) {
         PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                              "%s routed:radix: reviving %s with parent update"
                              " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -626,7 +650,7 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
                              PRTE_VPID_PRINT(status.prev_parent),
                              PRTE_VPID_PRINT(prte_rml_base.lifeline)));
     }
-    if(status.demoted){
+    if (status.demoted) {
         PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                              "%s routed:radix: reviving %s with new depth"
                              " %lu->%lu", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -726,7 +750,8 @@ bool prte_rml_is_lateral_only(pmix_rank_t rank)
     return !is_tree_neighbor(rank);
 }
 
-int prte_rml_route_lost(pmix_rank_t route){
+int prte_rml_route_lost(pmix_rank_t route)
+{
     /* If we have been named as a shrink target, depart now on the first lost
      * connection rather than trying to recover: the DVM has removed us on
      * purpose.  This fires only when prte_dvm_leaving is set, i.e., only after
@@ -740,7 +765,7 @@ int prte_rml_route_lost(pmix_rank_t route){
      * unconditionally keeps a leaving daemon's disconnects from ever being
      * mistaken for faults.  It is a fast path only — a bounded timer
      * (prted_comm.c) guarantees departure even if no connection ever drops. */
-    if(prte_dvm_leaving){
+    if (prte_dvm_leaving) {
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         return PRTE_SUCCESS;
     }
@@ -757,25 +782,25 @@ int prte_rml_route_lost(pmix_rank_t route){
      * from here would be both duplicative and, on a merely dropped socket,
      * wrong.  The collective is told so it can end or re-plan rather than wait
      * out a partner that is no longer answering. */
-    if(prte_rml_is_lateral_only(route)){
+    if (prte_rml_is_lateral_only(route)) {
         PMIX_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
                              "%s routed:radix: lateral link to %s lost -"
                              " not a routing-tree fault",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_VPID_PRINT(route)));
         prte_rml_lateral_deregister(route);
-        if(NULL != prte_rml_base.lateral_lost_cb){
+        if (NULL != prte_rml_base.lateral_lost_cb) {
             prte_rml_base.lateral_lost_cb(route);
         }
         return PRTE_SUCCESS;
     }
-    if(prte_finalizing || prte_prteds_term_ordered || prte_abnormal_term_ordered){
+    if (prte_finalizing || prte_prteds_term_ordered || prte_abnormal_term_ordered) {
         /* see if it is one of our children - if so, remove it */
         pmix_rank_t* children = (pmix_rank_t*)prte_rml_base.children.array;
         size_t size = prte_rml_base.children.size;
 
         pmix_rank_t idx = radix_subtree_index(&prte_rml_base.cur_node, route);
-        if(idx < size && children[idx] == route){
+        if (idx < size && children[idx] == route) {
             PMIX_OUTPUT_VERBOSE((3, prte_rml_base.routed_output,
                                  "%s routed:radix: finalizing, connection to"
                                  " child daemon %s lost",
@@ -792,7 +817,7 @@ int prte_rml_route_lost(pmix_rank_t route){
      * NOTE: we cannot call abort from here as the OOB needs to first release a
      * thread-lock - otherwise, we will hang!!
      */
-    if(route == PRTE_PROC_MY_HNP->rank){
+    if (route == PRTE_PROC_MY_HNP->rank) {
         PMIX_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
                              "%s routed:radix: Connection to hnp %s lost",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -818,14 +843,15 @@ int prte_rml_route_lost(pmix_rank_t route){
 // dead ancestor forward to its next living inheritor, so it can shorten a list
 // but never grow one; starting from the full-depth base list and dropping the
 // still-failed ranks yields the correct list in either direction.
-static void build_tree_from_base(void){
+static void build_tree_from_base(void)
+{
     prte_rml_base.cur_node = radix_node(PRTE_PROC_MY_NAME->rank);
 
     // Build array of ancestors
     size_t n_ancestors = prte_rml_base.cur_node.depth;
     prte_rml_resize_ranks(&prte_rml_base.ancestors, n_ancestors);
     pmix_rank_t* ancestors = (pmix_rank_t*) prte_rml_base.ancestors.array;
-    for(size_t i = 0; i < n_ancestors; i++){
+    for (size_t i = 0; i < n_ancestors; i++) {
         ancestors[i] = radix_at_depth(&prte_rml_base.cur_node, i).rank;
     }
     prte_rml_base.lifeline =
@@ -837,7 +863,7 @@ static void build_tree_from_base(void){
     pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
     radix_node_t child;
     size_t child_index = 0;
-    RADIX_CHILD_FOREACH(prte_rml_base.cur_node, child){
+    RADIX_CHILD_FOREACH(prte_rml_base.cur_node, child) {
         children[child_index++] = child.rank;
     }
     // Clear the tail. resize_ranks only fills with INVALID the slots it newly
@@ -846,7 +872,7 @@ static void build_tree_from_base(void){
     // the *previous* computation put there. A recompute (which is what a DVM
     // grow, and a revival, both do) would then keep routing to children this
     // daemon no longer has.
-    for(; child_index < prte_rml_base.children.size; child_index++){
+    for (; child_index < prte_rml_base.children.size; child_index++) {
         children[child_index] = PMIX_RANK_INVALID;
     }
     prte_rml_shrink_ranks(&prte_rml_base.children);
@@ -861,7 +887,8 @@ static void build_tree_from_base(void){
     update_descendants();
 }
 
-void prte_rml_compute_routing_tree(void){
+void prte_rml_compute_routing_tree(void)
+{
     // Save our state prior to any daemon failures
     prte_rml_base.n_dmns = prte_process_info.num_daemons;
 
@@ -890,9 +917,9 @@ void prte_rml_compute_routing_tree(void){
     // restored the same way: while the daemon is absent the tree must route
     // around its hole, so it counts as failed for this recompute. It differs
     // from dead_dmns only in that the unheal path can later clear it.
-    for(pmix_rank_t r = 0; r < prte_rml_base.n_dmns; r++){
-        if(pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r) ||
-           pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, r)){
+    for (pmix_rank_t r = 0; r < prte_rml_base.n_dmns; r++) {
+        if (pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r) ||
+           pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, r)) {
             pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
             // A departure the DVM has already broadcast stays broadcast: a
             // grow reshapes the tree, it does not un-tell anybody. This set
@@ -904,7 +931,7 @@ void prte_rml_compute_routing_tree(void){
             // one. Restored inside this arm, so the documented invariant
             // global_failed_dmns is a subset of failed_dmns holds by
             // construction rather than by the caller's good behavior.
-            if(pmix_bitmap_is_set_bit(&prev_global, r)){
+            if (pmix_bitmap_is_set_bit(&prev_global, r)) {
                 pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, r);
             }
         }
@@ -916,7 +943,9 @@ void prte_rml_compute_routing_tree(void){
     build_tree_from_base();
 
     // Print verbose output
-    if (1 > pmix_output_get_verbosity(prte_rml_base.routed_output)) return;
+    if (1 > pmix_output_get_verbosity(prte_rml_base.routed_output)) {
+        return;
+    }
 
     pmix_output(
         0, "%s: parent %s num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -925,7 +954,7 @@ void prte_rml_compute_routing_tree(void){
     // the daemon job may not be registered yet the first time we compute the
     // tree, so this debug-only lookup has to tolerate its absence
     prte_job_t* dmns = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    for(size_t i = 0; i < prte_rml_base.children.size; i++){
+    for (size_t i = 0; i < prte_rml_base.children.size; i++) {
         pmix_rank_t child_rank = ((pmix_rank_t*) prte_rml_base.children.array)[i];
 
         prte_proc_t* d = (NULL == dmns || NULL == dmns->procs) ? NULL :
@@ -937,7 +966,9 @@ void prte_rml_compute_routing_tree(void){
             PRTE_VPID_PRINT(child_rank), has_name ? " node " : "", node_name
         );
 
-        if(5 > pmix_output_get_verbosity(prte_rml_base.routed_output)) continue;
+        if (5 > pmix_output_get_verbosity(prte_rml_base.routed_output)) {
+            continue;
+        }
         radix_node_t node = radix_node(child_rank);
         pmix_rank_t r;
         RADIX_SUBTREE_FOREACH(node, r) {
@@ -949,17 +980,18 @@ void prte_rml_compute_routing_tree(void){
     }
 }
 
-int prte_rml_get_num_contributors(pmix_rank_t *dmns, size_t ndmns){
+int prte_rml_get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
+{
     pmix_bitmap_t contributors;
     PMIX_CONSTRUCT(&contributors, pmix_bitmap_t);
     pmix_bitmap_init(&contributors, prte_rml_base.children.size);
-    for(size_t i = 0; i < ndmns; i++){
-        if(pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, dmns[i])){
+    for (size_t i = 0; i < ndmns; i++) {
+        if (pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, dmns[i])) {
             continue;
         }
         pmix_rank_t child =
             radix_subtree_index(&prte_rml_base.cur_node, dmns[i]);
-        if(PMIX_RANK_INVALID != child){
+        if (PMIX_RANK_INVALID != child) {
             pmix_bitmap_set_bit(&contributors, child);
         }
     }
