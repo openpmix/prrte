@@ -730,7 +730,8 @@ static void recv_handler(int sd, short flg, void *cbdata)
          * belongs to, so put the two back together */
         PRTE_OOB_TCP_HDR_PROC(&hdr, hdr.origin, &sender);
         if (NULL == (peer = prte_oob_tcp_peer_lookup(&sender))) {
-            /* should never happen */
+            /* should never happen - the handshake records the peer */
+            CLOSE_THE_SOCKET(sd);
             goto cleanup;
         }
         /* the socket was made non-blocking when it was accepted */

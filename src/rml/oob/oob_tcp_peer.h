@@ -89,8 +89,6 @@ typedef struct {
     bool send_ev_active;
     prte_event_t recv_event; /**< registration with event thread for recv events */
     bool recv_ev_active;
-    prte_event_t timer_event; /**< timer for retrying connection failures */
-    bool timer_ev_active;
     pmix_list_t send_queue;        /**< list of messages to send */
     prte_oob_tcp_send_t *send_msg; /**< current send in progress */
     prte_oob_tcp_recv_t *recv_msg; /**< current recv in progress */
