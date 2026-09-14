@@ -55,15 +55,21 @@ int prte_relm_pack_state_update(
         ret = PMIX_ERR_BAD_PARAM;
     }
 
-    if(PMIX_SUCCESS == ret) ret = prte_relm_pack_signature(buf, msg);
-    if(PMIX_SUCCESS == ret) ret = prte_relm_pack_uid(buf, msg->prev_uid);
-    if(PMIX_SUCCESS == ret) ret = prte_relm_pack_state(buf, msg->state);
-
-    if(PRTE_RELM_STATE_SENDING == msg->state && PMIX_SUCCESS == ret){
+    if (PMIX_SUCCESS == ret) {
+        ret = prte_relm_pack_signature(buf, msg);
+    }
+    if (PMIX_SUCCESS == ret) {
+        ret = prte_relm_pack_uid(buf, msg->prev_uid);
+    }
+    if (PMIX_SUCCESS == ret) {
+        ret = prte_relm_pack_state(buf, msg->state);
+    }
+    // test ret first: it is the only thing guarding msg against NULL
+    if (PMIX_SUCCESS == ret && PRTE_RELM_STATE_SENDING == msg->state) {
         ret = prte_relm_pack_data(buf, msg->data);
     }
 
-    if(PMIX_SUCCESS != ret){
+    if (PMIX_SUCCESS != ret) {
         PRTE_RELM_MSG_ERROR_LOG(msg, prte_pmix_convert_status(ret));
     }
     return ret;
@@ -73,23 +79,24 @@ void prte_relm_handle_state_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg, prte_relm_state_t state,
     pmix_rank_t src
 ) {
-    if(PRTE_PROC_MY_NAME->rank == src){
+    if (PRTE_PROC_MY_NAME->rank == src) {
         local_update(buf, msg, state);
-    } else if(prte_relm_downstream_rank(msg) == src){
+    } else if (prte_relm_downstream_rank(msg) == src) {
         downstream_update(buf, msg, state);
-    } else if(prte_relm_upstream_rank(msg) == src){
+    } else if (prte_relm_upstream_rank(msg) == src) {
         upstream_update(buf, msg, state);
     }
-    //Ignore lingering messages from old links
+    // Ignore lingering messages from old links - prte_relm_message_handler
+    // has already dropped any it received, before looking the message up
 }
 
 static void downstream_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg, prte_relm_state_t state
 ) {
     PRTE_HIDE_UNUSED_PARAMS(buf);
-    switch(state){
+    switch (state) {
     case PRTE_RELM_STATE_ACKED:
-        if(PRTE_RELM_STATE_INVALID == msg->state){
+        if (PRTE_RELM_STATE_INVALID == msg->state) {
             // Unknown msg, must have been ACKACKED already
             prte_relm_update_state(msg, PRTE_RELM_STATE_ACKACKED);
             break;
@@ -109,12 +116,12 @@ static void downstream_update(
 static void upstream_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg, prte_relm_state_t state
 ) {
-    switch(state){
+    switch (state) {
     case PRTE_RELM_STATE_SENDING: {
         pmix_byte_object_t bo = prte_relm_unpack_data(buf);
-        if(0 == bo.size){
+        if (0 == bo.size) {
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
-        } else if(NULL != msg->data.bytes){
+        } else if (NULL != msg->data.bytes) {
             /* Seeing SENDING again for a message we already hold the data for
              * is ordinary - a replay we asked for, or a resend after the tree
              * moved - and it carries the same bytes, so keeping ours and
@@ -133,7 +140,7 @@ static void upstream_update(
             bool same = bo.size == msg->data.size &&
                         0 == memcmp(bo.bytes, msg->data.bytes, bo.size);
             PMIx_Byte_object_destruct(&bo);
-            if(!same){
+            if (!same) {
                 PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_FATAL);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 break;
@@ -185,10 +192,10 @@ static void upstream_update(
         break;
 
     case PRTE_RELM_STATE_REQUESTED:
-        if(PRTE_RELM_STATE_ACKED == msg->state){
+        if (PRTE_RELM_STATE_ACKED == msg->state) {
             PRTE_RELM_MSG_OUTPUT(1, msg, "replaying ack");
             prte_relm_send_state_upstream(msg);
-        } else if(PRTE_RELM_STATE_INVALID == msg->state){
+        } else if (PRTE_RELM_STATE_INVALID == msg->state) {
             PRTE_RELM_MSG_OUTPUT(1, msg, "requesting replay");
             prte_relm_update_state(msg, PRTE_RELM_STATE_REQUESTED);
         }
@@ -202,62 +209,64 @@ static void upstream_update(
 static void local_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg, prte_relm_state_t state
 ) {
-    switch (state){
+    switch (state) {
     case PRTE_RELM_STATE_SENT:
-        if(PRTE_PROC_MY_NAME->rank == msg->dst){
+        if (PRTE_PROC_MY_NAME->rank == msg->dst) {
             // Can't have sent the message downstream if I'm the destination
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
-        } else if(PRTE_RELM_STATE_SENDING == msg->state){
+        } else if (PRTE_RELM_STATE_SENDING == msg->state) {
             msg->state = state;
             pmix_rank_t r = PRTE_PROC_MY_NAME->rank;
-            if(r != msg->src && r != msg->dst){
+            /* a replay's cached copy can expire while the replay is on the
+             * wire, and then there is nothing left to cache */
+            if (r != msg->src && r != msg->dst && NULL != msg->data.bytes) {
                 prte_relm_update_state(msg, PRTE_RELM_STATE_CACHED);
             }
-        } else if(PRTE_RELM_STATE_ACKED == msg->state
-                  || PRTE_RELM_STATE_REQUESTED == msg->state){
+        } else if (PRTE_RELM_STATE_ACKED == msg->state ||
+                   PRTE_RELM_STATE_REQUESTED == msg->state) {
             prte_relm_send_state_upstream(msg);
-        } else if(PRTE_RELM_STATE_INVALID == msg->state) {
+        } else if (PRTE_RELM_STATE_INVALID == msg->state) {
             msg->state = state;
         }
         break;
 
     case PRTE_RELM_STATE_REQUESTED:
-        if(PRTE_RELM_STATE_SENT == msg->state
-           || PRTE_RELM_STATE_INVALID == msg->state){
-            if(NULL != msg->data.bytes){
+        if (PRTE_RELM_STATE_SENT == msg->state ||
+            PRTE_RELM_STATE_INVALID == msg->state) {
+            if (NULL != msg->data.bytes) {
                 PRTE_RELM_MSG_OUTPUT(1, msg, "replaying");
                 prte_relm_update_state(msg, PRTE_RELM_STATE_SENDING);
             } else {
                 msg->state = state;
                 prte_relm_send_state_upstream(msg);
             }
-        } else if(PRTE_RELM_STATE_ACKED == msg->state){
+        } else if (PRTE_RELM_STATE_ACKED == msg->state) {
             prte_relm_send_state_upstream(msg);
         }
         break;
 
     case PRTE_RELM_STATE_SENDING:
-        if(PRTE_RELM_STATE_ACKED == msg->state) {
+        if (PRTE_RELM_STATE_ACKED == msg->state) {
             prte_relm_send_state_upstream(msg);
             prte_relm_update_state(msg, PRTE_RELM_STATE_EVICTED);
-        } else if(NULL == msg->data.bytes){
+        } else if (NULL == msg->data.bytes) {
             prte_relm_update_state(msg, PRTE_RELM_STATE_REQUESTED);
-        } else if(PRTE_PROC_MY_NAME->rank == msg->dst) {
-            if(prte_relm_prev_is_posted(msg)){
+        } else if (PRTE_PROC_MY_NAME->rank == msg->dst) {
+            if (prte_relm_prev_is_posted(msg)) {
                 msg->state = PRTE_RELM_STATE_SENT;
                 prte_relm_post(msg);
                 prte_relm_update_state(msg, PRTE_RELM_STATE_ACKED);
             } else {
                 prte_relm_update_state(msg, PRTE_RELM_STATE_PENDING);
             }
-        } else if(PRTE_RELM_STATE_SENDING != msg->state) {
+        } else if (PRTE_RELM_STATE_SENDING != msg->state) {
             msg->state = state;
             prte_relm_send_state_downstream(msg);
         }
         break;
 
     case PRTE_RELM_STATE_PENDING:
-        if(PRTE_RELM_STATE_ACKED == msg->state){
+        if (PRTE_RELM_STATE_ACKED == msg->state) {
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
         } else {
             msg->state = state;
@@ -265,11 +274,13 @@ static void local_update(
         break;
 
     case PRTE_RELM_STATE_ACKED: {
-        if(PRTE_PROC_MY_NAME->rank == msg->src){
+        if (PRTE_PROC_MY_NAME->rank == msg->src) {
             msg->state = PRTE_RELM_STATE_ACKED;
             prte_relm_update_state(msg, PRTE_RELM_STATE_ACKACKED);
             break;
-        } else if(state == msg->state) break;
+        } else if (state == msg->state) {
+            break;
+        }
 
         msg->state = state;
         prte_relm_send_state_upstream(msg);
@@ -277,8 +288,10 @@ static void local_update(
 
         // Previous messages are implicitly acked
         prte_relm_msg_t* prev = msg;
-        while(NULL != (prev = prte_relm_find_prev_msg(prev))){
-            if(state == prev->state) break;
+        while (NULL != (prev = prte_relm_find_prev_msg(prev))) {
+            if (state == prev->state) {
+                break;
+            }
             prev->state = state;
             prte_relm_update_state(prev, PRTE_RELM_STATE_EVICTED);
         }
@@ -316,7 +329,7 @@ static void local_update(
     }
 
     case PRTE_RELM_STATE_NEW:
-        if(PRTE_RELM_STATE_INVALID != msg->state){
+        if (PRTE_RELM_STATE_INVALID != msg->state) {
             /* Either two attempts to start the same msg, or somehow a new msg
              * was given the same uid as an existing msg. The UID came from our
              * own counter and every message we start is a fresh signature, so
@@ -329,7 +342,7 @@ static void local_update(
              * keys on the same <src,uid> we just duplicated. */
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_FATAL);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        } else if(NULL == buf){
+        } else if (NULL == buf) {
             // We need the msg data for this state update
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
         } else {
@@ -350,7 +363,7 @@ static void local_update(
             rank->my_last_msg = msg->uid;
 
             prte_relm_msg_t* prev_msg = prte_relm_find_prev_msg(msg);
-            if(NULL != prev_msg){
+            if (NULL != prev_msg) {
                 prev_msg->next_uid = msg->uid;
             }
 
@@ -359,7 +372,7 @@ static void local_update(
         break;
 
     case PRTE_RELM_STATE_ACKACKED:
-        if(PRTE_PROC_MY_NAME->rank != msg->dst){
+        if (PRTE_PROC_MY_NAME->rank != msg->dst) {
             /* send_state_downstream packs msg->state, so ACKACKED has to be
              * in place while it runs - and only while it runs. It is an
              * ephemeral state, and the message can outlive the release
@@ -374,9 +387,9 @@ static void local_update(
             prte_relm_send_state_downstream(msg);
             msg->state = held;
         }
-        if(PRTE_PROC_MY_NAME->rank == msg->src){
+        if (PRTE_PROC_MY_NAME->rank == msg->src) {
             prte_relm_rank_t* rank = prte_relm_get_rank(msg->dst);
-            if(rank->my_last_msg == msg->uid){
+            if (rank->my_last_msg == msg->uid) {
                 rank->my_last_msg = PRTE_RELM_UID_NONE;
             }
         }
@@ -384,13 +397,13 @@ static void local_update(
         break;
 
     case PRTE_RELM_STATE_CACHED: {
-        if(NULL == msg->data.bytes){
+        if (NULL == msg->data.bytes) {
             // Don't cache without the data
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
             break;
         }
 
-        if(msg->cached){
+        if (msg->cached) {
             pmix_list_remove_item(&prte_relm_sm->cached_messages, &msg->super);
             prte_event_evtimer_del(&msg->eviction_ev);
         }
@@ -402,7 +415,7 @@ static void local_update(
         prte_event_evtimer_add(&msg->eviction_ev, &prte_relm_sm->cache_tv);
 
         size_t n = pmix_list_get_size(&prte_relm_sm->cached_messages);
-        if(n > prte_relm_sm->max_cache_count){
+        if (n > prte_relm_sm->max_cache_count) {
             prte_relm_msg_t* first = (prte_relm_msg_t*)
                 pmix_list_get_first(&prte_relm_sm->cached_messages);
             prte_relm_update_state(first, PRTE_RELM_STATE_EVICTED);
@@ -411,12 +424,12 @@ static void local_update(
     }
 
     case PRTE_RELM_STATE_EVICTED:
-        if(msg->cached){
+        if (msg->cached) {
             msg->cached = false;
             pmix_list_remove_item(&prte_relm_sm->cached_messages, &msg->super);
             prte_event_evtimer_del(&msg->eviction_ev);
         }
-        if(NULL != msg->data.bytes) {
+        if (NULL != msg->data.bytes) {
             PMIx_Byte_object_destruct(&msg->data);
         }
         break;
@@ -426,7 +439,7 @@ static void local_update(
     }
 }
 
-static void evict(int fd, short args, void* cb_data){
+static void evict(int fd, short args, void* cb_data) {
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
     prte_relm_msg_t* msg = (prte_relm_msg_t*) cb_data;
     prte_relm_update_state(msg, PRTE_RELM_STATE_EVICTED);
