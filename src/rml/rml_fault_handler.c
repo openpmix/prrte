@@ -23,38 +23,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
-
-//Yoink some helpers from routed_radix.c
-static void resize_ranks(pmix_data_array_t* arr, size_t size){
-    if(size == arr->size) return;
-    pmix_data_array_t old_arr = *arr;
-
-    PMIx_Data_array_init(arr, PMIX_PROC_RANK);
-    PMIx_Data_array_construct(arr, size, PMIX_PROC_RANK);
-
-    size_t min_size = arr->size < old_arr.size ? arr->size : old_arr.size;
-    for(size_t i = 0; i < min_size; i++){
-        // Copy as much old data as fits
-        ((pmix_rank_t*)arr->array)[i] = ((pmix_rank_t*)old_arr.array)[i];
-    }
-    for(size_t i = min_size; i < arr->size; i++){
-        // Fill any new data with invalids
-        ((pmix_rank_t*)arr->array)[i] = PMIX_RANK_INVALID;
-    }
-
-    PMIx_Data_array_destruct(&old_arr);
-}
-static void shrink_ranks(pmix_data_array_t* arr){
-    size_t size = arr->size;
-    for(size_t idx = 1; idx <= size; idx++){
-        if(PMIX_RANK_INVALID != ((pmix_rank_t*)arr->array)[arr->size - idx]){
-            break;
-        }
-        size--;
-    }
-    resize_ranks(arr, size);
-}
-
 /* Do two rank arrays hold the same sequence? */
 static bool ranks_differ(const pmix_data_array_t* a, const pmix_data_array_t* b)
 {
@@ -119,7 +87,7 @@ static bool record_inference(pmix_data_array_t* inferred, size_t* n,
     // the array still had room and shrank it back under the entries we had
     // already recorded
     if (*n >= inferred->size) {
-        resize_ranks(inferred, (*n+1)*3/2);
+        prte_rml_resize_ranks(inferred, (*n+1)*3/2);
     }
     ((pmix_rank_t*)inferred->array)[(*n)++] = ancestor;
     pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, ancestor);
@@ -159,13 +127,13 @@ prte_rml_ancestry_t prte_rml_reconcile_ancestry(pmix_data_array_t* report,
     // refuses a rank that is already failed, so every pass that is allowed to
     // proceed marks one more living rank dead.
     pmix_data_array_t ancestors = PMIX_DATA_ARRAY_STATIC_INIT;
-    resize_ranks(&ancestors, prte_rml_base.ancestors.size);
+    prte_rml_resize_ranks(&ancestors, prte_rml_base.ancestors.size);
     for (size_t i = 0; i < ancestors.size; i++) {
         ((pmix_rank_t*)ancestors.array)[i] =
             ((pmix_rank_t*)prte_rml_base.ancestors.array)[i];
     }
 
-    resize_ranks(inferred, 1);
+    prte_rml_resize_ranks(inferred, 1);
     size_t infer_i = 0;
     prte_rml_ancestry_t verdict = PRTE_RML_ANCESTRY_INFERRED;
 
@@ -194,7 +162,7 @@ prte_rml_ancestry_t prte_rml_reconcile_ancestry(pmix_data_array_t* report,
 
     // Undo setting the failed bit for inferred failures, so the caller can do
     // the full error handling process for them.
-    shrink_ranks(inferred);
+    prte_rml_shrink_ranks(inferred);
     for (size_t i = 0; i < inferred->size; i++) {
         pmix_bitmap_clear_bit(
             &prte_rml_base.failed_dmns, ((pmix_rank_t*)inferred->array)[i]
@@ -210,7 +178,7 @@ prte_rml_ancestry_t prte_rml_reconcile_ancestry(pmix_data_array_t* report,
 
     if (PRTE_RML_ANCESTRY_INFERRED != verdict) {
         // Nothing may be acted on, so hand back no inferences at all
-        resize_ranks(inferred, 0);
+        prte_rml_resize_ranks(inferred, 0);
     } else if (0 == inferred->size) {
         // The lists differ but no death explains it
         verdict = PRTE_RML_ANCESTRY_INCONSISTENT;
@@ -322,7 +290,7 @@ static void reconcile_child_ancestry(pmix_data_array_t* report,
         ));
         return;
     }
-    resize_ranks(report, report->size-1);
+    prte_rml_resize_ranks(report, report->size-1);
 
     pmix_data_array_t inferred = PMIX_DATA_ARRAY_STATIC_INIT;
     prte_rml_ancestry_t verdict = prte_rml_reconcile_ancestry(report, &inferred);
@@ -502,7 +470,7 @@ static void send_adoption_notices(const prte_rml_recovery_status_t* status){
 
     // Build array of (my view of) their new ancestors
     pmix_data_array_t arr = PMIX_DATA_ARRAY_STATIC_INIT;
-    resize_ranks(&arr, prte_rml_base.ancestors.size+1);
+    prte_rml_resize_ranks(&arr, prte_rml_base.ancestors.size+1);
     for(size_t i = 0; i < prte_rml_base.ancestors.size; i++){
         ((pmix_rank_t*)arr.array)[i] =
             ((pmix_rank_t*)prte_rml_base.ancestors.array)[i];
@@ -597,7 +565,7 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
 
         size_t size =
             pmix_bitmap_num_unset_bits(&local_only, prte_rml_base.n_dmns);
-        resize_ranks(&arr, size);
+        prte_rml_resize_ranks(&arr, size);
         size_t idx = 0;
         for(size_t i = 0; i < size; i++){
             int int_rank;
@@ -612,7 +580,7 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
         PMIX_DESTRUCT(&local_only);
     } else {
         // Parent is unchanged, just report current failures in my subtree
-        resize_ranks(&arr, status->failed_ranks.size);
+        prte_rml_resize_ranks(&arr, status->failed_ranks.size);
         size_t idx = 0;
         for(size_t i = 0; i < arr.size; i++){
             pmix_rank_t rank = ((pmix_rank_t*)status->failed_ranks.array)[i];
@@ -622,7 +590,7 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
             }
         }
     }
-    shrink_ranks(&arr);
+    prte_rml_shrink_ranks(&arr);
 
     ret = PMIx_Data_pack(NULL, msg, &arr, 1, PMIX_DATA_ARRAY);
     PMIx_Data_array_destruct(&arr);
@@ -662,8 +630,16 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
 
     // HNP broadcasts new failure information down
     if(PRTE_PROC_IS_MASTER){
-        prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_DIED, msg);
+        /* A broadcast that never goes out leaves every other daemon routing
+         * toward the departed ranks and a recovery epoch behind the HNP - the
+         * same divergence a notice that cannot be packed produces, and it is
+         * treated the same way. */
+        ret = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_DIED, msg);
         PMIX_DATA_BUFFER_RELEASE(msg);
+        if(PRTE_SUCCESS != ret){
+            PRTE_ERROR_LOG(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+        }
         return;
     }
 
@@ -788,8 +764,9 @@ void prte_rml_recv_return_request(
     /* Arbiter: accept the return only if it announces a strictly-newer
      * incarnation than the one we last recorded for this rank. A stale or
      * duplicate epoch (including the degenerate same-timestamp reboot) is
-     * dropped, forcing the daemon to retry with a later epoch. Record the new
-     * epoch as authoritative before broadcasting so the guard is armed. */
+     * dropped - nothing re-announces, so such a daemon rejoins only when it
+     * boots again with a later epoch. Record the new epoch as authoritative
+     * before broadcasting so the guard is armed. */
     if(0 != epoch && epoch <= prte_rml_get_epoch(rank)){
         return;
     }
@@ -823,8 +800,15 @@ void prte_rml_recv_return_request(
         PMIX_DATA_BUFFER_RELEASE(msg);
         return;
     }
-    prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_REVIVED, msg);
+    /* A revival that is never broadcast leaves the DVM consistent - every
+     * daemon still routes around the rank - but the return is lost: a daemon
+     * announces itself once, at boot, and the epoch recorded above would drop
+     * a repeat of that announcement anyway.  Say so. */
+    ret = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_REVIVED, msg);
     PMIX_DATA_BUFFER_RELEASE(msg);
+    if(PRTE_SUCCESS != ret){
+        PRTE_ERROR_LOG(ret);
+    }
 }
 
 /* All daemons: converge on a broadcast revival by re-inserting the returned
