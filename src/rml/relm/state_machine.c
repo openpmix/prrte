@@ -331,13 +331,43 @@ static void sending_to_sent_cb(
     int status, pmix_proc_t* peer, pmix_data_buffer_t* buf, prte_rml_tag_t tag,
     void *cbdata
 ) {
-    // We don't care about the status, update to sent and we'll repair during
-    // the link update steps if someone died
-    PRTE_HIDE_UNUSED_PARAMS(status, peer, tag);
+    PRTE_HIDE_UNUSED_PARAMS(tag);
     PMIx_Data_buffer_release(buf);
     prte_relm_msg_t* msg = (prte_relm_msg_t*) cbdata;
     PRTE_RELM_MSG_OUTPUT_TRACE(3, msg);
-    prte_relm_update_state(msg, PRTE_RELM_STATE_SENT);
+    /* The reference we hold keeps the object alive, not the message. A send
+     * to a peer that has died completes only when the transport gives up on
+     * it, and by then the tree may have been repaired and the message
+     * delivered, ACKed and released along another path - or purged by the
+     * fault handler. Only a message still in the table has a state left to
+     * advance; for anything else this is the last reference, and the release
+     * below is all that is left to do. */
+    prte_relm_signature_t sig = {
+        .src = msg->src,
+        .uid = msg->uid,
+        .dst = msg->dst
+    };
+    if (msg == prte_relm_find_msg(&sig)) {
+        // Update to sent whatever the status, and repair during the link
+        // update steps if someone died
+        prte_relm_update_state(msg, PRTE_RELM_STATE_SENT);
+        /* ...except that the link update may already have happened. A send
+         * to a node that vanished without a word can sit queued until the
+         * transport times it out, well after the rest of the DVM has
+         * repaired the tree around it - and for all that time the message
+         * was SENDING, in which state a replay request from the new neighbour
+         * is ignored (it is taken for the send already under way). So if the
+         * hop never took the message and the route has moved since, send it
+         * again the new way. A copy the new neighbour already has costs a
+         * duplicate, which every hop tolerates. */
+        if (PRTE_SUCCESS != status &&
+            PRTE_RELM_STATE_SENT == msg->state &&
+            NULL != msg->data.bytes &&
+            peer->rank != prte_relm_downstream_rank(msg)) {
+            PRTE_RELM_MSG_OUTPUT(1, msg, "hop was lost, resending on the new route");
+            prte_relm_update_state(msg, PRTE_RELM_STATE_SENDING);
+        }
+    }
     PMIX_RELEASE(msg); // msg was retained for this callback
 }
 
@@ -382,6 +412,18 @@ void prte_relm_send_state_downstream(prte_relm_msg_t* msg){
 
 void prte_relm_send_state_upstream(prte_relm_msg_t* msg){
     PRTE_RELM_MSG_OUTPUT_TRACE(2, msg);
+    /* Everything that travels upstream - an ACK, a request for a replay - is
+     * addressed to the source, and a source that has died can neither take an
+     * ACK nor replay anything. Every daemon purges such a message when it
+     * learns of the death, but not all at the same moment: a link update or a
+     * request from a daemon that has not yet heard can still arrive here for
+     * one we already dropped. Its route then leads to the dead rank or to no
+     * rank at all, and the send refusal below would fail the job over a
+     * message that is simply gone. */
+    if (!prte_rml_is_node_up(msg->src)) {
+        PRTE_RELM_MSG_OUTPUT(1, msg, "source is gone, nothing to send upstream");
+        return;
+    }
     bool valid_state =
         PRTE_RELM_STATE_ACKED == msg->state ||
         PRTE_RELM_STATE_REQUESTED == msg->state;
@@ -433,10 +475,65 @@ void prte_relm_send_link_update(pmix_rank_t link){
     }
 }
 
+/* Consume the rest of one state update without acting on it, so that a link
+ * update carrying several stays aligned on the next one */
+static void skip_state_update(pmix_data_buffer_t* buf){
+    (void) prte_relm_unpack_uid(buf);
+    prte_relm_state_t state = prte_relm_unpack_state(buf);
+    if (PRTE_RELM_STATE_SENDING == state) {
+        pmix_byte_object_t bo = prte_relm_unpack_data(buf);
+        PMIx_Byte_object_destruct(&bo);
+    }
+}
+
+/* Say why an update from src for sig is to be ignored, or NULL if it is not.
+ *
+ * An update from a rank that is neither the message's upstream nor its
+ * downstream neighbour is a lingering one from a link the tree has since
+ * replaced, and prte_relm_handle_state_update would ignore it. That has to be
+ * decided before the message is looked up: prte_relm_get_msg creates the
+ * message (and get_prev_msg its predecessor) when we have no record of it, and
+ * an update that is then ignored leaves both in the table in the INVALID state
+ * - which nothing ever releases, since only a message's own completion or its
+ * source's death purges it. It would also have rewritten prev_uid on a message
+ * we do hold.
+ *
+ * An update for a message whose source has died goes for the same reason. The
+ * fault handler purged every such message when it learned of the death, and a
+ * neighbour that has not learned yet can still send one: acting on it would
+ * recreate what was purged, with nobody left to complete it.
+ *
+ * A signature out of range is not ignored here - prte_relm_get_msg refuses it,
+ * and a peer sending one is broken, not late. */
+static const char* lingering_update(pmix_rank_t src, prte_relm_signature_t* sig){
+    if (sig->src >= prte_rml_base.n_dmns || sig->dst >= prte_rml_base.n_dmns ||
+        sig->uid > PRTE_RELM_UID_MAX) {
+        return NULL;
+    }
+    if (PRTE_PROC_MY_NAME->rank != src &&
+        prte_rml_get_route(sig->dst) != src &&
+        prte_rml_get_route(sig->src) != src) {
+        return "no longer a link on its path";
+    }
+    if (!prte_rml_is_node_up(sig->src)) {
+        return "its source is gone";
+    }
+    return NULL;
+}
+
 void prte_relm_message_handler(pmix_rank_t src, pmix_data_buffer_t* buf){
     prte_relm_signature_t sig = prte_relm_unpack_signature(buf);
     // Some error happened, unpack fn reported and set job state for us
     if(!PMIx_Rank_valid(sig.src)) return;
+
+    const char* why = lingering_update(src, &sig);
+    if (NULL != why) {
+        PRTE_RELM_OUTPUT_VERBOSE(1, "ignoring an update for %u %d->%d from %d, %s",
+                                 sig.uid, (int) sig.src, (int) sig.dst, (int) src,
+                                 why);
+        skip_state_update(buf);
+        return;
+    }
 
     prte_relm_msg_t* msg = prte_relm_get_msg(&sig);
     PRTE_RELM_MSG_OUTPUT_TRACE(4, msg);

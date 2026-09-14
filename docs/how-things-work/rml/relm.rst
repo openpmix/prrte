@@ -188,6 +188,24 @@ needs between the two calls.)  On the local notice, the handler:
    in-flight message that routes through that link, so a new neighbor learns
    exactly what is outstanding and can resume it.
 
+A link update reports each message in the *sender's* state, so a ``SENT``
+means "I have passed this toward you".  A receiver that has no record of such
+a message never got it — its only copy died with the daemon that used to sit
+between them — and it asks for a replay at once: nothing below it can have the
+message, and a link update goes only to links that changed, so no one further
+down may ever hear of it.  A destination that *does* have the message re-sends
+what the lost link was carrying the other way, its ACK or its own request.
+
+Recovery also has to cope with daemons learning of a failure at different
+moments.  An update about a message whose source has died is dropped on
+arrival, because every daemon purges such messages when it hears of the death
+and nobody is left to complete one; and nothing is sent upstream toward a dead
+source.  A send to a daemon that vanished can sit queued in the transport long
+after the tree has been repaired around it, so when such a send finally fails
+and the route has moved, the message is sent again along the new one.
+Duplicates are harmless throughout: an intermediate keeps the bytes it already
+holds, and a destination that has posted a message only acknowledges it again.
+
 Two mechanisms keep this correct under cascading or concurrent promotions:
 
 * **Depth stamping.**  Each link update carries the sender's tree depth.  A

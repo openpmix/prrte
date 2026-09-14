@@ -87,7 +87,75 @@ new neighbors so in-flight messages resume over the repaired tree.
 - **Ephemeral vs. lasting states.** States at or after
   `PRTE_RELM_EPHEMERAL_STATES_START` (`NEW`, `ACKACKED`, `CACHED`, `EVICTED`)
   drive transitions but must **never** be stored as a message's `state`. The
-  engine asserts this; don't defeat it.
+  engine asserts this; don't defeat it. There is exactly one sanctioned
+  exception, and it is scoped to a single call: `ACKACKED` is written into
+  `msg->state` for the length of `prte_relm_send_state_downstream()`, because
+  that emitter packs whatever `msg->state` holds, and the previous state is
+  put back before anything else runs. It used to be left there, and the
+  message it was left on is about to be released — which does not make it
+  unreachable (next point). What found it there was `prte_relm_update_state()`,
+  refusing and failing the job: from a late send completion, or from the
+  destructor's own eviction of a message still cached, which also left the
+  freed message linked on `cached_messages`.
+- **A message can outlive its release, so a reference is not a message.**
+  `prte_relm_release_msg()` drops the table's reference, but
+  `prte_relm_send_state_downstream()` holds another for its completion
+  callback, and a send to a peer that has died completes only when the
+  transport gives up — on a node that vanished without a RST, long after the
+  tree was repaired and the message delivered, ACKed and released some other
+  way, or purged by the fault handler. So the completion callback acts only if
+  `prte_relm_find_msg()` still answers that same object. Anything else holding
+  a `prte_relm_msg_t *` across an event, or across a call that can complete a
+  message, has to ask the table the same way (the PENDING drain does).
+- **A send that failed is not a send, and `SENDING` ignores replay requests.**
+  A request for a message that is `SENDING` is taken for the send already
+  under way — which, to a dead hop, will never arrive. The completion callback
+  still records `SENT` whatever the status, and relies on the link-update
+  exchange to repair; but if the status is a failure and the route to `dst`
+  has moved since the send was queued, that exchange has already happened
+  while the message sat queued, and the request it produced was ignored. So
+  the callback resends on the new route. A duplicate is safe everywhere: an
+  intermediate keeps the bytes it holds, and a destination that has posted the
+  message only ACKs again.
+- **A link update's `SENT` is a report about the *sender*.** Upstream packs
+  `SENT` for every message it has passed toward the receiver. A receiver with
+  no record of the message (`INVALID`) did not get it — the only copy died
+  with the daemon that used to sit between them — and it must ask for the
+  replay itself: nothing below it can have the message, and a link update is
+  only sent on links that changed, so no one further down may ever hear of it.
+  The destination must not take the generic local `SENT` transition at all
+  (a local `SENT` means *we* forwarded, which a destination never does); it
+  re-sends upstream what it had told the lost link, an ACK or a request. Both
+  cases used to fall through to the generic transition — an intermediate
+  recorded `SENT` and waited, a destination logged `BAD_PARAM` — and the
+  message was never delivered, with its data pinned at the source for the life
+  of the DVM.
+- **Decide to ignore an update before looking the message up.**
+  `prte_relm_get_msg()` *creates* a message it has no record of, and
+  `prte_relm_get_prev_msg()` its predecessor, both `INVALID` — and nothing
+  releases an `INVALID` message short of its source dying. So
+  `prte_relm_message_handler()` drops an update from a rank that is neither the
+  message's upstream nor its downstream neighbour (a lingering one from a
+  replaced link), and one for a message whose source is down (already purged),
+  before the lookup, consuming the rest of the update so a link update carrying
+  several stays aligned. `prte_relm_handle_state_update()` still ignores an
+  off-path sender, but by then the lookup has happened. An out-of-range
+  signature is *not* dropped there: that is a broken peer, and `get_msg`
+  refusing it fails the job.
+- **Nothing is sent upstream for a source that is down.** Everything that
+  travels upstream is ultimately for the source, and the route toward a dead
+  rank leads to that rank or to none, which `prte_rml_send_buffer_nb()` refuses
+  — and a refused RELM send fails the job. Daemons learn of a death at
+  different moments, so a request from one that has not heard yet can reach one
+  that has; `prte_relm_send_state_upstream()` drops it instead.
+- **Draining a PENDING backlog is a loop, not recursion.** Posting a message
+  ACKs it, and the ACK is what posts its successor. Written the obvious way
+  that is several stack frames per message, and a backlog is exactly what
+  builds up behind a message lost to a daemon failure until its replay lands:
+  the unit test's 50,000 is past what a debug build's 8 MB stack survives. The
+  outermost `ACKED` walks the chain (`waking_pending` stops the nested ones),
+  and re-finds each message after posting it rather than trusting the
+  pointer.
 - **UIDs wrap, and the wrap has to step over the sentinels.**
   `prte_relm_uid_t` is a `uint32_t` that is allowed to wrap; the design assumes
   a message is globally complete (and dereferenced) long before its UID is
@@ -162,5 +230,19 @@ What *is* pure computation is the identity layer, and
 and its wrap, the `<src,uid,dst>` signature and GUID, the find/get lookup
 helpers and what they refuse, the prev/next ordering chain, and
 `prte_relm_release_msg`. It stands the state machine up by hand with `PMIX_NEW`
-rather than calling `prte_relm_open()`, which would also post RML receives. The other tractable piece, not
-yet covered, is the pack/unpack helpers in `util.c`.
+rather than calling `prte_relm_open()`, which would also post RML receives.
+
+A single transition is reachable too, from a chosen seat in the tree, and the
+same binary drives a few: a link update's `SENT` at a destination and an
+intermediate, lingering and dead-source updates in one buffer, `ACKACKED` on a
+cached message that something still references, and a 50,000-message PENDING
+drain. What makes that possible is small and worth copying: a radix-2 tree from
+`prte_rml_compute_routing_tree()` (with the failure bitmaps constructed by
+hand), `PMIx_server_init()` so the packers run, `prte_event_base_open()` so
+sends have somewhere to queue — the test never runs the loop, so nothing is
+actually sent — and `prte_state.activate_job_state` pointed at a counter,
+since RELM activates a job state only to fail the job. A case can therefore
+check the state a message is left in and that the job was not failed, but not
+what went on the wire. The send-completion callback is `static` and is not
+covered; the pack/unpack helpers in `util.c` are covered only through these
+cases.
