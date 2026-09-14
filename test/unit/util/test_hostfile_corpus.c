@@ -33,11 +33,6 @@
  *    never had a case for any of them.  Refusing is at least honest, and
  *    is what the parser has always done, so it is left alone here.
  *
- *  - "ordered relative out of range" and "ordered too many empty" return an
- *    error AND leave the unresolved "+n9" / "+e:9" placeholder on the
- *    caller's list, alongside whichever nodes were expanded before the
- *    failure.
- *
  * Seven goldens changed when the parser was rewritten to read lines, each
  * of them a refusal or a silence that was an artifact of the scanner rather
  * than anybody's intent: a username containing a dot is now kept instead of
@@ -46,7 +41,8 @@
  * and a stray field after the host entry is now refused by name instead of
  * thrown away -- which is what makes "hostA hostB" on one line say so
  * rather than quietly losing hostB.  Each is argued in the commit that
- * changed it.
+ * changed it.  The relative forms are now tested where they are
+ * resolved, in test/unit/rmaps/test_resize.c.
  *
  * Failures are rendered as "err<N>", where N is the offset from
  * PRTE_ERR_BASE in src/include/constants.h -- err43 is PRTE_ERR_SILENT,
@@ -67,7 +63,6 @@
 
 #include "constants.h"
 #include "src/class/pmix_list.h"
-#include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
 #include "src/util/hostfile/hostfile.h"
@@ -75,18 +70,12 @@
 
 int test_hostfile_corpus(void);
 
-/* Which entry point the case goes through.  They differ in ways the parser
- * is responsible for: ADD collapses repeats of one name into a slot count
- * and applies the exclude list, ORDERED keeps every entry in file order and
- * is the only one that resolves the "+n<N>" / "+e" relative forms. */
-typedef enum {
-    CORPUS_ADD,
-    CORPUS_ORDERED
-} corpus_mode_t;
-
+/* Every case goes through prte_util_add_hostfile_nodes(), which collapses
+ * repeats of one name into a slot count, applies the exclude list, and
+ * refuses the "+n<N>" / "+e" relative forms.  Those are resolved only by the
+ * job filter, and test/unit/rmaps/test_resize.c covers them there. */
 typedef struct {
     const char *name;
-    corpus_mode_t mode;
     const char *body;
     const char *expect;
 } corpus_case_t;
@@ -175,11 +164,7 @@ static int run_case(const corpus_case_t *c, bool regen)
     fclose(fp);
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    if (CORPUS_ADD == c->mode) {
-        rc = prte_util_add_hostfile_nodes(&nodes, path);
-    } else {
-        rc = prte_util_get_ordered_host_list(&nodes, path);
-    }
+    rc = prte_util_add_hostfile_nodes(&nodes, path);
     got = render(rc, &nodes);
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(path);
@@ -200,115 +185,98 @@ static int run_case(const corpus_case_t *c, bool regen)
 
 static const corpus_case_t corpus[] = {
     /* --- the documented shape ------------------------------------- */
-    {"plain names", CORPUS_ADD, "hostA\nhostB\nhostC\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0 | hostC slots=1 max=0 given=0"},
-    {"slots", CORPUS_ADD, "hostA slots=4\nhostB slots=2\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=2 max=0 given=1"},
-    {"slots and max", CORPUS_ADD, "hostA slots=2 max_slots=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
-    {"max alone", CORPUS_ADD, "hostA max_slots=8\n", "rc=ok | hostA slots=8 max=8 given=1"},
-    {"user@host", CORPUS_ADD, "someone@hostA\n", "rc=ok | hostA slots=1 max=0 given=0 user=someone"},
-    {"port", CORPUS_ADD, "hostA port=2222\n", "rc=ok | hostA slots=1 max=0 given=0 port=2222"},
-    {"repeat accumulates slots", CORPUS_ADD, "hostA\nhostA\nhostA\n", "rc=ok | hostA slots=3 max=0 given=1"},
-    {"exclusion", CORPUS_ADD, "hostA\nhostB\n^hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
-    {"exclusion of a name not present", CORPUS_ADD, "hostA\n^hostZ\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"exclusion carrying a user@", CORPUS_ADD, "hostA\nhostB\n^someone@hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
+    {"plain names", "hostA\nhostB\nhostC\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0 | hostC slots=1 max=0 given=0"},
+    {"slots", "hostA slots=4\nhostB slots=2\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=2 max=0 given=1"},
+    {"slots and max", "hostA slots=2 max_slots=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"max alone", "hostA max_slots=8\n", "rc=ok | hostA slots=8 max=8 given=1"},
+    {"user@host", "someone@hostA\n", "rc=ok | hostA slots=1 max=0 given=0 user=someone"},
+    {"port", "hostA port=2222\n", "rc=ok | hostA slots=1 max=0 given=0 port=2222"},
+    {"repeat accumulates slots", "hostA\nhostA\nhostA\n", "rc=ok | hostA slots=3 max=0 given=1"},
+    {"exclusion", "hostA\nhostB\n^hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
+    {"exclusion of a name not present", "hostA\n^hostZ\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"exclusion carrying a user@", "hostA\nhostB\n^someone@hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
 
     /* --- comments and whitespace ---------------------------------- */
-    {"hash comment", CORPUS_ADD, "# comment\nhostA\n# another\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"slash-slash comment", CORPUS_ADD, "// comment\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"block comment on its own line", CORPUS_ADD, "/* comment */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"block comment spanning lines", CORPUS_ADD, "/* one\n   two */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"block comment mid-line", CORPUS_ADD, "hostA /* x */ slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"block comment before an entry", CORPUS_ADD, "/* x */ hostA slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"unterminated block comment", CORPUS_ADD, "hostA\n/* never closed\nhostB\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"a hash inside a name", CORPUS_ADD, "host#A\n", "rc=ok | host slots=1 max=0 given=0"},
-    {"a line of only whitespace", CORPUS_ADD, "   \nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"tab separated", CORPUS_ADD, "hostA\tslots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"crlf line endings", CORPUS_ADD, "hostA slots=4\r\nhostB\r\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=1 max=0 given=0"},
-    {"a lone carriage return", CORPUS_ADD, "hostA slots=4\rhostB\n", "rc=err43"},
-    {"trailing comment after an entry", CORPUS_ADD, "hostA slots=4 # four of them\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"blank lines", CORPUS_ADD, "\n\nhostA\n\n\nhostB\n\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0"},
-    {"leading whitespace", CORPUS_ADD, "   hostA slots=4\n\thostB\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=1 max=0 given=0"},
-    {"spaces around the equals", CORPUS_ADD, "hostA slots = 4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"no trailing newline", CORPUS_ADD, "hostA slots=4", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"empty file", CORPUS_ADD, "", "rc=ok"},
-    {"only comments", CORPUS_ADD, "# nothing here\n", "rc=ok"},
+    {"hash comment", "# comment\nhostA\n# another\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"slash-slash comment", "// comment\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"block comment on its own line", "/* comment */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"block comment spanning lines", "/* one\n   two */\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"block comment mid-line", "hostA /* x */ slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"block comment before an entry", "/* x */ hostA slots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"unterminated block comment", "hostA\n/* never closed\nhostB\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"a hash inside a name", "host#A\n", "rc=ok | host slots=1 max=0 given=0"},
+    {"a line of only whitespace", "   \nhostA\n", "rc=ok | hostA slots=1 max=0 given=0"},
+    {"tab separated", "hostA\tslots=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"crlf line endings", "hostA slots=4\r\nhostB\r\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=1 max=0 given=0"},
+    {"a lone carriage return", "hostA slots=4\rhostB\n", "rc=err43"},
+    {"trailing comment after an entry", "hostA slots=4 # four of them\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"blank lines", "\n\nhostA\n\n\nhostB\n\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0"},
+    {"leading whitespace", "   hostA slots=4\n\thostB\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=1 max=0 given=0"},
+    {"spaces around the equals", "hostA slots = 4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"no trailing newline", "hostA slots=4", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"empty file", "", "rc=ok"},
+    {"only comments", "# nothing here\n", "rc=ok"},
 
     /* --- the many spellings of the slot-count keywords ------------- */
-    {"cpu= is slots", CORPUS_ADD, "hostA cpu=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"count= is slots", CORPUS_ADD, "hostA count=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
-    {"slots-max", CORPUS_ADD, "hostA slots=2 slots-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
-    {"max-slots", CORPUS_ADD, "hostA slots=2 max-slots=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
-    {"max_cpu", CORPUS_ADD, "hostA slots=2 max_cpu=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
-    {"cpu-max", CORPUS_ADD, "hostA slots=2 cpu-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
-    {"max_count", CORPUS_ADD, "hostA slots=2 max_count=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
-    {"count-max", CORPUS_ADD, "hostA slots=2 count-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"cpu= is slots", "hostA cpu=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"count= is slots", "hostA count=4\n", "rc=ok | hostA slots=4 max=0 given=1"},
+    {"slots-max", "hostA slots=2 slots-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"max-slots", "hostA slots=2 max-slots=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"max_cpu", "hostA slots=2 max_cpu=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"cpu-max", "hostA slots=2 cpu-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"max_count", "hostA slots=2 max_count=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
+    {"count-max", "hostA slots=2 count-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
 
     /* --- name forms ------------------------------------------------ */
-    {"fqdn", CORPUS_ADD, "node01.example.com slots=2\n", "rc=ok | node01.example.com slots=2 max=0 given=1"},
-    {"ipv4", CORPUS_ADD, "10.0.0.1 slots=2\n", "rc=ok | 10.0.0.1 slots=2 max=0 given=1"},
-    {"user@ipv4", CORPUS_ADD, "someone@10.0.0.1\n", "rc=ok | 10.0.0.1 slots=1 max=0 given=0 user=someone"},
-    {"user@fqdn", CORPUS_ADD, "someone@node01.example.com\n", "rc=ok | node01.example.com slots=1 max=0 given=0 user=someone"},
-    {"ipv6", CORPUS_ADD, "fe80::1 slots=2\n", "rc=ok | fe80::1 slots=2 max=0 given=1"},
-    {"excluded fqdn", CORPUS_ADD, "node01.example.com\nhostB\n^node01.example.com\n", "rc=ok | hostB slots=1 max=0 given=0"},
-    {"a name that is all digits", CORPUS_ADD, "12345 slots=2\n", "rc=ok | 12345 slots=2 max=0 given=1"},
-    {"name with a dash", CORPUS_ADD, "host-01 slots=2\n", "rc=ok | host-01 slots=2 max=0 given=1"},
-    {"name with an underscore", CORPUS_ADD, "host_01 slots=2\n", "rc=ok | host_01 slots=2 max=0 given=1"},
+    {"fqdn", "node01.example.com slots=2\n", "rc=ok | node01.example.com slots=2 max=0 given=1"},
+    {"ipv4", "10.0.0.1 slots=2\n", "rc=ok | 10.0.0.1 slots=2 max=0 given=1"},
+    {"user@ipv4", "someone@10.0.0.1\n", "rc=ok | 10.0.0.1 slots=1 max=0 given=0 user=someone"},
+    {"user@fqdn", "someone@node01.example.com\n", "rc=ok | node01.example.com slots=1 max=0 given=0 user=someone"},
+    {"ipv6", "fe80::1 slots=2\n", "rc=ok | fe80::1 slots=2 max=0 given=1"},
+    {"excluded fqdn", "node01.example.com\nhostB\n^node01.example.com\n", "rc=ok | hostB slots=1 max=0 given=0"},
+    {"a name that is all digits", "12345 slots=2\n", "rc=ok | 12345 slots=2 max=0 given=1"},
+    {"name with a dash", "host-01 slots=2\n", "rc=ok | host-01 slots=2 max=0 given=1"},
+    {"name with an underscore", "host_01 slots=2\n", "rc=ok | host_01 slots=2 max=0 given=1"},
 
     /* --- the username= and port= keyword forms ---------------------- */
-    {"username keyword", CORPUS_ADD, "hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"user-name keyword", CORPUS_ADD, "hostA user-name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"user_name keyword", CORPUS_ADD, "hostA user_name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"username with a dot", CORPUS_ADD, "hostA username=bob.smith\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob.smith"},
-    {"username keyword beats user@", CORPUS_ADD, "alice@hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
+    {"username keyword", "hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
+    {"user-name keyword", "hostA user-name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
+    {"user_name keyword", "hostA user_name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
+    {"username with a dot", "hostA username=bob.smith\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob.smith"},
+    {"username keyword beats user@", "alice@hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
 
     /* --- a rankfile read as a hostfile ------------------------------ */
-    {"rank lines", CORPUS_ADD, "rank 0=hostA slot=0-1\nrank 1=hostB slot=2-3\n", "rc=ok | hostA slots=1 max=0 given=1 | hostB slots=1 max=0 given=1"},
-    {"rank lines repeating a host", CORPUS_ADD, "rank 0=hostA slot=0\nrank 1=hostA slot=1\n",
+    {"rank lines", "rank 0=hostA slot=0-1\nrank 1=hostB slot=2-3\n", "rc=ok | hostA slots=1 max=0 given=1 | hostB slots=1 max=0 given=1"},
+    {"rank lines repeating a host", "rank 0=hostA slot=0\nrank 1=hostA slot=1\n",
      "rc=ok | hostA slots=2 max=0 given=1"},
-    {"rank line with user@", CORPUS_ADD, "rank 0=someone@hostA slot=0\n", "rc=ok | hostA slots=1 max=0 given=1 user=someone"},
+    {"rank line with user@", "rank 0=someone@hostA slot=0\n", "rc=ok | hostA slots=1 max=0 given=1 user=someone"},
 
     /* --- refusals --------------------------------------------------- */
-    {"a second @", CORPUS_ADD, "a@b@hostA\n", "rc=err43"},
-    {"a user@ with no host", CORPUS_ADD, "someone@\n", "rc=err43"},
-    {"an @ with no user", CORPUS_ADD, "@hostA\n", "rc=err43"},
-    {"a doubled @", CORPUS_ADD, "someone@@hostA\n", "rc=err43"},
-    {"a ^ after the @", CORPUS_ADD, "someone@^hostA\n", "rc=err43"},
-    {"a non-numeric slot count", CORPUS_ADD, "hostA slots=many\n", "rc=err43"},
-    {"a negative slot count", CORPUS_ADD, "hostA slots=-1\n", "rc=err43"},
-    {"slots given twice", CORPUS_ADD, "hostA slots=2 slots=4\n", "rc=err43"},
-    {"max below slots", CORPUS_ADD, "hostA slots=8 max_slots=2\n", "rc=err43"},
-    {"a bare word after the entry", CORPUS_ADD, "hostA foo\n", "rc=err43"},
-    {"a bare number after the entry", CORPUS_ADD, "hostA 42\n", "rc=err43"},
-    {"two hosts on one line", CORPUS_ADD, "hostA hostB\n", "rc=err43"},
-    {"a key with no value", CORPUS_ADD, "hostA slots=\n", "rc=err43"},
-    {"a value with no key", CORPUS_ADD, "hostA = 4\n", "rc=err43"},
-    {"slots given as a word", CORPUS_ADD, "hostA slots=four\n", "rc=err43"},
-    {"an unknown keyword", CORPUS_ADD, "hostA nosuchkey=4\n", "rc=err43"},
-    {"sockets=", CORPUS_ADD, "hostA sockets=2\n", "rc=err43"},
-    {"cores=", CORPUS_ADD, "hostA cores=2\n", "rc=err43"},
-    {"boards=", CORPUS_ADD, "hostA boards=2\n", "rc=err43"},
-    {"a quoted string", CORPUS_ADD, "\"hostA\"\n", "rc=err43"},
-    {"a stray character", CORPUS_ADD, "hostA $\n", "rc=err43"},
-    {"a bare equals", CORPUS_ADD, "hostA =\n", "rc=err43"},
-    {"rank with no equals", CORPUS_ADD, "rank 0\n", "rc=err43"},
-    {"a relative spec", CORPUS_ADD, "+n0\n", "rc=err43"},
+    {"a second @", "a@b@hostA\n", "rc=err43"},
+    {"a user@ with no host", "someone@\n", "rc=err43"},
+    {"an @ with no user", "@hostA\n", "rc=err43"},
+    {"a doubled @", "someone@@hostA\n", "rc=err43"},
+    {"a ^ after the @", "someone@^hostA\n", "rc=err43"},
+    {"a non-numeric slot count", "hostA slots=many\n", "rc=err43"},
+    {"a negative slot count", "hostA slots=-1\n", "rc=err43"},
+    {"slots given twice", "hostA slots=2 slots=4\n", "rc=err43"},
+    {"max below slots", "hostA slots=8 max_slots=2\n", "rc=err43"},
+    {"a bare word after the entry", "hostA foo\n", "rc=err43"},
+    {"a bare number after the entry", "hostA 42\n", "rc=err43"},
+    {"two hosts on one line", "hostA hostB\n", "rc=err43"},
+    {"a key with no value", "hostA slots=\n", "rc=err43"},
+    {"a value with no key", "hostA = 4\n", "rc=err43"},
+    {"slots given as a word", "hostA slots=four\n", "rc=err43"},
+    {"an unknown keyword", "hostA nosuchkey=4\n", "rc=err43"},
+    {"sockets=", "hostA sockets=2\n", "rc=err43"},
+    {"cores=", "hostA cores=2\n", "rc=err43"},
+    {"boards=", "hostA boards=2\n", "rc=err43"},
+    {"a quoted string", "\"hostA\"\n", "rc=err43"},
+    {"a stray character", "hostA $\n", "rc=err43"},
+    {"a bare equals", "hostA =\n", "rc=err43"},
+    {"rank with no equals", "rank 0\n", "rc=err43"},
+    {"a relative spec", "+n0\n", "rc=err43"},
 
-    /* --- ordered-list mode ------------------------------------------ */
-    {"ordered keeps duplicates", CORPUS_ORDERED, "hostA\nhostB\nhostA\n", "rc=ok | hostA slots=1 max=0 given=0 | hostB slots=1 max=0 given=0 | hostA slots=1 max=0 given=0"},
-    {"ordered applies exclusion", CORPUS_ORDERED, "hostA\nhostB\nhostA\n^hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
-    {"ordered exclusion carrying a user@", CORPUS_ORDERED, "hostA\nhostB\n^someone@hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
-    {"ordered relative by index", CORPUS_ORDERED, "+n0\n", "rc=ok | poolB slots=6 max=0 given=1"},
-    {"ordered relative by index, second", CORPUS_ORDERED, "+n1\n", "rc=ok | poolC slots=8 max=0 given=1"},
-    {"ordered relative out of range", CORPUS_ORDERED, "+n9\n", "rc=err43 | +n9 slots=0 max=0 given=0"},
-    {"ordered relative with a slot count", CORPUS_ORDERED, "+n0 slots=2\n", "rc=ok | poolB slots=2 max=0 given=1"},
-    {"ordered relative uppercase N", CORPUS_ORDERED, "+N0\n", "rc=ok | poolB slots=6 max=0 given=1"},
-    {"ordered relative bad letter", CORPUS_ORDERED, "+x0\n", "rc=err43"},
-    {"ordered relative index too large", CORPUS_ORDERED, "+n2147483647\n", "rc=err43"},
-    {"ordered empty count too large", CORPUS_ORDERED, "+e:99999999999\n", "rc=err43"},
-    {"ordered all empty", CORPUS_ORDERED, "+e\n", "rc=ok | poolB slots=6 max=0 given=1 | poolC slots=8 max=0 given=1"},
-    {"ordered n empty", CORPUS_ORDERED, "+e:1\n", "rc=ok | poolB slots=6 max=0 given=1"},
-    {"ordered too many empty", CORPUS_ORDERED, "+e:9\n", "rc=err43 | +e:9 slots=0 max=0 given=0 | poolB slots=6 max=0 given=1 | poolC slots=8 max=0 given=1"},
-    {"ordered mixes names and relatives", CORPUS_ORDERED, "hostA\n+n0\nhostB\n", "rc=ok | hostA slots=1 max=0 given=0 | poolB slots=6 max=0 given=1 | hostB slots=1 max=0 given=0"},
-    {"ordered with slots", CORPUS_ORDERED, "hostA slots=4\nhostA slots=2\n", "rc=ok | hostA slots=4 max=0 given=1 | hostA slots=2 max=0 given=1"},
 };
 
 /* ------------------------------------------------------------------ */
@@ -318,35 +286,9 @@ int test_hostfile_corpus(void)
     int failures = 0;
     size_t i;
     bool regen = (NULL != getenv("PRTE_HOSTFILE_CORPUS_REGEN"));
-    prte_node_t *pool[3];
-    static const char *poolnames[3] = {"poolA", "poolB", "poolC"};
-    int j;
-
-    /*
-     * The relative forms ("+n<N>", "+e") are resolved against the node pool,
-     * so the corpus has to supply one or every relative case records nothing
-     * but "there were no nodes to pick from".
-     *
-     * Entry 0 stands in for the HNP's own node.  prte_hnp_is_allocated is
-     * false here, as it is whenever the HNP is not part of the allocation,
-     * and the parser adds one to every "+n<N>" index to step over that entry
-     * -- so "+n0" resolves to poolB, not poolA.  That is the intended
-     * numbering, not an off-by-one.
-     */
-    for (j = 0; j < 3; j++) {
-        pool[j] = PMIX_NEW(prte_node_t);
-        pool[j]->name = strdup(poolnames[j]);
-        pool[j]->slots = 4 + (2 * j);
-        pool[j]->index = pmix_pointer_array_add(prte_node_pool, pool[j]);
-    }
 
     for (i = 0; i < sizeof(corpus) / sizeof(corpus[0]); i++) {
         failures += run_case(&corpus[i], regen);
-    }
-
-    for (j = 0; j < 3; j++) {
-        pmix_pointer_array_set_item(prte_node_pool, pool[j]->index, NULL);
-        PMIX_RELEASE(pool[j]);
     }
 
     if (0 == failures) {

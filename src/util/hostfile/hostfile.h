@@ -36,8 +36,6 @@ PRTE_EXPORT int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
 
 PRTE_EXPORT int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove);
 
-PRTE_EXPORT int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile);
-
 END_C_DECLS
 
 #endif

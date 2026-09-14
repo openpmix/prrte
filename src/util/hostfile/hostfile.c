@@ -279,8 +279,7 @@ static void hostfile_exclude(const char *node_name, const char *username, pmix_l
  * groups.  Also accepts a rankfile's "rank <N>=<host> ..." line, from
  * which it takes only the host.
  */
-static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t *exclude,
-                               bool keep_all)
+static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t *exclude)
 {
     prte_node_t *node;
     bool got_max = false;
@@ -318,10 +317,10 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
     }
 
     if (valid_relative(entry)) {
-        /* Store it for the caller to resolve against the node pool.  The
-         * rest of the line still applies: a "+n<K> slots=2" is how an
-         * allocation is subdivided, and the count has to reach the
-         * placeholder or there is nothing for the caller to subdivide by. */
+        /* Store it for the filter to resolve against the node pool.  The
+         * rest of the line still applies: a "+n<K> slots=2" subdivides the
+         * node it resolves to just as "hostA slots=2" does, and the count
+         * has to reach the placeholder or there is nothing to subdivide by. */
         node = PMIX_NEW(prte_node_t);
         node->name = strdup(entry);
         pmix_list_append(updates, &node->super);
@@ -356,9 +355,8 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
     }
 
     PMIX_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
-                         "%s hostfile: node %s is being included - keep all is %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node_name,
-                         keep_all ? "TRUE" : "FALSE"));
+                         "%s hostfile: node %s is being included",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node_name));
 
     /* see if this is another name for us */
     if (prte_check_host_is_local(node_name)) {
@@ -366,7 +364,7 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
         node_name = strdup(prte_process_info.nodename);
     }
 
-    if ((!rank_form && keep_all) || NULL == (node = prte_node_match(updates, node_name))) {
+    if (NULL == (node = prte_node_match(updates, node_name))) {
         node = PMIX_NEW(prte_node_t);
         node->name = strdup(node_name);
         node->slots = 1;
@@ -483,8 +481,7 @@ refuse:
 /**
  * Parse the specified file into a node list.
  */
-static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_t *exclude,
-                          bool keep_all)
+static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_t *exclude)
 {
     prte_textfile_t tf;
     char **fields;
@@ -525,7 +522,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
 
     while (NULL != (fields = prte_textfile_next(&tf))) {
         cur_hostfile_line = tf.lineno;
-        rc = hostfile_parse_line(fields, updates, exclude, keep_all);
+        rc = hostfile_parse_line(fields, updates, exclude);
         if (PRTE_SUCCESS != rc) {
             goto cleanup;
         }
@@ -567,7 +564,7 @@ int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
     PMIX_CONSTRUCT(&adds, pmix_list_t);
 
     /* parse the hostfile and add any new contents to the list */
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &adds, &exclude, false))) {
+    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &adds, &exclude))) {
         goto cleanup;
     }
 
@@ -630,6 +627,44 @@ cleanup:
     return rc;
 }
 
+/*
+ * Cap a node the filter selected to the count its hostfile entry gave, for
+ * this job only.  The entry may have named the node outright or by position
+ * ("+n<K>", "+e"); a count means the same thing either way, and the
+ * positional forms used to have theirs dropped.
+ *
+ * If the slot count here is less than the total slots avail on this node,
+ * set it to the specified count - this allows people to subdivide an
+ * allocation.
+ *
+ * The nodes on the caller's list are the pool's own objects, so the smaller
+ * count has to be handed back when the map is done: the "slots=" says how
+ * many slots THIS job may have on the node, not how big the node is,
+ * exactly as a "-host node:N" does. Left unrecorded, one job's hostfile
+ * shrank the node for every job the DVM ran afterwards - jobs that never
+ * named the hostfile - and the allocation could only ever get smaller, with
+ * nothing short of restarting the DVM to put it back.
+ *
+ * Only do this when we are selecting the nodes a job will map onto
+ * ("remove"), because that is the one caller running inside
+ * prte_rmaps_base_map_job(), which restores what it recorded before it
+ * returns. The record list is a framework global, not a per-job one, and a
+ * DVM maps one job while another is still forming its daemons - so an entry
+ * made anywhere else is one some unrelated job's map would put back. The
+ * other caller, the VM setup, is only marking which nodes are to host a
+ * daemon; it never maps and reads no slot count, so it has nothing to resize
+ * for.
+ */
+static void hostfile_cap_for_job(prte_node_t *node_from_file, prte_node_t *node_from_list,
+                                 bool remove)
+{
+    if (remove && PRTE_FLAG_TEST(node_from_file, PRTE_NODE_FLAG_SLOTS_GIVEN)
+        && node_from_file->slots < node_from_list->slots) {
+        prte_rmaps_base_record_resize(node_from_list, node_from_list->slots);
+        node_from_list->slots = node_from_file->slots;
+    }
+}
+
 /* Parse the provided hostfile and filter the nodes that are
  * on the input list, removing those that
  * are not found in the hostfile
@@ -657,7 +692,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     PMIX_CONSTRUCT(&newnodes, pmix_list_t);
     PMIX_CONSTRUCT(&exclude, pmix_list_t);
     PMIX_CONSTRUCT(&keep, pmix_list_t);
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude, false))) {
+    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude))) {
         goto cleanup;
     }
 
@@ -763,6 +798,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                                 goto skipnode;
                             }
                         }
+                        hostfile_cap_for_job(node_from_file, node_from_list, remove);
                         if (remove) {
                             /* remove item from list */
                             pmix_list_remove_item(nodes, item1);
@@ -795,8 +831,8 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                  * has to be adjusted - otherwise "+n0" in a hostfile names
                  * a node the job was never given, and every index is one
                  * node adrift of the same index given to --host.
-                 * prte_util_get_ordered_host_list() and dash-host's
-                 * parse_dash_host() both make this adjustment. */
+                 * dash-host's parse_dash_host() makes the same
+                 * adjustment. */
                 if (!prte_hnp_is_allocated) {
                     nodeidx++;
                 }
@@ -814,6 +850,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                      item1 = pmix_list_get_next(item1)) {
                     node_from_list = (prte_node_t *) item1;
                     if (prte_nptr_match(node_from_pool, node_from_list)) {
+                        hostfile_cap_for_job(node_from_file, node_from_list, remove);
                         if (remove) {
                             /* match - remove item from list */
                             pmix_list_remove_item(nodes, item1);
@@ -857,38 +894,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                 /* we have converted all aliases for ourself
                  * to our own detected nodename */
                 if (prte_nptr_match(node_from_file, node_from_list)) {
-                    /* if the slot count here is less than the
-                     * total slots avail on this node, set it
-                     * to the specified count - this allows people
-                     * to subdivide an allocation.
-                     *
-                     * The nodes on this list are the pool's own objects, so
-                     * the smaller count has to be handed back when the map is
-                     * done: the "slots=" says how many slots THIS job may
-                     * have on the node, not how big the node is, exactly as a
-                     * "-host node:N" does. Left unrecorded, one job's hostfile
-                     * shrank the node for every job the DVM ran afterwards -
-                     * jobs that never named the hostfile - and the allocation
-                     * could only ever get smaller, with nothing short of
-                     * restarting the DVM to put it back.
-                     *
-                     * Only do this when we are selecting the nodes a job will
-                     * map onto ("remove"), because that is the one caller
-                     * running inside prte_rmaps_base_map_job(), which restores
-                     * what it recorded before it returns. The record list is a
-                     * framework global, not a per-job one, and a DVM maps one
-                     * job while another is still forming its daemons - so an
-                     * entry made anywhere else is one some unrelated job's map
-                     * would put back. The other caller, the VM setup, is only
-                     * marking which nodes are to host a daemon; it never maps
-                     * and reads no slot count, so it has nothing to resize for.
-                     */
-                    if (remove
-                        && PRTE_FLAG_TEST(node_from_file, PRTE_NODE_FLAG_SLOTS_GIVEN)
-                        && node_from_file->slots < node_from_list->slots) {
-                        prte_rmaps_base_record_resize(node_from_list, node_from_list->slots);
-                        node_from_list->slots = node_from_file->slots;
-                    }
+                    hostfile_cap_for_job(node_from_file, node_from_list, remove);
                     if (remove) {
                         /* remove the node from the list */
                         pmix_list_remove_item(nodes, item1);
@@ -957,190 +963,6 @@ cleanup:
      * with the two lists themselves */
     PMIX_LIST_DESTRUCT(&keep);
     PMIX_LIST_DESTRUCT(&newnodes);
-    PMIX_LIST_DESTRUCT(&exclude);
-
-    return rc;
-}
-
-int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
-{
-    pmix_list_t exclude;
-    pmix_list_item_t *item, *itm, *item2, *item1;
-    char *cptr;
-    int num_empty, i, nodeidx, startempty = 0;
-    bool want_all_empty = false;
-    prte_node_t *node_from_pool, *newnode;
-    int rc;
-
-    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                         "%s hostfile: creating ordered list of hosts from hostfile %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostfile));
-
-    PMIX_CONSTRUCT(&exclude, pmix_list_t);
-
-    /* parse the hostfile and add the contents to the list, keeping duplicates */
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, nodes, &exclude, true))) {
-        goto cleanup;
-    }
-
-    /* parse the nodes to process any relative node directives */
-    item2 = pmix_list_get_first(nodes);
-    while (item2 != pmix_list_get_end(nodes)) {
-        prte_node_t *node = (prte_node_t *) item2;
-
-        /* save the next location in case this one gets removed */
-        item1 = pmix_list_get_next(item2);
-
-        if ('+' != node->name[0]) {
-            item2 = item1;
-            continue;
-        }
-
-        /* see if we specified empty nodes */
-        if ('e' == node->name[1] || 'E' == node->name[1]) {
-            /* request for empty nodes - do they want
-             * all of them?
-             */
-            if (NULL != (cptr = strchr(node->name, ':'))) {
-                /* the colon indicates a specific # are requested - and
-                 * says so for this line, whatever an earlier "+e" asked */
-                cptr++; /* step past : */
-                num_empty = strtol(cptr, NULL, 10);
-                want_all_empty = false;
-            } else {
-                /* want them all - set num_empty to max */
-                num_empty = INT_MAX;
-                want_all_empty = true;
-            }
-            /* insert empty nodes into newnodes list in place of the current item.
-             * since item1 is the next item, we insert in front of it
-             */
-            if (!prte_hnp_is_allocated && 0 == startempty) {
-                startempty = 1;
-            }
-            for (i = startempty; 0 < num_empty && i < prte_node_pool->size; i++) {
-                node_from_pool = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
-                if (NULL == node_from_pool) {
-                    continue;
-                }
-                if (0 == node_from_pool->slots_inuse) {
-                    newnode = PMIX_NEW(prte_node_t);
-                    newnode->name = strdup(node_from_pool->name);
-                    /* if the slot count here is less than the
-                     * total slots avail on this node, set it
-                     * to the specified count - this allows people
-                     * to subdivide an allocation.
-                     *
-                     * Only if the hostfile actually gave a count, though: a
-                     * bare "+e" is a placeholder node whose slots are still
-                     * the constructor's zero, and taking that as "subdivide
-                     * to zero slots" handed back nodes with no slots at all.
-                     */
-                    if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)
-                        && node->slots < node_from_pool->slots) {
-                        newnode->slots = node->slots;
-                    } else {
-                        newnode->slots = node_from_pool->slots;
-                    }
-                    PRTE_FLAG_SET(newnode, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                    pmix_list_insert_pos(nodes, item1, &newnode->super);
-                    /* track number added */
-                    --num_empty;
-                }
-            }
-            /* bookmark where we stopped in case they ask for more */
-            startempty = i;
-            /* did they get everything they wanted? */
-            if (!want_all_empty && 0 < num_empty) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:not-enough-empty", true, num_empty);
-                rc = PRTE_ERR_SILENT;
-                goto cleanup;
-            }
-            /* since we have expanded the provided node, remove
-             * it from list
-             */
-            pmix_list_remove_item(nodes, item2);
-            PMIX_RELEASE(item2);
-        } else if ('n' == node->name[1] || 'N' == node->name[1]) {
-            /* they want a specific relative node #, so
-             * look it up on global pool
-             */
-            nodeidx = strtol(&node->name[2], NULL, 10);
-            /* if the HNP is not allocated, then we need to
-             * adjust the index as the node pool is offset
-             * by one
-             */
-            if (!prte_hnp_is_allocated) {
-                nodeidx++;
-            }
-            /* see if that location is filled */
-            node_from_pool = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
-            if (NULL == node_from_pool) {
-                /* this is an error */
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:relative-node-not-found", true,
-                               nodeidx, node->name);
-                rc = PRTE_ERR_SILENT;
-                goto cleanup;
-            }
-            /* create the node object */
-            newnode = PMIX_NEW(prte_node_t);
-            newnode->name = strdup(node_from_pool->name);
-            /* if the slot count here is less than the
-             * total slots avail on this node, set it
-             * to the specified count - this allows people
-             * to subdivide an allocation. As with "+e" above, a bare
-             * "+n<K>" carries no count of its own, so only honor one that
-             * the hostfile actually gave.
-             */
-            if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)
-                && node->slots < node_from_pool->slots) {
-                newnode->slots = node->slots;
-            } else {
-                newnode->slots = node_from_pool->slots;
-            }
-            PRTE_FLAG_SET(newnode, PRTE_NODE_FLAG_SLOTS_GIVEN);
-            /* insert it before item1 */
-            pmix_list_insert_pos(nodes, item1, &newnode->super);
-            /* since we have expanded the provided node, remove
-             * it from list
-             */
-            pmix_list_remove_item(nodes, item2);
-            PMIX_RELEASE(item2);
-        } else {
-            /* invalid relative node syntax */
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:invalid-relative-node-syntax", true,
-                           node->name);
-            rc = PRTE_ERR_SILENT;
-            goto cleanup;
-        }
-
-        /* move to next */
-        item2 = item1;
-    }
-
-    /* remove from the list of nodes those that are in the exclude list.
-     * This list keeps duplicates, so every match has to be removed - which
-     * means the successor has to be saved before the item is released, not
-     * read out of it afterwards. */
-    while (NULL != (item = pmix_list_remove_first(&exclude))) {
-        prte_node_t *exnode = (prte_node_t *) item;
-        /* check for matches on nodes */
-        itm = pmix_list_get_first(nodes);
-        while (itm != pmix_list_get_end(nodes)) {
-            prte_node_t *node = (prte_node_t *) itm;
-            pmix_list_item_t *nxt = pmix_list_get_next(itm);
-            if (prte_nptr_match(exnode, node)) {
-                /* match - remove it */
-                pmix_list_remove_item(nodes, itm);
-                PMIX_RELEASE(itm);
-            }
-            itm = nxt;
-        }
-        PMIX_RELEASE(item);
-    }
-
-cleanup:
-    /* holds nodes on every path that did not reach the exclusion pass */
     PMIX_LIST_DESTRUCT(&exclude);
 
     return rc;
