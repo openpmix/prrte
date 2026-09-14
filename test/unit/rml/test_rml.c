@@ -49,9 +49,13 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #ifdef HAVE_NETINET_IN_H
 #    include <netinet/in.h>
 #endif
@@ -72,10 +76,12 @@
 #include "src/rml/rml.h"
 #include "src/rml/oob/oob.h"
 #include "src/rml/oob/oob_tcp.h"
+#include "src/rml/oob/oob_tcp_common.h"
 #include "src/rml/oob/oob_tcp_hdr.h"
 #include "src/rml/oob/oob_tcp_connection.h"
 #include "src/rml/oob/oob_tcp_peer.h"
 #include "src/rml/oob/oob_tcp_sendrecv.h"
+#include "src/mca/prtereachable/base/base.h"
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -697,6 +703,190 @@ static int test_queued_sends_complete_on_close(void)
     return failures;
 }
 
+/* A connect handshake is read as its bytes arrive, never by waiting for them.
+ *
+ * The OOB's listening port accepts anyone, and the handshake is read on the
+ * progress thread.  It used to be read with a loop that stayed in recv() until
+ * every byte was in, so a single byte sent to the port - by a port scanner, a
+ * stray client, anything - parked the progress thread for as long as the
+ * sender kept the connection open: blocked in the kernel on Linux, spinning
+ * on EAGAIN elsewhere.  A running job could not even finish.
+ *
+ * Driven over a socketpair: a well-formed IDENT delivered one byte at a time
+ * must answer "not yet" after every byte but the last and then complete, and
+ * connections that are not ours are turned away on the header alone, before
+ * any payload is sized from them.
+ */
+static size_t build_ident(char *out, const char *nspace, uint32_t nbytes_override)
+{
+    prte_oob_tcp_hdr_t hdr;
+    uint16_t ack = htons(1);
+    size_t vlen = strlen(prte_version_string) + 1, hlen, len;
+
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.origin = 3;
+    hdr.dst = PRTE_PROC_MY_NAME->rank;
+    hdr.type = MCA_OOB_TCP_IDENT;
+    hdr.epoch = 1;
+    PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, nspace);
+    hdr.nbytes = (0 < nbytes_override) ? nbytes_override : (uint32_t) (sizeof(ack) + vlen);
+    hlen = PRTE_OOB_TCP_HDR_LEN(&hdr);
+    MCA_OOB_TCP_HDR_HTON(&hdr);
+    memcpy(out, &hdr, hlen);
+    len = hlen;
+    memcpy(out + len, &ack, sizeof(ack));
+    len += sizeof(ack);
+    memcpy(out + len, prte_version_string, vlen);
+    len += vlen;
+    return len;
+}
+
+static bool make_pair(int sv[2])
+{
+    int flags;
+
+    if (0 != socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        return false;
+    }
+    flags = fcntl(sv[0], F_GETFL, 0);
+    return (0 <= flags && 0 == fcntl(sv[0], F_SETFL, flags | O_NONBLOCK));
+}
+
+static bool fd_is_open(int fd)
+{
+    return (-1 != fcntl(fd, F_GETFD) || EBADF != errno);
+}
+
+static int test_handshake_never_waits(void)
+{
+    int failures = 0, sv[2], rc = PRTE_ERROR;
+    char wire[PMIX_MAX_NSLEN + 512];
+    size_t len, i;
+    prte_oob_tcp_handshake_t hs;
+    prte_oob_tcp_hdr_t hdr;
+    prte_oob_tcp_peer_t *peer;
+    bool early = false;
+
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+    memset(&hs, 0, sizeof(hs));
+
+    /* a well-formed ident, one byte at a time */
+    CHECK("socketpair", make_pair(sv));
+    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 0);
+    for (i = 0; i < len; i++) {
+        CHECK("wrote a byte", 1 == write(sv[1], wire + i, 1));
+        memset(&hdr, 0, sizeof(hdr));
+        rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+        if (i + 1 < len && PRTE_ERR_WOULD_BLOCK != rc) {
+            early = true;
+            break;
+        }
+    }
+    CHECK("every partial handshake answered 'not yet'", !early);
+    CHECK("the complete handshake was accepted", PRTE_SUCCESS == rc);
+    CHECK("and names its sender", 3 == hdr.origin && MCA_OOB_TCP_IDENT == hdr.type);
+    CHECK("the record was left empty", NULL == hs.payload && 0 == hs.hdr_rcvd && !hs.sized);
+    peer = prte_oob_tcp_peer_lookup(&(pmix_proc_t){.nspace = "prte-test-dvm", .rank = 3});
+    CHECK("a peer was recorded for the sender", NULL != peer);
+    if (NULL != peer) {
+        pmix_list_remove_item(&prte_oob_base.peers, &peer->super);
+        PMIX_RELEASE(peer);
+    }
+    close(sv[0]);
+    close(sv[1]);
+
+    /* one byte and then silence: the call must come straight back */
+    CHECK("socketpair", make_pair(sv));
+    CHECK("wrote a byte", 1 == write(sv[1], wire, 1));
+    CHECK("a lone byte does not hold the caller",
+          PRTE_ERR_WOULD_BLOCK == prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr));
+    CHECK("nor does a second look with nothing new",
+          PRTE_ERR_WOULD_BLOCK == prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr));
+    prte_oob_tcp_handshake_reset(&hs);
+    close(sv[0]);
+    close(sv[1]);
+
+    /* another DVM's daemon is refused on its header, and its socket closed */
+    CHECK("socketpair", make_pair(sv));
+    len = build_ident(wire, "some-other-dvm", 0);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("a foreign namespace is refused", PRTE_ERR_CONNECTION_REFUSED == rc);
+    CHECK("and the connection disposed of", !fd_is_open(sv[0]));
+    CHECK("with nothing allocated for it", NULL == hs.payload);
+    prte_oob_tcp_handshake_reset(&hs);
+    close(sv[1]);
+
+    /* a payload too short to hold the ack flag is refused, not over-read */
+    CHECK("socketpair", make_pair(sv));
+    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 1);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("a one-byte ident payload is refused", PRTE_SUCCESS != rc && PRTE_ERR_WOULD_BLOCK != rc);
+    CHECK("and the connection disposed of", !fd_is_open(sv[0]));
+    prte_oob_tcp_handshake_reset(&hs);
+    close(sv[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_handshake_never_waits\n");
+    }
+    return failures;
+}
+
+/* A connection attempt that has been overtaken must not dial.
+ *
+ * prte_oob_tcp_peer_try_connect can run long after it was scheduled - a retry
+ * waits on a timer - and by then the peer may have connected by dialing us.
+ * Carrying on closed the socket that live connection was using.  Everything
+ * that schedules an attempt sets CONNECTING first, so any other state means
+ * the attempt is stale.  (The reachability stub is here so that, were the
+ * guard missing, the test would see the socket closed rather than crash on a
+ * framework a unit test never opens.)
+ */
+static prte_reachable_t *no_route(pmix_list_t *local_ifs, pmix_list_t *remote_ifs)
+{
+    PRTE_HIDE_UNUSED_PARAMS(local_ifs, remote_ifs);
+    return NULL;
+}
+
+static int test_stale_attempt_does_not_dial(void)
+{
+    int failures = 0, sv[2];
+    prte_oob_tcp_peer_t *peer;
+    prte_oob_tcp_conn_op_t *op;
+    prte_reachable_base_module_reachable_fn_t save = prte_reachable.reachable;
+
+    prte_reachable.reachable = no_route;
+    CHECK("socketpair", make_pair(sv));
+
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 5);
+    peer->sd = sv[0];
+    peer->state = MCA_OOB_TCP_CONNECTED;
+    peer->established = true;
+
+    op = PMIX_NEW(prte_oob_tcp_conn_op_t);
+    op->peer = peer;
+    prte_oob_tcp_peer_try_connect(-1, 0, op);
+
+    CHECK("the connected peer kept its socket", sv[0] == peer->sd);
+    CHECK("which is still open", fd_is_open(sv[0]));
+    CHECK("and it is still connected", MCA_OOB_TCP_CONNECTED == peer->state);
+
+    /* the socket is ours to close, not the peer's */
+    peer->sd = -1;
+    PMIX_RELEASE(peer);
+    close(sv[0]);
+    close(sv[1]);
+    prte_reachable.reachable = save;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_stale_attempt_does_not_dial\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -719,6 +909,8 @@ int main(void)
     failures += test_peer_base_assignment();
     failures += test_queued_sends_complete_on_close();
     failures += test_wire_header();
+    failures += test_handshake_never_waits();
+    failures += test_stale_attempt_does_not_dial();
 
     prte_finalize();
 

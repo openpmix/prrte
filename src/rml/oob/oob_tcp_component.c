@@ -182,6 +182,7 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
     peer->send_ev_active = false;
     peer->recv_ev_active = false;
     peer->timer_ev_active = false;
+    memset(&peer->hshake, 0, sizeof(peer->hshake));
 }
 static void peer_des(prte_oob_tcp_peer_t *peer)
 {
@@ -211,6 +212,7 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
         PMIX_RELEASE(peer->send_msg);
     }
     PMIX_LIST_DESTRUCT(&peer->send_queue);
+    prte_oob_tcp_handshake_reset(&peer->hshake);
     PMIX_DESTRUCT(&peer->lock);
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_t, pmix_list_item_t, peer_cons, peer_des);
@@ -239,7 +241,16 @@ static void pop_des(prte_oob_tcp_peer_op_t *pop)
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_op_t, pmix_object_t, pop_cons, pop_des);
 
-PMIX_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, pmix_object_t, NULL, NULL);
+static void cop_cons(prte_oob_tcp_conn_op_t *cop)
+{
+    cop->peer = NULL;
+    memset(&cop->hshake, 0, sizeof(cop->hshake));
+}
+static void cop_des(prte_oob_tcp_conn_op_t *cop)
+{
+    prte_oob_tcp_handshake_reset(&cop->hshake);
+}
+PMIX_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, pmix_object_t, cop_cons, cop_des);
 
 static void nicaddr_cons(prte_oob_tcp_nicaddr_t *ptr)
 {
