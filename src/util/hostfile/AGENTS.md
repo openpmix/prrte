@@ -11,14 +11,13 @@ this file and those disagree, **the docs win** — and please fix this file.
 ## What lives here
 
 The hostfile parser: `hostfile.c`, reading one line at a time through
-[`src/util/textfile.h`](../textfile.h), and three entry points over it. A
+[`src/util/textfile.h`](../textfile.h), and two entry points over it. A
 hostfile is one node per line, optionally with keyword modifiers.
 
 | Entry point | Used for | Behavior |
 |-------------|----------|----------|
 | `prte_util_add_hostfile_nodes()` | building an allocation (`prte --hostfile`, `--add-hostfile`) | Adds every named node to the caller's list, merging duplicates and dropping the excluded ones. |
 | `prte_util_filter_hostfile_nodes()` | selecting for a job (`prun --hostfile`) | Removes from the caller's list every node the hostfile does not name, and caps the ones it keeps (see below). Returns `PRTE_ERR_TAKE_NEXT_OPTION` if the hostfile was empty, and refuses a hostfile naming a node the allocation does not have. |
-| `prte_util_get_ordered_host_list()` | nothing in the tree — only the unit tests call it | Keeps duplicates and order: the list *is* the sequence of placements. `rmaps/seq` reads its sequence file with its own reader, and `rmaps/rank_file` uses the rankfile parser. |
 
 There is no lexer any more. `prte_textfile_next()` hands back one logical
 line, already stripped of comments and split into fields with `=` always a
@@ -86,7 +85,7 @@ on the way, and the `-host` given beside an empty hostfile was never applied.
 
 ## What the goldens are for
 
-`test/unit/util/test_hostfile_corpus.c` pairs 94 hostfile bodies with a
+`test/unit/util/test_hostfile_corpus.c` pairs 78 hostfile bodies with a
 canonical rendering of what parsing each one produces — every field the
 parser can set on a node, plus the return code. It exists because this parser
 was rewritten from a scanner to a line reader, and a rewrite of that size can
@@ -173,10 +172,13 @@ found on it". It matters in three places here:
   same node is an error (`slots-given`), not a silent overwrite.
 - The relative forms (`+n<K>`, `+e[:N]`) are **placeholders**: they name a node
   without saying anything about its size. A placeholder's `slots` is the
-  constructor's zero, so `prte_util_get_ordered_host_list()` has to check the
-  flag before treating it as a subdivision request — otherwise every node a
-  bare `+n0` or `+e` resolved to came back with zero slots and the launch was
-  refused for lack of resources.
+  constructor's zero, so anything reading it has to check the flag before
+  treating it as a subdivision request — otherwise every node a bare `+n0` or
+  `+e` resolved to would be capped to zero slots.
+- In the filter, a count means the same thing whether the entry named its
+  node outright or by position: `hostfile_cap_for_job()` applies it to a node
+  selected by name, by `+n<K>`, and to each node `+e` takes. The positional
+  forms used to have their `slots=` parsed and then dropped.
 
 "Empty", for `+e`, means `slots_inuse == 0` — not `num_procs == 0`, which is
 the count the mapper is still *building* for the job being mapped. The
@@ -196,9 +198,9 @@ if (!prte_hnp_is_allocated) {
 }
 ```
 
-All three places that resolve `+n<K>` — here, `prte_util_get_ordered_host_list()`,
-and dash-host's `parse_dash_host()` — must make the same adjustment, or the
-same index means a different node depending on which one the user typed it at.
+Both places that resolve `+n<K>` — here and dash-host's `parse_dash_host()` —
+must make the same adjustment, or the same index means a different node
+depending on which one the user typed it at.
 
 In the filter, a `+n<K>` whose node is not on the caller's list is refused
 with `hostfile:extra-node-not-found`, exactly as a node named outright is.
@@ -247,14 +249,12 @@ objects. Route every exit through the single `cleanup:` label.
 A list of nodes is torn down with `PMIX_LIST_DESTRUCT`, never
 `PMIX_DESTRUCT`: the plain destructor releases none of the items. The filter
 used the plain one on its parse-failure and empty-file returns, which leaked
-every node read before a bad line, once per job; so did the ordered list's
-exclude list on its error paths.
+every node read before a bad line, once per job. Every refusal inside its
+resolution loop also leaked the entry being resolved, which has already been
+taken off `newnodes`; `cleanup:` releases it now.
 
 The same applies to walking a list while removing from it: save the successor
-*before* releasing the item. The exclusion pass in
-`prte_util_get_ordered_host_list()` kept iterating from the item it had just
-released, which is a use-after-free on every hostfile that excludes a host
-appearing more than once.
+*before* releasing the item.
 
 ---
 
@@ -263,12 +263,15 @@ appearing more than once.
 - `test/unit/rmaps/test_resize.c` (`test_hostfile_cap`) covers the section
   above: that the cap applies and is recorded when selecting for a map, that
   it is restored, that VM-setup marking leaves the node alone, that a
-  count *larger* than the node changes nothing, and that an empty hostfile
-  does not stop a `-host` beside it from filtering. It lives under `rmaps`
-  because the record/restore list is a framework global that needs the
-  framework opened.
+  count *larger* than the node changes nothing, that `+n<K> slots=` and
+  `+e slots=` cap what they select, that an empty hostfile does not stop a
+  `-host` beside it from filtering, and every relative form the filter
+  resolves — either case of the letter, an index past the pool or too large
+  for an int, a bad letter, and an `+e:N` asking for more nodes than there
+  are. It lives under `rmaps` because the record/restore list is a framework
+  global that needs the framework opened.
 - `test/unit/util/test_hostfile_corpus.c` is the golden corpus described
-  above — 94 bodies against their parse results. Add a case there for
+  above — 78 bodies against their parse results. Add a case there for
   anything you change.
 - `test/unit/util/test_textfile.c` covers the line reader underneath it:
   where a line ends, where a comment does, and that there is no maximum line
