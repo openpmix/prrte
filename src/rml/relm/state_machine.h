@@ -36,7 +36,8 @@ BEGIN_C_DECLS
  * link_updates.c. The generic engine below drives them; they in turn call
  * back into it to move a message's state along. */
 
-// Pack any state information and/or data for a msg state update
+// Pack any state information and/or data for a msg state update. Answers a
+// PMIx status, as the pack helpers in util.h do
 int prte_relm_pack_state_update(pmix_data_buffer_t* buf, prte_relm_msg_t* msg);
 // Handle a single msg's state update, dispatching on who originated it.
 // buf is NULL unless this update is associated with a recvd message buffer.
