@@ -41,7 +41,7 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 
 
-static void resize_ranks(pmix_data_array_t* arr, size_t size){
+void prte_rml_resize_ranks(pmix_data_array_t* arr, size_t size){
     if(size == arr->size) return;
     pmix_data_array_t old_arr = *arr;
 
@@ -62,7 +62,7 @@ static void resize_ranks(pmix_data_array_t* arr, size_t size){
 }
 
 // Shrink array to minimum size while maintaining valid entries at the same idx
-static void shrink_ranks(pmix_data_array_t* arr){
+void prte_rml_shrink_ranks(pmix_data_array_t* arr){
     size_t size = arr->size;
     for(size_t idx = 1; idx <= arr->size; idx++){
         if(PMIX_RANK_INVALID != ((pmix_rank_t*)arr->array)[arr->size - idx]){
@@ -70,7 +70,7 @@ static void shrink_ranks(pmix_data_array_t* arr){
         }
         size--;
     }
-    resize_ranks(arr, size);
+    prte_rml_resize_ranks(arr, size);
 }
 
 pmix_rank_t prte_rml_get_route(pmix_rank_t target){
@@ -166,7 +166,7 @@ void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr){
     }
 
     // Shrink out any now invalid ancestors at the end of the array
-    shrink_ranks(ancestors_arr);
+    prte_rml_shrink_ranks(ancestors_arr);
 
     if(ancestors_arr == &prte_rml_base.ancestors){
         // Update lifeline/parent only if we're updating my actual ancestors
@@ -183,7 +183,7 @@ static void handle_promotion(void){
     if(depth == prte_rml_base.cur_node.depth) return;
 
     // Make sure we can fit up to our max # children
-    resize_ranks(&prte_rml_base.children, prte_rml_base.radix);
+    prte_rml_resize_ranks(&prte_rml_base.children, prte_rml_base.radix);
     pmix_rank_t* children = prte_rml_base.children.array;
 
     radix_to_depth(&prte_rml_base.cur_node, depth);
@@ -340,7 +340,7 @@ static void update_descendants(void){
         }
         prte_rml_base.n_children++;
     }
-    shrink_ranks(&prte_rml_base.children);
+    prte_rml_shrink_ranks(&prte_rml_base.children);
     return;
 }
 
@@ -367,7 +367,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
         status.epoch = epoch;
     }
 
-    resize_ranks(&status.failed_ranks, failed_ranks->size);
+    prte_rml_resize_ranks(&status.failed_ranks, failed_ranks->size);
     size_t j = 0;
     for(size_t i = 0; i < failed_ranks->size; i++){
         pmix_rank_t r = ((pmix_rank_t*)failed_ranks->array)[i];
@@ -401,7 +401,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
         }
         ((pmix_rank_t*)status.failed_ranks.array)[j++] = r;
     }
-    shrink_ranks(&status.failed_ranks);
+    prte_rml_shrink_ranks(&status.failed_ranks);
 
     //If no new information, just return
     if(status.failed_ranks.size == 0){
@@ -446,7 +446,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
         // A convenience for fault handlers that will be using this status,
         // so they can always safely iterate up to children.size
         if(status.prev_children.size < prte_rml_base.children.size){
-            resize_ranks(&status.prev_children, prte_rml_base.children.size);
+            prte_rml_resize_ranks(&status.prev_children, prte_rml_base.children.size);
         }
     } else {
         for(size_t i = 0; i < status.prev_children.size; i++){
@@ -605,7 +605,7 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
         // A convenience for fault handlers, so they can always safely iterate
         // up to the larger of the two child arrays.
         if(status.prev_children.size < prte_rml_base.children.size){
-            resize_ranks(&status.prev_children, prte_rml_base.children.size);
+            prte_rml_resize_ranks(&status.prev_children, prte_rml_base.children.size);
         }
     } else {
         for(size_t i = 0; i < status.prev_children.size; i++){
@@ -801,7 +801,7 @@ int prte_rml_route_lost(pmix_rank_t route){
     }
 
     pmix_data_array_t failed_ranks = PMIX_DATA_ARRAY_STATIC_INIT;
-    resize_ranks(&failed_ranks, 1);
+    prte_rml_resize_ranks(&failed_ranks, 1);
     ((pmix_rank_t*)failed_ranks.array)[0] = route;
 
     prte_rml_repair_routing_tree(&failed_ranks, /* global = */ false, /* epoch = */ 0);
@@ -823,7 +823,7 @@ static void build_tree_from_base(void){
 
     // Build array of ancestors
     size_t n_ancestors = prte_rml_base.cur_node.depth;
-    resize_ranks(&prte_rml_base.ancestors, n_ancestors);
+    prte_rml_resize_ranks(&prte_rml_base.ancestors, n_ancestors);
     pmix_rank_t* ancestors = (pmix_rank_t*) prte_rml_base.ancestors.array;
     for(size_t i = 0; i < n_ancestors; i++){
         ancestors[i] = radix_at_depth(&prte_rml_base.cur_node, i).rank;
@@ -833,7 +833,7 @@ static void build_tree_from_base(void){
     PRTE_PROC_MY_PARENT->rank = prte_rml_base.lifeline;
 
     // Build array of children
-    resize_ranks(&prte_rml_base.children, prte_rml_base.radix);
+    prte_rml_resize_ranks(&prte_rml_base.children, prte_rml_base.radix);
     pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
     radix_node_t child;
     size_t child_index = 0;
@@ -849,7 +849,7 @@ static void build_tree_from_base(void){
     for(; child_index < prte_rml_base.children.size; child_index++){
         children[child_index] = PMIX_RANK_INVALID;
     }
-    shrink_ranks(&prte_rml_base.children);
+    prte_rml_shrink_ranks(&prte_rml_base.children);
     prte_rml_base.n_children = prte_rml_base.children.size;
 
     // Route the freshly-built base tree around any failed rank - the same
