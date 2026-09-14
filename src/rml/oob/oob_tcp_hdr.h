@@ -114,6 +114,28 @@ typedef struct {
     char nspace[PMIX_MAX_NSLEN + 1];
 } prte_oob_tcp_hdr_t;
 
+/* A connect handshake part way through being read.
+ *
+ * A handshake is the fixed header, the nspace it names and a small ack and
+ * version payload, and nothing promises the three arrive together - or at
+ * all, since the listening port answers anyone who connects to it.  It is
+ * read on the progress thread, so it is read as the bytes arrive: each read
+ * event takes what the socket has and records here how far it got, and the
+ * next one carries on.  Waiting for the rest instead is what let one stray
+ * byte on the port stop a daemon dead.
+ *
+ * `hdr` holds network byte order until `sized` is set, which happens once the
+ * header and its nspace are complete and have been checked; from then on it is
+ * host order and `payload` is allocated.  prte_oob_tcp_handshake_reset()
+ * returns one of these to empty. */
+typedef struct {
+    prte_oob_tcp_hdr_t hdr;
+    size_t hdr_rcvd;     // bytes of hdr - fixed part, then nspace - read so far
+    bool sized;          // header complete, checked, converted; payload allocated
+    char *payload;       // hdr.nbytes long, plus a terminator the reader adds
+    size_t payload_rcvd;
+} prte_oob_tcp_handshake_t;
+
 /* the part of the header that is always present, and the length of a
  * particular header on the wire.  Both take the nslen in *host* order, which
  * is every order: it is a single byte. */

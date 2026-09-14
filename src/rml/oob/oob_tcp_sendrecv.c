@@ -429,49 +429,30 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
 
     switch (peer->state) {
     case MCA_OOB_TCP_CONNECT_ACK:
-        if (PRTE_SUCCESS == (rc = prte_oob_tcp_peer_recv_connect_ack(peer, peer->sd, NULL))) {
+        if (PRTE_SUCCESS == (rc = prte_oob_tcp_peer_recv_connect_ack(peer, peer->sd,
+                                                                     &peer->hshake, NULL))) {
+            /* we connected!  tcp_peer_connected() has already run beneath the
+             * ack and done everything connecting means: the socket's events
+             * now live on peer->evbase, both are armed, and the peer reads
+             * CONNECTED.  Touch none of it here.  A worker may already own
+             * the socket - and may already have failed a send on it and
+             * closed the peer - so writing CONNECTED again from this thread
+             * could bring a closed peer back to life with no socket, and
+             * every later message to it would queue behind a send event that
+             * can never fire. */
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
-                                "%s:tcp:recv:handler starting send/recv events",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-            /* we connected! Start the send/recv events.
-             *
-             * tcp_peer_connected() has already run beneath the ack: the peer
-             * is CONNECTED, its socket events now live on peer->evbase, and a
-             * worker may already be queueing onto it.  So everything below
-             * that touches the send queue or the send event has to be guarded
-             * - it is no longer this thread's alone. */
-            if (!peer->recv_ev_active) {
-                peer->recv_ev_active = true;
-                PMIX_POST_OBJECT(peer);
-                prte_event_add(&peer->recv_event, 0);
-            }
-            if (peer->timer_ev_active) {
-                prte_event_del(&peer->timer_event);
-                peer->timer_ev_active = false;
-            }
-            /* if there is a message waiting to be sent, queue it */
-            pmix_mutex_lock(&peer->lock);
-            if (NULL == peer->send_msg) {
-                peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
-            }
-            if (NULL != peer->send_msg && !peer->send_ev_active) {
-                peer->send_ev_active = true;
-                PMIX_POST_OBJECT(peer);
-                prte_event_add(&peer->send_event, 0);
-            }
-            /* update our state */
-            peer->state = MCA_OOB_TCP_CONNECTED;
-            peer->ever_connected = true;
-            pmix_mutex_unlock(&peer->lock);
-        } else if (PRTE_ERR_UNREACH != rc) {
-            /* we get an unreachable error returned if a connection
-             * completes but is rejected - otherwise, we don't want
-             * to terminate as we might be retrying the connection */
+                                "%s:tcp:recv:handler connection to %s complete",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
+        } else if (PRTE_ERR_WOULD_BLOCK != rc) {
+            /* Nothing more to do: every failure has already disposed of the
+             * connection.  Closing the peer again here is not harmless - each
+             * close of a connection still being established starts a fresh
+             * attempt, so a second one ran two attempts at once and the later
+             * closed the earlier's socket from under its armed events.  A
+             * handshake still arriving just waits for the next read event. */
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s UNABLE TO COMPLETE CONNECT ACK WITH %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
-            prte_oob_tcp_peer_close(peer);
-            return;
         }
         break;
     case MCA_OOB_TCP_CONNECTED:

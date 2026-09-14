@@ -95,6 +95,11 @@ socket) checks the identity and either acks or nacks.  Because two daemons can
 try to connect to each other simultaneously, the handshake resolves which socket
 survives so a pair of peers does not end up with two half-open connections.
 
+The handshake runs on the progress thread, and the listening port answers
+anything that connects to it, so the handshake is read as its bytes arrive
+rather than by waiting for them.  A connection that sends part of one and
+stops costs its socket, not the daemon.
+
 Retry and backoff.  When a connect attempt finds no listener yet — a common race
 during startup — ``prte_oob_tcp_peer_try_connect`` schedules a retry.  The base
 behavior is a fixed ``retry_delay``-second wait, bounded by
