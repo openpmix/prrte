@@ -5161,8 +5161,11 @@ test_fence_straggler() {
 # nothing, which is why this cannot be a single-host test.
 #
 # The endpoint read-back is the second half.  Every rank posts one value and
-# never commits or fences it, so nothing but the group exchange can carry it;
-# the gets are OPTIONAL, so they cannot leave the process to find it.
+# commits it but never collects it in a fence, so nothing but the group
+# exchange can carry it - a group contribution is built from what each member
+# COMMITTED, so the commit is required, not a shortcut around the test.  The
+# gets ask under the group's context id and are OPTIONAL, so they cannot
+# leave the process to find it.
 test_grpcomm_invite() {
     local out n
 

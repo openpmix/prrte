@@ -16,9 +16,9 @@
  * The highest rank is the leader: it calls PMIx_Group_invite for the whole
  * job with PMIX_GROUP_ASSIGN_CONTEXT_ID.  Every other rank registers a
  * PMIX_GROUP_INVITED handler and accepts with PMIx_Group_join_nb.  Every rank
- * also posts one PMIx_Put value at PMIX_REMOTE scope beforehand and never
- * commits or fences it, then reads every peer's value back once the group has
- * formed.
+ * also posts one value at PMIX_REMOTE scope beforehand and commits it, but
+ * never fences it with PMIX_COLLECT_DATA, then reads every peer's value back
+ * once the group has formed.
  *
  * **The leader being the highest rank is the whole point of this client.**
  * Mapped by node, that rank is on the last node of the DVM and never on the
@@ -190,12 +190,23 @@ int main(int argc, char **argv)
     printf("GINV %u ROLE %s\n", myproc.rank, leader ? "LEADER" : "MEMBER");
     fflush(stdout);
 
-    /* post our contribution - deliberately NOT committed or fenced, so only
-     * the group exchange can carry it to the other members */
+    /* post our contribution, and commit it.  What a group exchange carries
+     * is what each member has COMMITTED - its server builds the contribution
+     * from the modex log only a commit writes - so a value that is only put
+     * has not been made public and is not the group's to circulate.
+     *
+     * Committing does not let anything but the group deliver it: the fence
+     * below collects nothing, and the read-back asks under the group's
+     * context id with PMIX_OPTIONAL, which only a value the group exchange
+     * stored can answer. */
     value.type = PMIX_UINT64;
     value.data.uint64 = 1234UL + (unsigned long) myproc.rank;
     if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_REMOTE, ENDPT_KEY, &value))) {
         fprintf(stderr, "GINV %u PUT-FAIL %s\n", myproc.rank, PMIx_Error_string(rc));
+        goto done;
+    }
+    if (PMIX_SUCCESS != (rc = PMIx_Commit())) {
+        fprintf(stderr, "GINV %u COMMIT-FAIL %s\n", myproc.rank, PMIx_Error_string(rc));
         goto done;
     }
 
