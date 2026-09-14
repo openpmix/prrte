@@ -16,7 +16,7 @@
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +68,7 @@ typedef uint8_t prte_oob_tcp_msg_type_t;
  *
  * The receiver therefore reconstructs both procids with its own namespace, and
  * the handshake is what makes that safe rather than merely true: an IDENT
- * carries the connecting daemon's nspace and `tcp_peer_recv_connect_ack`
+ * carries the connecting daemon's nspace and `tcp_peer_read_handshake`
  * **refuses a peer whose nspace is not ours**.  The invariant is checked once
  * per connection instead of being restated on every message - and instead of
  * being left for a reader to derive.

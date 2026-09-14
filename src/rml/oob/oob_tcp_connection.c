@@ -134,10 +134,11 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
                         strerror(prte_socket_errno), prte_socket_errno);
         } else {
             flags |= O_NONBLOCK;
-            if (fcntl(peer->sd, F_SETFL, flags) < 0)
+            if (fcntl(peer->sd, F_SETFL, flags) < 0) {
                 pmix_output(0, "%s-%s tcp_peer_connect: fcntl(F_SETFL) failed: %s (%d)\n",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                             strerror(prte_socket_errno), prte_socket_errno);
+            }
         }
     }
 
@@ -661,12 +662,9 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         }
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
-        /* let the TCP component know that this module failed to make
-         * the connection so it can do some bookkeeping and fail back
-         * to the OOB level so another component can try. This will activate
-         * an event in the component event base, and so it will fire async
-         * from us if we are in our own progress thread
-         */
+        /* let the TCP component know that we failed to make the connection
+         * so it can do its bookkeeping - this fires asynchronously, on
+         * prte_event_base */
         PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_failed_to_connect);
         tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
         goto cleanup;
@@ -722,9 +720,9 @@ out:
     }
 }
 
-/* send a handshake that includes our process identifier, our
- * version string, and a security token to ensure we are talking
- * to another OMPI process
+/* send a handshake that includes our process identifier and our version
+ * string, so the peer can check it is talking to a daemon of its own DVM
+ * running its own build
  */
 static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
 {
@@ -782,9 +780,9 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     return PRTE_SUCCESS;
 }
 
-/* send a handshake that includes our process identifier, our
- * version string, and a security token to ensure we are talking
- * to another OMPI process
+/* refuse a handshake: our process identifier and an ack flag of zero, which
+ * tells a peer that dialed us while we were dialing it that ours is the
+ * connection that will be kept
  */
 static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 {
@@ -829,7 +827,7 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     /* send it */
     if (PRTE_SUCCESS != tcp_peer_send_blocking(sd, msg, sdsize)) {
         /* it's ok if it fails - remote side may already
-         * identifiet the collision and closed the connection
+         * have identified the collision and closed the connection
          */
         rc = PRTE_SUCCESS;
     }
@@ -1066,7 +1064,7 @@ static int tcp_peer_send_blocking(int sd, void *data, size_t size)
  *  connected socket and verify the expected response. If so, move the
  *  socket to a connected state.
  */
-static bool retry(prte_oob_tcp_peer_t *peer, int sd, bool fatal)
+static bool retry(prte_oob_tcp_peer_t *peer, int sd)
 {
     int cmpval;
 
@@ -1074,7 +1072,19 @@ static bool retry(prte_oob_tcp_peer_t *peer, int sd, bool fatal)
                         "%s SIMUL CONNECTION WITH %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&peer->name));
     cmpval = prte_util_compare_name_fields(PRTE_NS_CMP_ALL, &peer->name, PRTE_PROC_MY_NAME);
-    if (fatal) {
+    if (PRTE_VALUE1_GREATER == cmpval) {
+        /* The other end will retry the connection.
+         *
+         * What we abandon may be a working connection, whose events live
+         * on a worker base and are armed by prte_oob_tcp_queue_msg under
+         * the peer lock whenever the peer reads CONNECTED.  So leave
+         * CONNECTED under that lock first - after it, nothing re-arms the
+         * send event behind the deletes below, and the deletes then wait
+         * out any handler already running (including one closing the
+         * peer, whose own teardown this state keeps quiet). */
+        pmix_mutex_lock(&peer->lock);
+        peer->state = MCA_OOB_TCP_UNCONNECTED;
+        pmix_mutex_unlock(&peer->lock);
         if (peer->send_ev_active) {
             prte_event_del(&peer->send_event);
             peer->send_ev_active = false;
@@ -1083,77 +1093,41 @@ static bool retry(prte_oob_tcp_peer_t *peer, int sd, bool fatal)
             prte_event_del(&peer->recv_event);
             peer->recv_ev_active = false;
         }
-        if (0 <= peer->sd) {
-            CLOSE_THE_SOCKET(peer->sd);
-            peer->sd = -1;
+        CLOSE_THE_SOCKET(peer->sd);
+        /* We have just thrown away our own socket in favour of the one
+         * the caller accepted, and the caller carries on to finish the
+         * handshake there, so that socket is the peer's from here on.
+         * Say so: leaving the descriptor we closed in the field invites a
+         * second close of a number the kernel has since handed to
+         * somebody else, and leaves anything that fails later in the
+         * handshake unable to tell that this peer owns the socket it
+         * failed on. */
+        peer->sd = sd;
+        /* Nothing part way through the old stream means anything on the
+         * new one - the far end threw it away with its end of that
+         * connection.  A half-read message would have the new stream's
+         * bytes appended to it, and a half-sent one would carry on from
+         * the middle; drop the first, and start the second again from its
+         * header. */
+        if (NULL != peer->recv_msg) {
+            PMIX_RELEASE(peer->recv_msg);
+            peer->recv_msg = NULL;
         }
-        if (PRTE_VALUE1_GREATER == cmpval) {
-            /* force the other end to retry the connection */
-            peer->state = MCA_OOB_TCP_UNCONNECTED;
-        } else {
-            /* retry the connection */
-            peer->state = MCA_OOB_TCP_CONNECTING;
-            PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
+        pmix_mutex_lock(&peer->lock);
+        if (NULL != peer->send_msg) {
+            peer->send_msg->hdr_sent = false;
+            peer->send_msg->iovnum = 0;
+            peer->send_msg->sdptr = (char *) &peer->send_msg->hdr;
+            peer->send_msg->sdbytes = PRTE_OOB_TCP_HDR_LEN(&peer->send_msg->hdr);
         }
-        return true;
+        peer->state = MCA_OOB_TCP_UNCONNECTED;
+        pmix_mutex_unlock(&peer->lock);
+        return false;
     } else {
-        if (PRTE_VALUE1_GREATER == cmpval) {
-            /* The other end will retry the connection.
-             *
-             * What we abandon may be a working connection, whose events live
-             * on a worker base and are armed by prte_oob_tcp_queue_msg under
-             * the peer lock whenever the peer reads CONNECTED.  So leave
-             * CONNECTED under that lock first - after it, nothing re-arms the
-             * send event behind the deletes below, and the deletes then wait
-             * out any handler already running (including one closing the
-             * peer, whose own teardown this state keeps quiet). */
-            pmix_mutex_lock(&peer->lock);
-            peer->state = MCA_OOB_TCP_UNCONNECTED;
-            pmix_mutex_unlock(&peer->lock);
-            if (peer->send_ev_active) {
-                prte_event_del(&peer->send_event);
-                peer->send_ev_active = false;
-            }
-            if (peer->recv_ev_active) {
-                prte_event_del(&peer->recv_event);
-                peer->recv_ev_active = false;
-            }
-            CLOSE_THE_SOCKET(peer->sd);
-            /* We have just thrown away our own socket in favour of the one
-             * the caller accepted, and the caller carries on to finish the
-             * handshake there, so that socket is the peer's from here on.
-             * Say so: leaving the descriptor we closed in the field invites a
-             * second close of a number the kernel has since handed to
-             * somebody else, and leaves anything that fails later in the
-             * handshake unable to tell that this peer owns the socket it
-             * failed on. */
-            peer->sd = sd;
-            /* Nothing part way through the old stream means anything on the
-             * new one - the far end threw it away with its end of that
-             * connection.  A half-read message would have the new stream's
-             * bytes appended to it, and a half-sent one would carry on from
-             * the middle; drop the first, and start the second again from its
-             * header. */
-            if (NULL != peer->recv_msg) {
-                PMIX_RELEASE(peer->recv_msg);
-                peer->recv_msg = NULL;
-            }
-            pmix_mutex_lock(&peer->lock);
-            if (NULL != peer->send_msg) {
-                peer->send_msg->hdr_sent = false;
-                peer->send_msg->iovnum = 0;
-                peer->send_msg->sdptr = (char *) &peer->send_msg->hdr;
-                peer->send_msg->sdbytes = PRTE_OOB_TCP_HDR_LEN(&peer->send_msg->hdr);
-            }
-            peer->state = MCA_OOB_TCP_UNCONNECTED;
-            pmix_mutex_unlock(&peer->lock);
-            return false;
-        } else {
-            /* The connection will be retried */
-            tcp_peer_send_connect_nack(sd, &peer->name);
-            CLOSE_THE_SOCKET(sd);
-            return true;
-        }
+        /* The connection will be retried */
+        tcp_peer_send_connect_nack(sd, &peer->name);
+        CLOSE_THE_SOCKET(sd);
+        return true;
     }
 }
 
@@ -1307,11 +1281,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
          * other state never gets this far.
          */
 
-        /* release the socket */
-        CLOSE_THE_SOCKET(peer->sd);
-        peer->sd = -1;
-
-        /* unregister active events */
+        /* unregister active events - before the socket they watch is gone */
         if (peer->recv_ev_active) {
             prte_event_del(&peer->recv_event);
             peer->recv_ev_active = false;
@@ -1321,8 +1291,11 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
             peer->send_ev_active = false;
         }
 
+        /* release the socket */
+        CLOSE_THE_SOCKET(peer->sd);
+
         /* change the state so we'll accept the remote
-         * connection when it'll apeear
+         * connection when it appears
          */
         peer->state = MCA_OOB_TCP_UNCONNECTED;
         return PRTE_ERR_UNREACH;
@@ -1337,7 +1310,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
     if (is_new
         && (MCA_OOB_TCP_CONNECTED == peer->state || MCA_OOB_TCP_CONNECTING == peer->state
             || MCA_OOB_TCP_CONNECT_ACK == peer->state)) {
-        if (retry(peer, sd, false)) {
+        if (retry(peer, sd)) {
             free(msg);
             return PRTE_ERR_UNREACH;
         }
@@ -1397,10 +1370,6 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
                         "%s-%s tcp_peer_connected on socket %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&(peer->name)), peer->sd);
 
-    if (peer->timer_ev_active) {
-        prte_event_del(&peer->timer_event);
-        peer->timer_ev_active = false;
-    }
     if (NULL != peer->active_addr) {
         peer->active_addr->retries = 0;
     }
@@ -1510,10 +1479,6 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
             prte_event_del(&peer->send_event);
             peer->send_ev_active = false;
         }
-        if (peer->timer_ev_active) {
-            prte_event_del(&peer->timer_event);
-            peer->timer_ev_active = false;
-        }
         close(peer->sd);
         peer->sd = -1;
         if (NULL != peer->active_addr) {
@@ -1557,10 +1522,6 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     if (peer->send_ev_active) {
         prte_event_del(&peer->send_event);
         peer->send_ev_active = false;
-    }
-    if (peer->timer_ev_active) {
-        prte_event_del(&peer->timer_event);
-        peer->timer_ev_active = false;
     }
     close(peer->sd);
     peer->sd = -1;
@@ -1699,7 +1660,7 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
          * daemon of that rank.  An absent namespace is refused for the same
          * reason - it would fall back to ours and defeat the check. */
         if (0 == hs->hdr.nslen
-            || !PMIX_CHECK_NSPACE(hs->hdr.nspace, PRTE_PROC_MY_NAME->nspace)) {
+            || !PMIX_CHECK_NSPACE_STRICT(hs->hdr.nspace, PRTE_PROC_MY_NAME->nspace)) {
             pmix_output(0,
                         "%s tcp_peer_recv_connect_ack: refusing a connection from "
                         "namespace \"%s\" - this daemon serves \"%s\"",
