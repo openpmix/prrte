@@ -490,8 +490,8 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
         PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                              "%s routed:radix: recovering with new depth"
                              " %lu->%lu", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             status.prev_ancestors.size,
-                             prte_rml_base.ancestors.size));
+                             (unsigned long) status.prev_ancestors.size,
+                             (unsigned long) prte_rml_base.ancestors.size));
 
     }
 
@@ -631,8 +631,8 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
                              "%s routed:radix: reviving %s with new depth"
                              " %lu->%lu", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_VPID_PRINT(rank),
-                             status.prev_ancestors.size,
-                             prte_rml_base.ancestors.size));
+                             (unsigned long) status.prev_ancestors.size,
+                             (unsigned long) prte_rml_base.ancestors.size));
     }
 
     // Notify the components so their in-flight state re-drives over the
