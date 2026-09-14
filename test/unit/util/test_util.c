@@ -53,9 +53,7 @@
  *
  *  - the hostfile parser left its FILE* open and the flex buffer live on
  *    every error path, so the next hostfile parsed in the same process
- *    resumed in the middle of the failed one; and its exclusion pass in
- *    prte_util_get_ordered_host_list() walked the list through an item it
- *    had already released.
+ *    resumed in the middle of the failed one.
  *
  *  - prte_util_filter_hostfile_nodes() stopped recognizing an allocated node
  *    once its daemon reported a different hostname for it, because the node
@@ -890,31 +888,6 @@ static int test_hostfile(void)
     nd = find_node(&nodes, "hostC");
     CHECK("a host with no count gets one slot", NULL != nd && 1 == nd->slots);
     PMIX_LIST_DESTRUCT(&nodes);
-
-    /*
-     * The exclusion pass. get_ordered_host_list keeps duplicates, so a name
-     * that appears twice and is then excluded exercised the loop that walked
-     * on through an item it had already released.
-     */
-    if (NULL == write_hostfile("hostA\n"
-                               "hostB\n"
-                               "hostA\n"
-                               "hostC\n"
-                               "^hostA\n",
-                               badpath, sizeof(badpath))) {
-        fprintf(stderr, "FAIL [hostfile]: could not write a temp hostfile\n");
-        unlink(path);
-        return failures + 1;
-    }
-    PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_get_ordered_host_list(&nodes, badpath);
-    CHECK("an ordered list with an exclusion parses", PRTE_SUCCESS == rc);
-    CHECK("both copies of the excluded host are gone", NULL == find_node(&nodes, "hostA"));
-    CHECK("the other hosts survived", NULL != find_node(&nodes, "hostB")
-                                          && NULL != find_node(&nodes, "hostC"));
-    CHECK("exactly the survivors remain", 2 == pmix_list_get_size(&nodes));
-    PMIX_LIST_DESTRUCT(&nodes);
-    unlink(badpath);
 
     /* a hostfile that does not exist is an error, not a silent no-op */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);

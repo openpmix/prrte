@@ -200,6 +200,128 @@ int test_hostfile_cap(void)
           0 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
     PMIX_LIST_DESTRUCT(&nodes);
 
+    /* a node named by position takes a count the same way a node named
+     * outright does.  The filter used to resolve "+n<K>" and "+e" and drop
+     * the "slots=" on the floor - the only reader of that count was the
+     * ordered host list, which nothing called.  prte_hnp_is_allocated is
+     * false here, so "+n0" is pool slot 1. */
+    {
+        bool made_pool = (NULL == prte_node_pool);
+        prte_node_t *pool[3];
+        int j;
+
+        if (made_pool) {
+            prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
+            pmix_pointer_array_init(prte_node_pool, 8, INT_MAX, 8);
+        }
+        for (j = 0; j < 3; j++) {
+            pool[j] = PMIX_NEW(prte_node_t);
+            pool[j]->name = (0 == j) ? strdup("poolHNP") : (1 == j) ? strdup("poolX") : strdup("poolY");
+            pool[j]->slots = 4;
+            pool[j]->index = pmix_pointer_array_add(prte_node_pool, pool[j]);
+        }
+
+        if (NULL == write_hostfile("+n0 slots=1\n", path, sizeof(path))) {
+            fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+            return failures + 1;
+        }
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        PMIX_RETAIN(pool[1]);
+        pmix_list_append(&nodes, &pool[1]->super);
+        rc = prte_util_filter_hostfile_nodes(&nodes, path, true);
+        CHECK("relative: filter succeeded", PRTE_SUCCESS == rc);
+        CHECK("relative: node capped for this job", 1 == pool[1]->slots);
+        CHECK("relative: the shrink was recorded",
+              1 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
+        prte_rmaps_base_restore_resized();
+        CHECK("relative: node back to its own size", 4 == pool[1]->slots);
+        PMIX_LIST_DESTRUCT(&nodes);
+
+        if (NULL == write_hostfile("+e slots=2\n", path, sizeof(path))) {
+            fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+            return failures + 1;
+        }
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        PMIX_RETAIN(pool[1]);
+        pmix_list_append(&nodes, &pool[1]->super);
+        PMIX_RETAIN(pool[2]);
+        pmix_list_append(&nodes, &pool[2]->super);
+        rc = prte_util_filter_hostfile_nodes(&nodes, path, true);
+        CHECK("empty: filter succeeded", PRTE_SUCCESS == rc);
+        CHECK("empty: every node it took is capped",
+              2 == pool[1]->slots && 2 == pool[2]->slots);
+        CHECK("empty: both shrinks were recorded",
+              2 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
+        prte_rmaps_base_restore_resized();
+        CHECK("empty: nodes back to their own size", 4 == pool[1]->slots && 4 == pool[2]->slots);
+        PMIX_LIST_DESTRUCT(&nodes);
+
+        /* the rest of the relative forms, as the filter resolves them */
+        {
+            static const struct {
+                const char *body;
+                int rc;
+                const char *kept; /* NULL: nothing checked beyond rc */
+            } rel[] = {
+                {"+N0\n", PRTE_SUCCESS, "poolX"},        /* either case of the letter */
+                {"+n1\n", PRTE_SUCCESS, "poolY"},
+                {"+n9\n", PRTE_ERR_SILENT, NULL},        /* past the end of the pool */
+                {"+n2147483647\n", PRTE_ERR_SILENT, NULL}, /* too large to step over the HNP */
+                {"+x0\n", PRTE_ERR_SILENT, NULL},
+                {"+e:1\n", PRTE_SUCCESS, "poolX"},       /* the first empty node */
+                {"+e:9\n", PRTE_ERR_SILENT, NULL},       /* more empty nodes than there are */
+            };
+            size_t r;
+
+            for (r = 0; r < sizeof(rel) / sizeof(rel[0]); r++) {
+                if (NULL == write_hostfile(rel[r].body, path, sizeof(path))) {
+                    fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+                    return failures + 1;
+                }
+                PMIX_CONSTRUCT(&nodes, pmix_list_t);
+                PMIX_RETAIN(pool[1]);
+                pmix_list_append(&nodes, &pool[1]->super);
+                PMIX_RETAIN(pool[2]);
+                pmix_list_append(&nodes, &pool[2]->super);
+                rc = prte_util_filter_hostfile_nodes(&nodes, path, true);
+                if (rel[r].rc != rc) {
+                    fprintf(stderr, "FAIL [hostfile-cap]: \"%s\" returned %d, expected %d\n",
+                            rel[r].body, rc, rel[r].rc);
+                    failures++;
+                } else if (NULL != rel[r].kept
+                           && (1 != pmix_list_get_size(&nodes)
+                               || 0 != strcmp(rel[r].kept,
+                                              ((prte_node_t *) pmix_list_get_first(&nodes))->name))) {
+                    fprintf(stderr, "FAIL [hostfile-cap]: \"%s\" did not select only %s\n",
+                            rel[r].body, rel[r].kept);
+                    failures++;
+                }
+                PMIX_LIST_DESTRUCT(&nodes);
+            }
+        }
+
+        /* a count too large for an int is refused rather than truncated */
+        if (NULL == write_hostfile("+e:99999999999\n", path, sizeof(path))) {
+            fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+            return failures + 1;
+        }
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        PMIX_RETAIN(pool[1]);
+        pmix_list_append(&nodes, &pool[1]->super);
+        rc = prte_util_filter_hostfile_nodes(&nodes, path, true);
+        CHECK("empty: an over-large count is refused", PRTE_ERR_SILENT == rc);
+        PMIX_LIST_DESTRUCT(&nodes);
+
+        for (j = 0; j < 3; j++) {
+            pmix_pointer_array_set_item(prte_node_pool, pool[j]->index, NULL);
+            PMIX_RELEASE(pool[j]);
+        }
+        if (made_pool) {
+            PMIX_RELEASE(prte_node_pool);
+            prte_node_pool = NULL;
+        }
+    }
+
     /* an empty hostfile filters nothing, and must not stop a -host given
      * alongside it from filtering either.  The hostfile's "take next option"
      * used to be returned straight out of prte_rmaps_base_filter_nodes() -
