@@ -33,7 +33,6 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/hwloc/pmix_hwloc.h"
@@ -197,8 +196,7 @@ pass:
             return PRTE_SUCCESS;
         }
         options->bind = savebind;
-        if(NULL != options->target)
-        {
+        if (NULL != options->target) {
             hwloc_bitmap_free(options->target);
             options->target = NULL;
         }
@@ -389,8 +387,7 @@ pass:
             return PRTE_SUCCESS;
         }
         options->bind = savebind;
-        if(NULL != options->target)
-        {
+        if (NULL != options->target) {
             hwloc_bitmap_free(options->target);
             options->target = NULL;
         }
@@ -425,7 +422,7 @@ pass:
     goto pass;
 }
 
-/* mapping by cpu */
+/* mapping by device - the shared loop, with the devices as its targets */
 int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
                            pmix_list_t *node_list, int32_t num_slots,
                            pmix_rank_t num_procs,
@@ -484,7 +481,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                         pmix_list_t *node_list, int32_t num_slots,
                         pmix_rank_t num_procs, prte_rmaps_options_t *options)
 {
-    int i, rc, nprocs_mapped, ncpus, nplaced = 0;
+    int i, rc = PRTE_SUCCESS, nprocs_mapped, ncpus, nplaced = 0;
     prte_node_t *node, *nd;
     prte_proc_t *proc;
     char **tmp;
@@ -545,7 +542,7 @@ pass:
                     --extra_procs_to_assign;
                 }
             }
-        } else  if (options->ordered || !options->overload) {
+        } else if (options->ordered || !options->overload) {
             // see how many PEs we were given
             tmp = PMIx_Argv_split(options->cpuset, ',');
             ntomap = PMIx_Argv_count(tmp);
@@ -689,10 +686,6 @@ errout:
     return PRTE_ERR_SILENT;
 }
 
-/* mapping by hwloc object looks a lot like mapping by node,
- * but has the added complication of possibly having different
- * numbers of objects on each node
- */
 /* The hwloc-object enumerator: the targets are every object of
  * options->maptype on the node.  Stateless - no begin/end needed. */
 static unsigned hwloc_targets_count(prte_node_t *node,
@@ -757,7 +750,7 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                         (int) num_slots, (unsigned long) num_procs);
 
     /* quick check to see if we can map all the procs */
-    if (num_slots < app->num_procs) {
+    if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
