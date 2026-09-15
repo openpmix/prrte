@@ -306,7 +306,7 @@ void prte_oob_base_get_addr(char **uri)
         NULL != prte_oob_base.ipv4conns) {
         tmp = PMIx_Argv_join(prte_oob_base.ipv4conns, ',');
         tp = PMIx_Argv_join(prte_oob_base.ipv4ports, ',');
-        tm = PMIx_Argv_join(prte_oob_base.if_masks, ',');
+        tm = PMIx_Argv_join(prte_oob_base.ipv4masks, ',');
         pmix_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
         free(tmp);
         free(tp);
@@ -330,7 +330,7 @@ void prte_oob_base_get_addr(char **uri)
          */
         tmp = PMIx_Argv_join(prte_oob_base.ipv6conns, ',');
         tp = PMIx_Argv_join(prte_oob_base.ipv6ports, ',');
-        tm = PMIx_Argv_join(prte_oob_base.if_masks, ',');
+        tm = PMIx_Argv_join(prte_oob_base.ipv6masks, ',');
         if (NULL == cptr) {
             /* no ipv4 stuff */
             pmix_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
