@@ -62,8 +62,10 @@ PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_
  * which case "ctx" is always NULL. */
 typedef struct {
     /* Called once per node before anything is placed on it.  Returns
-     * PRTE_SUCCESS, or an error that fails the map.  May be NULL. */
-    int (*begin)(prte_node_t *node, prte_rmaps_options_t *opts, void **ctx);
+     * PRTE_SUCCESS, or an error that fails the map; a diagnostic it prints
+     * is about "jdata".  May be NULL. */
+    int (*begin)(prte_job_t *jdata, prte_node_t *node, prte_rmaps_options_t *opts,
+                 void **ctx);
     /* How many targets this node offers.  Zero is not an error here - the
      * caller decides what it means. */
     unsigned (*count)(prte_node_t *node, prte_rmaps_options_t *opts, void *ctx);
@@ -71,9 +73,10 @@ typedef struct {
     hwloc_obj_t (*item)(prte_node_t *node, prte_rmaps_options_t *opts, void *ctx,
                         unsigned j);
     /* Called after a proc has been placed against the j-th target, so the
-     * enumerator can record what that target was.  May be NULL. */
-    void (*placed)(prte_proc_t *proc, prte_rmaps_options_t *opts, void *ctx,
-                   unsigned j);
+     * enumerator can record what that target was.  Anything but PRTE_SUCCESS
+     * fails the map.  May be NULL. */
+    int (*placed)(prte_proc_t *proc, prte_rmaps_options_t *opts, void *ctx,
+                  unsigned j);
     /* Release whatever "begin" allocated.  May be NULL. */
     void (*end)(void *ctx);
     /* What a target is called, for diagnostics ("core", "numa", ...). */

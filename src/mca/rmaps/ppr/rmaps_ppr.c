@@ -249,8 +249,13 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
             } else if (HWLOC_OBJ_OS_DEVICE == options->maptype) {
                 /* add in #devices for each node */
-                app->num_procs = options->pprn
-                                 * (int) prte_rmaps_base_devices_total(&node_list, options);
+                size_t ndevs;
+                rc = prte_rmaps_base_devices_total(&node_list, options, &ndevs);
+                if (PRTE_SUCCESS != rc) {
+                    PRTE_ERROR_LOG(rc);
+                    goto error;
+                }
+                app->num_procs = options->pprn * (int) ndevs;
             }
         }
 
@@ -341,7 +346,7 @@ static int ppr_mapper(prte_job_t *jdata,
             } else {
                 /* get the number of resources on this node */
                 if (bydev) {
-                    rc = prte_rmaps_base_devices_begin(node, options, &devctx);
+                    rc = prte_rmaps_base_devices_begin(jdata, node, options, &devctx);
                     if (PRTE_SUCCESS != rc) {
                         goto error;
                     }
@@ -411,7 +416,11 @@ static int ppr_mapper(prte_job_t *jdata,
                             /* every proc on this device is told which one it
                              * is - sharing a device does not make the
                              * assignment less worth knowing */
-                            prte_rmaps_base_devices_record(proc, options, devctx, i);
+                            rc = prte_rmaps_base_devices_record(proc, options, devctx, i);
+                            if (PRTE_SUCCESS != rc) {
+                                PMIX_RELEASE(proc);
+                                goto error;
+                            }
                         }
                         nprocs_mapped++;
                         rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
