@@ -18,9 +18,14 @@ its nodes back without one.  Such a node is allocated and up, but no
 part of the DVM: nothing can be launched on it.
 
 ``--activate`` starts a daemon on those nodes, bringing them into the
-DVM before the accompanying application is launched.  It takes the
-same argument syntax as ``--host``: a comma-delimited list of node
-names,
+DVM before the accompanying application is launched.
+
+Only a DVM started in elastic mode (``--prtemca prte_elastic_mode 1``)
+can change its membership.  Any other DVM is fixed for its lifetime,
+and this option is refused.
+
+It takes the same argument syntax as ``--host``: a comma-delimited list
+of node names,
 
 .. code::
 
