@@ -37,13 +37,11 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 #include "src/util/attr.h"
 #include "src/util/name_fns.h"
 
@@ -360,8 +358,8 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         ret = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(ret);
         PMIX_RELEASE(data);
-        rc = PRTE_ERR_UNPACK_FAILURE;
-        return rc;
+        /* the status goes back to a PMIx client, so it is a PMIx one */
+        return ret;
     }
 
     /* create the space */
@@ -373,8 +371,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         PMIX_ERROR_LOG(ret);
         PMIX_RELEASE(data);
         PMIX_INFO_FREE(info, ninfo);
-        rc = PRTE_ERR_UNPACK_FAILURE;
-        return rc;
+        return ret;
     }
 
     /* check for directives */
@@ -549,6 +546,12 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
 
     // add this data to our store
     data->index = pmix_pointer_array_add(&prte_data_store.store, data);
+    if (0 > data->index) {
+        /* not stored, so neither charged nor answerable */
+        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        PMIX_RELEASE(data);
+        return PMIX_ERR_OUT_OF_RESOURCE;
+    }
     prte_ds_charge(data);
 
     /* an INDEF or unread FIRST_READ item is the only thing the retention
