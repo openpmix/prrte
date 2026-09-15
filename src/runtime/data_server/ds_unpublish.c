@@ -49,6 +49,37 @@
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/data_server/ds.h"
 
+/* Is this owned item one the requestor's unpublish reaches?
+ *
+ * Ownership is by USER, and three ranges name a set of processes narrower
+ * than a user's: NAMESPACE, LOCAL and PROC_LOCAL.  The same key may be
+ * published on each of them by every such set - two concurrent jobs of one
+ * user, each publishing a NAMESPACE-range name for its own processes, is
+ * exactly what the duplicate rule permits - and each of those is a
+ * different item.  Ownership alone let either job's unpublish take the
+ * other's, out from under a job still running.  So an owned item on one of
+ * those ranges is reached only from within its own set, which is the same
+ * reach PRTE_PUBLISH_REPLACE has, and the same set a publish by this
+ * requestor would collide in.
+ *
+ * Not the read rule, though, and not for every range: an RM or CUSTOM item
+ * need not admit its own owner, and gating on the read rule once left
+ * those removable by nobody.  Those ranges, and the ones open to everyone,
+ * hold one item per key for the whole user, so the owner reaches it from
+ * anywhere - which is what lets a later job take back a name its
+ * predecessor left. */
+static bool reaches(prte_data_req_t *rq, prte_data_object_t *data)
+{
+    switch (data->range) {
+    case PMIX_RANGE_NAMESPACE:
+    case PMIX_RANGE_LOCAL:
+    case PMIX_RANGE_PROC_LOCAL:
+        return (PMIX_SUCCESS == prte_data_server_check_range(rq, data));
+    default:
+        return true;
+    }
+}
+
 pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
                                 pmix_data_buffer_t *buffer,
                                 pmix_data_buffer_t *answer)
@@ -176,16 +207,18 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             if (!prte_data_server_owns(rq.uid, rq.gid, data)) {
                 continue;
             }
-            /* Ownership is the whole rule for removal, and the test above
-             * has just established it: an owner may unpublish what it
-             * published on ANY range.  Range and access permissions govern
-             * who may READ an item, and neither belongs here - applying
-             * the read rule refused an owner its own data whenever the
-             * range was one the owner does not itself fall within (a
-             * PMIX_RANGE_RM item admits only the host's namespace, a
-             * PMIX_RANGE_CUSTOM one only the accessors it named), while
-             * still answering SUCCESS, and the item then sat in the store
-             * until its job ended. */
+            /* ...and of an owner's items, the ones its unpublish reaches.
+             * Access permissions govern who may READ an item and do not
+             * belong here - applying the read rule refused an owner its own
+             * data whenever the range was one the owner does not itself
+             * fall within (a PMIX_RANGE_RM item admits only the host's
+             * namespace, a PMIX_RANGE_CUSTOM one only the accessors it
+             * named), while still answering SUCCESS.  What does belong is
+             * which of the user's same-keyed items is this requestor's:
+             * see reaches(). */
+            if (!reaches(&rq, data)) {
+                continue;
+            }
             /* see if we have this key */
             PMIX_LIST_FOREACH_SAFE(ds1, ds2, &data->info, prte_info_item_t) {
                 if (PMIx_Check_key(ds1->info.key, rq.keys[i])) {
