@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2024-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -134,5 +134,8 @@ daemons.
 This is most often caused by an interface include or exclude list
 that leaves nothing behind.  Interfaces that are down, that are not
 IPv4 (or IPv6, where enabled), and that appear to be virtual are
-also skipped.  Please check the "prte_if_include" and
+also skipped.  A loopback interface is used only by the DVM
+controller, and only when "prte_if_include" selects it and nothing
+else, or when the host has no other interface - a daemon on another
+node could never reach it.  Please check the "prte_if_include" and
 "prte_if_exclude" MCA parameters and retry.
