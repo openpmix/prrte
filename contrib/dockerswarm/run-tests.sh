@@ -1632,6 +1632,128 @@ DS=/opt/prte/prte/bin/dataserver
 # ...and the same for the slow stdin reader, for the same reason.
 SC=/opt/prte/prte/bin/slowcat
 
+# A CHAINED relay: DVM A points at DVM B, and B is A's data server while
+# itself pointing at DVM C, which holds the store.  Three DVMs, and no fewer:
+# the claim that goes wrong is the one A's master attaches to what it sends B,
+# and only a B that relays onward has to carry it rather than consume it.
+#
+# B sees A's master as a tool acting for one of A's processes.  It used to
+# relay under the TOOL's identity and drop the claim, so at C every item from
+# every job in A belonged to A's master.  Three consequences, one assertion
+# each: a NAMESPACE-range item was visible to every job in A, a lookup answer
+# named A's master rather than the publisher, and the first job in A to end
+# purged everything A had published.  Each is asserted against a control that
+# shows the chain was working at all, so a broken chain cannot pass as a
+# correct range or a correct purge.
+#
+# Its own function so it can be run alone; test_runtime calls it.
+ds_chained_relay_case() {
+    local out nsid
+
+    banner "runtime/data_server: a chained relay keeps each job's identity"
+    cleanup_swarm
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! dvm_start_uri /tmp/dsc-c.uri 'node2:2' ''; then
+        bad "could not start DVM C, the store at the end of the chain"
+        cleanup_swarm
+        return
+    fi
+    if ! dvm_start_uri /tmp/dsc-b.uri 'node3:2' \
+                       '--prtemca pmix_server_uri file:/tmp/dsc-c.uri'; then
+        bad "could not start DVM B, the relay in the middle of the chain"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/dsc-c.uri" >/dev/null 2>&1
+        cleanup_swarm
+        return
+    fi
+    if ! dvm_start_uri /tmp/dsc-a.uri 'node4:2,node5:2' \
+                       '--prtemca pmix_server_uri file:/tmp/dsc-b.uri'; then
+        bad "could not start DVM A, the client at the head of the chain"
+        for u in /tmp/dsc-b.uri /tmp/dsc-c.uri; do
+            RUN "timeout -k 5 30 pterm --dvm-uri file:$u" >/dev/null 2>&1
+        done
+        cleanup_swarm
+        return
+    fi
+    ok "three DVMs are up in a chain: A -> B -> C"
+
+    # Job S holds a SESSION-range key for the whole case; it is both the
+    # identity probe and the survivor the purge must leave alone.  Job P is
+    # MPMD: its first app publishes a NAMESPACE-range key and its second, in
+    # the same namespace, waits for it - the control that says a
+    # NAMESPACE-range item is reachable through the chain at all.
+    PRUN_URI_BG /tmp/dsc-a.uri /tmp/dsc-s.out \
+        "--host node5:1 -n 1 $DS publish prte.test.chain.id who session 90"
+    PRUN_URI_BG /tmp/dsc-a.uri /tmp/dsc-p.out \
+        "--host node4:2 -n 1 $DS publish prte.test.chain.ns mine namespace 40 : --host node4:2 -n 1 $DS lookupwait prte.test.chain.ns 30 namespace"
+    sleep 12
+    if ! RUN 'grep -q "^PUBLISHED prte.test.chain.id" /tmp/dsc-s.out'; then
+        bad "the SESSION-range publish through the chain never happened: $(RUN 'cat /tmp/dsc-s.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    elif ! RUN 'grep -q "^PUBLISHED prte.test.chain.ns" /tmp/dsc-p.out'; then
+        bad "the NAMESPACE-range publish through the chain never happened: $(RUN 'cat /tmp/dsc-p.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        ok "two jobs in DVM A published through B into C"
+
+        RUN 'grep -q "^FOUND prte.test.chain.ns mine" /tmp/dsc-p.out' \
+            && ok "a NAMESPACE-range key is found from its own job across the chain" \
+            || bad "a NAMESPACE-range key was not found even from its own job: $(RUN 'cat /tmp/dsc-p.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+
+        # ...and not from another job of the same DVM.  With the claim lost
+        # at B, both jobs were A's master at C, and this found it.
+        out=$(PRUN_URI /tmp/dsc-a.uri "--host node5:1 -n 1 $DS lookup prte.test.chain.ns 15 namespace" 2>&1)
+        if ! echo "$out" | grep -q '^STATUS'; then
+            bad "the other job's NAMESPACE-range lookup did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        elif echo "$out" | grep -q '^FOUND prte.test.chain.ns'; then
+            bad "another job in DVM A saw a NAMESPACE-range key - the chain collapsed both jobs into one owner"
+        else
+            ok "...and not from another job in the same DVM, as NAMESPACE requires"
+        fi
+
+        # The answer names the publisher.  Its namespace is on its own
+        # NSPACE line, so this asserts the identity and not merely that one
+        # was named.  With the claim lost this usually fails as NOT_FOUND
+        # rather than as a wrong name: the lookup job above has already
+        # ended, and its purge - issued for A's master - took S's key too.
+        # Either way it is red, and the purge assertions below say which.
+        nsid=$(RUN 'sed -n "s/^NSPACE //p" /tmp/dsc-s.out' 2>/dev/null | tr -d '\r' | head -1)
+        out=$(PRUN_URI /tmp/dsc-a.uri "--host node5:1 -n 1 $DS lookup prte.test.chain.id 15" 2>&1)
+        if ! echo "$out" | grep -q '^FOUND prte.test.chain.id who'; then
+            bad "a SESSION-range key was not found across the chain: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        elif [ -n "$nsid" ] && echo "$out" | grep -qF "(from $nsid:0)"; then
+            ok "...and the answer names the publishing process, $nsid:0"
+        else
+            bad "the answer did not name the publisher ($nsid:0): $(echo "$out" | grep '^FOUND' | tr -d '\r')"
+        fi
+
+        # The purge.  A short job publishes and ends; its key must be gone
+        # from C - the purge travels the whole chain - and S's key must not.
+        out=$(PRUN_URI /tmp/dsc-a.uri "--host node5:1 -n 1 $DS publish prte.test.chain.gone bye session 2" 2>&1)
+        if ! echo "$out" | grep -q '^PUBLISHED prte.test.chain.gone'; then
+            bad "the short-lived publish through the chain failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        else
+            sleep 8
+            out=$(PRUN_URI /tmp/dsc-a.uri "--host node5:1 -n 1 $DS lookup prte.test.chain.gone 15" 2>&1)
+            if ! echo "$out" | grep -q '^STATUS'; then
+                bad "the post-purge lookup did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            elif echo "$out" | grep -q '^FOUND prte.test.chain.gone'; then
+                bad "an ended job's key survived at the end of the chain - its purge never arrived"
+            else
+                ok "an ended job's key was purged at the far end of the chain"
+            fi
+            out=$(PRUN_URI /tmp/dsc-a.uri "--host node5:1 -n 1 $DS lookup prte.test.chain.id 15" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.chain.id who' \
+                && ok "...and the purge took only that job's data, not all of DVM A's" \
+                || bad "one job's purge took another running job's key: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+    fi
+    for u in /tmp/dsc-a.uri /tmp/dsc-b.uri /tmp/dsc-c.uri; do
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$u" >/dev/null 2>&1
+    done
+    cleanup_swarm
+}
+
 test_runtime() {
     local out n rc
 
@@ -2640,6 +2762,8 @@ test_runtime() {
         done
     fi
     cleanup_swarm
+
+    ds_chained_relay_case
 
     banner "runtime: a DVM tears down cleanly with jobs and sessions built"
     # The object destructors -- and the ownership rules they encode -- only
