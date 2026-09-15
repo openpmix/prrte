@@ -703,6 +703,16 @@ static bool catchup_worthy(prte_job_t *jptr, prte_job_t *exclude)
     if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
         return false;
     }
+    /* A job whose own launch message is still to come travels in that
+     * message, which reaches every daemon in the DVM when it goes - this one
+     * included.  Packing it here as well is not redundant but fatal: the
+     * decoder below records it, and construct_child_list then finds the
+     * namespace taken and cannot launch the job's procs.  "exclude" is one
+     * such job; the jobs the launch fence held for the grow this message
+     * completes are the rest. */
+    if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_LAUNCH_PENDING)) {
+        return false;
+    }
     return true;
 }
 

@@ -975,7 +975,18 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
             goto REPORT_ERROR;
         }
     } else {
-        prte_set_job_data_object(jdata);
+        /* The launch message is what gives a daemon this job, so the
+         * namespace has to be free.  If it is not, the copy we just unpacked
+         * - the one holding our procs - is not the one the rest of the launch
+         * will find by name: launch_local looks the job up, gets the other
+         * copy, sees no local procs and forks nothing, and the job waits
+         * forever with nothing logged.  A grow's catch-up is what used to put
+         * a copy here first; see PRTE_JOB_FLAG_LAUNCH_PENDING. */
+        rc = prte_set_job_data_object(jdata);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            goto REPORT_ERROR;
+        }
 
         /* ensure the map object is present */
         if (NULL == jdata->map) {

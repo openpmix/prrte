@@ -201,10 +201,16 @@ because they answer the same question, *what does the DVM currently consist
 of*, and because that message is sent on exactly the event that changes the
 answer. Three things about them:
 
-- **The job being launched is excluded.** A daemon that already holds a
-  namespace *drops* the copy in the launch message, so a catch-up entry for
-  a job that has not been mapped yet would leave every daemon holding a
-  procless version of it for good.
+- **No job whose launch message is still to come is caught up** — not the
+  job being launched, and not the jobs the elastic launch fence is holding
+  for the grow this message completes (`PRTE_JOB_FLAG_LAUNCH_PENDING`, set
+  when `setup_job` registers the job and cleared once its launch message has
+  been broadcast). That message reaches every daemon in the DVM, so the
+  catch-up copy is not redundant but fatal: a daemon that already holds the
+  namespace cannot take the launch message for it, and the job forks nothing
+  anywhere but on the master. The fence makes this the ordinary case, not a
+  race — `vm_ready` packs this catch-up *before* `grow_drain` admits the
+  held jobs.
 - **The procs' placement comes out of `prte_job_pack`'s own maps.** It
   packs a node map and a proc map per app, from which the receiver rebuilds
   each proc's rank and hosting daemon; the catch-up needs nothing of its own
@@ -212,9 +218,9 @@ answer. Three things about them:
   time alongside. It does mean this decode has to run **after** the nidmap
   in the same message, since that is what puts the nodes in the pool.
 - **The decode registers each new namespace with the local PMIx server and
-  does not wait.** Nothing later in the message depends on it, and the
-  launch message that might care cannot have been built yet — the master
-  sends this at `VM_READY` and the launch message several states later.
+  does not wait.** Nothing later in the message depends on it, and no launch
+  message can be about one of these jobs: every job caught up has already
+  had its launch message broadcast (see the first point).
 
 This replaced a block at the head of the launch message, which tied that
 message's size to the number of jobs resident in the DVM and still left a

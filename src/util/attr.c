@@ -1166,6 +1166,9 @@ char* prte_print_job_flags(struct prte_job_t *ptr)
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_UPDATED)) {
         PMIx_Argv_append_nosize(&tmp, "UPDATED");
     }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_LAUNCH_PENDING)) {
+        PMIx_Argv_append_nosize(&tmp, "LAUNCH-PENDING");
+    }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_RESTARTED)) {
         PMIx_Argv_append_nosize(&tmp, "RESTARTED");
     }
