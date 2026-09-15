@@ -51,11 +51,12 @@ PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_
  *
  * "Map one proc per target, wrapping until the node is full or the procs run
  * out" is the same loop whatever the targets are; only the way they are
- * listed differs.  byobj lists the hwloc objects of a single type, and that
- * is the only enumerator today - but the loop it drives is the subtlest one
- * in this component (the redo/check_avail interplay and the oversubscribe
- * second pass have both been the source of real bugs), so a second kind of
- * target is added by writing an enumerator rather than by copying the loop.
+ * listed differs.  byobj lists the hwloc objects of a single type and
+ * bydevice the devices rmaps/base enumerates - and the loop they drive is
+ * the subtlest one in this component (the redo/check_avail interplay and the
+ * oversubscribe passes have both been the source of real bugs), so another
+ * kind of target is added by writing an enumerator rather than by copying
+ * the loop.
  *
  * "ctx" is enumerator-private per-node state: "begin" may allocate it and
  * "end" releases it.  An enumerator that needs neither leaves both NULL, in
@@ -81,10 +82,11 @@ typedef struct {
     void (*end)(void *ctx);
     /* What a target is called, for diagnostics ("core", "numa", ...). */
     const char *name;
-    /* When true, a target takes at most one proc: the loop lays one proc on
-     * each target and stops rather than coming round again.  A target that
-     * cannot be shared - a device, which is assigned rather than subdivided
-     * - sets this unless the user has allowed overloading. */
+    /* When true, a target takes at most one proc: the loop never comes round
+     * to a target again, and a later pass resumes at the first target the
+     * node has not handed out.  A target that cannot be shared - a device,
+     * which is assigned rather than subdivided - sets this unless the user
+     * has said the devices may be shared. */
     bool nowrap;
 } prte_rmaps_target_enum_t;
 
