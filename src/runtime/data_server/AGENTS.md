@@ -498,7 +498,7 @@ rendezvous name out.
 
 `prte_ds_usage_t` holds one running byte total per uid, on a list in the
 store — as many records as there are users publishing here, which is a small
-number. Three rules keep it honest:
+number. These rules keep it honest:
 
 - **Every removal goes through `prte_ds_drop()`.** There are six paths —
   the duplicate drop, an unpublish, a `FIRST_READ` read that empties an item
@@ -508,6 +508,11 @@ number. Three rules keep it honest:
   That is why it is one function and not a line repeated at every path.
 - **Every shrink calls `prte_ds_charge()`.** An item that loses a key to a
   `FIRST_READ` read is smaller than what its publisher is charged for.
+- **A uid's usage record can vanish mid-eviction.** `prte_ds_drop()`
+  releases the record with the uid's last byte, so `prte_ds_make_room()`
+  looks it up again on every pass. Evicting the only item a user holds to
+  make room for a second is the ordinary way to get there, and holding the
+  pointer across the drop read and wrote freed memory.
 - **The cap gate runs last**, after the duplicate scan and the directive
   scan, immediately before `pmix_pointer_array_add()`. It is the only gate
   that *modifies* the store, so a publish that is going to be refused must
@@ -645,7 +650,10 @@ including the `PMIX_RANGE_SESSION` default a request carries. And
 that counting takes nothing — a `FIRST_READ` value is still there and still
 counted afterwards — that collecting returns every value and drops the item
 it empties, and that another user's item holding the key is reported as
-denied. None of it needs the RML.
+denied. And the cap (`test_data_server_cap`): that evicting a user's only
+item makes room and leaves one fresh usage record. None of it needs the RML. (The eviction case pins
+the behavior; the use-after-free it once had shows only under a
+memory checker.)
 
 **Multi-node — `contrib/dockerswarm`, the `test_runtime` phase.** The store
 is on the HNP and the clients are elsewhere, so the interesting paths only
