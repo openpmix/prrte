@@ -483,6 +483,8 @@ static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target
 static void purge_data(pmix_proc_t *target, pmix_persistence_t horizon,
                        uint32_t qualifier)
 {
+    prte_job_t *jdata;
+
     prte_data_server_purge_local(target, horizon, qualifier);
 
     /* Not the SESSION horizon.  A session id is this DVM's own counter and
@@ -490,11 +492,20 @@ static void purge_data(pmix_proc_t *target, pmix_persistence_t horizon,
      * the same place, and its target is "anybody": the external server
      * refuses it rather than take its own sessions' data.  See docs/todo.rst
      * for what that leaves unreclaimed. */
-    if (NULL != prte_data_server_uri && PRTE_PROC_IS_MASTER &&
-        PMIX_PERSIST_SESSION != horizon) {
-        send_purge(PRTE_PROC_MY_HNP->rank, PRTE_RML_TAG_DATA_SERVER, target,
-                   horizon, qualifier);
+    if (NULL == prte_data_server_uri || !PRTE_PROC_IS_MASTER ||
+        PMIX_PERSIST_SESSION == horizon) {
+        return;
     }
+    /* Nor for a job that never sent the far end anything - prte_ds_relay()
+     * marks the ones that did.  The PROC horizon fires once per terminating
+     * process, and relaying it regardless cost every process in the DVM a
+     * round trip to another DVM that could only answer "nothing here". */
+    jdata = prte_get_job_data_object(target->nspace);
+    if (NULL == jdata || !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_EXTERNAL_DATA)) {
+        return;
+    }
+    send_purge(PRTE_PROC_MY_HNP->rank, PRTE_RML_TAG_DATA_SERVER, target,
+               horizon, qualifier);
 }
 
 void prte_state_base_purge_proc(pmix_proc_t *proc)
