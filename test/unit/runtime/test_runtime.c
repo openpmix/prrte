@@ -1449,6 +1449,46 @@ static int test_data_server_collect(void)
     return failures;
 }
 
+/* A range or a persistence arrives in the client's own directive array,
+ * typed however the client typed it.  Reading the union member regardless
+ * turned an int-typed PMIX_RANGE_NAMESPACE into PMIX_RANGE_UNDEF on a
+ * big-endian host - data meant for one namespace, open to everyone - and a
+ * test on a little-endian one can only show that the conversions are made
+ * and the unreadable ones refused. */
+static int test_data_server_named_uint8(void)
+{
+    int failures = 0;
+    pmix_value_t val;
+    uint8_t u8;
+    pmix_data_range_t range = PMIX_RANGE_NAMESPACE;
+    int ival;
+
+    u8 = 0xff;
+    PMIX_VALUE_LOAD(&val, &range, PMIX_DATA_RANGE);
+    CHECK("named uint8: the named type is read",
+          PMIX_SUCCESS == prte_ds_get_named_uint8(&val, PMIX_DATA_RANGE, &u8) &&
+          PMIX_RANGE_NAMESPACE == u8);
+
+    u8 = 0xff;
+    ival = PMIX_RANGE_LOCAL;
+    PMIX_VALUE_LOAD(&val, &ival, PMIX_INT);
+    CHECK("named uint8: a plain int is converted",
+          PMIX_SUCCESS == prte_ds_get_named_uint8(&val, PMIX_DATA_RANGE, &u8) &&
+          PMIX_RANGE_LOCAL == u8);
+
+    ival = 300;
+    PMIX_VALUE_LOAD(&val, &ival, PMIX_INT);
+    CHECK("named uint8: an int too wide for the type is refused",
+          PMIX_SUCCESS != prte_ds_get_named_uint8(&val, PMIX_DATA_RANGE, &u8));
+
+    PMIX_VALUE_LOAD(&val, "namespace", PMIX_STRING);
+    CHECK("named uint8: a string is refused",
+          PMIX_SUCCESS != prte_ds_get_named_uint8(&val, PMIX_DATA_RANGE, &u8));
+    PMIX_VALUE_DESTRUCT(&val);
+
+    return failures;
+}
+
 /* What counts as a duplicate.  The access check keeps two users'
  * identically-keyed items apart, but it is the wrong test for a publisher's
  * own item: a publisher may leave itself off its own accessor list, and
@@ -2353,6 +2393,7 @@ int main(void)
     failures += test_data_server_collect();
     failures += test_data_server_cap();
     failures += test_data_server_same_range();
+    failures += test_data_server_named_uint8();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
     failures += test_worker_pool();
