@@ -11,8 +11,9 @@ project rules. When this file and the docs disagree, **the docs win**.
 
 The data server backs PMIx's publish/lookup/unpublish service — the
 key/value rendezvous MPI applications use for `MPI_Publish_name` and
-friends. It is a **single store on one process** (normally the HNP) that
-every other participant reaches over the RML.
+friends. The DVM-wide store lives on the HNP, and every other participant
+reaches it over the RML; each daemon also holds a store of its own for
+`PMIX_RANGE_LOCAL` data (see "There is a store on every daemon" below).
 
 ```
 app proc ──PMIx──▶ its prted ──RML(PRTE_RML_TAG_DATA_SERVER)──▶ HNP
@@ -29,9 +30,9 @@ app proc ◀─PMIx── its prted ◀──RML(PRTE_RML_TAG_DATA_CLIENT)──
 |------|------|
 | `prte_data_server.h` | The public surface: init/finalize, the RML receive callback, and the four command codes. |
 | `ds.h` | The internal objects — `prte_data_object_t` (one published item), `prte_data_req_t` (one parked lookup), `prte_ds_info_t`, and the `prte_data_store` singleton. |
-| `ds_main.c` | `prte_data_server()` — the RML receive that unpacks the room number and command and dispatches; the access check and the two range checks; all the class instances. |
+| `ds_main.c` | `prte_data_server()` — the RML receive that unpacks the room number and command and dispatches; the access check and the two range checks; the per-uid accounting and eviction; all the class instances. |
 | `ds_publish.c` | Store an item, then satisfy any parked lookups it answers. |
-| `ds_lookup.c` | Answer from the store, or park the request if the caller asked to wait. |
+| `ds_lookup.c` | Answer from the store, or park the request if the caller asked to wait; `prte_ds_collect()`, the one resolver both lookup and publish use. |
 | `ds_unpublish.c` | Remove the caller's own items by key. |
 | `ds_purge.c` | Remove everything a (departing) process owns. |
 | `ds_relay.c` | Reissue a request to an **external** data server — one living in another DVM — over a PMIx tool connection, and answer the requesting daemon when it replies. |
@@ -85,8 +86,9 @@ status. Keep the two in separate variables.
 `prte_pmix_server_uri` names a data server living in a **different DVM**, so
 that jobs launched by different invocations can find each other's data
 (`MPI_Publish_name` / `MPI_Comm_accept` across `mpirun`s). When it is set,
-this DVM stores nothing of its own: `prte_data_server()` hands every request
-straight to `prte_ds_relay()`.
+this DVM keeps only its local-range data: `prte_data_server()` hands every
+other request straight to `prte_ds_relay()` (see "A local-range request must
+not be relayed" below).
 
 **It is not reachable over the RML, and no amount of work here would make it
 so.** The RML addresses a peer by *rank*, stamping the sender's own namespace
