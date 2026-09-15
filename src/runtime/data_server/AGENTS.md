@@ -262,12 +262,20 @@ lookup resolves to was a function of unrelated publish/unpublish history.
 **"Same range" is a set of processes, not the `pmix_data_range_t` word.**
 `PMIX_RANGE_NAMESPACE` published by two processes of different namespaces
 names two disjoint sets; refusing the second would refuse a publish the
-Standard permits. So `same_data_range()` tests the range word **and** asks
-whether the new publisher could itself have looked the stored item up
-(`prte_data_server_check_access` then `prte_data_server_check_range`) —
-which for `NAMESPACE`, `LOCAL` and `PROC_LOCAL` is exactly set equality, is
-trivially true for `SESSION`, `GLOBAL` and `RM`, and separates two users'
-identically-keyed items because neither can see the other's.
+Standard permits. So `prte_data_server_same_range()` (in `ds_main.c`) tests
+the range word **and** asks whether the stored item falls within the new
+publisher's view of that range (`prte_data_server_check_range`) — which for
+`NAMESPACE`, `LOCAL` and `PROC_LOCAL` is exactly set equality, and is
+trivially true for `SESSION`, `GLOBAL` and `RM`.
+
+Between two **users** it also applies the access check, which separates
+identically-keyed items because neither can see the other's. But the access
+check is the wrong test for the publisher's **own** items, which collide
+whether or not it may read them: a publisher may leave itself off its own
+accessor list, and asking "could it read this?" once answered no — so its
+second publish of the key was stored beside the first, the readers it named
+got whichever sat in the lower slot, and `PRTE_PUBLISH_REPLACE` could not
+reach the first. Ownership (`prte_data_server_owns()`) is checked first.
 
 The scan runs in two passes and the order is the point: `count_duplicates()`
 decides, `drop_prior()` acts. A publish that is going to be refused must

@@ -387,6 +387,47 @@ bool prte_data_server_owns(uint32_t uid, uint32_t gid, prte_data_object_t *data)
     return (gid == data->gid);
 }
 
+/* Is a stored item on the SAME DATA RANGE as a publication?
+ *
+ * The Standard permits duplicate keys on different ranges and requires
+ * PMIX_ERR_DUPLICATE_KEY for a duplicate on the same one.  A range is a
+ * SET OF PROCESSES, and the pmix_data_range_t is only that set's name as
+ * seen from the publisher: PMIX_RANGE_NAMESPACE published by two processes
+ * of different namespaces names two disjoint sets, not one, and refusing
+ * the second of those would refuse a publish the Standard permits.
+ *
+ * So "same data range" is the range word matching AND the stored item
+ * falling within the publisher's view of that range (the publisher's
+ * range check).  For NAMESPACE, LOCAL and PROC_LOCAL that is exactly set
+ * equality; for SESSION, GLOBAL and RM it is trivially true, which is what
+ * makes those the cases that do collide.
+ *
+ * Between two USERS the access check separates identically-keyed items as
+ * well: neither can see the other's, so neither can shadow it.  But it is
+ * the wrong test for the publisher's OWN items.  A publisher may leave
+ * itself off its own accessor list, and asking whether it could read such
+ * an item answered "no" - so its second publish of the key was stored as
+ * a second item beside the first, the readers it named got whichever sat
+ * in the lower slot, and PRTE_PUBLISH_REPLACE could not take the first
+ * one back.  An item the publisher owns is on its range whether or not it
+ * may read it.
+ *
+ * The req is the PUBLISHER cast as a requestor - the publisher's range is
+ * carried in it too, but only so a CUSTOM publication is asked the right
+ * question; the range word is compared before either check runs. */
+bool prte_data_server_same_range(prte_data_req_t *rq, prte_data_object_t *data,
+                                 pmix_data_range_t range)
+{
+    if (range != data->range) {
+        return false;
+    }
+    if (!prte_data_server_owns(rq->uid, rq->gid, data) &&
+        PMIX_SUCCESS != prte_data_server_check_access(rq, data)) {
+        return false;
+    }
+    return (PMIX_SUCCESS == prte_data_server_check_range(rq, data));
+}
+
 /* One range rule, applied in both directions.
  *
  * The PMIx retrieval rules for published data impose the range test
