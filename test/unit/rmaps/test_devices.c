@@ -98,7 +98,7 @@ static char *assigned_uuid(prte_node_t *node, char **osname)
      * which keeps this test about identity rather than placement */
     opts.bind = PRTE_BIND_TO_NONE;
 
-    if (PRTE_SUCCESS != prte_rmaps_base_devices_begin(node, &opts, &ctx)) {
+    if (PRTE_SUCCESS != prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx)) {
         return NULL;
     }
     if (0 == prte_rmaps_base_devices_count(node, &opts, ctx)) {
@@ -173,7 +173,7 @@ static void check_unnameable_refused(void)
     opts.app_idx = -1;
     opts.map_device = "gpu";
     opts.bind = PRTE_BIND_TO_NONE;
-    rc = prte_rmaps_base_devices_begin(node, &opts, &ctx);
+    rc = prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx);
     CHECK("unnameable refused", PRTE_ERR_SILENT == rc);
     CHECK("unnameable yields no context", NULL == ctx);
     prte_rmaps_base_devices_end(ctx);
@@ -185,7 +185,7 @@ static void check_unnameable_refused(void)
     opts.map_device = "network";
     opts.bind = PRTE_BIND_TO_NONE;
     ctx = NULL;
-    rc = prte_rmaps_base_devices_begin(node, &opts, &ctx);
+    rc = prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx);
     CHECK("network unaffected", PRTE_SUCCESS == rc);
     CHECK("network finds devices",
           0 < prte_rmaps_base_devices_count(node, &opts, ctx));
@@ -233,7 +233,7 @@ static void check_network_synonyms(void)
         opts.map_device = (char *) spellings[n];
         opts.bind = PRTE_BIND_TO_NONE;
         ctx = NULL;
-        CHECK(spellings[n], PRTE_SUCCESS == prte_rmaps_base_devices_begin(node, &opts, &ctx));
+        CHECK(spellings[n], PRTE_SUCCESS == prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx));
         count[n] = prte_rmaps_base_devices_count(node, &opts, ctx);
         prte_rmaps_base_devices_end(ctx);
     }
@@ -250,9 +250,140 @@ static void check_network_synonyms(void)
     opts.map_device = "gpu";
     opts.bind = PRTE_BIND_TO_NONE;
     ctx = NULL;
-    CHECK("gpu", PRTE_SUCCESS == prte_rmaps_base_devices_begin(node, &opts, &ctx));
+    CHECK("gpu", PRTE_SUCCESS == prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx));
     CHECK("gpu is its own class", 4 == prte_rmaps_base_devices_count(node, &opts, ctx));
     prte_rmaps_base_devices_end(ctx);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
+/* A GPU named by its OS device is still a GPU.
+ *
+ * The refusal above is about the device, not about how the user spelled
+ * the request: naming one GPU ("renderD129") instead of the class hands the
+ * process the very same unactionable assignment the refusal exists to
+ * prevent.  So the unnameable topology must refuse it by name too - while a
+ * NIC named the same way, which needs no vendor identity, still maps. */
+static void check_named_unnameable_refused(void)
+{
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    void *ctx = NULL;
+    int rc;
+
+    t = load_topo(TOPO_FILE_NOID);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices named unnameable case (no %s)\n", TOPO_FILE_NOID);
+        return;
+    }
+    node = build_node("node-epsilon", t);
+
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "renderD129";
+    opts.bind = PRTE_BIND_TO_NONE;
+    rc = prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx);
+    CHECK("named unnameable gpu refused", PRTE_ERR_SILENT == rc);
+    CHECK("named unnameable yields no context", NULL == ctx);
+    prte_rmaps_base_devices_end(ctx);
+
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "mlx5_1";
+    opts.bind = PRTE_BIND_TO_NONE;
+    ctx = NULL;
+    rc = prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx);
+    CHECK("named nic unaffected", PRTE_SUCCESS == rc);
+    CHECK("named nic found", 1 == prte_rmaps_base_devices_count(node, &opts, ctx));
+    prte_rmaps_base_devices_end(ctx);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
+/* The order the devices come out in, as the OS names each group was given,
+ * joined with ','.  Caller frees. */
+static char *device_order(prte_node_t *node, prte_rmaps_options_t *opts)
+{
+    pmix_data_array_t *darray;
+    pmix_device_t *dev;
+    prte_proc_t *proc;
+    void *ctx = NULL;
+    char *order = NULL, *tmp;
+    unsigned n, count;
+
+    if (PRTE_SUCCESS != prte_rmaps_base_devices_begin(NULL, node, opts, &ctx)) {
+        return NULL;
+    }
+    count = prte_rmaps_base_devices_count(node, opts, ctx);
+    for (n = 0; n < count; n++) {
+        proc = PMIX_NEW(prte_proc_t);
+        darray = NULL;
+        if (PRTE_SUCCESS == prte_rmaps_base_devices_record(proc, opts, ctx, n)
+            && prte_get_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
+                                  (void **) &darray, PMIX_DATA_ARRAY)
+            && NULL != darray && 0 < darray->size) {
+            dev = (pmix_device_t *) darray->array;
+            pmix_asprintf(&tmp, "%s%s%s", (NULL == order) ? "" : order,
+                          (NULL == order) ? "" : ",", dev[0].osname);
+            free(order);
+            order = tmp;
+        }
+        if (NULL != darray) {
+            PMIX_DATA_ARRAY_FREE(darray);
+        }
+        PMIX_RELEASE(proc);
+    }
+    prte_rmaps_base_devices_end(ctx);
+    return order;
+}
+
+/* Interleaving by NUMA domain has to find the NUMA domain.
+ *
+ * In hwloc 2 a NUMA node is a memory child, never an ancestor of anything,
+ * so a device's NUMA domain cannot be found by walking up from its
+ * locality - and "interleave=numa" that looked for it that way found no
+ * domain for any device, formed one group, and silently reproduced the
+ * input order.
+ *
+ * On this machine two of the seven network cards (mlx5_1 and mlx5_2) share
+ * NUMA domain 3 and sit next to each other in bus order; every other card
+ * has a domain to itself.  Taking one card per domain per round moves the
+ * second of the pair to the end, and that is the only change - which is
+ * also what makes the expected order unambiguous. */
+static void check_interleave_numa(void)
+{
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    char *plain, *numa;
+
+    t = load_topo(TOPO_FILE);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices interleave (no %s)\n", TOPO_FILE);
+        return;
+    }
+    node = build_node("node-zeta", t);
+
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "network";
+    opts.bind = PRTE_BIND_TO_NONE;
+    plain = device_order(node, &opts);
+    opts.map_interleave = "numa";
+    numa = device_order(node, &opts);
+
+    CHECK("plain order", NULL != plain
+          && 0 == strcmp(plain, "mlx5_0,mlx5_3,eno6,mlx5_1,mlx5_2,mlx5_4,mlx5_5"));
+    CHECK("numa interleave separates the shared domain", NULL != numa
+          && 0 == strcmp(numa, "mlx5_0,mlx5_3,eno6,mlx5_1,mlx5_4,mlx5_5,mlx5_2"));
+    if (NULL != numa && NULL != plain && 0 != strcmp(numa, "mlx5_0,mlx5_3,eno6,mlx5_1,mlx5_4,mlx5_5,mlx5_2")) {
+        fprintf(stderr, "  plain: %s\n  numa:  %s\n", plain, numa);
+    }
+    free(plain);
+    free(numa);
 
     PMIX_RELEASE(node);
     PMIX_RELEASE(t);
@@ -317,7 +448,9 @@ int test_devices(bool pmix_up)
     PMIX_RELEASE(t);
 
     check_unnameable_refused();
+    check_named_unnameable_refused();
     check_network_synonyms();
+    check_interleave_numa();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");
