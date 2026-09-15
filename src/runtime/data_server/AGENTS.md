@@ -788,6 +788,17 @@ by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
 
+A **chained** relay (`ds_chained_relay_case`) needs three DVMs in a line,
+A → B → C, and no fewer: the claim at risk is the one A's master attaches,
+and only a B that relays onward has to pass it on rather than consume it.
+The case runs two jobs in A and asserts a NAMESPACE-range item stays with
+its own job, that the answer names the publishing process, and that one
+job's end purges its data at C without taking the other's. Removing the
+`prte_ds_check_requestor()` call from `prte_ds_relay_directives()` turns
+three of its seven assertions red. The one-hop cases above cannot see
+that: a master relaying for its own process receives no claim, so the call
+changes nothing there.
+
 The swarm covers the timeout with `--prtemca prte_data_server_timeout` set
 to a few seconds — no debug-only knob and no `PRTE_ENABLE_DEBUG` build. Note
 that a `prun` takes seconds to get a process running, so a case that reads a
