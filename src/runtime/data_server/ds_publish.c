@@ -132,45 +132,6 @@ static pmix_status_t load_permissions(const pmix_value_t *val,
     return PMIX_SUCCESS;
 }
 
-/* Is a stored item on the SAME DATA RANGE as this publication?
- *
- * The Standard permits duplicate keys on different ranges and requires
- * PMIX_ERR_DUPLICATE_KEY for a duplicate on the same one.  A range is a
- * SET OF PROCESSES, and the pmix_data_range_t is only that set's name as
- * seen from the publisher: PMIX_RANGE_NAMESPACE published by two processes
- * of different namespaces names two disjoint sets, not one, and refusing
- * the second of those would refuse a publish the Standard permits.
- *
- * So "same data range" is the range word matching AND the stored item being
- * one this publisher could itself have looked up.  For NAMESPACE, LOCAL and
- * PROC_LOCAL that second test is exactly set equality; for SESSION, GLOBAL
- * and RM it is trivially true, which is what makes those the cases that do
- * collide.  Bringing the access check in with it separates two users'
- * identically-keyed items for the same reason: neither can see the other's,
- * so neither can shadow it.
- *
- * The req is the PUBLISHER cast as a requestor - the publisher's range is
- * carried in it too, but only so a CUSTOM publication is asked the right
- * question; the range word is compared before either check runs. */
-static bool same_data_range(prte_data_req_t *rq, prte_data_object_t *data,
-                            pmix_data_range_t range)
-{
-    if (range != data->range) {
-        return false;
-    }
-    if (PMIX_SUCCESS != prte_data_server_check_access(rq, data)) {
-        return false;
-    }
-    return (PMIX_SUCCESS == prte_data_server_check_range(rq, data));
-}
-
-/* Does this publication collide with what is already stored?
- *
- * Counts the colliding keys and reports whether any of them belongs to a
- * DIFFERENT publisher, which is what decides between "you may replace your
- * own" and "that name is taken".  Nothing is modified here: the decision
- * has to be complete before anything is removed, so that a publish which
- * ends up refused leaves the store exactly as it found it. */
 /* Record which application and session the publisher belongs to.
  *
  * Every process that runs a data server holds the job objects it needs for
@@ -201,6 +162,13 @@ static void resolve_publisher(prte_data_object_t *data)
     }
 }
 
+/* Does this publication collide with what is already stored?
+ *
+ * Counts the colliding keys and reports whether any of them belongs to a
+ * DIFFERENT publisher, which is what decides between "you may replace your
+ * own" and "that name is taken".  Nothing is modified here: the decision
+ * has to be complete before anything is removed, so that a publish which
+ * ends up refused leaves the store exactly as it found it. */
 static size_t count_duplicates(prte_data_req_t *rq, prte_data_object_t *data,
                                bool *foreign)
 {
@@ -215,7 +183,7 @@ static size_t count_duplicates(prte_data_req_t *rq, prte_data_object_t *data,
         if (NULL == dptr) {
             continue;
         }
-        if (!same_data_range(rq, dptr, data->range)) {
+        if (!prte_data_server_same_range(rq, dptr, data->range)) {
             continue;
         }
         PMIX_LIST_FOREACH(mine, &data->info, prte_info_item_t) {
@@ -263,7 +231,7 @@ static void drop_prior(prte_data_req_t *rq, prte_data_object_t *data)
         if (!prte_data_server_owns(rq->uid, rq->gid, dptr)) {
             continue;
         }
-        if (!same_data_range(rq, dptr, data->range)) {
+        if (!prte_data_server_same_range(rq, dptr, data->range)) {
             continue;
         }
         PMIX_LIST_FOREACH(mine, &data->info, prte_info_item_t) {
@@ -402,6 +370,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REPLACE)) {
             /* the publisher is updating something it published itself */
             replace = PMIX_INFO_TRUE(&info[n]);
+
         } else {
             /* add it to the list of data */
             ds1 = PMIX_NEW(prte_info_item_t);
