@@ -794,6 +794,15 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
             return;
         }
     }
+    /* ...and until its launch message has been broadcast, it must not be
+     * copied to the daemons by anybody else's.  A grow's VM_READY catch-up
+     * walks prte_job_data, and a daemon that already holds a namespace cannot
+     * take the launch message for it - so a job admitted after that catch-up
+     * (the launch fence holds every job that reaches VM_READY or LAUNCH_APPS
+     * while a grow is in flight, and releases them only once the grow's
+     * catch-up has gone out) would reach every daemon as a procless copy and
+     * launch nowhere but here.  Cleared by prte_plm_base_send_launch_msg. */
+    PRTE_FLAG_SET(caddy->jdata, PRTE_JOB_FLAG_LAUNCH_PENDING);
 
     /* Now - and only now - is the job recorded as an owner of the
      * reservation(s) it was cleared to run in.  That grant is what lets it
@@ -1048,6 +1057,9 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&jdata->launch_msg);
     PMIX_DATA_BUFFER_CONSTRUCT(&jdata->launch_msg);
+    /* every daemon now in the DVM has been sent the job, so a daemon that
+     * joins from here on has to be caught up with it instead */
+    PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_LAUNCH_PENDING);
 
     /* track that we automatically are considered to have reported - used
      * only to report launch progress

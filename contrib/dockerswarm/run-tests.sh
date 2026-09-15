@@ -9635,6 +9635,51 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         && ok "the daemon the grow added was told to exit, not left orphaned" \
         || bad "a prted from the in-flight grow is still running on node2"
     cleanup_swarm
+
+    # A job submitted while a grow is in flight is held by the launch fence
+    # and admitted once the grow completes -- but the grow's own VM_READY
+    # message, which goes out first, catches every daemon up on the jobs in
+    # the DVM, and a held job was one of them.  Every daemon then already
+    # held the namespace when the job's launch message arrived, so it forked
+    # nothing: the master launched its share and the job waited forever on
+    # the rest.  The job here deliberately has no procs on the master's node.
+    #
+    # The grow is several nodes wide so that it is still waiting on daemons
+    # when the prun arrives; a prun that happens to lose that race is not
+    # held and passes either way.
+    banner "elastic DVM: a job held across a grow launches on every node"
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start an elastic DVM for the held-job test"
+    elif ! pmix_cap PMIX_CAP_TOOL_FINALIZED; then
+        # without it the grown nodes stay reserved to the exited elastic
+        # tool, so a later prun cannot be placed on them by name
+        skp "job held across a grow (PMIx predates PMIX_CAP_TOOL_FINALIZED)"
+    else
+        out=$(RUN 'timeout 90 elastic grow node2:1,node3:1' 2>&1)
+        if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+            bad "grow node2+node3 did not complete -- cannot test a held job"
+        else
+            sleep 2
+            RUN 'nohup timeout 120 elastic grow node4:1,node5:1,node6:1,node7:1,node8:1 \
+                     >/tmp/heldgrow.out 2>&1 &' >/dev/null 2>&1
+            out=$(RUN 'timeout 60 prun --host node2:1,node3:1 -n 2 --map-by node hostname' 2>&1); rc=$?
+            n=$(echo "$out" | grep -cE '^node[23]$')
+            [ "$rc" = 0 ] && [ "$n" = 2 ] \
+                && ok "a job submitted mid-grow ran on both of its nodes" \
+                || bad "a job submitted mid-grow did not complete (rc=$rc, $n of 2 ran): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            for _ in $(seq 60); do
+                RUN 'grep -q PMIX_DVM_IS_READY /tmp/heldgrow.out' 2>/dev/null && break
+                sleep 1
+            done
+            RUN 'grep -q PMIX_DVM_IS_READY /tmp/heldgrow.out' 2>/dev/null \
+                && ok "...and the grow it was held for completed" \
+                || bad "the grow the job was held for did not complete"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
 }
 
 ########################################################################

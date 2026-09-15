@@ -76,6 +76,7 @@
 #include "src/runtime/prte_worker_pool.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
+#include "src/util/nidmap.h"
 #include "src/util/proc_info.h"
 
 #include "src/runtime/data_server/ds.h"
@@ -218,6 +219,65 @@ static int test_job_registry(void)
     j1 = make_job("job.three");
     CHECK("job: the vacated slot is reused", PRTE_SUCCESS == prte_set_job_data_object(j1));
     CHECK("job: reuse lands in the freed slot", saved_index == j1->index);
+
+    reset_globals();
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
+/* the grow catch-up                                                  */
+/* ------------------------------------------------------------------ */
+
+/* A job registered to launch, whose launch message has not gone out yet, is
+ * not caught up to the daemons with a grow's VM_READY message.  It will be
+ * sent to every daemon in its own launch message, and a daemon that already
+ * holds the namespace cannot take that message - so a catch-up copy made
+ * the job launch nowhere but on the master.  The launch fence holds exactly
+ * such jobs across a grow and admits them after the grow's catch-up. */
+static int test_job_catchup_skips_pending_launch(void)
+{
+    int failures = 0;
+    prte_job_t *dvm, *pending, *tool;
+    pmix_data_buffer_t buf;
+    int32_t njobs, cnt;
+    int rc;
+
+    reset_globals();
+
+    /* slot 0 is the DVM's own job, which the catch-up never packs */
+    dvm = make_job("catchup.dvm");
+    CHECK("catchup: register the DVM job", PRTE_SUCCESS == prte_set_job_data_object(dvm));
+    CHECK("catchup: the DVM job holds slot 0", 0 == dvm->index);
+
+    pending = make_job("catchup.pending");
+    PRTE_FLAG_SET(pending, PRTE_JOB_FLAG_LAUNCH_PENDING);
+    CHECK("catchup: register the held job", PRTE_SUCCESS == prte_set_job_data_object(pending));
+
+    tool = make_job("catchup.tool");
+    PRTE_FLAG_SET(tool, PRTE_JOB_FLAG_TOOL);
+    CHECK("catchup: register a tool", PRTE_SUCCESS == prte_set_job_data_object(tool));
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = prte_util_pack_job_catchup(&buf, NULL);
+    CHECK("catchup: packing succeeds", PRTE_SUCCESS == rc);
+    cnt = 1;
+    njobs = -1;
+    rc = PMIx_Data_unpack(NULL, &buf, &njobs, &cnt, PMIX_INT32);
+    CHECK("catchup: the count unpacks", PMIX_SUCCESS == rc);
+    CHECK("catchup: a job still to be launched is not caught up", 0 == njobs);
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+
+    /* once its launch message is out, a daemon joining later does need it -
+     * the count is packed ahead of the jobs themselves, so read only that */
+    PRTE_FLAG_UNSET(pending, PRTE_JOB_FLAG_LAUNCH_PENDING);
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    (void) prte_util_pack_job_catchup(&buf, tool);
+    cnt = 1;
+    njobs = -1;
+    rc = PMIx_Data_unpack(NULL, &buf, &njobs, &cnt, PMIX_INT32);
+    CHECK("catchup: the count unpacks again", PMIX_SUCCESS == rc);
+    CHECK("catchup: a launched job is caught up", 1 == njobs);
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
 
     reset_globals();
     return failures;
@@ -2691,6 +2751,7 @@ int main(void)
     failures += test_data_server_named_uint8();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
+    failures += test_job_catchup_skips_pending_launch();
     failures += test_worker_pool();
     failures += test_paramfile_ordering();
 
