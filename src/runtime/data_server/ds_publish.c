@@ -715,8 +715,14 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         }
         PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
         if (PRTE_SUCCESS != rc) {
+            /* The send refused the buffer - the requesting daemon is gone -
+             * so it is still ours, and releasing it disposes of it.  That
+             * is PMIX_SUCCESS by the answer-buffer contract: returning the
+             * send's error handed our caller a buffer we had just freed,
+             * which it packed the error into, sent, and released again. */
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(answer);
+            rc = PMIX_SUCCESS;
         }
     }
 

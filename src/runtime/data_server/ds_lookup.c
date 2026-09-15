@@ -460,10 +460,14 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
     }
     PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
     if (PRTE_SUCCESS != rc) {
+        /* The send refused the buffer - the requesting daemon is gone - so
+         * it is still ours, and releasing it disposes of it.  That is
+         * PMIX_SUCCESS by the answer-buffer contract: returning the send's
+         * error handed our caller a buffer we had just freed, which it
+         * packed the error into, sent, and released a second time. */
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(answer);
-        return rc;
     }
-    /* the answer has been sent - tell our caller not to send another */
+    /* the answer has been disposed of - tell our caller not to send another */
     return PMIX_SUCCESS;
 }
