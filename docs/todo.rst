@@ -44,6 +44,17 @@ which is ``PMIX_PERSIST_NSPACE`` — and no reported problem depends on it.  See
 ``docs/plans/datastore/`` for the specification and the design the rest of
 that work follows.
 
+**An external data server never reclaims ``PMIX_PERSIST_SESSION`` data at
+its session's end.**  A session id is a counter each DVM starts from 1, so the
+master does not relay the ``SESSION`` horizon to a server in another DVM
+(``purge_data()`` in ``src/mca/state/base/state_base_fns.c``), and the server
+refuses a purge naming no namespace (``prte_ds_purge``).  It could not have
+selected the right items anyway: a relayed publish has no job object at the
+server, so the item records no session at all.  Such an item is held until its
+publisher unpublishes it or the server DVM ends — never shorter than asked.
+Making it work needs the relay to carry a session identity that is unique
+across DVMs at publish and to name the same identity at purge.
+
 **``ras/flux`` has no ``modify()``.**  It returns ``PMIX_ERR_NOT_SUPPORTED``
 (``src/mca/ras/flux/ras_flux_module.c``), so the elastic extend/release
 surface exists for SLURM only.  Everything above the component is

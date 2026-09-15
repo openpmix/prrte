@@ -88,11 +88,8 @@ static pmix_status_t pack_answers(pmix_list_t *answers, pmix_byte_object_t *pbo)
     return rc;
 }
 
-/* Answer a parked request: room number, the command it answers, the status,
- * and - when "pbo" is given - the values.  A status with no payload is read
- * as the whole answer by the daemon-side receiver, so this is also how a
- * parked request is told it failed. */
-static void answer_parked(prte_data_req_t *req, pmix_status_t status,
+/* see ds.h */
+void prte_ds_reply_parked(prte_data_req_t *req, pmix_status_t status,
                           pmix_byte_object_t *pbo)
 {
     pmix_data_buffer_t *reply;
@@ -160,7 +157,7 @@ static void lookup_timeout(int sd, short args, void *cbdata)
     /* A timeout carries no payload, and the daemon-side receiver knows not
      * to look for one.  Nothing was taken out of the store on this
      * request's behalf while it waited, so there is nothing to give back. */
-    answer_parked(req, PMIX_ERR_TIMEOUT, NULL);
+    prte_ds_reply_parked(req, PMIX_ERR_TIMEOUT, NULL);
     PMIX_RELEASE(req);
 }
 
@@ -307,10 +304,10 @@ bool prte_ds_answer_parked(prte_data_req_t *req)
     PMIX_LIST_DESTRUCT(&answers);
     if (PMIX_SUCCESS != rc) {
         /* tell it, rather than leave it parked on a room nobody answers */
-        answer_parked(req, rc, NULL);
+        prte_ds_reply_parked(req, rc, NULL);
         return true;
     }
-    answer_parked(req, (nfound < nkeys) ? PMIX_ERR_PARTIAL_SUCCESS : PMIX_SUCCESS, &pbo);
+    prte_ds_reply_parked(req, (nfound < nkeys) ? PMIX_ERR_PARTIAL_SUCCESS : PMIX_SUCCESS, &pbo);
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
     return true;
 }
