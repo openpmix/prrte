@@ -58,6 +58,7 @@
 #include "src/util/proc_info.h"
 
 #include "src/class/pmix_bitmap.h"
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 
@@ -1343,6 +1344,162 @@ static int test_release_tree(void)
     return failures;
 }
 
+/*
+ * A controller asked to fence over a namespace it has no map for - a tool
+ * connected to it, say - hosts those participants itself, and says so by
+ * counting itself in.  What it must not do is stop reading the signature
+ * there: the daemons hosting the entries after that one are participants
+ * too.  Stopping used to leave the rollup expecting nobody, so the
+ * controller released the answer on its own contribution before anyone else
+ * had reported.
+ */
+static int test_fence_tracker_mapless(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_grpcomm_fence_signature_t sig;
+    prte_grpcomm_fence_t *coll;
+    prte_job_t *mapped;
+    pmix_rank_t save_rank = PRTE_PROC_MY_NAME->rank;
+    pmix_nspace_t save_nspace, mapped_nspace;
+    bool have_self = false, have_host = false;
+    size_t n;
+
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+    PMIX_LOAD_NSPACE(save_nspace, PRTE_PROC_MY_NAME->nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-unit-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+
+    /* no map at all for the first; the second has one, and its rank 3 sits
+     * on daemon 3 */
+    build_job("fence-mapless", 1);
+    build_job("fence-mapped", 4);
+    PMIX_LOAD_NSPACE(mapped_nspace, "fence-mapped");
+    mapped = prte_get_job_data_object(mapped_nspace);
+    mapped->map = PMIX_NEW(prte_job_map_t);
+    mapped->map->num_nodes = 4;
+
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
+    sig.sz = 2;
+    PMIX_PROC_CREATE(sig.signature, 2);
+    PMIX_LOAD_PROCID(&sig.signature[0], "fence-mapless", 0);
+    PMIX_LOAD_PROCID(&sig.signature[1], "fence-mapped", 3);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
+    CHECK("mapless: the signature resolves", NULL != coll);
+    if (NULL != coll) {
+        for (n = 0; n < coll->ndmns; n++) {
+            if (0 == coll->dmns[n]) {
+                have_self = true;
+            } else if (3 == coll->dmns[n]) {
+                have_host = true;
+            }
+        }
+        CHECK("mapless: the controller counts itself in", have_self);
+        CHECK("mapless: and the entry after it is still resolved", have_host);
+        CHECK("mapless: nobody else", 2 == coll->ndmns);
+    }
+    PMIX_DESTRUCT(&sig);
+
+    PRTE_PROC_MY_NAME->rank = save_rank;
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, save_nspace);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_tracker_mapless\n");
+    }
+    return failures;
+}
+
+#if PRTE_TEST_GRPCOMM_INTERNALS
+static int failing_release_calls;
+
+/* Refuse the first release, accept everything after it - what a controller
+ * sees when it cannot emit a fence's answer but can still emit the smaller
+ * abort. */
+static int stub_release_fails_once(prte_rml_tag_t tag, pmix_data_buffer_t *msg)
+{
+    failing_release_calls++;
+    if (1 == failing_release_calls) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    return stub_xcast(tag, msg);
+}
+#endif
+
+/*
+ * A controller whose fence has converged must get an answer out, even when
+ * the answer itself cannot be sent.  Convergence latches the tracker, and the
+ * recovery restart deliberately leaves a converged tracker alone on the
+ * controller - its release is supposed to be on the wire already - so a
+ * release that failed to go out used to leave every participant in the DVM
+ * blocked for good.  The controller now falls back to the abort, which is
+ * only a signature and a status.
+ *
+ * Driven through the restart because that is the one way to converge a fence
+ * with no message in hand: a tracker whose daemon set resolves to nobody is
+ * complete the moment its expectation is recomputed.
+ */
+static int test_fence_release_failure(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_grpcomm_fence_t *coll;
+    uint32_t epoch;
+
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops, prte_grpcomm_xcast_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
+
+    coll = add_fence_op("fence-release-fails");
+    coll->nexpected = 1;
+    coll->nreported = 0;
+
+    prte_grpcomm_release_bcast = stub_release_fails_once;
+    failing_release_calls = 0;
+    fence_xcast_calls = 0;
+
+    epoch = prte_grpcomm_current_epoch() + 1;
+    prte_grpcomm_advance_epoch(epoch);
+
+    CHECK("release failure: the fence converged", coll->converged);
+    CHECK("release failure: the release was attempted, then the abort",
+          2 == failing_release_calls);
+    CHECK("release failure: the abort went out", 1 == fence_xcast_calls);
+    CHECK("release failure: the abort is a release on the fence tag",
+          PRTE_RML_TAG_FENCE_RELEASE == fence_xcast_tag);
+    CHECK("release failure: the abort carries a failure",
+          PMIX_SUCCESS != fence_xcast_status);
+    CHECK("release failure: the tracker is being torn down", coll->aborting);
+
+    prte_grpcomm_release_bcast = prte_grpcomm_xcast;
+    prte_grpcomm_globals.recovery_epoch = 0;
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_DESTRUCT(&prte_grpcomm_globals.xcast_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.group_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_release_failure\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1377,6 +1534,8 @@ int main(void)
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
     failures += test_recovery_epoch();
+    failures += test_fence_tracker_mapless();
+    failures += test_fence_release_failure();
 
     PMIx_server_finalize();
     prte_finalize();
