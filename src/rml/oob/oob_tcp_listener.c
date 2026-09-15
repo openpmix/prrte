@@ -74,7 +74,6 @@
 #include "src/rml/oob/oob_tcp_listener.h"
 #include "src/rml/oob/oob_tcp_peer.h"
 
-static void connection_event_handler(int incoming_sd, short flags, void *cbdata);
 static void *listen_thread(pmix_object_t *obj);
 static int create_listeners(int family);
 static void unadvertise(char ***conns, char ***masks);
@@ -154,7 +153,7 @@ int prte_oob_tcp_start_listening(void)
     {
         listener->ev_active = true;
         prte_event_set(prte_event_base, &listener->event, listener->sd,
-                       PRTE_EV_READ | PRTE_EV_PERSIST, connection_event_handler, 0);
+                       PRTE_EV_READ | PRTE_EV_PERSIST, connection_event_handler, listener);
         PMIX_POST_OBJECT(listener);
         prte_event_add(&listener->event, 0);
     }
@@ -487,6 +486,38 @@ static void unadvertise(char ***conns, char ***masks)
 }
 
 /*
+ * Is this accept() failure about the one connection being accepted, rather
+ * than about the listening socket?  A client that resets before we accept it
+ * yields ECONNABORTED, and Linux also hands back the pending network error of
+ * the new connection (see accept(2)).  None of those is a reason to stop
+ * listening, or even to say anything: the next connection is unaffected.
+ */
+static bool accept_error_is_transient(int err)
+{
+    switch (err) {
+    case EINTR:
+    case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+    case EWOULDBLOCK:
+#endif
+    case ECONNABORTED:
+    case EPROTO:
+    case ENOPROTOOPT:
+    case EHOSTDOWN:
+    case EHOSTUNREACH:
+    case ENETDOWN:
+    case ENETUNREACH:
+    case EOPNOTSUPP:
+#ifdef ENONET
+    case ENONET:
+#endif
+        return true;
+    default:
+        return false;
+    }
+}
+
+/*
  * The listen thread created when listen_mode is threaded.  Accepts
  * incoming connections and places them in a queue for further
  * processing
@@ -496,7 +527,7 @@ static void unadvertise(char ***conns, char ***masks)
 static void *listen_thread(pmix_object_t *obj)
 {
     int rc, max, accepted_connections, sd;
-    prte_socklen_t addrlen = sizeof(struct sockaddr_storage);
+    prte_socklen_t addrlen;
     prte_oob_tcp_pending_connection_t *pending_connection;
     struct timeval timeout;
     fd_set readfds;
@@ -570,6 +601,9 @@ static void *listen_thread(pmix_object_t *obj)
                 pending_connection = PMIX_NEW(prte_oob_tcp_pending_connection_t);
                 prte_event_set(prte_event_base, &pending_connection->ev, -1, PRTE_EV_WRITE,
                                connection_handler, pending_connection);
+                /* accept() overwrites this with the length of the address it
+                 * returned, which is shorter for IPv4 than for IPv6 */
+                addrlen = sizeof(pending_connection->addr);
                 pending_connection->fd = accept(sd, (struct sockaddr *) &(pending_connection->addr),
                                                 &addrlen);
 
@@ -578,7 +612,7 @@ static void *listen_thread(pmix_object_t *obj)
                     PMIX_RELEASE(pending_connection);
 
                     /* Non-fatal errors */
-                    if (EAGAIN == prte_socket_errno || EWOULDBLOCK == prte_socket_errno) {
+                    if (accept_error_is_transient(prte_socket_errno)) {
                         continue;
                     }
 
@@ -587,6 +621,7 @@ static void *listen_thread(pmix_object_t *obj)
                        problem) and abandon all hope. */
                     else if (EMFILE == prte_socket_errno) {
                         CLOSE_THE_SOCKET(sd);
+                        listener->sd = -1;
                         PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
                         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
                                        prte_process_info.nodename, prte_socket_errno,
@@ -678,50 +713,54 @@ static void connection_handler(int sd, short flags, void *cbdata)
  */
 static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
 {
-    struct sockaddr addr;
-    prte_socklen_t addrlen = sizeof(struct sockaddr);
-    int sd;
-    PRTE_HIDE_UNUSED_PARAMS(flags, cbdata);
+    prte_oob_tcp_listener_t *listener = (prte_oob_tcp_listener_t *) cbdata;
+    /* big enough for either family: accept() truncates to what it is given */
+    struct sockaddr_storage addr;
+    prte_socklen_t addrlen = sizeof(addr);
+    int sd, err;
+    PRTE_HIDE_UNUSED_PARAMS(flags);
 
     sd = accept(incoming_sd, (struct sockaddr *) &addr, &addrlen);
-    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
-                        "%s connection_event_handler: working connection "
-                        "(%d, %d) %s:%d\n",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, prte_socket_errno,
-                        pmix_net_get_hostname((struct sockaddr *) &addr),
-                        pmix_net_get_port((struct sockaddr *) &addr));
     if (sd < 0) {
         /* Non-fatal errors */
-        if (EINTR == prte_socket_errno || EAGAIN == prte_socket_errno
-            || EWOULDBLOCK == prte_socket_errno) {
+        if (accept_error_is_transient(prte_socket_errno)) {
             return;
         }
+
+        /* Give up on this listener.  Its event is persistent, so it has to
+         * come off the base before the socket is closed - left armed on a
+         * dead descriptor it would fire, or watch whatever next reuses the
+         * number - and the destructor must not close it a second time. */
+        err = prte_socket_errno;
+        prte_event_del(&listener->event);
+        listener->ev_active = false;
+        CLOSE_THE_SOCKET(incoming_sd);
+        listener->sd = -1;
 
         /* If we run out of file descriptors, log an extra warning (so
            that the user can know to fix this problem) and abandon all
            hope. */
-        else if (EMFILE == prte_socket_errno) {
-            CLOSE_THE_SOCKET(incoming_sd);
+        if (EMFILE == err) {
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
-                           prte_socket_errno, strerror(prte_socket_errno),
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
+                           prte_process_info.nodename, err, strerror(err),
                            "Out of file descriptors");
-            return;
-        }
-
-        /* For all other cases, close the socket, print a warning but
-           try to continue */
-        else {
-            CLOSE_THE_SOCKET(incoming_sd);
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
-                           prte_socket_errno, strerror(prte_socket_errno),
+        } else {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
+                           prte_process_info.nodename, err, strerror(err),
                            "Unknown cause; job will try to continue");
-            return;
         }
+        return;
     }
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                        "%s connection_event_handler: working connection "
+                        "(%d) %s:%d\n",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd,
+                        pmix_net_get_hostname((struct sockaddr *) &addr),
+                        pmix_net_get_port((struct sockaddr *) &addr));
 
     /* process the connection */
-    prte_oob_accept_connection(sd, &addr);
+    prte_oob_accept_connection(sd, (struct sockaddr *) &addr);
 }
 
 static void tcp_ev_cons(prte_oob_tcp_listener_t *event)

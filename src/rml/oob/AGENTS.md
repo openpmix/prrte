@@ -408,6 +408,12 @@ socket on each. Two rules here are easy to break by "simplifying":
 - **`pmix_ifmatches` answers in PMIx status codes.** Anything other than
   `PMIX_SUCCESS` or `PMIX_ERR_NOT_FOUND` is a specification it could not parse;
   comparing its result against a `PRTE_ERR_*` code never matches.
+- **An accept error is usually about the connection, not the listener.**
+  `accept_error_is_transient()` lists the per-connection failures
+  (`ECONNABORTED` for a client that reset first, and the pending network errors
+  Linux passes back); only something else gives up on the listener, and the
+  event path must `prte_event_del` the persistent event before closing its
+  socket and mark `sd = -1` so the destructor does not close it again.
 
 ## Gotchas before you edit
 
