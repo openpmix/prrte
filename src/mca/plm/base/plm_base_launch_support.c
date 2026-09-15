@@ -30,6 +30,7 @@
  */
 
 #include "prte_config.h"
+
 #include "constants.h"
 
 #ifdef HAVE_SYS_WAIT_H
@@ -39,6 +40,7 @@
 #    include <sys/time.h>
 #endif /* HAVE_SYS_TIME_H */
 #include <ctype.h>
+#include <limits.h>
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -3699,6 +3701,71 @@ static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
     free(kill);
 }
 
+/* did this job ask for the DVM to grow before it launched? */
+static bool job_asked_to_grow(prte_job_t *jdata)
+{
+    prte_app_context_t *app;
+
+    for (int i = 0; i < jdata->apps->size; i++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, NULL, PMIX_STRING) ||
+            prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, NULL, PMIX_STRING) ||
+            prte_get_attribute(&app->attributes, PRTE_APP_ACTIVATE_HOSTS, NULL, PMIX_STRING)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * The last grow in flight has failed: give back what it was holding.
+ *
+ * An --add-host, --add-hostfile or --activate marks the DVM not-ready and
+ * parks its job in prte_cache, and only the grow's VM_READY re-entry marks it
+ * ready again and drains the cache.  A grow whose daemon never started does
+ * not get there - the campaign is rolled back instead - so the job that asked
+ * waited forever, and so did every job submitted behind it, and so did pterm.
+ *
+ * Answer the jobs that asked for nodes they did not get, and launch the rest,
+ * which were only queued behind the grow.  This is the answer
+ * prte_ras_base_modify gives when a grow request fails before any daemon is
+ * launched, and in the same order: out of the cache first, because draining
+ * it spawns synchronously and would launch a job we are about to fail.
+ */
+static void grow_failed_release_cache(void)
+{
+    pmix_pointer_array_t failed;
+    prte_job_t *jptr;
+    int i;
+
+    PMIX_CONSTRUCT(&failed, pmix_pointer_array_t);
+    pmix_pointer_array_init(&failed, 4, INT_MAX, 4);
+    for (i = 0; i < prte_cache->size; i++) {
+        jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_cache, i);
+        if (NULL != jptr && job_asked_to_grow(jptr)) {
+            /* the cache holds a borrowed pointer - clearing the slot is all
+             * it takes to take the job out of it */
+            pmix_pointer_array_set_item(prte_cache, i, NULL);
+            pmix_pointer_array_add(&failed, jptr);
+        }
+    }
+
+    prte_dvm_ready = true;
+    prte_plm_base_release_cached_jobs();
+
+    for (i = 0; i < failed.size; i++) {
+        jptr = (prte_job_t *) pmix_pointer_array_get_item(&failed, i);
+        if (NULL != jptr) {
+            prte_plm_base_spawn_response(prte_pmix_convert_job_state_to_error(PRTE_JOB_STATE_ALLOC_FAILED),
+                                         jptr);
+        }
+    }
+    PMIX_DESTRUCT(&failed);
+}
+
 bool prte_plm_base_grow_target_failed(pmix_rank_t rank)
 {
     prte_grow_campaign_t *camp;
@@ -3738,6 +3805,10 @@ bool prte_plm_base_grow_target_failed(pmix_rank_t rank)
             PMIX_RELEASE(camp);
             /* any grow failure fails the whole pre-map held-job set */
             prte_plm_base_abort_premap_held();
+            /* and once no grow remains, so do the jobs parked waiting for one */
+            if (pmix_list_is_empty(&prte_grow_campaigns)) {
+                grow_failed_release_cache();
+            }
             return true;
         }
     }
