@@ -829,6 +829,16 @@ def hostcap_cases(topo):
                "capped", "nodeA0:4", [("nodeA0", 4)], map_by="core", n=4,
                alloc_args=small, expect_counts={"nodeA0": 4}, expect="map")
 
+    # An unordered pe-list binds each proc to the whole list, and once every
+    # entry has a proc an overloading one simply shares it.  The third proc
+    # here used to fail the map with nothing but an error log.  (The binding
+    # is passed as an extra argument: check_binding() holds "core" to a
+    # one-core span, which is not what a pe-list binding is.)
+    yield Case("hostcap.%s.pelist-overload" % topo.name, "hostcap", topo,
+               "capped", "node0:4", [("node0", 4)], map_by="pe-list=0,1",
+               extra_args=("--bind-to", "core:overload-allowed"), n=3,
+               expect_counts={"node0": 3}, expect="map")
+
 
 def device_cases(topo):
     """--map-by device=, whose placement is pinned by golden snapshots.
