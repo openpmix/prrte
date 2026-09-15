@@ -37,13 +37,11 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_show_help.h"
 
@@ -268,8 +266,9 @@ void prte_data_server(int status, pmix_proc_t *sender,
             return;
 
         default:
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            rc = PRTE_ERR_BAD_PARAM;
+            /* rc goes back to a PMIx client, so it is a PMIx status */
+            PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            rc = PMIX_ERR_BAD_PARAM;
             break;
     }
 
@@ -399,7 +398,12 @@ bool prte_data_server_owns(uint32_t uid, uint32_t gid, prte_data_object_t *data)
  *
  * This is an ACCESS rule: it says who may read an item.  It is therefore
  * the wrong test for who may REMOVE one, which is a question of
- * ownership - see ds_unpublish.c. */
+ * ownership - see ds_unpublish.c.
+ *
+ * Every comparison is the STRICT form.  PMIX_CHECK_NSPACE and
+ * PMIX_CHECK_PROCID call an empty namespace a wildcard that matches
+ * anything, which is the opposite of what a range means: a process whose
+ * namespace we do not know is in nobody's namespace. */
 static pmix_status_t range_admits(pmix_data_range_t range,
                                   const pmix_proc_t *anchor,
                                   const pmix_proc_t *anchor_proxy,
@@ -417,22 +421,22 @@ static pmix_status_t range_admits(pmix_data_range_t range,
         break;
 
     case PMIX_RANGE_NAMESPACE:
-        match = PMIX_CHECK_NSPACE(anchor->nspace, subject->nspace);
+        match = PMIX_CHECK_NSPACE_STRICT(anchor->nspace, subject->nspace);
         break;
 
     case PMIX_RANGE_LOCAL:
         // the two must sit behind the same daemon
-        match = PMIX_CHECK_PROCID(anchor_proxy, subject_proxy);
+        match = PMIX_CHECK_PROCID_STRICT(anchor_proxy, subject_proxy);
         break;
 
     case PMIX_RANGE_PROC_LOCAL:
-        match = PMIX_CHECK_PROCID(anchor, subject);
+        match = PMIX_CHECK_PROCID_STRICT(anchor, subject);
         break;
 
     case PMIX_RANGE_RM:
         /* the subject must be the host environment - which means its
          * nspace must match that of the host's server, which is my own */
-        match = PMIX_CHECK_NSPACE(subject->nspace, PRTE_PROC_MY_NAME->nspace);
+        match = PMIX_CHECK_NSPACE_STRICT(subject->nspace, PRTE_PROC_MY_NAME->nspace);
         break;
 
     case PMIX_RANGE_CUSTOM:
@@ -819,9 +823,6 @@ PMIX_CLASS_INSTANCE(prte_ds_usage_t,
                     pmix_list_item_t,
                     ucon, NULL);
 
-PMIX_CLASS_INSTANCE(prte_data_cleanup_t,
-                    pmix_list_item_t,
-                    NULL, NULL);
 
 
 static void dsicon(prte_ds_info_t *p)

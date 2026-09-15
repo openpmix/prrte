@@ -134,13 +134,6 @@ typedef struct {
 PMIX_CLASS_DECLARATION(prte_ds_usage_t);
 
 
-/* define a container for data object cleanups */
-typedef struct {
-    pmix_list_item_t super;
-    prte_data_object_t *data;
-} prte_data_cleanup_t;
-
-
 /* define a caddy for pointing to pmix_info_t that
  * are to be included in an answer */
 typedef struct {
