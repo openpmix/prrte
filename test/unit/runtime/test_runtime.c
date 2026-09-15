@@ -1726,6 +1726,93 @@ static int test_data_server_purge_parked(void)
     return failures;
 }
 
+/* An unpublish reaches its owner's items - but on a range narrower than a
+ * user, only the owner's items in the requestor's own set.  Two jobs of one
+ * user may each publish a NAMESPACE-range key of the same name, and one of
+ * them unpublishing it used to take both. */
+static prte_data_object_t *ds_unpub_item(const char *nspace, pmix_data_range_t range)
+{
+    prte_data_object_t *data = ds_store_item("prte.test.unpub", "v", 601,
+                                             PMIX_PERSIST_INDEF);
+
+    PMIX_LOAD_PROCID(&data->owner, nspace, 0);
+    PMIX_LOAD_PROCID(&data->proxy, "prte-daemons", 1);
+    data->gid = 20;
+    data->range = range;
+    return data;
+}
+
+static bool ds_stored(prte_data_object_t *data, int index)
+{
+    return (data == pmix_pointer_array_get_item(&prte_data_store.store, index));
+}
+
+static void ds_unpub_msg(const char *nspace, pmix_rank_t rank)
+{
+    pmix_data_buffer_t buf, *answer;
+    pmix_proc_t requestor, sender;
+    pmix_info_t info[2];
+    size_t n = 1;
+    uint32_t uid = 601, gid = 20;
+    char *key = "prte.test.unpub";
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    PMIX_LOAD_PROCID(&requestor, nspace, rank);
+    PMIx_Data_pack(NULL, &buf, &requestor, 1, PMIX_PROC);
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, &buf, &key, 1, PMIX_STRING);
+    n = 2;
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &uid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PMIX_GRPID, &gid, PMIX_UINT32);
+    PMIx_Data_pack(NULL, &buf, info, 2, PMIX_INFO);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_DATA_BUFFER_CREATE(answer);
+    PMIX_LOAD_PROCID(&sender, "prte-daemons", 1);
+    /* returns having disposed of "answer": the reply is refused, since
+     * these tests have no RML */
+    (void) prte_ds_unpublish(&sender, &buf, answer);
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+}
+
+static int test_data_server_unpublish_reach(void)
+{
+    int failures = 0;
+    prte_data_object_t *mine, *theirs, *wide, *rm;
+    int imine, itheirs, iwide, irm;
+
+    ds_store_open();
+    mine = ds_unpub_item("unpub.job2", PMIX_RANGE_NAMESPACE);
+    imine = mine->index;
+    theirs = ds_unpub_item("unpub.job1", PMIX_RANGE_NAMESPACE);
+    itheirs = theirs->index;
+
+    ds_unpub_msg("unpub.job2", 3);
+    CHECK("unpublish: a job takes back its own NAMESPACE-range key", !ds_stored(mine, imine));
+    CHECK("unpublish: ...and not the same key another job of its user holds",
+          ds_stored(theirs, itheirs));
+    if (ds_stored(theirs, itheirs)) {
+        prte_ds_drop(theirs);
+    }
+
+    /* on a range the whole user shares, the owner reaches it from anywhere:
+     * a later job taking back what its predecessor left */
+    wide = ds_unpub_item("unpub.job1", PMIX_RANGE_SESSION);
+    iwide = wide->index;
+    ds_unpub_msg("unpub.job2", 0);
+    CHECK("unpublish: a SESSION-range key is its user's from any job", !ds_stored(wide, iwide));
+
+    /* ...and an RM item, which does not admit its own owner to read it */
+    rm = ds_unpub_item("unpub.job1", PMIX_RANGE_RM);
+    irm = rm->index;
+    ds_unpub_msg("unpub.job2", 0);
+    CHECK("unpublish: an RM-range key is still its owner's to remove", !ds_stored(rm, irm));
+
+    ds_store_close();
+    return failures;
+}
+
 /* The persistence ordering ds_purge applies when a lifetime ends.  Worth
  * pinning down because the values are NOT a usable numeric ladder:
  * PMIX_PERSIST_INDEF is 0 and outlives every other value, so any attempt to
@@ -2599,6 +2686,7 @@ int main(void)
     failures += test_data_server_collect();
     failures += test_data_server_cap();
     failures += test_data_server_purge_parked();
+    failures += test_data_server_unpublish_reach();
     failures += test_data_server_same_range();
     failures += test_data_server_named_uint8();
     failures += test_progress_thread_cpus();
