@@ -1449,6 +1449,62 @@ static int test_data_server_collect(void)
     return failures;
 }
 
+/* What counts as a duplicate.  The access check keeps two users'
+ * identically-keyed items apart, but it is the wrong test for a publisher's
+ * own item: a publisher may leave itself off its own accessor list, and
+ * the collision test used to ask whether it could READ its item - so a
+ * second publish of the key was stored beside the first. */
+static int test_data_server_same_range(void)
+{
+    int failures = 0;
+    prte_data_object_t *data;
+    prte_data_req_t *rq;
+
+    data = PMIX_NEW(prte_data_object_t);
+    PMIX_LOAD_PROCID(&data->owner, "publisher.job", 0);
+    data->uid = 500;
+    data->gid = 20;
+    data->range = PMIX_RANGE_SESSION;
+
+    rq = PMIX_NEW(prte_data_req_t);
+    PMIX_LOAD_PROCID(&rq->requestor, "publisher.job", 0);
+    rq->uid = 500;
+    rq->gid = 20;
+    rq->range = PMIX_RANGE_SESSION;
+
+    CHECK("same range: the publisher's own item collides",
+          prte_data_server_same_range(rq, data, PMIX_RANGE_SESSION));
+    CHECK("same range: a different range word does not",
+          !prte_data_server_same_range(rq, data, PMIX_RANGE_GLOBAL));
+
+    /* the publisher named only somebody else as a reader */
+    data->auids = (uint32_t *) malloc(sizeof(uint32_t));
+    data->auids[0] = 501;
+    data->nauids = 1;
+    CHECK("same range: an owned item the owner may not read still collides",
+          prte_data_server_same_range(rq, data, PMIX_RANGE_SESSION));
+
+    /* another user's item: the access check decides */
+    rq->uid = 502;
+    CHECK("same range: another user's item this publisher cannot read does not collide",
+          !prte_data_server_same_range(rq, data, PMIX_RANGE_SESSION));
+    rq->uid = 501;
+    CHECK("same range: another user's item this publisher can read collides",
+          prte_data_server_same_range(rq, data, PMIX_RANGE_SESSION));
+
+    /* a namespace range is a set of processes, not a word */
+    rq->uid = 500;
+    data->range = PMIX_RANGE_NAMESPACE;
+    rq->range = PMIX_RANGE_NAMESPACE;
+    PMIX_LOAD_PROCID(&rq->requestor, "later.job", 0);
+    CHECK("same range: NAMESPACE from another namespace is a different set",
+          !prte_data_server_same_range(rq, data, PMIX_RANGE_NAMESPACE));
+
+    PMIX_RELEASE(rq);
+    PMIX_RELEASE(data);
+    return failures;
+}
+
 /* The per-uid cap.  Two things it has got wrong: evicting the one item a
  * user holds releases that user's usage record, and prte_ds_make_room() went
  * on reading the record it had in hand; and every value that was not a
@@ -2296,6 +2352,7 @@ int main(void)
     failures += test_data_server_requestor();
     failures += test_data_server_collect();
     failures += test_data_server_cap();
+    failures += test_data_server_same_range();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
     failures += test_worker_pool();

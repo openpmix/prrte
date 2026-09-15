@@ -320,6 +320,14 @@ PRTE_EXPORT void prte_ds_check_requestor(pmix_proc_t *owner,
 PRTE_EXPORT bool prte_data_server_owns(uint32_t uid, uint32_t gid,
                                        prte_data_object_t *data);
 
+/* Would a publication on "range", by the publisher "rq" describes, collide
+ * with this stored item?  The range word must match, the item must fall
+ * within the publisher's view of that range, and it must be either the
+ * publisher's own or one the publisher may read.  See ds_main.c. */
+PRTE_EXPORT bool prte_data_server_same_range(prte_data_req_t *rq,
+                                             prte_data_object_t *data,
+                                             pmix_data_range_t range);
+
 END_C_DECLS
 
 #endif /* PRTE_DS_INTERNAL_H */
