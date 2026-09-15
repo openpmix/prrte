@@ -1341,6 +1341,23 @@ static int test_data_server_objects(void)
  * FIRST_READ value consumed by a request that goes on waiting is a value
  * nobody ever receives.  That is exactly what the lookup path used to do:
  * take what it could find, drop it, and park for the rest. */
+/* the store is normally built by prte_data_server_init(), which also
+ * registers RML receives these tests have no RML for */
+static void ds_store_open(void)
+{
+    PMIX_CONSTRUCT(&prte_data_store.store, pmix_pointer_array_t);
+    pmix_pointer_array_init(&prte_data_store.store, 1, INT_MAX, 1);
+    PMIX_CONSTRUCT(&prte_data_store.pending, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_data_store.usage, pmix_list_t);
+}
+
+static void ds_store_close(void)
+{
+    PMIX_DESTRUCT(&prte_data_store.store);
+    PMIX_LIST_DESTRUCT(&prte_data_store.pending);
+    PMIX_LIST_DESTRUCT(&prte_data_store.usage);
+}
+
 static prte_data_object_t *ds_store_item(const char *key, const char *val,
                                          uint32_t uid, pmix_persistence_t persist)
 {
@@ -1372,12 +1389,7 @@ static int test_data_server_collect(void)
     char *a[] = {"prte.test.once", NULL};
     char *theirkey[] = {"prte.test.theirs", NULL};
 
-    /* the store is normally built by prte_data_server_init(), which also
-     * registers RML receives this test has no RML for */
-    PMIX_CONSTRUCT(&prte_data_store.store, pmix_pointer_array_t);
-    pmix_pointer_array_init(&prte_data_store.store, 1, INT_MAX, 1);
-    PMIX_CONSTRUCT(&prte_data_store.pending, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_data_store.usage, pmix_list_t);
+    ds_store_open();
 
     once = ds_store_item("prte.test.once", "first-read", 500, PMIX_PERSIST_FIRST_READ);
     kept = ds_store_item("prte.test.kept", "indefinite", 500, PMIX_PERSIST_INDEF);
@@ -1432,10 +1444,57 @@ static int test_data_server_collect(void)
     prte_ds_drop(theirs);
     CHECK("collect: dropping every item uncharges every uid",
           0 == pmix_list_get_size(&prte_data_store.usage));
-    PMIX_DESTRUCT(&prte_data_store.store);
-    PMIX_LIST_DESTRUCT(&prte_data_store.pending);
-    PMIX_LIST_DESTRUCT(&prte_data_store.usage);
+    ds_store_close();
 
+    return failures;
+}
+
+/* The per-uid cap.  Evicting the one item a user holds releases that
+ * user's usage record, and prte_ds_make_room() went on reading the record
+ * it had in hand. */
+static int test_data_server_cap(void)
+{
+    int failures = 0;
+    prte_data_object_t *old, *fresh;
+    prte_info_item_t *item;
+    size_t saved = prte_data_store.max_size;
+
+    ds_store_open();
+
+    old = ds_store_item("prte.test.cap.old", "the first of this user's items", 700,
+                        PMIX_PERSIST_INDEF);
+    old->last_access -= 10;
+
+    /* a cap that holds either item but not both */
+    fresh = PMIX_NEW(prte_data_object_t);
+    PMIX_LOAD_PROCID(&fresh->owner, "publisher.job", 0);
+    fresh->uid = 700;
+    fresh->gid = 20;
+    item = PMIX_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&item->info, "prte.test.cap.new", "the item that needs the room", PMIX_STRING);
+    pmix_list_append(&fresh->info, &item->super);
+    /* charging is the only way to measure it; then take the charge back
+     * off, since a publish is charged only once there is room for it */
+    prte_ds_charge(fresh);
+    prte_data_store.max_size = old->nbytes + fresh->nbytes - 1;
+    ((prte_ds_usage_t *) pmix_list_get_first(&prte_data_store.usage))->bytes -= fresh->nbytes;
+    fresh->nbytes = 0;
+
+    CHECK("cap: room is made by evicting the user's only item",
+          prte_ds_make_room(fresh));
+    CHECK("cap: ...which has left the store",
+          NULL == pmix_pointer_array_get_item(&prte_data_store.store, 0));
+    CHECK("cap: ...and taken the user's usage record with it",
+          0 == pmix_list_get_size(&prte_data_store.usage));
+    prte_ds_charge(fresh);
+    fresh->index = pmix_pointer_array_add(&prte_data_store.store, fresh);
+    CHECK("cap: the new item is charged afresh",
+          1 == pmix_list_get_size(&prte_data_store.usage) &&
+          fresh->nbytes == ((prte_ds_usage_t *) pmix_list_get_first(&prte_data_store.usage))->bytes);
+    prte_ds_drop(fresh);
+    prte_data_store.max_size = saved;
+
+    ds_store_close();
     return failures;
 }
 
@@ -2220,6 +2279,7 @@ int main(void)
     failures += test_data_server_ownership();
     failures += test_data_server_requestor();
     failures += test_data_server_collect();
+    failures += test_data_server_cap();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
     failures += test_worker_pool();
