@@ -233,6 +233,14 @@ continues the launch. **Nothing blocks**: a `PRTE_SUCCESS` return here
 means "the callback will fire", and an error return means it never will
 (the caddy is released on the spot).
 
+**The status the callback is handed is a verdict, not a courtesy.** PMIx
+absorbs "not for me" (`NOT_AVAILABLE`, `TAKE_NEXT_OPTION`) below it, so a
+non-success status means a network, GPU or programming-model component
+really failed to set the job up. `_setup_complete()` fails the job
+(`NEVER_LAUNCHED`) rather than launching it without whatever that component
+was to provide; `_local_support_complete()` does the same on a daemon for
+`PMIx_server_setup_local_support()`.
+
 ### 2a. The half addressed to one daemon — `prte_odls_base_send_cpuset_slices()`
 
 A proc's binding is read by exactly one daemon, the one that forks it, and
@@ -272,6 +280,20 @@ Three cases that must not wait, and each is a hang if you get it wrong:
   use, where the cpusets were in the buffer all along. The receiver keys off
   the mode byte it unpacked, not off its own MCA parameter, so a daemon can
   never wait for a slice the master did not send.
+
+**A parked half belongs to its job, and goes with it.** The caddy carrying
+a parked launch holds its own reference on the job, and the list entry owns
+the caddy, so dropping the entry releases both.
+`prte_odls_base_discard_slices()` does that, and `prted_comm.c` calls it on
+every daemon when the DVM cleans the job up — *before* looking the job up,
+because a slice whose launch message never came has no job to find. The
+case it closes is a slice that is late rather than lost: a relay on its
+route dies, the job is aborted and cleaned up, and the RML replays the slice
+afterwards. A launch still parked for it would otherwise hold a job the
+cleanup freed, and the replayed slice would register and fork the procs of
+a job that is over. The lookup is
+strict (`PMIX_CHECK_NSPACE_STRICT`): an undecodable namespace must not
+match, and so discard, somebody else's parked launch.
 
 `--prtemca odls_base_scatter_cpusets 0` turns it off and broadcasts the
 bindings as before; it is an A/B switch, not a supported difference in
@@ -443,8 +465,10 @@ component's raw fork:
   per-job `PRTE_JOB_EXEC_AGENT`, or the global `exec_agent`; optionally
   index-suffixes `argv[0]` with the rank (`PRTE_JOB_INDEX_ARGV`).
 - Calls the component's **`cd->fork_local(cd)`** — the actual `fork`/`execve`.
-- On success stores the pid (on the master) and activates
-  `PRTE_PROC_STATE_RUNNING`; on failure activates a failure state.
+- On success stores the pid in PMIx (on the master), and in every case
+  hands its verdict to **`spawn_done`** on `prte_event_base`, which records
+  it on the child and activates `PRTE_PROC_STATE_RUNNING` or the failure
+  state. See "The fork does not write the child" below.
 
 ### 6. Applying binding — `prte_odls_base_prepare_binding()` + `prte_odls_base_set()` (`odls_base_bind.c`)
 
@@ -564,6 +588,21 @@ computed proc state.
   waitpid (to avoid races), then escalates **SIGCONT → SIGTERM → SIGKILL**
   with `nanosleep` gaps, marking each `KILLED_BY_CMD`. It calls the
   component's raw `kill_local(pid, signum)`.
+
+  **A child can be ordered to die mid-fork.** It is `ALIVE` with no pid
+  from the moment `launch_local` dispatches it until its fork reports back,
+  and a kill in that window - an aborted job, one of whose ranks failed
+  while its siblings on the same node were still being forked - has nothing
+  to signal. It must not be treated as never having started either: the
+  fork goes ahead regardless, and a child recorded as terminated then ran
+  to its own end while the aborted job waited on it. Such a child is
+  flagged `PRTE_PROC_FLAG_KILL_PENDING`, and `spawn_done` delivers the kill
+  once the pid exists, batching the children that report while one batch
+  is pending (the escalation sleeps on the progress thread, so one call per
+  child would stall the daemon per child). `--prtemca
+  odls_base_fork_publish_delay 3000000` with `prte_num_worker_threads 1`
+  and a two-rank job whose rank 0 exits non-zero holds rank 1 in exactly
+  that window.
 - **`prte_odls_base_default_signal_local_procs()`** — finds the target
   child (or all) and calls the component's raw `signal_local(pid, signum)`.
 - **`prte_odls_base_default_restart_proc()`** — resets a single known
@@ -593,16 +632,32 @@ computed proc state.
   — the normal PRRTE event-driven model.
 - **Only the fork/exec spawn step** may be off-loaded to the **process-wide
   worker pool** (`prte_worker_pool_assign()`) to parallelize launching many
-  procs. Each spawn is a self-contained caddy handed to one worker base; it
-  touches only its own child, so no shared-state locking is needed on the hot
-  path. The pool is shared with the OOB — a worker base servicing your fork
-  may also be servicing a peer socket.
+  procs. Each spawn is a self-contained caddy handed to one worker base. The
+  pool is shared with the OOB — a worker base servicing your fork may also
+  be servicing a peer socket.
+- **The fork does not write the child.** "Its own child" is not the same
+  as "a child nobody else touches": the SIGCHLD reaper, the IOF read
+  handlers and the daemon command processor all reach that `prte_proc_t`
+  from the progress thread while the fork is in flight. A state written on
+  the worker can overwrite a termination the progress thread has just
+  recorded, and `PRTE_FLAG_SET`/`UNSET` are read-modify-write on a shared
+  bitmask, so two threads touching different bits lose one. So everything
+  the child needs cleared before a launch is cleared by `launch_reset()` on
+  the progress thread, everything the launch learns is carried back by
+  `spawn_report()` and recorded by `spawn_done`, and the only field the
+  worker writes is the pid - published behind the component's gate for the
+  reaper. The same goes for the **job's attribute list**, which the
+  progress thread can append to mid-launch (the prted errmgr's
+  `FAIL_NOTIFIED`): `spawn_caddy_resolve()` reads what the fork path needs
+  onto the caddy before dispatch, and nothing past the dispatch calls
+  `prte_get_attribute` on the job.
 - `SIGCHLD` must stay unblocked (done at framework open); child death is
   delivered through `src/runtime/prte_wait.c`, which fires the registered
   `wait_local_proc` callback on `prte_event_base`.
 - **No base function blocks.** `get_add_procs_data` and
   `construct_child_list` both hand their work to PMIx and return; the
-  launch is carried across the gap by a `prte_odls_jcaddy_t` and resumed
+  launch is carried across the gap by a `prte_odls_jcaddy_t` — which holds
+  its own reference on the job, since the gap can outlast it — and resumed
   by a thread-shifted completion handler. Neither uses a
   `prte_pmix_lock_t`, and neither should grow one — they run on
   `prte_event_base`, which is the only thread that can run the handler
@@ -686,7 +741,8 @@ computed proc state.
   is `PMIX_NEW`'d in `launch_local` and owned by `spawn_proc`; the success
   tail, the `errorout:` path, **and** the early `PRTE_JOB_DO_NOT_SPAWN`
   return all have to release it, or every donotlaunch/mapping-only proc
-  leaks a caddy (plus its `wdir` string).
+  leaks a caddy (plus its `wdir` string). Each of them also owes exactly one
+  `spawn_report()`, or the child's launch is never accounted for.
 - **`setup_path` writes through to `app->cwd`.** `launch_local` calls it as
   `setup_path(jobdat, app, &app->cwd)`, so it overwrites (and must first
   free) the app's existing `cwd`; `restart_proc` instead passes a local
@@ -709,10 +765,11 @@ computed proc state.
   `launch_local` flags a child `ALIVE` and registers its waitpid *before*
   the IOF setup and the dispatch to `spawn_proc`, so anything that fails in
   between leaves a wait tracker — holding a reference on the child —
-  waiting for a pid that will never exist. `spawn_proc`'s `errorout:` keys
-  the cancel off `0 == child->pid`, which is exactly the pre-fork case; a
-  *post*-fork failure keeps its registration, because that child does exist
-  and its `SIGCHLD` is still coming.
+  waiting for a pid that will never exist. `spawn_done` keys the cancel off
+  `0 >= child->pid` for any launch that did not end `RUNNING`, which is
+  exactly the no-process case (never forked, or the fork itself failed and
+  stored -1); a *post*-fork failure keeps its registration, because that
+  child does exist and its `SIGCHLD` is still coming.
 - **Never hand a pid of 0 to the kill/signal primitives.** Both component
   primitives turn a pid into a process *group* (`-pid`) so a signal reaches
   whatever the app itself spawned — which makes `pid == 0` catastrophic
