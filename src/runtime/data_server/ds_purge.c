@@ -204,6 +204,51 @@ static bool purge_takes(prte_data_object_t *data, const pmix_proc_t *target,
     return prte_data_server_expires_by(data->persistence, horizon);
 }
 
+/* Finish the lookups a process left parked when it ended.
+ *
+ * A parked request that outlives its requestor is worse than a leak.  A
+ * later publish that satisfies it takes a PMIX_PERSIST_FIRST_READ value on
+ * behalf of a process that cannot receive it, so the reader actually
+ * waiting for that value - typically the next generation of the same job -
+ * finds nothing.  And the requestor's daemon holds the request's room for
+ * as long as it waits.
+ *
+ * So each one is answered - nobody reads the answer, but it is what lets
+ * the daemon free that room - and released.
+ *
+ * Only the two horizons whose target names the requestors themselves.  An
+ * APPLICATION's target is its whole namespace, and a parked request does not
+ * say which application asked, so dropping by that target would cancel the
+ * lookups of applications still running - and every process of the one that
+ * ended was purged at the PROC horizon as it went.  A SESSION's target is
+ * anybody at all.  An explicit PMIx_Unpublish(NULL, ...) ends nothing: it
+ * comes from a live process that is taking its data back, and cancelling
+ * the lookups it is waiting on is no part of that. */
+static void drop_parked(const pmix_proc_t *target, pmix_persistence_t horizon)
+{
+    prte_data_req_t *req, *rqnext;
+
+    if (PMIX_PERSIST_PROC != horizon && PMIX_PERSIST_NSPACE != horizon) {
+        return;
+    }
+    PMIX_LIST_FOREACH_SAFE(req, rqnext, &prte_data_store.pending, prte_data_req_t) {
+        /* strictly: a namespace we do not know is nobody's */
+        if (!PMIX_CHECK_NSPACE_STRICT(target->nspace, req->requestor.nspace)) {
+            continue;
+        }
+        if (PMIX_RANK_WILDCARD != target->rank && target->rank != req->requestor.rank) {
+            continue;
+        }
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: dropping pending request from %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIX_NAME_PRINT(&req->requestor));
+        pmix_list_remove_item(&prte_data_store.pending, &req->super);
+        prte_ds_reply_parked(req, PMIX_ERR_NOT_FOUND, NULL);
+        PMIX_RELEASE(req);
+    }
+}
+
 /* Remove everything the ended lifetime takes.  Shared by the message form
  * and the direct one - what differs between them is who gets told, not what
  * goes. */
@@ -223,6 +268,10 @@ static void purge_store(const pmix_proc_t *target, pmix_persistence_t horizon,
         }
         prte_ds_drop(data);
     }
+    /* The parked lookups go with the lifetime too.  This used to happen
+     * only in the message form, and once the state machine's purges became
+     * calls into purge_local, nothing dropped them at all. */
+    drop_parked(target, horizon);
 }
 
 void prte_data_server_purge_local(const pmix_proc_t *target,
@@ -248,14 +297,14 @@ void prte_ds_purge(pmix_proc_t *sender,
     int32_t count;
     pmix_status_t rc, ret;
     pmix_proc_t requestor;
-    prte_data_req_t *req, *rqnext;
     pmix_info_t *info;
     size_t n, ninfo;
+    uint8_t u8;
     /* absent a PMIX_PERSISTENCE directive this is an explicit
      * "remove everything I published", not the end of a lifetime */
     pmix_persistence_t horizon = PMIX_PERSIST_INVALID;
     /* the app index or session id the horizon needs, where it needs one */
-    uint32_t qualifier = UINT32_MAX;
+    uint32_t qualifier = UINT32_MAX, appidx = UINT32_MAX, sessionid = UINT32_MAX;
 
     /* unpack the proc whose data is to be purged - session
      * data is purged by providing a requestor whose rank
@@ -283,16 +332,38 @@ void prte_ds_purge(pmix_proc_t *sender,
             PMIX_INFO_FREE(info, ninfo);
             goto done;
         }
+        /* Every one of these is read through its type rather than out of
+         * the union regardless.  A purge is an unpublish naming no keys, so
+         * the array can be a client's own, typed however the client typed
+         * it - and an int holding PMIX_PERSIST_PROC read as a persist is
+         * PMIX_PERSIST_INDEF on a big-endian host. */
         for (n = 0; n < ninfo; n++) {
             if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
                 /* a lifetime ended, and this is which one */
-                horizon = info[n].value.data.persist;
-            } else if (PMIx_Check_key(info[n].key, PRTE_PURGE_APP_IDX) ||
-                       PMIx_Check_key(info[n].key, PMIX_SESSION_ID)) {
-                /* which application, or which session - the horizon says
-                 * which of the two this is */
-                qualifier = info[n].value.data.uint32;
+                rc = prte_ds_get_named_uint8(&info[n].value, PMIX_PERSIST, &u8);
+                if (PMIX_SUCCESS != rc) {
+                    break;
+                }
+                horizon = u8;
+            } else if (PMIx_Check_key(info[n].key, PRTE_PURGE_APP_IDX)) {
+                rc = PMIx_Value_get_number(&info[n].value, &appidx, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    break;
+                }
+            } else if (PMIx_Check_key(info[n].key, PMIX_SESSION_ID)) {
+                rc = PMIx_Value_get_number(&info[n].value, &sessionid, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    break;
+                }
             }
+        }
+        if (PMIX_SUCCESS != rc) {
+            /* a lifetime we cannot read is not one we may guess at - the
+             * guess decides whose data goes */
+            PMIX_ERROR_LOG(rc);
+            PMIX_INFO_FREE(info, ninfo);
+            rc = PMIX_ERR_BAD_PARAM;
+            goto done;
         }
         /* A relay purging on behalf of a process in its own DVM.  Without
          * this the purge would take everything the relay itself owns -
@@ -303,42 +374,64 @@ void prte_ds_purge(pmix_proc_t *sender,
         PMIX_INFO_FREE(info, ninfo);
     }
 
+    /* Which of the two qualifiers counts is the horizon's to say, and a
+     * horizon that needs one it was not given selects nothing real:
+     * UINT32_MAX is what an item records when it has no application or
+     * session, so it would take exactly those. */
+    switch (horizon) {
+    case PMIX_PERSIST_INVALID:
+    case PMIX_PERSIST_PROC:
+    case PMIX_PERSIST_NSPACE:
+        break;
+    case PMIX_PERSIST_APP:
+        qualifier = appidx;
+        break;
+    case PMIX_PERSIST_SESSION:
+        qualifier = sessionid;
+        break;
+    default:
+        /* INDEF and FIRST_READ name no lifetime that can end, and anything
+         * else names nothing at all */
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+    if ((PMIX_PERSIST_APP == horizon || PMIX_PERSIST_SESSION == horizon) &&
+        UINT32_MAX == qualifier) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+
+    /* A purge arriving as a message must name a namespace.  The empty one
+     * is a wildcard to PMIX_CHECK_PROCID, which the session horizon relies
+     * on when the MASTER purges its own store by a direct call - but a
+     * session id means something only inside the DVM that assigned it.  A
+     * relayed session purge used to arrive here naming "anybody", so another
+     * DVM ending its session 1 took this DVM's own session-1 data, and every
+     * lookup parked in the store was released unanswered, hanging the
+     * processes waiting on them.  Nothing else sends an empty target: a
+     * client's own name always has a namespace, and so does every other
+     * horizon's. */
+    if (PMIX_NSPACE_INVALID(requestor.nspace)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+
     pmix_output_verbose(1, prte_data_store.output,
                         "%s data server: purge data from %s:%d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         requestor.nspace, requestor.rank);
 
-    /* Take what the ended lifetime takes.  This is what makes
-     * PMIX_PERSISTENCE mean anything: the value was recorded at publish and
-     * then never consulted again, so data published to last only as long as
-     * its application sat in the store until the DVM itself went away, and
-     * PMIX_PERSIST_APP and PMIX_PERSIST_PROC both behaved as
-     * PMIX_PERSIST_INDEF. */
+    /* Take what the ended lifetime takes, and finish any lookup it left
+     * parked.  This is what makes PMIX_PERSISTENCE mean anything: the value
+     * was recorded at publish and then never consulted again, so data
+     * published to last only as long as its application sat in the store
+     * until the DVM itself went away, and PMIX_PERSIST_APP and
+     * PMIX_PERSIST_PROC both behaved as PMIX_PERSIST_INDEF. */
     purge_store(&requestor, horizon, qualifier);
-
-    /* Drop any lookup this process left parked on the pending list. Those
-     * requests outlived their requestor: a later publish would match one and
-     * try to reply to a process that no longer exists, and until then the
-     * request kept the (already purged) proc's keys alive.
-     *
-     * Only when a lifetime actually ended, though.  An explicit
-     * PMIx_Unpublish(NULL, ...) arrives as this same command from a process
-     * that is very much alive, and cancelling the lookups it is waiting on
-     * is no part of taking its published data back. */
-    if (PMIX_PERSIST_INVALID == horizon) {
-        goto done;
-    }
-    PMIX_LIST_FOREACH_SAFE(req, rqnext, &prte_data_store.pending, prte_data_req_t) {
-        if (!PMIX_CHECK_PROCID(&requestor, &req->requestor)) {
-            continue;
-        }
-        pmix_output_verbose(1, prte_data_store.output,
-                            "%s data server: dropping pending request from %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PMIX_NAME_PRINT(&req->requestor));
-        pmix_list_remove_item(&prte_data_store.pending, &req->super);
-        PMIX_RELEASE(req);
-    }
+    rc = PMIX_SUCCESS;
 
 done:
     // send back an answer. Keep the pack status separate from the status

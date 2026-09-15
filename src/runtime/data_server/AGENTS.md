@@ -128,9 +128,22 @@ Three things follow, and each is load-bearing:
   call, never once at startup.
 
 The purge command carries a directive array for this reason — it is the only
-way `PMIX_REQUESTOR` can reach `ds_purge`. Three senders pack it
-(`pmix_server_unpublish_fn`, `state_dvm.c`, `state_base_fns.c`) and one reader
-unpacks it; they change together.
+way `PMIX_REQUESTOR` can reach `ds_purge`. Two senders pack it
+(`pmix_server_unpublish_fn`, `send_purge()` in `state_base_fns.c`) and two
+readers unpack it (`prte_ds_purge`, `prte_ds_relay`); they change together.
+
+**A purge that arrives as a message must name a namespace**, and `ds_purge`
+refuses one that does not. The empty namespace is a wildcard to
+`PMIX_CHECK_PROCID`, which the `SESSION` horizon relies on when the master
+purges its *own* store by a direct call — but a session id is a counter each
+DVM starts from 1, so it names nothing at the far end. The master used to
+relay its session purges anyway: the external server took *its own* jobs'
+session data whenever the ids coincided, which is always, and released every
+lookup parked in its store without answering it. `purge_data()` no longer
+relays the `SESSION` horizon (see `docs/todo.rst` for what that leaves), and
+the server refuses the shape if anything else sends it. The horizon and its
+qualifier are read through their types, like the publish directives: a purge
+is an unpublish naming no keys, so the array can be a client's own.
 
 ---
 
@@ -580,9 +593,22 @@ publish has been getting — as a side effect of reading `APP` correctly.
 lifetime asks for `APP` and gets it.
 
 A lifecycle purge drops both the departing process's published items *and*
-any lookup it left parked; a request that outlives its requestor would
-otherwise have a later publish trying to reply to a process that no longer
-exists.
+any lookup it left parked. A request that outlives its requestor is worse
+than a leak: a later publish that satisfies it takes a `FIRST_READ` value on
+behalf of a process that cannot receive it, so the reader actually waiting
+for that value finds nothing, and the requestor's daemon holds the room
+until then. The drop lives in `purge_store()`, which both the direct call
+and the message form go through — it used to be only in the message form,
+so once the state machine's purges became calls nothing dropped them at all.
+Each dropped request is *answered* (nobody reads it; it is what lets the
+daemon free the room) and released.
+
+Only the `PROC` and `NSPACE` horizons drop parked lookups, because only
+their targets name the requestors. An `APP` target is the whole namespace
+and a parked request does not record which application asked, so dropping by
+it would cancel the lookups of applications still running — and each process
+of the app that ended was already purged at `PROC`. A `SESSION` target is
+anybody. An explicit unpublish-all (`INVALID`) ends nothing.
 
 ---
 
@@ -687,7 +713,10 @@ including the `PMIX_RANGE_SESSION` default a request carries. And
 that counting takes nothing — a `FIRST_READ` value is still there and still
 counted afterwards — that collecting returns every value and drops the item
 it empties, and that another user's item holding the key is reported as
-denied. And the cap (`test_data_server_cap`): that evicting a user's only
+denied. And the purge (`test_data_server_purge_parked`): which horizons drop
+a parked lookup, by direct call and by message, and that a message naming no
+namespace, or a horizon that cannot be read, is refused. And the cap
+(`test_data_server_cap`): that evicting a user's only
 item makes room and leaves one fresh usage record, and that a data array is
 charged for its contents. None of it needs the RML. The eviction case pins
 the behavior; the use-after-free it once had shows only under a memory
@@ -701,7 +730,9 @@ that must *not* reach another job's data, an accessor list that admits or
 refuses a real reader (and is answered with `PMIX_ERR_NO_PERMISSIONS`),
 unpublish — including an owner removing data published on a range it does
 not itself fall within — and the `PMIX_WAIT` path, both where a later
-publish satisfies it and where `PMIX_TIMEOUT` ends it. The `dataserver`
+publish satisfies it and where `PMIX_TIMEOUT` ends it — and where its
+requestor is killed while parked, which must leave a later `FIRST_READ`
+value for the reader that comes after. The `dataserver`
 helper takes the publish range, the unpublish range and an access spec as
 separate arguments for those cases.
 
