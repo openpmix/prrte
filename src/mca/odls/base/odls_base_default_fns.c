@@ -464,7 +464,7 @@ static void _local_support_complete(int sd, short args, void *cbdata)
     PMIX_RELEASE(cd);
 }
 
-static void ls_cbunc(pmix_status_t status, void *cbdata)
+static void ls_cbfunc(pmix_status_t status, void *cbdata)
 {
     prte_odls_jcaddy_t *cd = (prte_odls_jcaddy_t *) cbdata;
 
@@ -558,7 +558,7 @@ static void job_reg_join(prte_odls_jcaddy_t *cd)
          * thread-shift and activate the local launch once the
          * support is in place */
         ret = PMIx_server_setup_local_support(cd->jdata->nspace, cd->info, cd->ninfo,
-                                              ls_cbunc, cd);
+                                              ls_cbfunc, cd);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             fail_local_procs(cd->jdata, prte_pmix_convert_status(ret));
@@ -1134,7 +1134,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
         }
     }
 
-    /* now that the node array in the job map and jdata are completely filled out,.
+    /* now that the node array in the job map and jdata are completely filled out,
      * we need to "wireup" the procs to their nodes so other utilities can
      * locate them */
     for (n = 0; n < jdata->procs->size; n++) {
@@ -1584,7 +1584,6 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-
     if (cd->do_not_spawn) {
         // if we aren't spawning the apps, then just mark them as
         // terminated - see spawn_done
@@ -1684,11 +1683,12 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         cd->argv = PMIx_Argv_copy(app->argv);
     }
 
-    /* An app may carry no argv at all - a PMIx_Spawn is allowed to name a
-     * cmd and nothing else - so default it here, before anything reads
-     * argv[0]. The index-argv rewrite immediately below does exactly that,
-     * and used to dereference NULL for such an app. (The component defaults
-     * it too, but only once it has the caddy in hand, which is too late.) */
+    /* Default an empty argv here, before anything reads argv[0] - the
+     * index-argv rewrite immediately below does.  A PMIx_Spawn that names
+     * only a cmd does not reach us that way: the PMIx client library fills
+     * in argv[0] from the cmd before sending the request.  This guards an
+     * app built some other way. (The component defaults it too, but only
+     * once it has the caddy in hand, which is too late for the rewrite.) */
     if (NULL == cd->argv) {
         PMIx_Argv_append_nosize(&cd->argv, cd->cmd);
     }
@@ -2175,7 +2175,6 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         // process any provided env directives
         prte_odls_base_process_envars(jobdat, app);
 
-
         if (PRTE_SUCCESS != (rc = schizo->setup_fork(jobdat, app))) {
 
             PMIX_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
@@ -2277,10 +2276,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 PRTE_PROC_STATE_RESTART != child->state) {
                 continue;
             }
-            /* do we have a child from the specified job. Because the
-             * job could be given as a WILDCARD value, we must use
-             * the dss.compare function to check for equality.
-             */
+            /* do we have a child from the specified job? */
             if (!PMIX_CHECK_NSPACE(job, child->name.nspace)) {
 
                 PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
@@ -2928,8 +2924,8 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             /* check for everything complete - this will remove
              * the child object from our local list
              */
-            if (!prte_finalizing && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE)
-                && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID)) {
+            if (!prte_finalizing && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE) &&
+                PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID)) {
                 PRTE_ACTIVATE_PROC_STATE(&child->name, child->state);
             }
         }
