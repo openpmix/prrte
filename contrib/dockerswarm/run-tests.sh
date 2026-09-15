@@ -6608,6 +6608,51 @@ test_rml() {
         || ok "...without crashing"
     cleanup_swarm
 
+    # ...and the sockets are bound to that interface alone.  The listener used
+    # to take the wildcard address whatever had been selected, so an excluded
+    # interface still answered on the OOB port.  Check both the HNP and a
+    # remote daemon, since they open their listeners on different paths (a
+    # thread in the HNP, the event base in a prted).
+    RUN 'nohup prte --daemonize --prtemca prte_if_include eth0 --host node1:1,node2:1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    for n in 1 2; do
+        w=prte; [ "$n" = 1 ] || w=prted
+        a=$(ON "$n" "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" | tr -d '\r')
+        l=$(ON "$n" "ss -Hltnp | grep '\"$w\"' | awk '{print \$4}'" | tr -d '\r')
+        echo "$l" | grep -q "^$a:" \
+            && ok "node$n: $w listens on eth0 ($a)" \
+            || bad "node$n: no $w listener on eth0 ($a): $(echo "$l" | tr '\n' ' ')"
+        echo "$l" | grep -qE '^(0\.0\.0\.0|\*|\[::\]):' \
+            && bad "node$n: $w listens on the wildcard address: $(echo "$l" | tr '\n' ' ')" \
+            || ok "node$n: ...and on no wildcard address"
+    done
+    RUN 'pterm' >/dev/null 2>&1
+    cleanup_swarm
+
+    # Confining a single-node job to loopback.  Loopback used to be dropped
+    # before the include list was consulted, so naming it - on any host with
+    # another interface - left nothing and the job refused to start.
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca prte_if_include lo -np 2 hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node1$')
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "if_include lo runs a single-node job" \
+        || bad "if_include lo refused a single-node job (rc=$rc, lines=$n): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    l=$(RUN 'timeout -k 5 30 prterun --prtemca prte_if_include lo -np 1 sleep 6 >/dev/null 2>&1 & sleep 3; ss -Hltnp | grep "\"prterun\"" | awk "{print \$4}"' 2>/dev/null | tr -d '\r')
+    [ -n "$l" ] && ! echo "$l" | grep -qvE '^(127\.[0-9.]+|\[::1\]):' \
+        && ok "...and every prterun listener is on loopback" \
+        || bad "if_include lo left a non-loopback prterun listener: $(echo "$l" | tr '\n' ' ')"
+    cleanup_swarm
+
+    # A DVM confined to loopback cannot reach another node, so asking it to
+    # start a daemon there has to fail.  The remote daemon finds no usable
+    # interface and exits; the HNP used to report that and then wait for the
+    # daemon to call in, which it never would, until killed.
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca prte_if_include lo \
+                  --host node1:1,node2:1 -np 2 --map-by node hostname' 2>&1); rc=$?
+    [ "$rc" != 124 ] && [ "$rc" != 0 ] \
+        && ok "a loopback-only DVM asked for a remote node failed instead of hanging (rc=$rc)" \
+        || bad "a loopback-only DVM asked for a remote node: rc=$rc: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+
     banner "rml: losing a daemon under a live DVM is detected, not hung on"
     # Killing an interior daemon drops its sockets; the peers' recv handlers
     # see the close, run prte_oob_tcp_peer_close (which must complete every
