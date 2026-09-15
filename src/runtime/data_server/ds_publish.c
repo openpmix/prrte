@@ -132,6 +132,42 @@ static pmix_status_t load_permissions(const pmix_value_t *val,
     return PMIX_SUCCESS;
 }
 
+/* The persistences and ranges this store knows how to honor.  Spelled out
+ * rather than bounded by the highest value: neither family is a ladder,
+ * and a value PMIx adds later is one this store cannot honor until it is
+ * taught what it means. */
+static bool known_persistence(pmix_persistence_t persist)
+{
+    switch (persist) {
+    case PMIX_PERSIST_INDEF:
+    case PMIX_PERSIST_FIRST_READ:
+    case PMIX_PERSIST_PROC:
+    case PMIX_PERSIST_APP:
+    case PMIX_PERSIST_SESSION:
+    case PMIX_PERSIST_NSPACE:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool known_range(pmix_data_range_t range)
+{
+    switch (range) {
+    case PMIX_RANGE_UNDEF:
+    case PMIX_RANGE_RM:
+    case PMIX_RANGE_LOCAL:
+    case PMIX_RANGE_NAMESPACE:
+    case PMIX_RANGE_SESSION:
+    case PMIX_RANGE_GLOBAL:
+    case PMIX_RANGE_CUSTOM:
+    case PMIX_RANGE_PROC_LOCAL:
+        return true;
+    default:
+        return false;
+    }
+}
+
 /* Record which application and session the publisher belongs to.
  *
  * Every process that runs a data server holds the job objects it needs for
@@ -290,6 +326,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
     size_t n, ndups;
     pmix_info_t *info;
     prte_data_req_t rq;
+    uint8_t u8;
     bool replace = false, foreign;
 
     data = PMIX_NEW(prte_data_object_t);
@@ -344,9 +381,17 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
     ret = PMIX_SUCCESS;
     for (n = 0; n < ninfo; n++) {
         if (PMIx_Check_key(info[n].key, PMIX_RANGE)) {
-            data->range = info[n].value.data.range;
+            /* a range or a persistence we cannot read is refused along with
+             * the publish, for the same reason an access restriction is */
+            ret = prte_ds_get_named_uint8(&info[n].value, PMIX_DATA_RANGE, &u8);
+            if (PMIX_SUCCESS == ret) {
+                data->range = u8;
+            }
         } else if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
-            data->persistence = info[n].value.data.persist;
+            ret = prte_ds_get_named_uint8(&info[n].value, PMIX_PERSIST, &u8);
+            if (PMIX_SUCCESS == ret) {
+                data->persistence = u8;
+            }
         } else if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
             data->uid = info[n].value.data.uint32;
         } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
@@ -385,8 +430,9 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             pmix_list_append(&data->info, &ds1->super);
         }
         if (PMIX_SUCCESS != ret) {
-            /* an access restriction we could not read.  Storing the data
-             * anyway would store it unrestricted, so refuse the publish */
+            /* a restriction we could not read - an access list, a range, or
+             * a persistence.  Storing the data anyway would store it with a
+             * restriction nobody asked for, so refuse the publish */
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             PMIX_RELEASE(data);
@@ -399,10 +445,28 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
      * land on top of the claim. */
     prte_ds_check_requestor(&data->owner, &data->uid, &data->gid, info, ninfo);
 
-    /* A publisher that named no persistence, or named an invalid one, gets
-     * the default the object was constructed with. */
+    /* A publisher that named no persistence, or named PMIX_PERSIST_INVALID,
+     * gets the default the object was constructed with. */
     if (PMIX_PERSIST_INVALID == data->persistence) {
         data->persistence = PMIX_PERSIST_NSPACE;
+    }
+    /* Any other value we do not know is refused, as is a range we do not
+     * know.  A persistence nothing here recognizes is one no purge horizon
+     * takes and the retention sweep does not touch, so the item used to be
+     * kept for the life of the DVM whatever the publisher meant; a range
+     * nothing recognizes admits nobody, so the item was stored where no
+     * lookup could reach it.  Both reported success. */
+    if (!known_persistence(data->persistence) || !known_range(data->range)) {
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: refusing publish from %s - unknown %s %u",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIX_NAME_PRINT(&data->owner),
+                            known_range(data->range) ? "persistence" : "range",
+                            (unsigned) (known_range(data->range) ? data->persistence
+                                                                 : data->range));
+        PMIX_INFO_FREE(info, ninfo);
+        PMIX_RELEASE(data);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* Which application, and which session?  Neither is derivable later:

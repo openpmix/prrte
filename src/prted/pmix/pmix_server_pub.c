@@ -222,12 +222,20 @@ static void scan_directives(prte_pmix_server_req_t *req,
 {
     size_t n;
     pmix_status_t rc;
+    uint8_t u8;
     int tmo;
 
     for (n = 0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_RANGE)) {
-            if (PMIX_DATA_RANGE == info[n].value.type) {
-                req->range = info[n].value.data.range;
+            /* read the way the data server reads it, so that a range given
+             * as a plain integer is routed to the store that will hold it.
+             * Honoring only PMIX_DATA_RANGE here sent an int-typed LOCAL
+             * publish to the global server, which stored it as LOCAL - where
+             * a local-range lookup, routed to this daemon, never looks.  A
+             * range neither side can read is refused by the data server,
+             * wherever it is routed. */
+            if (PMIX_SUCCESS == prte_ds_get_named_uint8(&info[n].value, PMIX_DATA_RANGE, &u8)) {
+                req->range = u8;
             }
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_TIMEOUT)) {
             /* the data server is what honors this - it is recorded here only
