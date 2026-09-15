@@ -1335,6 +1335,110 @@ static int test_data_server_objects(void)
     return failures;
 }
 
+/* prte_ds_collect() is what decides whether a PMIX_WAIT lookup can be
+ * answered, and it has to be able to ask without taking anything.  A parked
+ * request gets one reply - the daemon frees its room on the first - so a
+ * FIRST_READ value consumed by a request that goes on waiting is a value
+ * nobody ever receives.  That is exactly what the lookup path used to do:
+ * take what it could find, drop it, and park for the rest. */
+static prte_data_object_t *ds_store_item(const char *key, const char *val,
+                                         uint32_t uid, pmix_persistence_t persist)
+{
+    prte_data_object_t *data = PMIX_NEW(prte_data_object_t);
+    prte_info_item_t *item = PMIX_NEW(prte_info_item_t);
+
+    PMIX_LOAD_PROCID(&data->owner, "publisher.job", 0);
+    data->uid = uid;
+    data->gid = 20;
+    data->persistence = persist;
+    PMIX_INFO_LOAD(&item->info, key, val, PMIX_STRING);
+    pmix_list_append(&data->info, &item->super);
+    prte_ds_charge(data);
+    data->index = pmix_pointer_array_add(&prte_data_store.store, data);
+    return data;
+}
+
+static int test_data_server_collect(void)
+{
+    int failures = 0;
+    prte_data_object_t *once, *kept, *theirs;
+    prte_data_req_t rq;
+    pmix_list_t answers;
+    prte_ds_info_t *rinfo;
+    bool denied;
+    int k;
+    char *ac[] = {"prte.test.once", "prte.test.absent", NULL};
+    char *ab[] = {"prte.test.once", "prte.test.kept", NULL};
+    char *a[] = {"prte.test.once", NULL};
+    char *theirkey[] = {"prte.test.theirs", NULL};
+
+    /* the store is normally built by prte_data_server_init(), which also
+     * registers RML receives this test has no RML for */
+    PMIX_CONSTRUCT(&prte_data_store.store, pmix_pointer_array_t);
+    pmix_pointer_array_init(&prte_data_store.store, 1, INT_MAX, 1);
+    PMIX_CONSTRUCT(&prte_data_store.pending, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_data_store.usage, pmix_list_t);
+
+    once = ds_store_item("prte.test.once", "first-read", 500, PMIX_PERSIST_FIRST_READ);
+    kept = ds_store_item("prte.test.kept", "indefinite", 500, PMIX_PERSIST_INDEF);
+    theirs = ds_store_item("prte.test.theirs", "private", 600, PMIX_PERSIST_INDEF);
+
+    PMIX_CONSTRUCT(&rq, prte_data_req_t);
+    PMIX_LOAD_PROCID(&rq.requestor, "reader.job", 0);
+    rq.uid = 500;
+    rq.gid = 20;
+
+    /* counting: one of two found, and nothing taken */
+    CHECK("collect: counting finds what is there",
+          1 == prte_ds_collect(&rq, ac, NULL, NULL));
+    CHECK("collect: counting leaves a FIRST_READ item in the store",
+          once == pmix_pointer_array_get_item(&prte_data_store.store, once->index));
+    CHECK("collect: counting leaves a FIRST_READ value in its item",
+          1 == pmix_list_get_size(&once->info));
+    CHECK("collect: counting again gives the same answer",
+          2 == prte_ds_collect(&rq, ab, NULL, NULL));
+
+    /* collecting: both values come back, and the FIRST_READ one is gone */
+    PMIX_CONSTRUCT(&answers, pmix_list_t);
+    k = once->index;
+    CHECK("collect: collecting returns every key found",
+          2 == prte_ds_collect(&rq, ab, &answers, NULL));
+    CHECK("collect: one answer per key", 2 == pmix_list_get_size(&answers));
+    rinfo = (prte_ds_info_t *) pmix_list_get_first(&answers);
+    CHECK("collect: the answer carries the value",
+          PMIX_STRING == rinfo->info.value.type &&
+          0 == strcmp("first-read", rinfo->info.value.data.string));
+    CHECK("collect: the answer names the publisher",
+          PMIX_CHECK_NSPACE("publisher.job", rinfo->source.nspace));
+    CHECK("collect: an emptied FIRST_READ item leaves the store",
+          NULL == pmix_pointer_array_get_item(&prte_data_store.store, k));
+    CHECK("collect: an INDEF item stays",
+          kept == pmix_pointer_array_get_item(&prte_data_store.store, kept->index));
+    PMIX_LIST_DESTRUCT(&answers);
+
+    PMIX_CONSTRUCT(&answers, pmix_list_t);
+    CHECK("collect: a consumed FIRST_READ value is not found again",
+          0 == prte_ds_collect(&rq, a, &answers, NULL));
+    PMIX_LIST_DESTRUCT(&answers);
+
+    /* another user's item holding the key is a refusal, not an absence */
+    denied = false;
+    CHECK("collect: another user's private item is not returned",
+          0 == prte_ds_collect(&rq, theirkey, NULL, &denied));
+    CHECK("collect: ...and is reported as denied", denied);
+
+    PMIX_DESTRUCT(&rq);
+    prte_ds_drop(kept);
+    prte_ds_drop(theirs);
+    CHECK("collect: dropping every item uncharges every uid",
+          0 == pmix_list_get_size(&prte_data_store.usage));
+    PMIX_DESTRUCT(&prte_data_store.store);
+    PMIX_LIST_DESTRUCT(&prte_data_store.pending);
+    PMIX_LIST_DESTRUCT(&prte_data_store.usage);
+
+    return failures;
+}
+
 /* The persistence ordering ds_purge applies when a lifetime ends.  Worth
  * pinning down because the values are NOT a usable numeric ladder:
  * PMIX_PERSIST_INDEF is 0 and outlives every other value, so any attempt to
@@ -2115,6 +2219,7 @@ int main(void)
     failures += test_data_server_access();
     failures += test_data_server_ownership();
     failures += test_data_server_requestor();
+    failures += test_data_server_collect();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
     failures += test_worker_pool();

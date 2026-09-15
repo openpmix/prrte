@@ -53,7 +53,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `docker-compose.yml` | The ten nodes `prte-node1`..`prte-node10`, each mounting the shared `prte-build` volume. Every one of those names derives from `$PRTE_SWARM`, so two clones can each run a swarm — see §4. |
 | `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
 | *(no file here)* | `build.sh` also compiles [`examples/dynamic.c`](../../examples/dynamic.c) from the main tree as `dynamic` — the only client in this harness that calls `PMIx_Spawn`, and so the only way to get a **parent/child job pair**. See §11. |
-| `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
+| `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/lookup2wait/unpublish. Drives `src/runtime/data_server`. See §13. |
 | `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
 | `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`departed`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. `departed` lets half the job exit first, which is what tells a table that is *current* from one that is merely the launch message read back. Drives `src/pmix`. |
 | `peerinfo.c` | A bare PMIx client in which every rank asks **every other rank of its own job** where it is (`peerinfo` in the install): rank, app rank, local/node rank, node id, hostname, cpuset, locality string — and device distances, the one key an off-node peer must be *refused*. The only client here that reads a *peer's* reserved keys, and so the only one that reaches the daemon's derive-on-demand path — everything else either reads back what it put itself or asks about the job. Drives `derive_proc_data()` in `src/prted/pmix/pmix_server_fence.c`. See §20. |
@@ -1367,6 +1367,7 @@ dataserver publish <key> <value> [session|namespace|local|proc-local|global] [se
 dataserver lookup <key> [secs]           # no wait
 dataserver lookupwait <key> [secs]       # PMIX_WAIT -- parks in the store
 dataserver lookup2 <key1> <key2> [secs]  # the partial-success shape
+dataserver lookup2wait <key1> <key2> [secs]  # PMIX_WAIT for two keys -- one answer, both values
 dataserver unpublish <key> [secs]        # publish, confirm, unpublish, confirm gone
 ```
 
