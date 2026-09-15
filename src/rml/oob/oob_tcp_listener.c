@@ -489,6 +489,17 @@ static int create_listen6(void)
             return PRTE_ERROR;
         }
 
+#ifdef IPV6_V6ONLY
+        /* accept only V6 connections here, so this bind does not overlap the
+           INADDR_ANY bind in create_listen() (cf. mca_btl_tcp_create_listen) */
+        int v6only = 1;
+        if (setsockopt(sd, IPPROTO_IPV6, IPV6_V6ONLY, (const char *) &v6only, sizeof(v6only)) < 0) {
+            pmix_output(0, "prte_oob_create_listen6: unable to set the "
+                        "IPV6_V6ONLY option (%s:%d)\n",
+                        strerror(prte_socket_errno), prte_socket_errno);
+        }
+#endif
+
         if (bind(sd, (struct sockaddr *) &inaddr, addrlen) < 0) {
             if ((EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno)) {
                 continue;
