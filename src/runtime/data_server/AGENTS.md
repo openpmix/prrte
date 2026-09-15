@@ -59,6 +59,15 @@ has to *release* the buffer, or every waiting lookup leaks one. And a
 handler that has already sent the buffer must not return an error, or the
 caller sends a freed buffer.
 
+**A send that fails has disposed of nothing, and the handler that then
+releases the buffer has.** `PRTE_RML_RELIABLE_SEND` refuses a peer that is
+down — the requesting daemon died while its request was in flight — and
+leaves the buffer with the caller. The handler releases it and must return
+`PMIX_SUCCESS`: all three handlers used to return the send's error instead,
+so `prte_data_server()` packed a status into the buffer they had just freed,
+sent it, and released it a second time. There is nobody to answer at that
+point, which is exactly why "disposed of" is the right description.
+
 The room number leads every reply because it is how the requesting PMIx
 client matches an answer to its outstanding request. A reply that omits it,
 or that carries a status without the payload the status implies, wedges the
