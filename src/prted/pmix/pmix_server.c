@@ -510,7 +510,8 @@ void pmix_server_register_params(void)
     /* whether or not to support remote connections */
     prte_pmix_server_globals.remote_connections = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "remote_connections",
-                                      "Whether or not to support remote connections",
+                                      "Whether or not to support remote connections (the "
+                                      "listener then honors prte_if_include/prte_if_exclude)",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.remote_connections);
 
@@ -1125,6 +1126,27 @@ int pmix_server_init(void)
         PMIX_INFO_LIST_RELEASE(ilist);
         rc = prte_pmix_convert_status(prc);
         return rc;
+    }
+
+    /* A server that accepts remote tool connections listens on a network
+     * interface, and it has to be one the user permitted: the OOB honors
+     * prte_if_include/prte_if_exclude, and a tool listener that ignored them
+     * would still expose a port on an interface the user excluded.  Without
+     * remote connections the listener is on loopback, where no network
+     * selection applies - and passing one there would do harm, since PMIx
+     * then insists the list leave it a loopback interface, and an include
+     * list naming only real interfaces would fail the server's init. */
+    if (prte_pmix_server_globals.remote_connections) {
+        if (NULL != prte_if_include) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TCP_IF_INCLUDE, prte_if_include, PMIX_STRING);
+        } else if (NULL != prte_if_exclude) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TCP_IF_EXCLUDE, prte_if_exclude, PMIX_STRING);
+        }
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
     }
 
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_ALLOW_CLIENT_CLONES,
