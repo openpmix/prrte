@@ -575,11 +575,20 @@ static prte_ds_usage_t *usage_for(uint32_t uid, bool create)
  *
  * An accounting figure rather than a malloc total: what matters is that it
  * is monotone in what the publisher stored, so that a publisher cannot
- * evade the cap by choosing a type.  Strings and byte objects are measured
- * because they are the two a publisher can make arbitrarily large;
- * everything else is charged the size of the union that holds it. */
+ * evade the cap by choosing a type.  Strings and byte objects - what nearly
+ * every publisher stores - are measured directly.  Anything else is
+ * measured by what it packs to, which is the one measure that follows a
+ * pointer into whatever the type holds.
+ *
+ * Every other type used to be charged the size of the union, and a
+ * PMIX_DATA_ARRAY is a pointer in that union: a publisher could store an
+ * array of any length for the price of an integer, and the cap bounded
+ * nothing for anybody who noticed. */
 static size_t value_size(const pmix_value_t *val)
 {
+    pmix_data_buffer_t buf;
+    size_t size = sizeof(pmix_value_t);
+
     switch (val->type) {
     case PMIX_STRING:
         return (NULL == val->data.string) ? 0 : strlen(val->data.string) + 1;
@@ -588,7 +597,15 @@ static size_t value_size(const pmix_value_t *val)
     case PMIX_COMPRESSED_BYTE_OBJECT:
         return val->data.bo.size;
     default:
-        return sizeof(pmix_value_t);
+        PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+        /* a value that cannot be packed arrived packed, so this does not
+         * fail in practice - and if it did, the union is the floor */
+        if (PMIX_SUCCESS == PMIx_Data_pack(NULL, &buf, (pmix_value_t *) val, 1, PMIX_VALUE) &&
+            buf.bytes_used > size) {
+            size = buf.bytes_used;
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&buf);
+        return size;
     }
 }
 
