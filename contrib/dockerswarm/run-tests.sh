@@ -2006,6 +2006,23 @@ test_runtime() {
                     && ok "...and its owner could replace it" \
                     || bad "an owner could not replace a key it may not read: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
             fi
+
+            banner "runtime/data_server: PMIX_TIMEOUT on a publish is a directive, not data"
+            # PMIx hands the host every directive a publish carried, and
+            # ds_publish stored the one it did not recognize -- PMIX_TIMEOUT,
+            # which the Standard defines for PMIx_Publish -- as a published
+            # key.  The same user's next publish with a timeout then collided
+            # with "pmix.timeout" and was refused as a duplicate.
+            out=$(PRUN "--host node3:1 -n 1 $DS pubtimeout prte.test.tmo.one prte.test.tmo.two 0" 2>&1)
+            echo "$out" | grep -q '^STATUS1 PMIX_SUCCESS' \
+                && ok "a publish carrying PMIX_TIMEOUT succeeded" \
+                || bad "a publish carrying PMIX_TIMEOUT failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -q '^STATUS2 PMIX_SUCCESS' \
+                && ok "...and so did a second one, for a different key" \
+                || bad "a second publish carrying PMIX_TIMEOUT was refused: $(echo "$out" | grep '^STATUS2' | tr -d '\r')"
+            echo "$out" | grep -q '^TIMEOUTKEY PMIX_ERR_NOT_FOUND' \
+                && ok "...and nothing was stored under the directive's name" \
+                || bad "PMIX_TIMEOUT was stored as published data: $(echo "$out" | grep '^TIMEOUTKEY' | tr -d '\r')"
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
