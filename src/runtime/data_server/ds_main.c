@@ -764,6 +764,7 @@ static void rqcon(prte_data_req_t *p)
     /* the default range for a lookup or an unpublish is SESSION - the
      * same default the publish side carries */
     p->range = PMIX_RANGE_SESSION;
+    p->nwait = 0;
 }
 static void rqdes(prte_data_req_t *p)
 {

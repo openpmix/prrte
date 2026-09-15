@@ -40,6 +40,11 @@
  *       Look both keys up in one call.  With only one of them published
  *       this is the PARTIAL_SUCCESS path.
  *
+ *   dataserver lookup2wait <key1> <key2> [seconds]
+ *       The same with PMIX_WAIT: with one key already published and the
+ *       other not, the request parks, and the answer that finally comes
+ *       back must carry BOTH values.
+ *
  * The lookup range matters and defaults to whatever PMIx picks.  A
  * PMIX_RANGE_LOCAL publish is routed by the daemon to its OWN data server
  * instance rather than to the HNP (see pmix_server_pub.c), so it is only
@@ -566,13 +571,14 @@ int main(int argc, char **argv)
                 "       %s lookup <key> [secs] [range]\n"
                 "       %s lookupwait <key> [secs] [range]\n"
                 "       %s lookup2 <key1> <key2> [secs]\n"
+                "       %s lookup2wait <key1> <key2> [secs]\n"
                 "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n"
                 "       %s dup <key> <value> [secs] [range] [replace]\n"
                 "       %s unpubonly <key> [secs] [range]\n"
                 "       %s republish <key> [secs] [range]\n"
                 "       %s persist <key> <value> <persistence> [secs] [range]\n",
                 argv[0], argv[0], argv[0], argv[0], argv[0], argv[0], argv[0],
-                argv[0], argv[0]);
+                argv[0], argv[0], argv[0]);
         return 2;
     }
 
@@ -595,14 +601,15 @@ int main(int argc, char **argv)
                          (0 == strcmp(argv[1], "lookupwait")),
                          (5 > argc) ? NULL : argv[4]);
     }
-    if (0 == strcmp(argv[1], "lookup2")) {
+    if (0 == strcmp(argv[1], "lookup2") || 0 == strcmp(argv[1], "lookup2wait")) {
         if (4 > argc) {
-            fprintf(stderr, "lookup2 needs two keys\n");
+            fprintf(stderr, "%s needs two keys\n", argv[1]);
             return 2;
         }
         keys[0] = argv[2];
         keys[1] = argv[3];
-        return do_lookup(keys, 2, (5 > argc) ? 20 : atoi(argv[4]), false, NULL);
+        return do_lookup(keys, 2, (5 > argc) ? 20 : atoi(argv[4]),
+                         (0 == strcmp(argv[1], "lookup2wait")), NULL);
     }
     if (0 == strcmp(argv[1], "unpublish")) {
         if (3 > argc) {

@@ -107,6 +107,9 @@ typedef struct {
     uint32_t uid;
     uint32_t gid;
     pmix_data_range_t range;
+    /* how many of the keys a PMIX_WAIT lookup is waiting for; 0 is all of
+     * them, which is also the Standard's default */
+    size_t nwait;
     char **keys;
 } prte_data_req_t;
 PMIX_CLASS_DECLARATION(prte_data_req_t);
@@ -211,10 +214,10 @@ PRTE_EXPORT void prte_ds_charge(prte_data_object_t *data);
 /* Take an item out of the store: uncharge it, clear its slot, release it.
  *
  * EVERY removal path has to go through this, or a uid's total drifts up
- * until it can publish nothing.  There are seven of them - the duplicate
- * drop, an unpublish, a FIRST_READ read that empties an item (in both
- * places that answer a lookup), each purge horizon, the expiry sweep, and
- * eviction - which is exactly why it is one function. */
+ * until it can publish nothing.  There are six of them - the duplicate
+ * drop, an unpublish, a FIRST_READ read that empties an item
+ * (prte_ds_collect), each purge horizon, the expiry sweep, and eviction -
+ * which is exactly why it is one function. */
 PRTE_EXPORT void prte_ds_drop(prte_data_object_t *data);
 
 /* Make room for an item about to be stored, evicting the publishing uid's
@@ -259,6 +262,30 @@ PRTE_EXPORT bool prte_data_server_expires_by(pmix_persistence_t persist,
  * different ranges apart.  Both checks have to pass. */
 PRTE_EXPORT pmix_status_t prte_data_server_check_search_range(prte_data_req_t *req,
                                                               prte_data_object_t *data);
+
+/* Resolve a lookup's keys against this store, applying the same three
+ * tests to every item: the publisher's access permissions, its range, and
+ * the range the requestor asked us to search.  Returns how many of the
+ * keys were found.
+ *
+ * With "answers" NULL this only counts, and changes nothing - which is how
+ * a PMIX_WAIT lookup decides whether it can be answered yet without
+ * consuming a PMIX_PERSIST_FIRST_READ value it would then have nowhere to
+ * deliver.  With "answers" given, each value found is copied onto it as a
+ * prte_ds_info_t, its item's retention clock is restamped, and a FIRST_READ
+ * value is taken out of the store (dropping an item left empty).
+ *
+ * "denied", which may be NULL, is set when a key was held by an item the
+ * requestor was refused. */
+PRTE_EXPORT size_t prte_ds_collect(prte_data_req_t *req, char **keys,
+                                   pmix_list_t *answers, bool *denied);
+
+/* Answer a parked PMIX_WAIT lookup if the store can now meet what it is
+ * waiting for.  Returns true once the request is finished with - answered,
+ * or impossible to answer - and the caller must then take it off
+ * prte_data_store.pending and release it.  Returns false, having changed
+ * nothing, while it must keep waiting. */
+PRTE_EXPORT bool prte_ds_answer_parked(prte_data_req_t *req);
 
 /* Relay a request to the external data server named by
  * prte_data_server_uri, and answer the requesting daemon when it replies.

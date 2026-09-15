@@ -196,10 +196,10 @@ consult and `range_admits` refuses it.
 The requester's half used to be missing entirely: `ds_lookup` unpacked
 `PMIX_RANGE` and put it only on a *parked* request, where nothing read it,
 so a lookup that asked to search its own namespace searched everything its
-publishers would let it see. Both checks now run in `ds_lookup` and in
-`ds_publish`'s pending-request loop, and the default on both sides is
-`PMIX_RANGE_SESSION` — the constructors say so, which is why `rqcon` sets a
-range at all.
+publishers would let it see. Both checks now run in `prte_ds_collect()`,
+the one place a lookup is resolved against the store, and the default on
+both sides is `PMIX_RANGE_SESSION` — the constructors say so, which is why
+`rqcon` sets a range at all.
 
 ### Removal: ownership, and nothing else
 
@@ -302,20 +302,48 @@ scan, so the gate has to sit between that scan and
 
 ## Persistence and parked requests
 
-`PMIX_PERSIST_FIRST_READ` removes an item from `data->info` as soon as it is
-returned. Both `ds_lookup` (returning from the store) and `ds_publish`
-(satisfying a parked request) implement it, and both then have to notice
-that an object whose `info` list is now empty must leave the store —
-`ds_lookup` did not, so an item read by an ordinary lookup stayed in the
-store as an empty shell, matching nothing and removed only by a purge.
-`data` there is the loop variable of the scan over the store, so nothing may
-touch it after the drop; the `break` is what makes that safe.
+**One function resolves a lookup against the store: `prte_ds_collect()`**
+in `ds_lookup.c`. It applies the access check and both range checks to every
+item, and it has two modes. Given an `answers` list it copies each value
+found onto it, restamps the item's retention clock, and takes a
+`PMIX_PERSIST_FIRST_READ` value out of the item — dropping an item left
+empty, since an empty shell matches nothing and would sit in the store until
+a purge. Given `NULL` it only **counts**, and changes nothing. `data` there
+is the loop variable of the scan over the store, so nothing may touch it
+after the drop; the `break`, and `found` ending the scan, are what make that
+safe.
 
-A lookup carrying `PMIX_WAIT` that cannot be fully satisfied is parked on
-`prte_data_store.pending` with **only the keys it is still missing**. When a
-later publish resolves the rest, `complete_resolved` is what says the
-request is finished — do not re-derive it by counting `req->keys`, because
-that array has already been swapped for the unresolved remainder.
+The counting mode exists for `PMIX_WAIT`, and the rule it enforces is
+**decide before taking anything**. A parked request gets exactly **one**
+reply: `pmix_server_keyval_client()` frees the room on the first answer it
+receives. So:
+
+- A `PMIX_WAIT` lookup that cannot yet be given what it is waiting for is
+  parked with **all** of its keys and takes nothing. It used to take what it
+  could find and park the rest — the values found were dropped with the
+  buffer holding them (a `FIRST_READ` value among them was gone from the
+  store too), and the eventual answer carried only what the later publish
+  supplied, as a complete success.
+- A publish answers a parked request only when `prte_ds_answer_parked()`
+  finds the **whole store** can now meet it, and then answers once with
+  everything. It used to answer whatever the one new item resolved, as
+  `PMIX_ERR_PARTIAL_SUCCESS`, and leave the request parked — so the next
+  matching publish replied to a room already freed, or already reissued to
+  some unrelated request, and consumed its `FIRST_READ` value on the way.
+  `answers_request()` in `ds_publish.c` is only a filter ahead of that scan:
+  a parked request can become answerable only through an item it can see
+  that holds one of its keys.
+- What a request is waiting for is `PMIX_WAIT`'s value, which is a **count**
+  (`req->nwait`, 0 meaning all of the keys, and anything that is not a
+  number — a bool is common — meaning the same). A request answered with
+  fewer than all of its keys gets `PMIX_ERR_PARTIAL_SUCCESS` with the values
+  it did get.
+
+Satisfying a request can drop the very item the publish just stored, so the
+pending loop in `ds_publish` holds a reference of its own on it. And a parked
+request whose answer cannot be delivered — its daemon is gone, or the pack
+failed — is still finished with: it is removed and released rather than left
+for the next publish to try again.
 
 A `PMIX_TIMEOUT` given with the wait bounds it: the parked request carries
 an event armed for that many seconds (`lookup_timeout` in `ds_lookup.c`),
@@ -439,9 +467,9 @@ permanent allocation made by a process that no longer exists;
 `PMIX_PERSIST_FIRST_READ` is the same shape when the read it waits for never
 comes. `prte_data_server_timeout` (default 300 s) removes either once it has
 been **idle** that long — `last_access` is stamped at publish and restamped
-by every lookup that returns one of the item's keys, in *both* places that
-answer a lookup (`ds_lookup.c`, and `ds_publish.c` where a publish satisfies
-a parked request).
+by every lookup that returns one of the item's keys (`prte_ds_collect()`,
+which answers immediate and parked lookups alike; a count-only pass returns
+nothing and stamps nothing).
 
 Idle rather than a lifetime, deliberately: a rendezvous name in active use
 must not be pulled out from under its readers. Nothing else is swept — a
@@ -472,12 +500,12 @@ rendezvous name out.
 store — as many records as there are users publishing here, which is a small
 number. Three rules keep it honest:
 
-- **Every removal goes through `prte_ds_drop()`.** There are seven paths —
+- **Every removal goes through `prte_ds_drop()`.** There are six paths —
   the duplicate drop, an unpublish, a `FIRST_READ` read that empties an item
-  (in *both* places that answer a lookup), each purge horizon, the expiry
-  sweep, and eviction itself — and one that forgets to uncharge leaves a uid
-  unable to publish anything ever again. That is why it is one function and
-  not a line repeated seven times.
+  (`prte_ds_collect()`, which answers every lookup, parked or not), each
+  purge horizon, the expiry sweep, and eviction itself — and one that
+  forgets to uncharge leaves a uid unable to publish anything ever again.
+  That is why it is one function and not a line repeated at every path.
 - **Every shrink calls `prte_ds_charge()`.** An item that loses a key to a
   `FIRST_READ` read is smaller than what its publisher is charged for.
 - **The cap gate runs last**, after the duplicate scan and the directive
@@ -584,6 +612,11 @@ answer — including when it has already sent a failure.
 - **A range word is not a range.** Two publications can carry the same
   `pmix_data_range_t` and still name disjoint sets of processes. Never
   compare `data->range` alone and call it "the same range".
+- **A parked request gets one reply.** The daemon frees its room on the
+  first answer, so a second answer to the same room lands on whatever
+  request was given that room next. Never answer a parked request until it
+  is finished, and never take a `FIRST_READ` value on behalf of one that is
+  not.
 - **A parked request can own an armed timer.** Remove it from `pending` and
   `PMIX_RELEASE` it; never `free` around it, and never leave the list
   holding one you have released.
@@ -607,8 +640,12 @@ answer — including when it has already sent a failure.
 every range value in both directions — `prte_data_server_check_range` from
 the publisher's side and `prte_data_server_check_search_range` from the
 requester's — and the object constructors' initialization contract,
-including the `PMIX_RANGE_SESSION` default a request carries. Neither needs
-the RML.
+including the `PMIX_RANGE_SESSION` default a request carries. And
+`prte_ds_collect()` against a hand-built store (`test_data_server_collect`):
+that counting takes nothing — a `FIRST_READ` value is still there and still
+counted afterwards — that collecting returns every value and drops the item
+it empties, and that another user's item holding the key is reported as
+denied. None of it needs the RML.
 
 **Multi-node — `contrib/dockerswarm`, the `test_runtime` phase.** The store
 is on the HNP and the clients are elsewhere, so the interesting paths only
