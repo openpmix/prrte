@@ -520,9 +520,9 @@ than a device.
 Mapping by a device was requested, but the devices on this node carry no
 identity that can be given to the vendor's runtime:
 
-  Device class: %s
-  Node:         %s
-  Device:       %s
+  Requested: %s
+  Node:      %s
+  Device:    %s
 
 A GPU can only be named to the library that will compute on it by the
 vendor's own identifier - NVIDIA's GPU-<uuid>, AMD's equivalent, and so
@@ -551,9 +551,9 @@ it, so binding cannot express "near this device":
   Node:     %s
   Found:    %d devices sharing one locality
 
-The job will run, and each process is still assigned its own device - on
-this node that assignment is the whole of what mapping by device buys
-you, and it is reported to each process. But the binding will be no more
+The job will run, and each process is still told which device it was
+assigned - on this node that assignment is the whole of what mapping by
+device buys you. But the binding will be no more
 specific than it would have been without the directive.
 
 This is a property of the machine, not of the request: it happens when
