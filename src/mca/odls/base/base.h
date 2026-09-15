@@ -106,6 +106,13 @@ PRTE_EXPORT int prte_odls_base_send_cpuset_slices(prte_job_t *jdata);
  * has no answer yet - and "no cpuset" would be the wrong one. */
 PRTE_EXPORT bool prte_odls_base_awaiting_cpusets(const pmix_nspace_t nspace);
 
+/* Drop whatever this daemon has parked for a job - a slice with no launch
+ * yet, or a launch still waiting for its slice.  Called when the DVM cleans
+ * the job up: past that point neither half will ever be completed, and a
+ * parked launch that outlived its job would register and fork the procs of
+ * a job that is over if the other half arrived after all. */
+PRTE_EXPORT void prte_odls_base_discard_slices(const pmix_nspace_t nspace);
+
 /* Receive one - registered on PRTE_RML_TAG_LAUNCH_SLICE by every daemon,
  * including the master (which never receives one). */
 PRTE_EXPORT void prte_odls_base_recv_cpuset_slice(int status, pmix_proc_t *sender,
@@ -132,6 +139,18 @@ typedef struct {
     prte_app_context_t *app;
     prte_proc_t *child;
     bool index_argv;
+    /* The job attributes the fork path consults, resolved on the progress
+     * thread before dispatch.  The fork runs on a worker, and the job's
+     * attribute list is not safe to walk from one: the progress thread can
+     * add to it at the same moment - the prted errmgr does when a sibling
+     * of this proc fails - and a list append links the new item in before
+     * its own next pointer is set. */
+    bool do_not_spawn;
+    bool stop_on_exec;
+    bool report_bindings;
+    bool hwt_cpus;
+    bool report_physical_cpus;
+    char *exec_agent;
     prte_iof_base_io_conf_t opts;
     prte_odls_base_fork_local_proc_fn_t fork_local;
     /* CPU/memory binding computed by the parent

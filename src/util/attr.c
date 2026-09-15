@@ -1088,6 +1088,9 @@ char* prte_print_proc_flags(struct prte_proc_t *ptr)
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_TERM_REPORTED)) {
         PMIx_Argv_append_nosize(&tmp, "TERMINATED");
     }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_KILL_PENDING)) {
+        PMIx_Argv_append_nosize(&tmp, "KILL-PENDING");
+    }
     ans = PMIx_Argv_join(tmp, '|');
     PMIx_Argv_free(tmp);
     return ans;

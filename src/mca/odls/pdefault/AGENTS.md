@@ -93,9 +93,8 @@ data** and the parent reads EOF ⇒ success. If anything fails before exec,
 the child writes a fixed-size code-plus-errno record up the pipe and the
 parent renders and prints the diagnostic.
 
-`pipe()` or `fork()` failure sets `child->state =
-PRTE_PROC_STATE_FAILED_TO_START` and returns `PMIX_ERR_SYS_LIMITS_PIPES` /
-`PMIX_ERR_SYS_LIMITS_CHILDREN`.  All four descriptors have to be closed on
+`pipe()` or `fork()` failure returns `PMIX_ERR_SYS_LIMITS_PIPES` /
+`PMIX_ERR_SYS_LIMITS_CHILDREN`, and the base records the failure.  All four descriptors have to be closed on
 those paths — the gate pair is easy to forget, and leaking it leaks two
 fds per failed launch.
 
@@ -231,17 +230,27 @@ Runs on the event base. Closes the child ends of the IOF pipes, then loops
 reading fixed-size `prte_odls_pipe_err_msg_t` records:
 
 - **Pipe closed / read timeout** (`PMIX_ERR_TIMEOUT`) ⇒ child exec'd
-  successfully: set `child->state = RUNNING`, flag `ALIVE`, return
-  `PRTE_SUCCESS`.
+  successfully: return `PRTE_SUCCESS`.
 - **A record arrives** ⇒ `render_child_msg()` maps the code + `errno` to the
   right `pmix_show_help` topic and renders it (allocation and `show_help`
-  are safe here in the parent). If `msg.fatal`, set `child->state =
-  FAILED_TO_START`, unset `ALIVE`, and return `PRTE_ERR_SILENT` (the message
-  was already shown). If it was only a warning, keep looping.
-- **Read error** ⇒ set `child->state = UNDEF` and return a converted error.
+  are safe here in the parent). If `msg.fatal`, return `PRTE_ERR_SILENT`
+  (the message was already shown). If it was only a warning, keep looping.
+- **Read error** ⇒ return a converted error.
 
-The `PRTE_ERR_SILENT` return propagates back through the base's
-`spawn_proc`, which then activates `PRTE_PROC_STATE_FAILED_TO_START`.
+The return code is the whole report. The base's `spawn_proc` carries it to
+the progress thread, where `spawn_done` records the state, the `ALIVE`
+flag and the exit code, and activates `RUNNING` or
+`PRTE_PROC_STATE_FAILED_TO_START`.
+
+**Nothing in this file writes to the child object except its pid.** The
+fork primitive runs on a worker thread, and the progress thread's reaper,
+IOF handlers and daemon commands all reach the same `prte_proc_t` while it
+does: a state written here can overwrite a termination the progress thread
+has just recorded, and the flags are a bitmask updated read-modify-write,
+so two threads setting different bits lose one. The pid is the exception
+because the reaper needs it, and it is published behind the gate. The job's
+attributes are off limits for the same reason - read the values the base
+resolved onto the caddy (`cd->stop_on_exec` and friends) instead.
 
 ---
 
