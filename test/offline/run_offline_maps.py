@@ -268,6 +268,9 @@ class TopoModel:
         model = cls(os.path.splitext(os.path.basename(path))[0], by_level)
         model.ngpus = _count_gpus(root)
         model.gpus_nameable = _gpus_nameable(root)
+        model.osdev_names = frozenset(
+            o.get("name") for o in root.iter("object")
+            if "OSDev" == o.get("type") and o.get("name"))
         return model
 
     def objects_at(self, level):
@@ -868,6 +871,14 @@ def device_cases(topo):
     yield Case("device.%s.gpu-shared" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="device=gpu:shared", rank_by="slot",
                bind_to="core", n=2 * n, expect="map")
+
+    # a named device is "every process near this one", the old dist policy:
+    # the processes share it by definition, so more of them than the one
+    # device is a map and not the refusal a class would get
+    if "mlx5_0" in getattr(topo, "osdev_names", ()):
+        yield Case("device.%s.named" % topo.name, "device", topo, "single",
+                   hostspec, pool, map_by="device=mlx5_0", rank_by="slot",
+                   bind_to="core", n=n, expect="map")
 
     # the reverse ratio: N procs on each device
     yield Case("device.%s.ppr2" % topo.name, "device", topo, "single",

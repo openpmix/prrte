@@ -381,6 +381,10 @@ int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
                            prte_rmaps_options_t *options)
 {
     size_t ndevs;
+    int rc;
+    /* A named device is "put every process near this one" - shared by
+     * definition, whatever the "shared" qualifier says. */
+    bool shared = options->map_shared || prte_rmaps_base_devices_named(options->map_device);
     prte_rmaps_target_enum_t tgts = {
         .begin = prte_rmaps_base_devices_begin,
         .count = prte_rmaps_base_devices_count,
@@ -395,7 +399,7 @@ int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
          * than there are CPUs - a different resource, a different question,
          * and answering both with one word would leave neither sayable on
          * its own. */
-        .nowrap = !options->map_shared
+        .nowrap = !shared
     };
 
     if (NULL == options->map_device) {
@@ -408,8 +412,12 @@ int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
     /* Say up front when there are not enough devices to go round, rather
      * than letting the placement run out partway and report a generic
      * failure. */
-    if (!options->map_shared) {
-        ndevs = prte_rmaps_base_devices_total(node_list, options);
+    if (!shared) {
+        rc = prte_rmaps_base_devices_total(node_list, options, &ndevs);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
+        }
         if (0 < ndevs && ndevs < (size_t) app->num_procs) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:too-few-devices", true,
                            (int) app->num_procs, options->map_device, (int) ndevs);
@@ -796,7 +804,7 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
 
             /* let the enumerator set up whatever it needs for this node */
             if (NULL != tgts->begin) {
-                rc = tgts->begin(node, options, &ctx);
+                rc = tgts->begin(jdata, node, options, &ctx);
                 if (PRTE_SUCCESS != rc) {
                     goto errout;
                 }
@@ -929,7 +937,11 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                  * a device map notes which device this proc was placed
                  * against, which the proc has no other way to learn */
                 if (NULL != tgts->placed) {
-                    tgts->placed(proc, options, ctx, j);
+                    rc = tgts->placed(proc, options, ctx, j);
+                    if (PRTE_SUCCESS != rc) {
+                        PMIX_RELEASE(proc);
+                        goto errout;
+                    }
                 }
                 nprocs_mapped++;
                 nplaced++;

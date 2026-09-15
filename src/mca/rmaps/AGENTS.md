@@ -526,7 +526,11 @@ it govern everything in `rmaps_base_devices.c`:
   `rmaps:device-not-nameable` rather than mapping and telling the process
   nothing — those two outcomes are indistinguishable while the job runs,
   and the second one silently puts every rank on the same GPU. The check is
-  GPU-only: fabric and network devices are named by their own GUIDs.
+  GPU-only: fabric and network devices are named by their own GUIDs. It is
+  decided by each device's **type**, not by the class the user typed —
+  `device=renderD129` names one GPU, is not a class request, and used to
+  slip past the refusal to hand the process exactly the assignment it
+  exists to prevent.
 
 That second check runs on the HNP against a **shared** topology, and is
 sound anyway: an absent info attribute changes an object's info count,
@@ -535,6 +539,11 @@ one, and `prte_plm_base_daemon_callback()` records such a node under its
 own `prte_topology_t`. So *whether* identity exists cannot vary inside one
 recorded topology. Its **value** can, and must be read on the node itself —
 never from the HNP's copy, which belongs to whichever node reported first.
+
+The rest of what `rmaps_base_devices.c` owns — its per-node context, who
+calls it, and the traps its shape invites (interleaving by NUMA, which job a
+refusal names, what the pre-count may judge) — is in
+[`base/AGENTS.md`](base/AGENTS.md).
 
 ## Conventions specific to this framework
 

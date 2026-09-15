@@ -115,6 +115,19 @@ static pmix_device_type_t device_class(const char *spec)
     return PMIX_DEVTYPE_UNKNOWN;
 }
 
+/* Does the spec name one device rather than a class?
+ *
+ * The two forms are different requests, not one request of different sizes.
+ * A class is a set of devices to hand out, one process each unless "shared"
+ * says otherwise.  A name is "put every process near this device" - the old
+ * dist policy in one directive - so the processes share it by definition,
+ * and refusing -n 8 against the one device the user named, as the class rule
+ * would, refuses the only thing the form is for. */
+bool prte_rmaps_base_devices_named(const char *spec)
+{
+    return (NULL != spec && PMIX_DEVTYPE_UNKNOWN == device_class(spec));
+}
+
 /* Can we bind where we were asked to, given where the device is?
  *
  * "Near this device" is the whole request, and an object that strictly
@@ -166,50 +179,79 @@ static bool binding_fits(prte_node_t *node, hwloc_obj_t locality,
  * group) reproduces the input order exactly.  That is what makes the
  * qualifier safe to leave in a site's default mapping policy.
  */
+/* The <level> object a device's locality lies within, or NULL if none does.
+ *
+ * Found by cpuset rather than by walking up from the locality, because the
+ * walk cannot find a NUMA domain: in hwloc 2 a NUMA node is a memory child
+ * of the object it is attached to, never anybody's ancestor, so asking for
+ * the NUMANODE ancestor of a device's locality answers NULL on every
+ * machine.  "interleave=numa" then put every device in one group and
+ * reproduced the input order - silently, since that is also the documented
+ * answer for a level that does not partition the devices.  For the other
+ * levels containment by cpuset is the same answer the walk gave.
+ *
+ * Asked through the PRRTE wrappers so that NUMA means the CPU NUMA domains
+ * only - see src/hwloc/AGENTS.md. */
+static hwloc_obj_t interleave_key(hwloc_topology_t topo, hwloc_obj_type_t level,
+                                  hwloc_obj_t locality)
+{
+    hwloc_obj_t obj;
+    unsigned n, nobjs;
+
+    if (NULL == locality || NULL == locality->cpuset
+        || hwloc_bitmap_iszero(locality->cpuset)) {
+        return NULL;
+    }
+    nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, level);
+    for (n = 0; n < nobjs; n++) {
+        obj = prte_hwloc_base_get_obj_by_type(topo, level, n);
+        if (NULL != obj && NULL != obj->cpuset
+            && hwloc_bitmap_isincluded(locality->cpuset, obj->cpuset)) {
+            return obj;
+        }
+    }
+    return NULL;
+}
+
 static void interleave_devices(hwloc_topology_t topo, hwloc_obj_type_t level,
                                pmix_hwloc_device_t *devs, size_t ndevs)
 {
     pmix_hwloc_device_t *out;
     hwloc_obj_t *keys;
+    hwloc_obj_t *devkey;    /* the group key of each device */
     size_t *headof;     /* next index to take from each group */
     size_t *counts;
     size_t ngroups = 0, n, g, o = 0;
-    hwloc_obj_t key;
 
     if (2 > ndevs) {
         return;
     }
     out = (pmix_hwloc_device_t *) malloc(ndevs * sizeof(pmix_hwloc_device_t));
     keys = (hwloc_obj_t *) calloc(ndevs, sizeof(hwloc_obj_t));
+    devkey = (hwloc_obj_t *) calloc(ndevs, sizeof(hwloc_obj_t));
     headof = (size_t *) calloc(ndevs, sizeof(size_t));
     counts = (size_t *) calloc(ndevs, sizeof(size_t));
-    if (NULL == out || NULL == keys || NULL == headof || NULL == counts) {
+    if (NULL == out || NULL == keys || NULL == devkey || NULL == headof || NULL == counts) {
         free(out);
         free(keys);
+        free(devkey);
         free(headof);
         free(counts);
         return;     /* the plain order is a valid answer */
     }
 
     /* group key: the <level> object containing this device's locality.  A
-     * device with no such ancestor gets a NULL key and forms its own group,
+     * device with no such object gets a NULL key and forms its own group,
      * which keeps it in the rotation rather than dropping it */
     for (n = 0; n < ndevs; n++) {
-        key = NULL;
-        if (NULL != devs[n].locality) {
-            if (level == devs[n].locality->type) {
-                key = devs[n].locality;
-            } else {
-                key = hwloc_get_ancestor_obj_by_type(topo, level, devs[n].locality);
-            }
-        }
+        devkey[n] = interleave_key(topo, level, devs[n].locality);
         for (g = 0; g < ngroups; g++) {
-            if (keys[g] == key) {
+            if (keys[g] == devkey[n]) {
                 break;
             }
         }
         if (g == ngroups) {
-            keys[ngroups] = key;
+            keys[ngroups] = devkey[n];
             ++ngroups;
         }
         ++counts[g];
@@ -223,15 +265,7 @@ static void interleave_devices(hwloc_topology_t topo, hwloc_obj_type_t level,
             }
             /* the next device belonging to group g */
             for (n = headof[g]; n < ndevs; n++) {
-                key = NULL;
-                if (NULL != devs[n].locality) {
-                    if (level == devs[n].locality->type) {
-                        key = devs[n].locality;
-                    } else {
-                        key = hwloc_get_ancestor_obj_by_type(topo, level, devs[n].locality);
-                    }
-                }
-                if (key == keys[g]) {
+                if (devkey[n] == keys[g]) {
                     out[o++] = devs[n];
                     headof[g] = n + 1;
                     --counts[g];
@@ -244,33 +278,25 @@ static void interleave_devices(hwloc_topology_t topo, hwloc_obj_type_t level,
     memcpy(devs, out, ndevs * sizeof(pmix_hwloc_device_t));
     free(out);
     free(keys);
+    free(devkey);
     free(headof);
     free(counts);
 }
 
-int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
-                                void **ctx)
+/* The devices the request names on this node, in PMIx's order. */
+static int enumerate_devices(prte_node_t *node, prte_rmaps_options_t *opts,
+                             pmix_hwloc_device_t **devs, size_t *ndevs)
 {
-    prte_rmaps_device_map_t *dc;
     pmix_device_type_t type;
     const char *byname = NULL;
     pmix_topology_t topo;
     pmix_status_t prc;
-    size_t n;
-    bool degenerate = true;
-
-    *ctx = NULL;
 
     type = device_class(opts->map_device);
     if (PMIX_DEVTYPE_UNKNOWN == type) {
-        /* not a class, so it names one particular device: every proc is
-         * placed near that one */
+        /* not a class, so it names one particular device - which is then
+         * the node's only target, and every proc on the node shares it */
         byname = opts->map_device;
-    }
-
-    dc = (prte_rmaps_device_map_t *) calloc(1, sizeof(prte_rmaps_device_map_t));
-    if (NULL == dc) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     topo.source = "hwloc";
@@ -281,11 +307,32 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
      * with the HNP's hostname, and the process that later computes the same
      * uuid from its own topology would fail to match the one it was given -
      * which is the whole reason the uuid travels rather than an ordinal. */
-    prc = pmix_hwloc_get_devices(&topo, node->name, type, byname,
-                                 &dc->devs, &dc->ndevs);
+    prc = pmix_hwloc_get_devices(&topo, node->name, type, byname, devs, ndevs);
     if (PMIX_SUCCESS != prc) {
-        free(dc);
         return prte_pmix_convert_status(prc);
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
+                                  prte_rmaps_options_t *opts, void **ctx)
+{
+    prte_rmaps_device_map_t *dc;
+    size_t n;
+    int rc;
+    bool degenerate = true;
+
+    *ctx = NULL;
+
+    dc = (prte_rmaps_device_map_t *) calloc(1, sizeof(prte_rmaps_device_map_t));
+    if (NULL == dc) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    rc = enumerate_devices(node, opts, &dc->devs, &dc->ndevs);
+    if (PRTE_SUCCESS != rc) {
+        free(dc);
+        return rc;
     }
 
     /* A node with none of the requested devices cannot answer the request.
@@ -313,9 +360,13 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
      * same GPU - which nobody discovers until somebody measures.  So say so
      * up front, and name the fix.
      *
-     * Only for the GPU classes.  A fabric or network device is named by its
-     * own GUIDs or MAC, which hwloc always has and which is the identifier
-     * the fabric libraries use; there is no vendor backend to be missing.
+     * Only for GPUs.  A fabric or network device is named by its own GUIDs
+     * or MAC, which hwloc always has and which is the identifier the fabric
+     * libraries use; there is no vendor backend to be missing.
+     *
+     * Decided by what each device IS, not by the class the user asked for:
+     * naming one GPU by its OS device ("renderD129") is not a class request,
+     * and gets the process exactly the same unactionable assignment.
      *
      * Checked against this node's recorded topology, which is sound even
      * though the HNP shares one topology between nodes reporting identical
@@ -324,16 +375,15 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
      * expressible one, and PRRTE records such a node separately.  So
      * WHETHER identity exists cannot vary within a shared topology - only
      * its value can, and that is read on the node itself. */
-    if (0 != (type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))) {
-        for (n = 0; n < dc->ndevs; n++) {
-            if (NULL == dc->devs[n].vendor_id) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
-                               true, opts->map_device, node->name,
-                               dc->devs[n].dev.osname);
-                pmix_hwloc_release_devices(dc->devs, dc->ndevs);
-                free(dc);
-                return PRTE_ERR_SILENT;
-            }
+    for (n = 0; n < dc->ndevs; n++) {
+        if (0 != (dc->devs[n].dev.type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))
+            && NULL == dc->devs[n].vendor_id) {
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
+                           true, opts->map_device, node->name,
+                           dc->devs[n].dev.osname);
+            pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+            free(dc);
+            return PRTE_ERR_SILENT;
         }
     }
 
@@ -383,7 +433,7 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
      * binding matching it is then legitimate. */
     for (n = 0; n < dc->ngroups; n++) {
         if (!binding_fits(node, dc->grouploc[n], opts)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
                            prte_hwloc_base_print_binding(opts->bind),
                            opts->map_device, node->name);
             pmix_hwloc_release_devices(dc->devs, dc->ndevs);
@@ -402,7 +452,7 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
         }
     }
     if (degenerate && 1 < dc->ngroups) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
                        true, opts->map_device, node->name, (int) dc->ngroups);
     }
 
@@ -440,17 +490,21 @@ hwloc_obj_t prte_rmaps_base_devices_locale(prte_node_t *node, prte_rmaps_options
  * is what travels, not an index: it is the same string PMIx reports for that
  * device through PMIX_DEVICE_DISTANCES, so the process can correlate the
  * two, whereas an ordinal would depend on whose numbering was meant. */
-void prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opts,
-                                  void *ctx, unsigned j)
+int prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opts,
+                                   void *ctx, unsigned j)
 {
     prte_rmaps_device_map_t *dc = (prte_rmaps_device_map_t *) ctx;
     pmix_data_array_t *darray;
     pmix_device_t *dev;
     size_t m;
+    int rc;
 
     PRTE_HIDE_UNUSED_PARAMS(opts);
     if (NULL == dc || (size_t) j >= dc->ngroups) {
-        return;
+        /* the caller placed a proc against a target this context never
+         * offered - there is no device to tell it about */
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
     }
     /* LOCAL, even though the daemon that forks this proc needs it: no proc
      * attribute list goes on the wire at all (see prte_proc_pack), so the
@@ -465,10 +519,16 @@ void prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opt
      * would need both paths, and the one-device path would be the only one
      * anybody tested.  The array also carries what a bare uuid cannot: each
      * device's OS name and type, which is what PMIx reports for a device
-     * everywhere else. */
+     * everywhere else.
+     *
+     * A failure here fails the map.  The proc is already placed, and a proc
+     * launched without its assignment is the silent outcome this whole
+     * feature exists to prevent: it runs, it looks right, and it computes
+     * on whichever device its runtime picks by default. */
     PMIX_DATA_ARRAY_CREATE(darray, dc->per, PMIX_DEVICE);
     if (NULL == darray) {
-        return;
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     dev = (pmix_device_t *) darray->array;
     for (m = 0; m < dc->per; m++) {
@@ -480,11 +540,23 @@ void prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opt
         if (NULL != src->osname) {
             dev[m].osname = strdup(src->osname);
         }
+        if ((NULL != src->uuid && NULL == dev[m].uuid)
+            || (NULL != src->osname && NULL == dev[m].osname)) {
+            /* an entry with its identity missing is the same silent
+             * non-assignment as no entry at all */
+            PMIX_DATA_ARRAY_FREE(darray);
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         dev[m].type = src->type;
     }
-    prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_LOCAL,
-                       darray, PMIX_DATA_ARRAY);
+    rc = prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_LOCAL,
+                            darray, PMIX_DATA_ARRAY);
     PMIX_DATA_ARRAY_FREE(darray);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+    }
+    return rc;
 }
 
 void prte_rmaps_base_devices_end(void *ctx)
@@ -503,23 +575,37 @@ void prte_rmaps_base_devices_end(void *ctx)
     free(dc);
 }
 
-/* How many devices of the requested class the whole node list offers.  Used
+/* How many processes the devices on the whole node list can take.  Used
  * only to answer "are there enough?" before any proc is placed; the mapper
- * enumerates each node again as it reaches it. */
-size_t prte_rmaps_base_devices_total(pmix_list_t *node_list, prte_rmaps_options_t *options)
+ * enumerates each node again as it reaches it.
+ *
+ * This counts the hardware and deliberately judges nothing.  The refusals in
+ * begin() are made - and explained - when the mapper reaches the node; run
+ * here too, each one was printed, its node was then skipped, and the count
+ * came up short, so the user was also told there were too few devices on a
+ * node list that had plenty.  An enumeration that fails outright is a
+ * different matter and is returned: a count that silently leaves a node out
+ * is exactly that wrong answer again. */
+int prte_rmaps_base_devices_total(pmix_list_t *node_list, prte_rmaps_options_t *options,
+                                  size_t *total)
 {
     prte_node_t *node;
-    void *ctx = NULL;
-    size_t total = 0;
+    pmix_hwloc_device_t *devs;
+    size_t ndevs, per;
+    int rc;
 
+    *total = 0;
+    per = (0 == options->map_ndev) ? 1 : options->map_ndev;
     PMIX_LIST_FOREACH(node, node_list, prte_node_t) {
-        if (PRTE_SUCCESS != prte_rmaps_base_devices_begin(node, options, &ctx)) {
-            continue;
+        devs = NULL;
+        ndevs = 0;
+        rc = enumerate_devices(node, options, &devs, &ndevs);
+        if (PRTE_SUCCESS != rc) {
+            return rc;
         }
-        total += prte_rmaps_base_devices_count(node, options, ctx);
-        prte_rmaps_base_devices_end(ctx);
-        ctx = NULL;
+        *total += ndevs / per;
+        pmix_hwloc_release_devices(devs, ndevs);
     }
-    return total;
+    return PRTE_SUCCESS;
 }
 
