@@ -1610,6 +1610,122 @@ static int test_data_server_cap(void)
     return failures;
 }
 
+/* A lookup parked by a process that has ended must go when the process
+ * does - or a later publish hands a FIRST_READ value to nobody.  The state
+ * machine purges by direct call, and only the message form used to drop
+ * parked requests; and the message form accepted a target naming "anybody",
+ * which is what a relayed SESSION purge carried. */
+static prte_data_req_t *ds_park(const char *nspace, pmix_rank_t rank)
+{
+    prte_data_req_t *req = PMIX_NEW(prte_data_req_t);
+
+    PMIX_LOAD_PROCID(&req->requestor, nspace, rank);
+    /* a daemon these tests have no RML for, so the reply is refused */
+    PMIX_LOAD_PROCID(&req->proxy, "prte-daemons", 1);
+    req->room_number = 7;
+    PMIx_Argv_append_nosize(&req->keys, "prte.test.purge.key");
+    pmix_list_append(&prte_data_store.pending, &req->super);
+    return req;
+}
+
+static bool ds_parked(prte_data_req_t *req)
+{
+    prte_data_req_t *r;
+
+    PMIX_LIST_FOREACH(r, &prte_data_store.pending, prte_data_req_t) {
+        if (r == req) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void ds_purge_msg(const char *nspace, pmix_rank_t rank,
+                         pmix_info_t *info, size_t ninfo)
+{
+    pmix_data_buffer_t buf, *answer;
+    pmix_proc_t target, sender;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    PMIX_LOAD_PROCID(&target, nspace, rank);
+    PMIx_Data_pack(NULL, &buf, &target, 1, PMIX_PROC);
+    PMIx_Data_pack(NULL, &buf, &ninfo, 1, PMIX_SIZE);
+    if (0 < ninfo) {
+        PMIx_Data_pack(NULL, &buf, info, (int32_t) ninfo, PMIX_INFO);
+    }
+    PMIX_DATA_BUFFER_CREATE(answer);
+    PMIX_LOAD_PROCID(&sender, "prte-daemons", 1);
+    /* disposes of "answer" whatever happens */
+    prte_ds_purge(&sender, &buf, answer);
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+}
+
+static int test_data_server_purge_parked(void)
+{
+    int failures = 0;
+    prte_data_req_t *a, *b, *c;
+    prte_data_object_t *data;
+    pmix_proc_t t;
+    pmix_info_t info[2];
+    pmix_persistence_t persist;
+    uint32_t sid = 1;
+    int ival;
+
+    ds_store_open();
+    a = ds_park("purge.job1", 3);
+    b = ds_park("purge.job1", 4);
+    c = ds_park("purge.job2", 0);
+
+    prte_data_server_purge_local(&a->requestor, PMIX_PERSIST_PROC, UINT32_MAX);
+    CHECK("purge: PROC drops the ended process's parked lookup", !ds_parked(a));
+    CHECK("purge: PROC leaves its namespace-mate's", ds_parked(b));
+    CHECK("purge: PROC leaves another job's", ds_parked(c));
+
+    /* an application's target is its whole namespace, and a request does
+     * not say which application parked it */
+    PMIX_LOAD_PROCID(&t, "purge.job1", PMIX_RANK_WILDCARD);
+    prte_data_server_purge_local(&t, PMIX_PERSIST_APP, 0);
+    CHECK("purge: APP cancels no lookup", ds_parked(b));
+    PMIX_LOAD_PROCID(&t, NULL, PMIX_RANK_WILDCARD);
+    prte_data_server_purge_local(&t, PMIX_PERSIST_SESSION, 1);
+    CHECK("purge: SESSION cancels no lookup", ds_parked(b) && ds_parked(c));
+    PMIX_LOAD_PROCID(&t, "purge.job1", PMIX_RANK_WILDCARD);
+    prte_data_server_purge_local(&t, PMIX_PERSIST_NSPACE, UINT32_MAX);
+    CHECK("purge: NSPACE drops the namespace's parked lookups", !ds_parked(b));
+    CHECK("purge: NSPACE leaves another job's", ds_parked(c));
+
+    /* the message form: a session purge naming "anybody" is refused, and
+     * takes neither this DVM's session data nor anybody's parked lookup */
+    data = ds_store_item("prte.test.purge.session", "v", 501, PMIX_PERSIST_SESSION);
+    data->session_id = 1;
+    persist = PMIX_PERSIST_SESSION;
+    PMIX_INFO_LOAD(&info[0], PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
+    PMIX_INFO_LOAD(&info[1], PMIX_SESSION_ID, &sid, PMIX_UINT32);
+    ds_purge_msg("", PMIX_RANK_WILDCARD, info, 2);
+    CHECK("purge: a message naming anybody takes no data",
+          data == pmix_pointer_array_get_item(&prte_data_store.store, data->index));
+    CHECK("purge: a message naming anybody cancels no lookup", ds_parked(c));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    prte_ds_drop(data);
+
+    /* a horizon that cannot be read is refused rather than guessed at */
+    PMIX_INFO_LOAD(&info[0], PMIX_PERSISTENCE, "proc", PMIX_STRING);
+    ds_purge_msg("purge.job2", 0, info, 1);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    CHECK("purge: an unreadable horizon is refused", ds_parked(c));
+
+    /* ...and one given as a plain integer is read as the lifetime it holds */
+    ival = PMIX_PERSIST_PROC;
+    PMIX_INFO_LOAD(&info[0], PMIX_PERSISTENCE, &ival, PMIX_INT);
+    ds_purge_msg("purge.job2", 0, info, 1);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    CHECK("purge: an int-typed PROC horizon drops the parked lookup", !ds_parked(c));
+
+    ds_store_close();
+    return failures;
+}
+
 /* The persistence ordering ds_purge applies when a lifetime ends.  Worth
  * pinning down because the values are NOT a usable numeric ladder:
  * PMIX_PERSIST_INDEF is 0 and outlives every other value, so any attempt to
@@ -2392,6 +2508,7 @@ int main(void)
     failures += test_data_server_requestor();
     failures += test_data_server_collect();
     failures += test_data_server_cap();
+    failures += test_data_server_purge_parked();
     failures += test_data_server_same_range();
     failures += test_data_server_named_uint8();
     failures += test_progress_thread_cpus();
