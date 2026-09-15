@@ -508,6 +508,13 @@ number. These rules keep it honest:
   That is why it is one function and not a line repeated at every path.
 - **Every shrink calls `prte_ds_charge()`.** An item that loses a key to a
   `FIRST_READ` read is smaller than what its publisher is charged for.
+- **What an item costs is what it packs to**, for every type but a string
+  or a byte object (measured directly, being what nearly everybody
+  publishes). `value_size()` used to charge anything else the size of the
+  `pmix_value_t` union — and a `PMIX_DATA_ARRAY`, like every structured
+  type, is a *pointer* in that union, so an array of any length cost the
+  price of an integer and the cap bounded nothing for a publisher who
+  chose that type.
 - **A uid's usage record can vanish mid-eviction.** `prte_ds_drop()`
   releases the record with the uid's last byte, so `prte_ds_make_room()`
   looks it up again on every pass. Evicting the only item a user holds to
@@ -651,9 +658,10 @@ that counting takes nothing — a `FIRST_READ` value is still there and still
 counted afterwards — that collecting returns every value and drops the item
 it empties, and that another user's item holding the key is reported as
 denied. And the cap (`test_data_server_cap`): that evicting a user's only
-item makes room and leaves one fresh usage record. None of it needs the RML. (The eviction case pins
-the behavior; the use-after-free it once had shows only under a
-memory checker.)
+item makes room and leaves one fresh usage record, and that a data array is
+charged for its contents. None of it needs the RML. The eviction case pins
+the behavior; the use-after-free it once had shows only under a memory
+checker.
 
 **Multi-node — `contrib/dockerswarm`, the `test_runtime` phase.** The store
 is on the HNP and the clients are elsewhere, so the interesting paths only

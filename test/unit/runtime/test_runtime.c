@@ -1449,14 +1449,17 @@ static int test_data_server_collect(void)
     return failures;
 }
 
-/* The per-uid cap.  Evicting the one item a user holds releases that
- * user's usage record, and prte_ds_make_room() went on reading the record
- * it had in hand. */
+/* The per-uid cap.  Two things it has got wrong: evicting the one item a
+ * user holds releases that user's usage record, and prte_ds_make_room() went
+ * on reading the record it had in hand; and every value that was not a
+ * string or a byte object was charged the size of the union, so a
+ * PMIX_DATA_ARRAY of any length cost the price of an integer. */
 static int test_data_server_cap(void)
 {
     int failures = 0;
-    prte_data_object_t *old, *fresh;
+    prte_data_object_t *old, *fresh, *arr;
     prte_info_item_t *item;
+    pmix_data_array_t *darray;
     size_t saved = prte_data_store.max_size;
 
     ds_store_open();
@@ -1493,6 +1496,19 @@ static int test_data_server_cap(void)
           fresh->nbytes == ((prte_ds_usage_t *) pmix_list_get_first(&prte_data_store.usage))->bytes);
     prte_ds_drop(fresh);
     prte_data_store.max_size = saved;
+
+    /* a data array is charged for what it holds */
+    arr = PMIX_NEW(prte_data_object_t);
+    arr->uid = 701;
+    item = PMIX_NEW(prte_info_item_t);
+    PMIX_DATA_ARRAY_CREATE(darray, 65536, PMIX_UINT8);
+    memset(darray->array, 0xa5, 65536);
+    PMIX_INFO_LOAD(&item->info, "prte.test.cap.array", darray, PMIX_DATA_ARRAY);
+    PMIX_DATA_ARRAY_FREE(darray);
+    pmix_list_append(&arr->info, &item->super);
+    prte_ds_charge(arr);
+    CHECK("cap: a data array is charged for its contents", 65536 < arr->nbytes);
+    prte_ds_drop(arr);
 
     ds_store_close();
     return failures;
