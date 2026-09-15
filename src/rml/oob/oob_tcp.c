@@ -201,10 +201,11 @@ int prte_oob_open(void)
         if (NULL != interfaces) {
             /* check for match */
             rc = pmix_ifmatches(kindex, interfaces);
-            /* if one of the network specifications isn't parseable, then
-             * error out as we can't do what was requested
-             */
-            if (PRTE_ERR_NETWORK_NOT_PARSEABLE == rc) {
+            /* pmix_ifmatches speaks PMIx status codes: a match, no match,
+             * or a specification it could not parse (which it has already
+             * reported) - in which case error out, as we can't do what was
+             * requested */
+            if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "not-parseable", true);
                 PMIx_Argv_free(interfaces);
                 return PRTE_ERR_BAD_PARAM;
