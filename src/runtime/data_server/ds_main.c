@@ -675,8 +675,18 @@ bool prte_ds_make_room(prte_data_object_t *data)
     if (need > prte_data_store.max_size) {
         return false;
     }
-    u = usage_for(data->uid, true);
-    while ((u->bytes + need) > prte_data_store.max_size) {
+    for (;;) {
+        /* Found again on every pass.  prte_ds_drop() releases a uid's record
+         * with its last byte, so the record from the previous pass may be
+         * gone - and evicting the one item a user holds to make room for a
+         * second is the ordinary way to get there.  Holding the pointer
+         * across the drop read the loop condition, and wrote the warning
+         * flag, through freed memory.  No record means nothing held, and
+         * need is already known to fit in that. */
+        u = usage_for(data->uid, false);
+        if (NULL == u || (u->bytes + need) <= prte_data_store.max_size) {
+            break;
+        }
         victim = oldest_of(data->uid);
         if (NULL == victim) {
             /* nothing of this uid's left to take: the accounting and the
