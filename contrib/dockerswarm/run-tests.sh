@@ -1984,6 +1984,28 @@ test_runtime() {
             echo "$out" | grep -q '^FOUND prte.test.dup taken' \
                 && ok "...and node2's value is still what a lookup returns" \
                 || bad "another process's key was disturbed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            banner "runtime/data_server: an owner's key collides even where it may not read it"
+            # A publisher may leave itself off its own accessor list.  The
+            # collision test used to ask whether the publisher could READ
+            # the stored item, found it could not, and stored the second
+            # publish beside the first -- so the readers it named got
+            # whichever sat in the lower slot, and replace could not reach
+            # the first one.  An owned item is on its range regardless.
+            PRUN_BG /tmp/ds-dup-self.out "--host node2:1 -n 1 $DS publish prte.test.dup.self hidden session 40 other-uid"
+            sleep 8
+            if ! RUN 'grep -q "^PUBLISHED prte.test.dup.self" /tmp/ds-dup-self.out'; then
+                bad "the self-excluded publish never happened: $(RUN 'cat /tmp/ds-dup-self.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+            else
+                out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.dup.self again 0" 2>&1)
+                echo "$out" | grep -q 'STATUS PMIX_ERR_DUPLICATE_KEY' \
+                    && ok "a second publish of a key its owner may not read was refused" \
+                    || bad "a key its owner may not read was published twice: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+                out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.dup.self replaced 0 session replace" 2>&1)
+                echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
+                    && ok "...and its owner could replace it" \
+                    || bad "an owner could not replace a key it may not read: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+            fi
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
