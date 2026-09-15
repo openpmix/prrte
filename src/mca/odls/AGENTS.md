@@ -347,6 +347,14 @@ Runs **on every daemon** (including the HNP). This is the mirror image of
   adds any that never reached `prte_local_children`, and resets
   `num_local_procs` to match. It is a no-op on the master, which reports to
   nobody and holds the authoritative job object.
+- **The namespace must be free.** The launch message is what gives a
+  daemon a job, so `prte_set_job_data_object()` has to succeed; if a copy is
+  already on file, the procs just wired up belong to an object nobody will
+  find by name — `launch_local` looks the job up, gets the other copy, sees
+  no local procs, and forks nothing. A grow's catch-up used to plant exactly
+  such a copy for every job the elastic launch fence was holding; see
+  `PRTE_JOB_FLAG_LAUNCH_PENDING` in [`src/util/AGENTS.md`](../../util/AGENTS.md).
+  A refusal is reported like any other failure here.
 - **`jdata` at the `REPORT_ERROR` label must be the job we were told to
   launch, or NULL.** The prior-jobs loop that used to sit at the top of this
   function decoded *other* jobs, and reused `jdata` to do it — so a failure
