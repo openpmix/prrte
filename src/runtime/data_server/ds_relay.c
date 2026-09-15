@@ -12,9 +12,9 @@
  *
  * Relay a data-server request to an EXTERNAL data server.
  *
- * When prte_data_server_uri names a server, this DVM does not store
- * published data at all - the named DVM does, so that jobs launched by
- * different invocations can find each other's data (what an MPI
+ * When prte_data_server_uri names a server, this DVM stores only its
+ * PMIX_RANGE_LOCAL data - the named DVM stores the rest, so that jobs
+ * launched by different invocations can find each other's data (what an MPI
  * application reaches through MPI_Publish_name / MPI_Comm_accept).
  *
  * That server is a DVM of its own, and its daemons are in a different
@@ -507,10 +507,9 @@ pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
         cd->status = rc;
         answer(cd);
         PMIX_RELEASE(cd);
-        /* the request has been answered - our caller must not answer it
-         * again */
-        return PMIX_SUCCESS;
     }
 
+    /* either the callback will answer, or we already have - our caller
+     * must not answer it again */
     return PMIX_SUCCESS;
 }
