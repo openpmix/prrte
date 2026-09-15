@@ -1863,6 +1863,25 @@ test_runtime() {
             && ok "an owner unpublished its GLOBAL-range data naming SESSION" \
             || bad "an owner could not remove its own data (FOUND $n times): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
 
+        banner "runtime/data_server: an unpublish leaves another job's namespace alone"
+        # Removal is owned by the USER, and two jobs of one user may each
+        # publish the same key on PMIX_RANGE_NAMESPACE -- two sets of
+        # processes, two items.  One job unpublishing its copy used to take
+        # the other's too, out from under a job still running.  Job one is
+        # MPMD so a second app in the SAME namespace can look the key up
+        # after job two has unpublished its own.
+        PRUN_BG /tmp/ds-nsdup.out "--host node2:2 -n 1 $DS publish prte.test.nsdup one namespace 22 : --host node2:2 -n 1 bash -c 'sleep 16; $DS lookup prte.test.nsdup 1 namespace'"
+        sleep 8
+        out=$(PRUN "--host node3:1 -n 1 $DS unpublish prte.test.nsdup 1 namespace namespace" 2>&1)
+        echo "$out" | grep -q '^UNPUBLISHED prte.test.nsdup' \
+            || bad "the second job's unpublish did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 14
+        RUN 'grep -q "^FOUND prte.test.nsdup one" /tmp/ds-nsdup.out' \
+            && ok "the first job's own NAMESPACE-range key survived another job's unpublish" \
+            || bad "another job's unpublish took this job's key: $(RUN 'cat /tmp/ds-nsdup.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        # the case below needs every node2 slot, so let job one finish
+        sleep 6
+
         banner "runtime/data_server: access permissions decide who may read"
         # Absent an accessor list, published data belongs to its publisher:
         # only the publisher's own uid and gid may read it.  A list -- given

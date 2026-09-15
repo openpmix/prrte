@@ -249,11 +249,12 @@ the one place a lookup is resolved against the store, and the default on
 both sides is `PMIX_RANGE_SESSION` — the constructors say so, which is why
 `rqcon` sets a range at all.
 
-### Removal: ownership, and nothing else
+### Removal: ownership, then which of the owner's items is this one
 
-`ds_unpublish` applies neither rule. **An owner may unpublish what it
+`ds_unpublish` applies neither read rule. **An owner may unpublish what it
 published on any range**, and the range the unpublish itself names does not
-narrow that.
+narrow that — with one qualification, below, about *which* of a user's
+items a given process reaches.
 
 **The owner is the publishing USER**, not the publishing process:
 `prte_data_server_owns()` compares the requestor's effective uid against the
@@ -283,6 +284,21 @@ exists to prevent: it left a `PMIX_RANGE_RM` or `PMIX_RANGE_CUSTOM` item
 impossible to remove — the owner falls outside its own item's range — while
 still answering `PMIX_SUCCESS`, so the item sat in the store until its job
 ended.
+
+**But a user is not one set of processes on every range.** `NAMESPACE`,
+`LOCAL` and `PROC_LOCAL` name sets narrower than a user, the duplicate rule
+lets each such set publish the same key, and each of those is a different
+item — two concurrent jobs of one user each publishing a `NAMESPACE`-range
+name for their own processes is the ordinary case. Ownership alone let
+either job's unpublish take both, out from under a job still running. So on
+those three ranges an owner's item is reached only from inside its own set
+(`reaches()` in `ds_unpublish.c`, which asks `prte_data_server_check_range()`
+— the publisher-anchored range test, not the access test). That is the same
+reach `PRTE_PUBLISH_REPLACE` has, and the same set a publish by the
+requestor would collide in. Every other range holds one item per key for the
+whole user, so there the owner reaches it from anywhere — which is what lets
+a later job take back a name its predecessor left, and what keeps `RM` and
+`CUSTOM` items removable.
 
 `data->proxy` and `req->proxy` are what the `LOCAL` rule compares, and
 `PMIX_NEW` does not zero its allocation, so both constructors have to
@@ -693,7 +709,9 @@ answer — including when it has already sent a failure.
   the stack to carry the requestor into `check_range`.
 - **An access rule is not an ownership rule.** See the section above: what
   may be read and what may be removed are different questions, and the
-  answer to the first one refused owners their own data.
+  answer to the first one refused owners their own data. Nor is ownership
+  the whole of removal: on a range narrower than a user, a same-user item in
+  another set is somebody else's item.
 - **Decide before you remove.** The duplicate scan is two passes for a
   reason: a refused publish must leave the store untouched, so nothing may
   be dropped until every collision has been found and attributed.
@@ -735,7 +753,9 @@ counted afterwards — that collecting returns every value and drops the item
 it empties, and that another user's item holding the key is reported as
 denied. And the relay's directive array (`test_data_server_relay_directives`):
 one claim goes out, naming a tool's claimed process or an application
-itself. And the purge (`test_data_server_purge_parked`): which horizons drop
+itself. And an unpublish's reach (`test_data_server_unpublish_reach`): an
+owner's `NAMESPACE`-range item in another job survives, a `SESSION` or `RM`
+one does not. And the purge (`test_data_server_purge_parked`): which horizons drop
 a parked lookup, by direct call and by message, and that a message naming no
 namespace, or a horizon that cannot be read, is refused. And the cap
 (`test_data_server_cap`): that evicting a user's only
@@ -751,7 +771,8 @@ the range and access rules between real processes, a namespace-scoped lookup
 that must *not* reach another job's data, an accessor list that admits or
 refuses a real reader (and is answered with `PMIX_ERR_NO_PERMISSIONS`),
 unpublish — including an owner removing data published on a range it does
-not itself fall within — and the `PMIX_WAIT` path, both where a later
+not itself fall within, and one job's unpublish leaving the same key another
+job holds on its own namespace — and the `PMIX_WAIT` path, both where a later
 publish satisfies it and where `PMIX_TIMEOUT` ends it — and where its
 requestor is killed while parked, which must leave a later `FIRST_READ`
 value for the reader that comes after. The `dataserver`
