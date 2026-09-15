@@ -78,6 +78,7 @@
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_common.h"
 #include "src/rml/oob/oob_tcp_hdr.h"
+#include "src/rml/oob/oob_tcp_listener.h"
 #include "src/rml/oob/oob_tcp_connection.h"
 #include "src/rml/oob/oob_tcp_peer.h"
 #include "src/rml/oob/oob_tcp_sendrecv.h"
@@ -887,6 +888,207 @@ static int test_stale_attempt_does_not_dial(void)
     return failures;
 }
 
+/*
+ * The interfaces prte_oob_open selects, and the sockets it listens on.
+ *
+ * Two things were wrong here, and a user confining a single-node job to
+ * loopback met both.  Loopback was discarded before the include list was
+ * consulted, whenever the host had any other interface - so an include list
+ * naming only the loopback interface left nothing, and the DVM refused to
+ * start.  And the listener was bound to the wildcard address regardless of
+ * what had been selected, so an excluded interface - every external one, in
+ * that case - still accepted connections.
+ *
+ * These drive prte_oob_open for real, with real sockets, as the DVM master;
+ * prte_oob_close then tears the listen thread down again.
+ */
+static bool find_loopback_ipv4(char *name, int namelen, char *addr, size_t addrlen)
+{
+    pmix_pif_t *ifp;
+
+    PMIX_LIST_FOREACH(ifp, &pmix_if_list, pmix_pif_t)
+    {
+        if (AF_INET != ((struct sockaddr *) &ifp->if_addr)->sa_family ||
+            !(ifp->if_flags & IFF_LOOPBACK)) {
+            continue;
+        }
+        if (NULL == inet_ntop(AF_INET, &((struct sockaddr_in *) &ifp->if_addr)->sin_addr,
+                              addr, addrlen)) {
+            continue;
+        }
+        if (PMIX_SUCCESS != pmix_ifkindextoname(ifp->if_kernel_index, name, namelen)) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+/* every listener is bound to an address we advertise - never the wildcard -
+ * and all listeners of a family share the one port the URI carries */
+static int check_listeners(const char *label)
+{
+    int failures = 0;
+    prte_oob_tcp_listener_t *listener;
+    char addr[INET6_ADDRSTRLEN], lbl[256];
+    char **conns;
+    int port4 = -1, port6 = -1, *port;
+
+    CHECK(label, 0 < pmix_list_get_size(&prte_oob_base.listeners));
+    PMIX_LIST_FOREACH(listener, &prte_oob_base.listeners, prte_oob_tcp_listener_t)
+    {
+        if (listener->tcp6) {
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *) &listener->addr)->sin6_addr,
+                      addr, sizeof(addr));
+            conns = prte_oob_base.ipv6conns;
+            port = &port6;
+        } else {
+            inet_ntop(AF_INET, &((struct sockaddr_in *) &listener->addr)->sin_addr,
+                      addr, sizeof(addr));
+            conns = prte_oob_base.ipv4conns;
+            port = &port4;
+        }
+        snprintf(lbl, sizeof(lbl), "%s: listener on %s is advertised", label, addr);
+        CHECK(lbl, 0 < count_matches(conns, addr));
+        snprintf(lbl, sizeof(lbl), "%s: listener on %s is not the wildcard", label, addr);
+        CHECK(lbl, 0 != strcmp(addr, "0.0.0.0") && 0 != strcmp(addr, "::"));
+        if (0 > *port) {
+            *port = listener->port;
+        }
+        snprintf(lbl, sizeof(lbl), "%s: listener on %s shares its family's port", label, addr);
+        CHECK(lbl, *port == listener->port);
+    }
+    if (0 <= port4) {
+        snprintf(lbl, sizeof(lbl), "%s: one IPv4 port advertised", label);
+        CHECK(lbl, 1 == PMIx_Argv_count(prte_oob_base.ipv4ports) &&
+                   port4 == atoi(prte_oob_base.ipv4ports[0]));
+    }
+    return failures;
+}
+
+static int test_listeners_bound_to_selection(void)
+{
+    int failures = 0, rc;
+
+    rc = prte_oob_open();
+    CHECK("default open", PRTE_SUCCESS == rc);
+    if (PRTE_SUCCESS == rc) {
+        failures += check_listeners("default");
+    }
+    prte_oob_close();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_listeners_bound_to_selection\n");
+    }
+    return failures;
+}
+
+/* is there a non-loopback IPv4 interface, and the names of every
+ * non-loopback interface as an exclude list */
+static bool have_other_ipv4_interface(void)
+{
+    pmix_pif_t *ifp;
+
+    PMIX_LIST_FOREACH(ifp, &pmix_if_list, pmix_pif_t)
+    {
+        if (AF_INET == ((struct sockaddr *) &ifp->if_addr)->sa_family &&
+            !(ifp->if_flags & IFF_LOOPBACK)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static char *all_but_loopback(void)
+{
+    pmix_pif_t *ifp;
+    char **names = NULL, *str;
+
+    PMIX_LIST_FOREACH(ifp, &pmix_if_list, pmix_pif_t)
+    {
+        if (!(ifp->if_flags & IFF_LOOPBACK)) {
+            PMIx_Argv_append_unique_nosize(&names, ifp->if_name);
+        }
+    }
+    str = PMIx_Argv_join(names, ',');
+    PMIx_Argv_free(names);
+    return str;
+}
+
+static int test_loopback_include_honored(void)
+{
+    int failures = 0, rc;
+    char loname[IF_NAMESIZE], loaddr[INET_ADDRSTRLEN];
+    char *save_include = prte_if_include;
+    prte_oob_tcp_listener_t *listener;
+    char addr[INET_ADDRSTRLEN];
+    prte_proc_type_t save_type = prte_process_info.proc_type;
+
+    if (!find_loopback_ipv4(loname, sizeof(loname), loaddr, sizeof(loaddr))) {
+        fprintf(stdout, "SKIPPED test_loopback_include_honored (no IPv4 loopback)\n");
+        return 0;
+    }
+
+    /* the master takes loopback when it is all the user asked for */
+    prte_if_include = strdup(loname);
+    rc = prte_oob_open();
+    CHECK("loopback-only include opens", PRTE_SUCCESS == rc);
+    if (PRTE_SUCCESS == rc) {
+        CHECK("only loopback advertised", 1 == PMIx_Argv_count(prte_oob_base.ipv4conns) &&
+                                          0 == strcmp(loaddr, prte_oob_base.ipv4conns[0]));
+        CHECK("masks match addresses", 1 == PMIx_Argv_count(prte_oob_base.ipv4masks));
+        failures += check_listeners("loopback");
+        /* where IPv6 is enabled, naming the interface selects its IPv6
+         * loopback address too - but nothing else */
+        PMIX_LIST_FOREACH(listener, &prte_oob_base.listeners, prte_oob_tcp_listener_t)
+        {
+            if (listener->tcp6) {
+                CHECK("IPv6 listener bound to loopback",
+                      IN6_IS_ADDR_LOOPBACK(&((struct sockaddr_in6 *) &listener->addr)->sin6_addr));
+            } else {
+                inet_ntop(AF_INET, &((struct sockaddr_in *) &listener->addr)->sin_addr,
+                          addr, sizeof(addr));
+                CHECK("IPv4 listener bound to loopback", 0 == strcmp(loaddr, addr));
+            }
+        }
+    }
+    prte_oob_close();
+    free(prte_if_include);
+
+    /* an exclude list is not a request for loopback: one that leaves nothing
+     * else must still fail here, rather than start a DVM whose remote daemons
+     * are handed an address they cannot use */
+    if (have_other_ipv4_interface()) {
+        fprintf(stdout, "-- the next case excludes every other interface;"
+                        " the error it prints is expected --\n");
+        prte_if_include = NULL;
+        prte_if_exclude = all_but_loopback();
+        rc = prte_oob_open();
+        CHECK("exclude leaving only loopback refused", PRTE_ERR_NOT_AVAILABLE == rc);
+        prte_oob_close();
+        free(prte_if_exclude);
+        prte_if_exclude = NULL;
+    }
+
+    /* ...and a daemon never does: nothing on another node could reach it */
+    fprintf(stdout, "-- the next case refuses a loopback-only daemon;"
+                    " the error it prints is expected --\n");
+    prte_process_info.proc_type = PRTE_PROC_DAEMON;
+    prte_if_include = strdup(loname);
+    rc = prte_oob_open();
+    CHECK("daemon refuses loopback-only", PRTE_ERR_NOT_AVAILABLE == rc);
+    CHECK("daemon advertises nothing", NULL == prte_oob_base.ipv4conns);
+    prte_oob_close();
+    free(prte_if_include);
+    prte_process_info.proc_type = save_type;
+    prte_if_include = save_include;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_loopback_include_honored\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -905,6 +1107,11 @@ int main(void)
                     " the warnings it prints are expected --\n");
     failures += test_bad_subnets_dropped();
     failures += test_subnet_resolves_and_dedupes();
+    failures += test_listeners_bound_to_selection();
+    failures += test_loopback_include_honored();
+    /* PMIx_server_finalize, at the end of this one, takes PMIx's utility
+     * layer down with it - the interface list included - so anything that
+     * needs a local interface has to run before it */
     failures += test_payload_outlives_sends();
     failures += test_peer_base_assignment();
     failures += test_queued_sends_complete_on_close();
