@@ -77,6 +77,7 @@ typedef struct {
     char **tcp_dyn_ports;     /**< Dynamic ports - IPV4 */
     char **ipv4conns;
     char **ipv4ports;
+    char **ipv4masks;         /**< prefix length of each ipv4conns entry */
 
     /* IPv6 support */
     bool disable_ipv6_family; /**< disable this AF */
@@ -84,10 +85,10 @@ typedef struct {
     char **tcp6_dyn_ports;    /**< Dynamic ports - IPV6 */
     char **ipv6conns;
     char **ipv6ports;
+    char **ipv6masks;         /**< prefix length of each ipv6conns entry */
 
     /* connection support */
     pmix_list_t local_ifs; /**< prte list of local pmix_pif_t interfaces */
-    char **if_masks;
     int num_hnp_ports;           /**< number of ports the HNP should listen on */
     pmix_list_t listeners;       /**< List of sockets being monitored by event or thread */
     pmix_thread_t listen_thread; /**< handle to the listening thread */

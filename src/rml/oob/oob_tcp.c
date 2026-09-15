@@ -97,7 +97,8 @@ prte_oob_base_t prte_oob_base = {
     .ipv6ports = NULL,
 
     .local_ifs = PMIX_LIST_STATIC_INIT(prte_oob_base.local_ifs),
-    .if_masks = NULL,
+    .ipv4masks = NULL,
+    .ipv6masks = NULL,
     .num_hnp_ports = 1,
     .listeners = PMIX_LIST_STATIC_INIT(prte_oob_base.listeners),
     .listen_thread_active = false,
@@ -135,7 +136,8 @@ int prte_oob_open(void)
     prte_oob_base.ipv4ports = NULL;
     prte_oob_base.ipv6conns = NULL;
     prte_oob_base.ipv6ports = NULL;
-    prte_oob_base.if_masks = NULL;
+    prte_oob_base.ipv4masks = NULL;
+    prte_oob_base.ipv6masks = NULL;
 
     PMIX_CONSTRUCT(&prte_oob_base.local_ifs, pmix_list_t);
         PMIX_CONSTRUCT(&prte_oob_base.peers, pmix_list_t);
@@ -234,7 +236,10 @@ int prte_oob_open(void)
          * them so that applications won't hang.
          */
 
-        /* add this address to our connections */
+        /* add this address to our connections - each family keeps its own
+         * masks, because each family's URI carries its own mask list, indexed
+         * like its own address list */
+        snprintf(string, 50, "%d", selected_interface->if_mask);
         if (AF_INET == my_ss.ss_family) {
             pmix_output_verbose(10, prte_oob_base.output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
@@ -243,6 +248,7 @@ int prte_oob_open(void)
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             PMIx_Argv_append_nosize(&prte_oob_base.ipv4conns,
                                            pmix_net_get_hostname((struct sockaddr *) &my_ss));
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv4masks, string);
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
             pmix_output_verbose(10, prte_oob_base.output,
@@ -252,6 +258,7 @@ int prte_oob_open(void)
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             PMIx_Argv_append_nosize(&prte_oob_base.ipv6conns,
                                            pmix_net_get_hostname((struct sockaddr *) &my_ss));
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv6masks, string);
 #endif // PRTE_ENABLE_IPV6
         } else {
             pmix_output_verbose(10, prte_oob_base.output,
@@ -281,9 +288,6 @@ int prte_oob_open(void)
         memcpy(&copied_interface->if_mac, &selected_interface->if_mac,
                sizeof(copied_interface->if_mac));
         copied_interface->ifmtu = selected_interface->ifmtu;
-        /* Add the if_mask to the list */
-        snprintf(string, 50, "%d", selected_interface->if_mask);
-        PMIx_Argv_append_nosize(&prte_oob_base.if_masks, string);
         pmix_list_append(&prte_oob_base.local_ifs, &(copied_interface->super));
     }
     if (NULL != interfaces) {
@@ -375,8 +379,11 @@ void prte_oob_close(void)
         PMIx_Argv_free(prte_oob_base.ipv6ports);
     }
 #endif
-    if (NULL != prte_oob_base.if_masks) {
-        PMIx_Argv_free(prte_oob_base.if_masks);
+    if (NULL != prte_oob_base.ipv4masks) {
+        PMIx_Argv_free(prte_oob_base.ipv4masks);
+    }
+    if (NULL != prte_oob_base.ipv6masks) {
+        PMIx_Argv_free(prte_oob_base.ipv6masks);
     }
 
     if (0 <= prte_oob_base.output) {
