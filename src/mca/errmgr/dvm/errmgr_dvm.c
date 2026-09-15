@@ -526,7 +526,17 @@ static void proc_errors(int fd, short args, void *cbdata)
                                    NULL == pptr->node ? "unknown" : pptr->node->name);
                 }
 
-                if (PRTE_SUCCESS == prte_rml_route_lost(proc->rank)) {
+                /* A daemon that never started while the DVM was first forming
+                 * cannot be routed around.  The route repair below succeeds
+                 * for any daemon the HNP loses, and continuing is right for
+                 * one that dies under a running DVM - its node's procs are
+                 * marked gone and their jobs end.  But nothing has been mapped
+                 * yet while the DVM forms: the launch is waiting for this
+                 * daemon to report, it never will, and there are no procs
+                 * whose termination could end that wait.  prterun sat there
+                 * until killed, having already said the daemon had failed. */
+                if ((prte_dvm_started || PRTE_PROC_STATE_FAILED_TO_START != state) &&
+                    PRTE_SUCCESS == prte_rml_route_lost(proc->rank)) {
                     /* Mark all procs on the lost daemon's node as gone.  This
                      * used to be guarded by "am I rank 0", standing in for "am
                      * I the HNP" - which this component always is, so the test
