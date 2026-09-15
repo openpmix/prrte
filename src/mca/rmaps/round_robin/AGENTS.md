@@ -22,9 +22,9 @@ Files:
 | File | Contents |
 |------|----------|
 | `rmaps_rr_component.c` | Registration, `priority` MCA param (default 10), `query` returning the module. |
-| `rmaps_rr.c` | `prte_rmaps_rr_map()` — the module entry: gate checks + per-app dispatch to the four algorithms. |
-| `rmaps_rr_mappers.c` | The four algorithms: `byslot`, `bynode`, `bycpu`, `byobj` — the last of which is a wrapper around the shared `map_targets` loop. |
-| `rmaps_rr.h` | Prototypes for the four algorithm functions, plus `prte_rmaps_target_enum_t` — the vtable that says how a node's placement targets are listed. |
+| `rmaps_rr.c` | `prte_rmaps_rr_map()` — the module entry: gate checks + per-app dispatch to the algorithms. |
+| `rmaps_rr_mappers.c` | The algorithms: `byslot`, `bynode`, `bycpu`, and `byobj` and `bydevice` — the last two thin wrappers around the shared `map_targets` loop. |
+| `rmaps_rr.h` | Prototypes for the algorithm functions, plus `prte_rmaps_target_enum_t` — the vtable that says how a node's placement targets are listed. |
 
 ---
 
@@ -34,7 +34,7 @@ Before doing anything, the module defers (`PRTE_ERR_TAKE_NEXT_OPTION`)
 when the job isn't its business:
 
 - `PRTE_JOB_FLAG_RESTART` is set — rr only does initial launch.
-- `PRTE_GET_MAPPING_POLICY(jdata->map->mapping) > PRTE_MAPPING_RR` — i.e.
+- `PRTE_GET_MAPPING_POLICY(options->map) > PRTE_MAPPING_RR` — i.e.
   the policy is one of the specialized values (seq/user/ppr, whose
   numeric codes are all `> PRTE_MAPPING_RR == 16`). The round-robin
   policies (by-slot=9, by-node=1, the object codes 2–8, pe-list=11) are
@@ -56,9 +56,13 @@ round_robin was the component (`PRTE_APP_LAST_MAPPER`).
    dispatch enters this module once per app — treating each entry as a
    fresh map would double-add nodes a prior app already placed).
 3. Calls `prte_rmaps_base_get_target_nodes()` for the app's node list.
-4. Dispatches on `options->map` to one of the four algorithms:
+4. Dispatches on `options->map` to one of the algorithms:
    - `PRTE_MAPPING_BYNODE` → `prte_rmaps_rr_bynode`
    - `PRTE_MAPPING_BYSLOT` → `prte_rmaps_rr_byslot`
+   - `PRTE_MAPPING_BYDEVICE` → `prte_rmaps_rr_bydevice`, whose targets are
+     the devices `rmaps/base` enumerates (see
+     [`../base/AGENTS.md`](../base/AGENTS.md)). A named device is shared
+     by definition; a class is not unless `shared` says so.
    - `PRTE_MAPPING_PELIST` → `prte_rmaps_rr_bycpu`
    - anything else (an object type) → `prte_rmaps_rr_byobj`. **There is
      deliberately no fallback here.** We map by an object only because the
@@ -77,7 +81,7 @@ it skips this — the base ranks each app with correct cross-app numbering.
 ## The four algorithms (`rmaps_rr_mappers.c`)
 
 All four share a skeleton: a "can we fit?" pre-check, a main placement
-pass over the node list, and (except byobj) a **second pass** to spread
+pass over the node list, and (except byobj) **further passes** to spread
 the overflow when oversubscription is allowed. All four reset an *unset*
 binding policy to `BIND_TO_NONE` for a node when procs exceed cpus but
 fit within slots (overloaded-but-not-oversubscribed), restoring
@@ -87,16 +91,21 @@ fit within slots (overloaded-but-not-oversubscribed), restoring
 Assigns up to `node->slots_available` procs to each node before moving
 on, so procs are front-loaded. If `num_slots < app->num_procs` and
 oversubscribe isn't allowed → hard `alloc-error`. Otherwise the leftover
-procs are balanced across the remaining nodes in a second pass
+procs are balanced across the remaining nodes in a further pass
 (`extra_procs_to_assign` / `nxtra_nodes` compute the even split plus the
-remainder onto the first few nodes). This is the most common default.
+remainder onto the first few nodes), recomputed and repeated for as long as
+a pass still places something. This is the most common default.
 
 ### `prte_rmaps_rr_bynode` — round-robin across nodes
 Computes an average `(remaining procs) / (num nodes)` and lays that many
 on each node per pass, capping at `slots_available` when not
-oversubscribing, looping until all procs placed. One-proc-per-node
-behavior emerges when there are fewer procs than nodes. Same second-pass
-overflow handling as byslot.
+oversubscribing, looping while passes still place procs. One-proc-per-node
+behavior emerges when there are fewer procs than nodes.
+
+**The cap is the node's, not the pass's.** Each node starts from the
+average and is then capped. The cap used to be written over the pass's
+count itself, so a one-slot node at the head of `-H a:1,b:4,c:4` cut every
+later node's offer to one, and `-n 9` — which exactly fits — failed to map.
 
 ### `prte_rmaps_rr_byobj` — spread across hwloc objects
 Maps by an object type (`options->maptype`: package/numa/cache/core/
@@ -138,8 +147,21 @@ than it has targets. On 3 nodes of 4 slots, `-n 8 --map-by core:span` came out
 4/4/0 where the "one big node" reading it documents gives 3/3/2.
 
 A target set that cannot be revisited (`tgts->nowrap`, the device maps) is
-deliberately excluded: it gets a single pass by design, so there is no
-rotation to join, and a budget of 1 would place one proc per node and stop.
+deliberately excluded from span: there is no rotation to join, and a budget
+of 1 would place one proc per node and stop. It keeps a cursor of its own
+for a different reason. Its passes get the same budgets as a non-span map,
+so a pass after the first — which only oversubscription brings — has to
+resume at the first target that node has not yet handed out, never start
+over at one already assigned. The cursor is set to one past each target
+*examined*, placed on or passed over for lack of cpus, so a skipped target
+is not offered again. Without it a device map got a single pass, and
+permission to oversubscribe changed nothing: four GPUs on a two-slot node
+refused `-n 4`.
+
+**A map that fails with nothing having gone wrong still fails.** The loop
+can simply run out of targets or budget with `rc` holding the last call's
+`PRTE_SUCCESS`, and the diagnostic then said "Mapper result: Success".
+`errout` turns that into `PRTE_ERR_OUT_OF_RESOURCE` first.
 
 Per object it checks free cpus against `cpus_per_rank` (only when
 actually binding; if binding was reset to NONE for an oversubscribed
@@ -151,7 +173,7 @@ without telling them. `outofcpus` vs. `allfull` distinguish the two failure
 help messages (`allocation-overload` vs `failed-map`). Note this mapper has
 **no** second-pass block — the outer `do { … } while (!allfull)` loop handles
 iteration, and the per-pass budget below is what gives those later passes the
-job byslot's second pass does.
+job byslot's later passes do.
 
 **A node's budget is `slots_available`, not its slot count.** The loop asks
 for one proc at a time, so nothing in `check_avail`/`check_oversubscribed` —
@@ -169,10 +191,10 @@ oversubscribed job come out balanced.** On the first pass it is
 that (which can only happen when oversubscription is allowed) it is an even
 share of the procs still unplaced, recomputed per pass over the nodes still
 on the list: the same `extra_procs_to_assign`/`nxtra_nodes` split byslot uses
-for its second pass, which is why the two now agree — `-host a:2,b:2,c:2`
+for its later passes, which is why the two now agree — `-host a:2,b:2,c:2`
 with `--map-by core:oversubscribe` gives 3/3/2 at `-n 8`, 4/4/4 at `-n 12`
 and 6/6/6 at `-n 18`, exactly as `--map-by slot:oversubscribe` does.
-Recomputing per pass (rather than once, as byslot does) also lets the split
+Recomputing per pass also lets the split
 correct itself when a node cannot take its share because its cpus ran out or
 it hit `max_slots` and left the list.
 
@@ -181,6 +203,15 @@ not that the head of the list may have them all: without the budget an
 object map filled the first node with the entire job (8/0/0 above), and with
 the budget applied only on the first pass it still gave that node the whole
 overflow (8/2/2 at `-n 12`).
+
+**`max_slots` is checked per proc here, and per batch everywhere else.**
+This loop asks `check_avail` before every placement, so it has always
+stopped at `max_slots`. byslot, bynode and bycpu ask once and then place a
+node's whole share, and with oversubscription nothing else bounded that
+share — `--map-by node:oversubscribe` put eight procs on a node whose
+`max_slots` was three. `cap_at_max_slots()` holds each batch to the node's
+headroom, right after `check_avail` accepts the node; the passes that follow
+move what a capped node could not take onto the nodes that still have room.
 
 **The `redo:` loop and `check_avail` do not mix casually.** When
 `check_avail` declines a node it may also have removed it from `node_list`
@@ -200,7 +231,7 @@ the job-level path does. The requested cpuset (`options->cpuset`)
 is saved/restored across nodes (`savecpuset`) because the placement
 consumes it. When not overloading/ordered it places exactly as many
 procs as PEs listed; otherwise up to `slots_available`. Same
-second-pass overflow split as byslot when oversubscribe is on. Binding
+repeated overflow passes as byslot when oversubscribe is on. Binding
 for these procs is done by `bind_to_cpuset` inside `setup_proc`.
 
 `options->cpuset` is *owned* by the options struct, and `bind_to_cpuset`
@@ -214,11 +245,9 @@ struct must be left holding a pointer its owner can free.
 
 - **Keep the gate cheap and correct.** The `> PRTE_MAPPING_RR` test is
   what keeps rr from stealing seq/user/ppr jobs; the numeric ordering of
-  the `PRTE_MAPPING_*` codes in `rmaps_types.h` is load-bearing. Note it
-  asks about the *job's* policy even in per-app dispatch — so an app-level
-  directive cannot pull a job away from a specialized mapper the job-level
-  policy already selected. That is a framework-wide limitation of the
-  per-app path, not one specific to rr.
+  the `PRTE_MAPPING_*` codes in `rmaps_types.h` is load-bearing. It reads
+  `options->map`, never the job's map, so in per-app dispatch each app's
+  own directive decides — see the framework guide's module contract.
 - **Do not reintroduce a policy fallback.** Every mapping policy this
   component handles was asked for; if it cannot be honored, say so.
 - **`initial_map` must stay `num_nodes`-based**, or per-app/MPMD jobs
