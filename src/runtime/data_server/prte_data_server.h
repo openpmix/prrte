@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -101,6 +101,22 @@ BEGIN_C_DECLS
 PRTE_EXPORT void prte_data_server_purge_local(const pmix_proc_t *target,
                                               pmix_persistence_t horizon,
                                               uint32_t qualifier);
+
+/* Read a directive whose value is one of PMIx's one-byte named integers -
+ * a PMIX_DATA_RANGE or a PMIX_PERSIST, named by "type" - into *dest.
+ *
+ * The array these come from is the requesting client's own, and PMIx
+ * forwards it without looking at what any entry holds.  Reading the union
+ * member regardless of the value's type is right only for the named type
+ * itself: an int holding PMIX_RANGE_NAMESPACE reads as that on a
+ * little-endian host and as PMIX_RANGE_UNDEF - open to everyone - on a
+ * big-endian one.  So the named type is read directly and any plain integer
+ * is converted, range-checked, by PMIx_Value_get_number.  Anything else
+ * returns PMIX_ERR_BAD_PARAM, and the caller must refuse the request rather
+ * than guess: a restriction we cannot read is not one we may drop. */
+PRTE_EXPORT pmix_status_t prte_ds_get_named_uint8(const pmix_value_t *val,
+                                                  pmix_data_type_t type,
+                                                  uint8_t *dest);
 
 /* provide hooks to startup and finalize the data server */
 PRTE_EXPORT int prte_data_server_init(void);

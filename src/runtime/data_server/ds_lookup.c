@@ -331,6 +331,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
     uint32_t gid = UINT32_MAX;
     int timeout = 0;
     size_t nwait = 0;
+    uint8_t u8;
     bool wait = false;
     bool denied = false;
     /* the default range for a lookup is SESSION - see the PMIx
@@ -413,7 +414,15 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                     nwait = 0;
                 }
             } else if (PMIx_Check_key(info[n].key, PMIX_RANGE)) {
-                range = info[n].value.data.range;
+                if (PMIX_SUCCESS != prte_ds_get_named_uint8(&info[n].value, PMIX_DATA_RANGE, &u8)) {
+                    /* the search would be over a set of processes we cannot
+                     * name - refuse it, rather than search everything */
+                    PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                    PMIX_INFO_FREE(info, ninfo);
+                    PMIx_Argv_free(keys);
+                    return PMIX_ERR_BAD_PARAM;
+                }
+                range = u8;
             }
         }
         /* a relay looking up on behalf of a process in its own DVM.  After
