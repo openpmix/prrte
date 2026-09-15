@@ -283,27 +283,44 @@ static void drop_prior(prte_data_req_t *rq, prte_data_object_t *data)
     }
 }
 
+/* Could this newly stored item advance a parked lookup?  It must hold one of
+ * the keys the request is waiting for, and pass the three tests the lookup
+ * applies.  A cheap filter ahead of prte_ds_answer_parked(), which scans the
+ * whole store: only a publish can make a parked request answerable, and
+ * only by being an item that request can see. */
+static bool answers_request(prte_data_req_t *req, prte_data_object_t *data)
+{
+    prte_info_item_t *item;
+    int i;
+
+    if (PMIX_SUCCESS != prte_data_server_check_access(req, data) ||
+        PMIX_SUCCESS != prte_data_server_check_range(req, data) ||
+        PMIX_SUCCESS != prte_data_server_check_search_range(req, data)) {
+        return false;
+    }
+    for (i = 0; NULL != req->keys[i]; i++) {
+        PMIX_LIST_FOREACH(item, &data->info, prte_info_item_t) {
+            if (PMIx_Check_key(item->info.key, req->keys[i])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 pmix_status_t prte_ds_publish(pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer,
                               pmix_data_buffer_t *answer)
 {
-    uint8_t command;
     int32_t count;
     prte_data_object_t *data;
-    pmix_data_buffer_t *reply;
     int rc;
     size_t ninfo;
-    uint32_t i;
-    bool complete_resolved, found;
     prte_data_req_t *req, *rqnext;
-    pmix_data_buffer_t pbkt;
-    pmix_byte_object_t pbo;
-    pmix_status_t ret;
-    prte_info_item_t *ds1, *ds2, *ds3;
+    pmix_status_t ret, st = PMIX_SUCCESS;
+    prte_info_item_t *ds1;
     size_t n, ndups;
     pmix_info_t *info;
-    char **cache;
-    pmix_list_t answers;
     prte_data_req_t rq;
     bool replace = false, foreign;
 
@@ -502,230 +519,55 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
                         "%s data server: checking for pending requests",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    /* check for pending requests that match this data */
-    reply = NULL;
-    rc = PRTE_SUCCESS;
+    /* Answer any parked lookup this publish lets us complete.
+     *
+     * A parked request gets exactly one reply: the daemon that asked frees
+     * its room on the first answer it receives.  This loop used to answer
+     * whatever this one item resolved, as PMIX_ERR_PARTIAL_SUCCESS when
+     * that was not everything, and leave the request parked for the rest -
+     * so the requestor was handed a partial answer it had asked to wait
+     * past, a FIRST_READ value it resolved was consumed on its behalf, and
+     * the NEXT matching publish replied to a room already freed, or already
+     * handed to some other request.  prte_ds_answer_parked() now decides
+     * against the whole store and answers once.
+     *
+     * Satisfying a request can consume this item's FIRST_READ keys and drop
+     * it from the store, so hold a reference of our own for as long as the
+     * loop reads it.  A dropped item holds no keys, so it matches nothing
+     * further. */
+    PMIX_RETAIN(data);
     PMIX_LIST_FOREACH_SAFE(req, rqnext, &prte_data_store.pending, prte_data_req_t)
     {
-        /* the same three tests an immediate lookup applies, in the same
-         * order: the publisher's access permissions, then its range, then
-         * the range the requestor asked us to search */
-        if (PMIX_SUCCESS != prte_data_server_check_access(req, data)) {
+        /* only a request this item could advance needs the full scan */
+        if (!answers_request(req, data)) {
             continue;
         }
-        if (PMIX_SUCCESS != prte_data_server_check_range(req, data)) {
-            continue;
-        }
-        if (PMIX_SUCCESS != prte_data_server_check_search_range(req, data)) {
-            continue;
-        }
-
-        complete_resolved = false;
-        cache = NULL;
-        PMIX_CONSTRUCT(&answers, pmix_list_t);
-
-        for (i = 0; NULL != req->keys[i]; i++) {
-            /* cycle thru the data keys for matches */
-            found = false;
-            PMIX_LIST_FOREACH_SAFE(ds1, ds2, &data->info, prte_info_item_t) {
-                pmix_output_verbose(10, prte_data_store.output,
-                                    "%s\tCHECKING %s TO %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                    ds1->info.key, req->keys[i]);
-
-                if (PMIx_Check_key(ds1->info.key, req->keys[i])) {
-                    pmix_output_verbose(10, prte_data_store.output,
-                                        "%s data server: packaging return",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-                    /* track this response */
-                    pmix_output_verbose(
-                        10, prte_data_store.output,
-                        "%s data server: adding %s data %s from %s:%d to response",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ds1->info.key,
-                        PMIx_Data_type_string(ds1->info.value.type), data->owner.nspace,
-                        data->owner.rank);
-                    ds3 = PMIX_NEW(prte_info_item_t);
-                    PMIX_INFO_XFER(&ds3->info, &ds1->info);
-                    pmix_list_append(&answers, &ds3->super);
-                    /* it was of use to somebody, so the retention timeout
-                     * starts again from here.  Both places that answer a
-                     * lookup have to do this - the other is ds_lookup.c */
-                    data->last_access = time(NULL);
-                    // if the persistence is "first read", then remove this info
-                    if (PMIX_PERSIST_FIRST_READ == data->persistence) {
-                        pmix_list_remove_item(&data->info, &ds1->super);
-                        PMIX_RELEASE(ds1);
-                    }
-                    found = true;
-                    break; // a key can only occur once
-                }
-            }
-            if (!found) {
-                PMIx_Argv_append_nosize(&cache, req->keys[i]);
-            }
-        }
-        // update the keys to remove all that have been resolved
-        if (0 < PMIx_Argv_count(cache)) {
-            PMIx_Argv_free(req->keys);
-            req->keys = cache;
-        } else {
-            // if no keys are in the cache, then all keys were resolved
-            complete_resolved = true;
-        }
-
-        n = pmix_list_get_size(&answers);
-        if (0 == n) {
-            PMIX_LIST_DESTRUCT(&answers);
-            continue;
-        }
-
-
-        /* send the answers back to the requestor */
-        pmix_output_verbose(1, prte_data_store.output,
-                            "%s data server:publish returning %lu data to %s:%d",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            (unsigned long)n,
-                            req->requestor.nspace,
-                            req->requestor.rank);
-
-        PMIX_DATA_BUFFER_CREATE(reply);
-        /* start with their room number */
-        rc = PMIx_Data_pack(NULL, reply, &req->room_number, 1, PMIX_INT);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            goto reply_failed;
-        }
-        /* we are responding to a lookup cmd */
-        command = PRTE_PMIX_LOOKUP_CMD;
-        rc = PMIx_Data_pack(NULL, reply, &command, 1, PMIX_UINT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            goto reply_failed;
-        }
-        /* If every key the request was still waiting on has now been
-         * resolved, the lookup completed. Do NOT re-derive that from
-         * req->keys: the unresolved remainder was swapped into it a few
-         * lines above, so comparing our answer count against it reported
-         * PARTIAL_SUCCESS for a request we had in fact satisfied in full. */
-        ret = complete_resolved ? PMIX_SUCCESS : PMIX_ERR_PARTIAL_SUCCESS;
-        /* return the status */
-        rc = PMIx_Data_pack(NULL, reply, &ret, 1, PMIX_STATUS);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            goto reply_failed;
-        }
-
-        /* pack the rest into a pmix_data_buffer_t */
-        PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-
-        /* pack the number of returned info's */
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &n, 1, PMIX_SIZE))) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            rc = PRTE_ERR_PACK_FAILURE;
-            goto reply_failed;
-        }
-        /* loop thru and pack the individual responses - this is somewhat less
-         * efficient than packing an info array, but avoids another malloc
-         * operation just to assemble all the return values into a contiguous
-         * array */
-        while (NULL != (ds3 = (prte_info_item_t *) pmix_list_remove_first(&answers))) {
-            /* pack the data owner */
-            ret = PMIx_Data_pack(NULL, &pbkt, &data->owner, 1, PMIX_PROC);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_RELEASE(ds3);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-                rc = PRTE_ERR_PACK_FAILURE;
-                goto reply_failed;
-            }
-            /* pack the data */
-            ret = PMIx_Data_pack(NULL, &pbkt, &ds3->info, 1, PMIX_INFO);
-            PMIX_RELEASE(ds3);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-                rc = PRTE_ERR_PACK_FAILURE;
-                goto reply_failed;
-            }
-        }
-        PMIX_LIST_DESTRUCT(&answers);
-
-        /* unload the pmix buffer */
-        rc = PMIx_Data_unload(&pbkt, &pbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            return rc;
-        }
-
-        /* pack it into our reply */
-        rc = PMIx_Data_pack(NULL, reply, &pbo, 1, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            /* Leave the request on the pending list. It used to be released
-             * right here while still linked into that list, which left a
-             * freed item behind for the next publish to walk into. */
-            return rc;
-        }
-        PRTE_RML_RELIABLE_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-        }
-        if (0 == pmix_list_get_size(&data->info)) {
-            // all the data was removed, so we no longer need this entry
-            prte_ds_drop(data);
-            data = NULL;
-        } else {
-            /* it shrank: what its publisher is charged has to follow */
-            prte_ds_charge(data);
-        }
-        if (complete_resolved) {
-            // completely resolved this pending request, so remove it
+        if (prte_ds_answer_parked(req)) {
             pmix_list_remove_item(&prte_data_store.pending, &req->super);
             PMIX_RELEASE(req);
         }
-        if (NULL == data) {
-            break;
-        }
-        continue;
+    }
+    PMIX_RELEASE(data);
 
-    reply_failed:
-        /* a reply to one waiting requestor could not be assembled. Drop it
-         * and let the publish itself report the failure - but not before
-         * releasing the partial reply and the answers we had collected,
-         * both of which used to leak straight out of the function. */
-        PMIX_LIST_DESTRUCT(&answers);
-        PMIX_DATA_BUFFER_RELEASE(reply);
+    /* The data is stored whatever became of the parked requests, so the
+     * publisher is told it succeeded.  A pending reply that could not be
+     * delivered used to leave its error in rc, which suppressed this
+     * answer and reported the error to the publisher instead - a publish
+     * that had in fact taken effect, and that a retry would then find
+     * refused as a duplicate. */
+    rc = PMIx_Data_pack(NULL, answer, &st, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return rc;
     }
-
-    if (PMIX_SUCCESS == rc) {
-        pmix_status_t st = PMIX_SUCCESS;
-
-        // send back an answer
-        rc = PMIx_Data_pack(NULL, answer, &st, 1, PMIX_STATUS);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            return rc;
-        }
-        PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
-        if (PRTE_SUCCESS != rc) {
-            /* The send refused the buffer - the requesting daemon is gone -
-             * so it is still ours, and releasing it disposes of it.  That
-             * is PMIX_SUCCESS by the answer-buffer contract: returning the
-             * send's error handed our caller a buffer we had just freed,
-             * which it packed the error into, sent, and released again. */
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(answer);
-            rc = PMIX_SUCCESS;
-        }
+    PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
+    if (PRTE_SUCCESS != rc) {
+        /* The send refused the buffer - the publisher's daemon is gone - so
+         * it is still ours, and releasing it disposes of it.  That is
+         * PMIX_SUCCESS by the answer-buffer contract: returning the send's
+         * error handed our caller a buffer we had just freed. */
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(answer);
     }
-
-
-    return rc;
+    return PMIX_SUCCESS;
 }

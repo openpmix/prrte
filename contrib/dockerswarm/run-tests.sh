@@ -1758,6 +1758,46 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: a waiting lookup answers with every key, once"
+    # A PMIX_WAIT lookup for two keys when only one is published yet.  The
+    # daemon frees a request's room on the FIRST reply, so the parked
+    # request gets exactly one answer, and it has to carry both values.
+    # The lookup used to take the key it could find -- consuming it, since
+    # it is FIRST_READ -- drop it on the floor, and park for the other; the
+    # later publish then answered with that one key alone, as a complete
+    # success.  So the early key is the one to watch.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the two-key waiting-lookup test"
+    else
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.wait.early early first-read 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.wait.early' \
+            || bad "the early first-read publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        PRUN_BG /tmp/ds-wait2.out "--host node3:1 -n 1 $DS lookup2wait prte.test.wait.early prte.test.wait.late 60"
+        sleep 8
+        if ! RUN 'grep -q "^WAITING" /tmp/ds-wait2.out'; then
+            skp "the two-key waiting lookup never started; the next case is weaker"
+        else
+            RUN 'grep -q "^FOUND" /tmp/ds-wait2.out' \
+                && bad "a lookup waiting for two keys answered with one: $(RUN 'cat /tmp/ds-wait2.out' 2>&1 | tr '\n' ' ' | tail -c 250)" \
+                || ok "a lookup waiting for two keys, one published, is still waiting"
+        fi
+        PRUN_BG /tmp/ds-late2.out "--host node4:1 -n 1 $DS publish prte.test.wait.late late session 40"
+        sleep 12
+        RUN 'grep -q "^FOUND prte.test.wait.early early" /tmp/ds-wait2.out' \
+            && ok "the answer carries the key that was already published" \
+            || bad "the key found before parking was lost: $(RUN 'cat /tmp/ds-wait2.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        RUN 'grep -q "^FOUND prte.test.wait.late late" /tmp/ds-wait2.out' \
+            && ok "...and the key published while it waited" \
+            || bad "the key published while the lookup waited is missing: $(RUN 'cat /tmp/ds-wait2.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        RUN 'grep -qE "^STATUS SUCCESS|^STATUS .*(PMIX_SUCCESS)" /tmp/ds-wait2.out' \
+            && ok "...reported as a complete result" \
+            || bad "a two-key wait completed with the wrong status: $(RUN 'grep "^STATUS" /tmp/ds-wait2.out' 2>&1 | tr -d '\r')"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "runtime/data_server: unpublish removes the data"
     # Only the publisher may unpublish its own keys, so this runs in one
     # process: publish, confirm, unpublish, confirm gone.
