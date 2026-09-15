@@ -387,6 +387,20 @@ bool prte_data_server_owns(uint32_t uid, uint32_t gid, prte_data_object_t *data)
     return (gid == data->gid);
 }
 
+pmix_status_t prte_ds_get_named_uint8(const pmix_value_t *val,
+                                      pmix_data_type_t type, uint8_t *dest)
+{
+    if (type == val->type) {
+        /* both of the types this serves are a uint8 in the union */
+        *dest = val->data.uint8;
+        return PMIX_SUCCESS;
+    }
+    /* a plain integer, converted with its value checked against the width.
+     * The destination is named as a plain PMIX_UINT8 rather than as the
+     * named type, which not every PMIx this can run against converts to. */
+    return PMIx_Value_get_number(val, dest, PMIX_UINT8);
+}
+
 /* Is a stored item on the SAME DATA RANGE as a publication?
  *
  * The Standard permits duplicate keys on different ranges and requires

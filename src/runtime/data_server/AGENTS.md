@@ -158,6 +158,19 @@ A restriction the publisher gave and we cannot parse **fails the publish**.
 Storing it anyway would store the data unrestricted, which is the one
 outcome nobody asked for.
 
+That includes the range and the persistence. Both arrive typed however the
+client typed them — PMIx forwards the array without looking — so they are
+read with `prte_ds_get_named_uint8()`: the named type directly, any plain
+integer converted with its width checked, anything else refused. Reading the
+union member regardless turned an `int` holding `PMIX_RANGE_NAMESPACE` into
+`PMIX_RANGE_UNDEF`, open to everyone, on a big-endian host. The daemon's
+router (`scan_directives()` in `pmix_server_pub.c`) reads the range with the
+same helper, and has to: it used to honor only `PMIX_DATA_RANGE`, so an
+int-typed `LOCAL` publish was routed to the global store and stored there as
+`LOCAL`, where no local-range lookup looks. A value neither family defines
+is refused as well — an unknown persistence is one no purge horizon takes and
+the sweep never touches, and an unknown range admits nobody.
+
 This depends on PMIx handing us both ids. The library appends `PMIX_USERID`
 and `PMIX_GRPID` to the info array of every publish, lookup and unpublish —
 the gid took an openpmix change to be handed over at all (it comes from the
