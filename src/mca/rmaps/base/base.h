@@ -206,10 +206,11 @@ PRTE_EXPORT void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
  * was given, and "end" releases the context.  A caller that places more than
  * one process per device calls "locale" repeatedly with the same index.
  *
- * "begin" also performs the two checks that must happen before any process
- * is placed on the node: that the requested binding is not coarser than the
- * devices are local to, and whether every device shares one locality (which
- * is a warning, not an error). */
+ * "begin" also performs the checks that must happen before any process is
+ * placed on the node: that every GPU carries an identity its runtime
+ * accepts, that the requested binding is not coarser than the devices are
+ * local to, and whether every device shares one locality (a warning, not an
+ * error).  Its diagnostics are about "jdata". */
 PRTE_EXPORT int prte_rmaps_base_devices_begin(prte_job_t *jdata,
                                               prte_node_t *node,
                                               prte_rmaps_options_t *opts,

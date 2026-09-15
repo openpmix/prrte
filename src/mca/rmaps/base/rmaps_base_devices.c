@@ -22,8 +22,10 @@
  * process through PMIX_DEVICE_DISTANCES.  What is here is everything
  * between that list and a placement: the class spelling, the interleave
  * ordering, the grouping into one group per process, the locality each
- * group resolves to, and the two checks that have to happen before any
- * process is placed on a node.
+ * group resolves to, and the checks that have to happen before any process
+ * is placed on a node - that every GPU can be named to its runtime, that
+ * the binding is not coarser than the devices, and whether the devices say
+ * anything about cpus at all.
  */
 
 #include "prte_config.h"
