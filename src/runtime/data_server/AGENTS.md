@@ -618,6 +618,13 @@ answer — including when it has already sent a failure.
   side of it you are on.
 - **`PMIX_RELEASE(req)` while `req` is still on `pending` leaves a freed
   item on the list.** Remove it first.
+- **A directive `ds_publish` does not consume becomes data.** Anything in
+  the info array the directive scan does not recognize is stored as a
+  published key, and PMIx passes every directive through. `PMIX_TIMEOUT`,
+  which the Standard defines for `PMIx_Publish`, was once missing from the
+  scan: it was stored under `pmix.timeout`, and the same user's next publish
+  carrying a timeout collided with it and was refused as a duplicate. A new
+  directive has to be added to the scan, not just to the daemon.
 - **Success paths free too.** `ds_publish` unpacks a `pmix_info_t` array,
   copies what it keeps into the data object, and has to `PMIX_INFO_FREE` the
   array — that was happening only on the unpack-failure path, so a

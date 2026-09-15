@@ -40,6 +40,12 @@
  *       Look both keys up in one call.  With only one of them published
  *       this is the PARTIAL_SUCCESS path.
  *
+ *   dataserver pubtimeout <key1> <key2> [seconds]
+ *       Publish two keys in two calls, each carrying PMIX_TIMEOUT, then
+ *       look up "pmix.timeout".  Prints "STATUS1", "STATUS2" and "TIMEOUTKEY"
+ *       with each status: the timeout is a directive, so both publishes
+ *       must succeed and nothing may be stored under its name.
+ *
  *   dataserver lookup2wait <key1> <key2> [seconds]
  *       The same with PMIX_WAIT: with one key already published and the
  *       other not, the request parks, and the answer that finally comes
@@ -429,6 +435,44 @@ static pmix_persistence_t parse_persist(const char *s)
 /* Publish and report the status whatever it is.  Returns 0 even on failure:
  * the duplicate-key case EXPECTS an error, and exiting non-zero would have
  * PRRTE tear the job down and bury the STATUS line under an abort banner. */
+static int do_pubtimeout(const char *key1, const char *key2, int seconds)
+{
+    pmix_status_t rc;
+    pmix_info_t info[2];
+    pmix_pdata_t pdata;
+    int tmo = 10;
+
+    rc = PMIx_Init(&myproc, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Init: %s\n", PMIx_Error_string(rc));
+        return 1;
+    }
+    PMIX_INFO_LOAD(&info[0], key1, "first", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_TIMEOUT, &tmo, PMIX_INT);
+    rc = PMIx_Publish(info, 2);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    printf("STATUS1 %s\n", PMIx_Error_string(rc));
+
+    PMIX_INFO_LOAD(&info[0], key2, "second", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_TIMEOUT, &tmo, PMIX_INT);
+    rc = PMIx_Publish(info, 2);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    printf("STATUS2 %s\n", PMIx_Error_string(rc));
+
+    PMIX_PDATA_CONSTRUCT(&pdata);
+    PMIX_LOAD_KEY(pdata.key, PMIX_TIMEOUT);
+    rc = PMIx_Lookup(&pdata, 1, NULL, 0);
+    printf("TIMEOUTKEY %s\n", PMIx_Error_string(rc));
+    PMIX_PDATA_DESTRUCT(&pdata);
+    fflush(stdout);
+
+    sleep(seconds);
+    PMIx_Finalize(NULL, 0);
+    return 0;
+}
+
 static int do_dup(const char *key, const char *value, int seconds,
                   const char *rangestr, bool replace)
 {
@@ -572,13 +616,14 @@ int main(int argc, char **argv)
                 "       %s lookupwait <key> [secs] [range]\n"
                 "       %s lookup2 <key1> <key2> [secs]\n"
                 "       %s lookup2wait <key1> <key2> [secs]\n"
+                "       %s pubtimeout <key1> <key2> [secs]\n"
                 "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n"
                 "       %s dup <key> <value> [secs] [range] [replace]\n"
                 "       %s unpubonly <key> [secs] [range]\n"
                 "       %s republish <key> [secs] [range]\n"
                 "       %s persist <key> <value> <persistence> [secs] [range]\n",
                 argv[0], argv[0], argv[0], argv[0], argv[0], argv[0], argv[0],
-                argv[0], argv[0], argv[0]);
+                argv[0], argv[0], argv[0], argv[0]);
         return 2;
     }
 
@@ -610,6 +655,13 @@ int main(int argc, char **argv)
         keys[1] = argv[3];
         return do_lookup(keys, 2, (5 > argc) ? 20 : atoi(argv[4]),
                          (0 == strcmp(argv[1], "lookup2wait")), NULL);
+    }
+    if (0 == strcmp(argv[1], "pubtimeout")) {
+        if (4 > argc) {
+            fprintf(stderr, "pubtimeout needs two keys\n");
+            return 2;
+        }
+        return do_pubtimeout(argv[2], argv[3], (5 > argc) ? 0 : atoi(argv[4]));
     }
     if (0 == strcmp(argv[1], "unpublish")) {
         if (3 > argc) {
