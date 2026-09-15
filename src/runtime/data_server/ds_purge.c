@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2025      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -29,21 +29,17 @@
 #include "constants.h"
 #include "types.h"
 
-#include <string.h>
-
 #ifdef HAVE_SYS_TIME_H
 #    include <sys/time.h>
 #endif
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
 
 #include "src/runtime/data_server/prte_data_server.h"
@@ -283,10 +279,10 @@ void prte_data_server_purge_local(const pmix_proc_t *target,
      * horizon fires once per terminating process, and almost no job
      * publishes anything at all. */
     pmix_output_verbose(1, prte_data_store.output,
-                        "%s data server: purge at %s horizon, data from %s:%d",
+                        "%s data server: purge at %s horizon, data from %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIx_Persistence_string(horizon),
-                        target->nspace, target->rank);
+                        PMIX_NAME_PRINT(target));
     purge_store(target, horizon, qualifier);
 }
 
@@ -306,9 +302,8 @@ void prte_ds_purge(pmix_proc_t *sender,
     /* the app index or session id the horizon needs, where it needs one */
     uint32_t qualifier = UINT32_MAX, appidx = UINT32_MAX, sessionid = UINT32_MAX;
 
-    /* unpack the proc whose data is to be purged - session
-     * data is purged by providing a requestor whose rank
-     * is wildcard */
+    /* unpack the process whose data is to be purged - PMIX_RANK_WILDCARD
+     * for any rank of its namespace */
     count = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &requestor, &count, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
@@ -420,9 +415,9 @@ void prte_ds_purge(pmix_proc_t *sender,
     }
 
     pmix_output_verbose(1, prte_data_store.output,
-                        "%s data server: purge data from %s:%d",
+                        "%s data server: purge data from %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        requestor.nspace, requestor.rank);
+                        PMIX_NAME_PRINT(&requestor));
 
     /* Take what the ended lifetime takes, and finish any lookup it left
      * parked.  This is what makes PMIX_PERSISTENCE mean anything: the value

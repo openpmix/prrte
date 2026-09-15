@@ -84,7 +84,10 @@ BEGIN_C_DECLS
  */
 #define PRTE_PURGE_APP_IDX       "prte.purge.appidx"    // (uint32) index of the application that terminated
 
-/* Purge THIS process's store directly, with no message and no reply.
+/* Purge THIS process's store directly, with no message to the data server
+ * and no reply to the caller.  At the PROC and NSPACE horizons it also
+ * finishes any lookup the ended process left parked here, which does answer
+ * that lookup's daemon, so it can free the room the request held.
  *
  * The store that has to act is in every case one the caller already has in
  * hand: a daemon reaps its own children and is told when a namespace ends,
