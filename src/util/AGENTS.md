@@ -158,6 +158,21 @@ finding the live DVM. Anything that leaves a session directory behind is a
 bug, and `contrib/dockerswarm/run-tests.sh` clears all three prefixes between
 cases for exactly this reason.
 
+**The ownership check lives here, not in PMIx.** The top-level name is
+predictable by anyone on the node and sits under a world-writable root, so
+another user can create it first. `pmix_os_dirpath_create()` answers
+`PMIX_ERR_EXISTS` for such a directory and deliberately does not ask who owns
+it — its generic callers hand it `/tmp` itself and shared user-named output
+directories. `_check_owner()` therefore refuses any directory PRRTE composes
+(top, job, rank) that is not owned by our euid or is group/other-writable,
+inspecting it through an `O_NOFOLLOW` descriptor. It never examines
+`tmpdir_base`: that was handed to us, and on macOS it is reached through the
+root-owned `/tmp` symlink. A job whose directory is refused must also forget
+the path (`jdata->session_dir = NULL`), because finalize recursively destroys
+whatever that names. Verifying the foreign-owner refusal needs a second uid,
+so it was checked in the dockerswarm image as root planting the name for the
+`ubuntu` user; a planted *symlink* is already refused by PMIx.
+
 `prte_job_session_dir_finalize()` keeps non-empty `output-*` files (that is
 what `--output file=...` wrote) and removes everything else. The
 `prte_process_info.rm_session_dirs` flag means the resource manager will clean
