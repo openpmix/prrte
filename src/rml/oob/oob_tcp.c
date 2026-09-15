@@ -111,6 +111,54 @@ prte_oob_base_t prte_oob_base = {
     .max_recon_attempts = 0
 };
 
+/* Does @c intf survive the address-family, virtual-interface and
+ * include/exclude filters?  Returns PRTE_SUCCESS if it does,
+ * PRTE_ERR_TAKE_NEXT_OPTION if it does not, and PRTE_ERR_BAD_PARAM (having
+ * said why) if one of the user's network specifications cannot be parsed. */
+static int interface_selected(pmix_pif_t *intf, char **interfaces, bool including)
+{
+    int rc;
+
+    /* ignore non-ip4/6 interfaces */
+    if (AF_INET != intf->if_addr.ss_family
+#if PRTE_ENABLE_IPV6
+        && AF_INET6 != intf->if_addr.ss_family
+#endif
+        ) {
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+
+    /* ignore any virtual interfaces */
+    if (0 == strncmp(intf->if_name, "vir", 3)) {
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+
+    if (NULL == interfaces) {
+        return PRTE_SUCCESS;
+    }
+
+    /* pmix_ifmatches speaks PMIx status codes: a match, no match, or a
+     * specification it could not parse (which it has already reported) */
+    rc = pmix_ifmatches(intf->if_kernel_index, interfaces);
+    if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "not-parseable", true);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (including && PMIX_SUCCESS != rc) {
+        pmix_output_verbose(20, prte_oob_base.output,
+                            "%s oob:tcp:init rejecting interface %s (not in include list)",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), intf->if_name);
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+    if (!including && PMIX_SUCCESS == rc) {
+        pmix_output_verbose(20, prte_oob_base.output,
+                            "%s oob:tcp:init rejecting interface %s (in exclude list)",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), intf->if_name);
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+    return PRTE_SUCCESS;
+}
+
 int prte_oob_open(void)
 {
     pmix_pif_t *copied_interface, *selected_interface;
@@ -120,6 +168,8 @@ int prte_oob_open(void)
     int kindex;
     int i, rc;
     bool keeploopback = false;
+    bool have_nonloopback = false;
+    bool host_has_nonloopback = false;
     bool including = false;
 
     pmix_output_verbose(5, prte_oob_base.output,
@@ -156,78 +206,65 @@ int prte_oob_open(void)
                                    "exclude", &interfaces);
     }
 
-    /* if we are the master, then check the interfaces for loopbacks
-     * and keep loopbacks only if no non-loopback interface exists */
-    if (PRTE_PROC_IS_MASTER) {
-        keeploopback = true;
-        PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t)
-        {
-            if (!(selected_interface->if_flags & IFF_LOOPBACK)) {
-                keeploopback = false;
-                break;
-            }
+    /* A loopback address is useless to any daemon but the DVM master, and to
+     * the master only when no daemon on another node will need to reach it.
+     * So the master keeps loopback in two cases: the user's include list
+     * selected it and nothing else, or the host has nothing else at all.
+     *
+     * The first case has to be decided after the include list is applied.
+     * Deciding over every interface on the host threw away a loopback the
+     * user had explicitly included, as the only interface wanted, whenever the
+     * host also had a real one - so confining a single-node job to loopback
+     * was impossible.  An exclude list is not such a request: one that
+     * removes every real interface leaves nothing a remote daemon could use,
+     * and falling back to loopback would only move the failure to the first
+     * daemon launched. */
+    PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t)
+    {
+        if (selected_interface->if_flags & IFF_LOOPBACK) {
+            continue;
+        }
+        rc = interface_selected(selected_interface, NULL, false);
+        if (PRTE_SUCCESS != rc) {
+            continue;
+        }
+        host_has_nonloopback = true;
+        rc = interface_selected(selected_interface, interfaces, including);
+        if (PRTE_ERR_BAD_PARAM == rc) {
+            PMIx_Argv_free(interfaces);
+            return rc;
+        }
+        if (PRTE_SUCCESS == rc) {
+            have_nonloopback = true;
+            break;
         }
     }
+    keeploopback = PRTE_PROC_IS_MASTER && !have_nonloopback &&
+                   (including || !host_has_nonloopback);
 
     /* look at all available interfaces */
     PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t)
     {
-        if ((selected_interface->if_flags & IFF_LOOPBACK) &&
-            !keeploopback) {
+        rc = interface_selected(selected_interface, interfaces, including);
+        if (PRTE_ERR_BAD_PARAM == rc) {
+            PMIx_Argv_free(interfaces);
+            return rc;
+        }
+        if (PRTE_SUCCESS != rc) {
             continue;
         }
-
+        if ((selected_interface->if_flags & IFF_LOOPBACK) &&
+            !keeploopback) {
+            pmix_output_verbose(20, prte_oob_base.output,
+                                "%s oob:tcp:init rejecting loopback interface %s",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
+            continue;
+        }
 
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
         memcpy((struct sockaddr *) &my_ss, &selected_interface->if_addr,
                MIN(sizeof(struct sockaddr_storage), sizeof(selected_interface->if_addr)));
-
-        /* ignore non-ip4/6 interfaces */
-        if (AF_INET != my_ss.ss_family
-#if PRTE_ENABLE_IPV6
-            && AF_INET6 != my_ss.ss_family
-#endif
-            ) {
-            continue;
-        }
-
-        /* ignore any virtual interfaces */
-        if (0 == strncmp(selected_interface->if_name, "vir", 3)) {
-            continue;
-        }
-
-        /* handle include/exclude directives */
-        if (NULL != interfaces) {
-            /* check for match */
-            rc = pmix_ifmatches(kindex, interfaces);
-            /* pmix_ifmatches speaks PMIx status codes: a match, no match,
-             * or a specification it could not parse (which it has already
-             * reported) - in which case error out, as we can't do what was
-             * requested */
-            if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "not-parseable", true);
-                PMIx_Argv_free(interfaces);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            /* if we are including, then ignore this if not present */
-            if (including) {
-                if (PMIX_SUCCESS != rc) {
-                    pmix_output_verbose(20, prte_oob_base.output,
-                                        "%s oob:tcp:init rejecting interface %s (not in include list)",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
-                    continue;
-                }
-            } else {
-                /* we are excluding, so ignore if present */
-                if (PMIX_SUCCESS == rc) {
-                    pmix_output_verbose(20, prte_oob_base.output,
-                                        "%s oob:tcp:init rejecting interface %s (in exclude list)",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
-                    continue;
-                }
-            }
-        }
 
         /* Refs ticket #3019
          * it would probably be worthwhile to print out a warning if PRRTE detects multiple
@@ -243,30 +280,22 @@ int prte_oob_open(void)
         snprintf(string, 50, "%d", selected_interface->if_mask);
         if (AF_INET == my_ss.ss_family) {
             pmix_output_verbose(10, prte_oob_base.output,
-                                "%s oob:tcp:init adding %s to our list of %s connections",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                pmix_net_get_hostname((struct sockaddr *) &my_ss),
-                                (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            PMIx_Argv_append_nosize(&prte_oob_base.ipv4conns,
-                                           pmix_net_get_hostname((struct sockaddr *) &my_ss));
-            PMIx_Argv_append_nosize(&prte_oob_base.ipv4masks, string);
-        } else if (AF_INET6 == my_ss.ss_family) {
-#if PRTE_ENABLE_IPV6
-            pmix_output_verbose(10, prte_oob_base.output,
-                                "%s oob:tcp:init adding %s to our list of %s connections",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                pmix_net_get_hostname((struct sockaddr *) &my_ss),
-                                (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            PMIx_Argv_append_nosize(&prte_oob_base.ipv6conns,
-                                           pmix_net_get_hostname((struct sockaddr *) &my_ss));
-            PMIx_Argv_append_nosize(&prte_oob_base.ipv6masks, string);
-#endif // PRTE_ENABLE_IPV6
-        } else {
-            pmix_output_verbose(10, prte_oob_base.output,
-                                "%s oob:tcp:init ignoring %s from out list of connections",
+                                "%s oob:tcp:init adding %s to our list of V4 connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss));
-            continue;
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv4conns,
+                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv4masks, string);
+        } else {
+#if PRTE_ENABLE_IPV6
+            pmix_output_verbose(10, prte_oob_base.output,
+                                "%s oob:tcp:init adding %s to our list of V6 connections",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss));
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv6conns,
+                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv6masks, string);
+#endif // PRTE_ENABLE_IPV6
         }
         copied_interface = PMIX_NEW(pmix_pif_t);
         if (NULL == copied_interface) {
