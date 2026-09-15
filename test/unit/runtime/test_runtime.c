@@ -2205,6 +2205,95 @@ static int test_data_server_requestor(void)
     return failures;
 }
 
+/* What a relay hands the external server.  Exactly one identity claim goes
+ * out, and it names the process the far end must attribute the operation
+ * to: the requester itself, or - when the requester is a relay too, a tool
+ * of another DVM - the process IT was acting for.  That second case used to
+ * relay the tool, so every item that DVM published through us was the
+ * tool's: visible to all of its jobs on a NAMESPACE range, and taken by the
+ * first of its job-end purges. */
+static const pmix_info_t *relay_find(const pmix_info_t *info, size_t ninfo,
+                                     const char *key, size_t *count)
+{
+    const pmix_info_t *found = NULL;
+    size_t n;
+
+    *count = 0;
+    for (n = 0; n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, key)) {
+            found = &info[n];
+            (*count)++;
+        }
+    }
+    return found;
+}
+
+static int test_data_server_relay_directives(void)
+{
+    int failures = 0;
+    prte_job_t *toolj, *appj;
+    pmix_proc_t requestor, behalf;
+    pmix_info_t in[5], *out = NULL;
+    const pmix_info_t *hit;
+    size_t nout = 0, count;
+    uint32_t reluid = 7, relgid = 9, claim = 4242;
+
+    reset_globals();
+    toolj = make_job("relay.tool");
+    PRTE_FLAG_SET(toolj, PRTE_JOB_FLAG_TOOL);
+    CHECK("relay: tool job registered", PRTE_SUCCESS == prte_set_job_data_object(toolj));
+    appj = make_job("some.app");
+    CHECK("relay: app job registered", PRTE_SUCCESS == prte_set_job_data_object(appj));
+    PMIX_LOAD_PROCID(&behalf, "far.away.job", 3);
+
+    /* a tool relaying for a process of its own DVM, with the identity its
+     * own PMIx server appended after the claim */
+    PMIX_INFO_LOAD(&in[0], "prte.test.relay.key", "v", PMIX_STRING);
+    PMIX_INFO_LOAD(&in[1], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    PMIX_INFO_LOAD(&in[2], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&in[3], PMIX_USERID, &reluid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&in[4], PMIX_GRPID, &relgid, PMIX_UINT32);
+    PMIX_LOAD_PROCID(&requestor, "relay.tool", 0);
+    CHECK("relay: a tool's directives build",
+          PMIX_SUCCESS == prte_ds_relay_directives(in, 5, &requestor, &out, &nout));
+    CHECK("relay: the tool's claim is what is relayed", PMIX_CHECK_PROCID(&requestor, &behalf));
+    hit = relay_find(out, nout, PMIX_REQUESTOR, &count);
+    CHECK("relay: one PMIX_REQUESTOR goes out", 1 == count);
+    CHECK("relay: ...naming the process the tool acted for",
+          NULL != hit && PMIX_PROC == hit->value.type &&
+          PMIX_CHECK_PROCID(hit->value.data.proc, &behalf));
+    hit = relay_find(out, nout, PRTE_PUBLISH_REQ_UID, &count);
+    CHECK("relay: one claimed uid goes out, the tool's claim",
+          1 == count && NULL != hit && claim == hit->value.data.uint32);
+    hit = relay_find(out, nout, PRTE_PUBLISH_REQ_GID, &count);
+    CHECK("relay: absent a claimed gid, the requester's own goes out",
+          1 == count && NULL != hit && relgid == hit->value.data.uint32);
+    hit = relay_find(out, nout, "prte.test.relay.key", &count);
+    CHECK("relay: the published data goes out", 1 == count);
+    PMIX_INFO_FREE(out, nout);
+
+    /* an application process claiming to act for somebody is named as
+     * itself, and its claim does not travel */
+    PMIX_LOAD_PROCID(&requestor, "some.app", 1);
+    CHECK("relay: an application's directives build",
+          PMIX_SUCCESS == prte_ds_relay_directives(in, 5, &requestor, &out, &nout));
+    hit = relay_find(out, nout, PMIX_REQUESTOR, &count);
+    CHECK("relay: an application is relayed as itself",
+          1 == count && NULL != hit && PMIX_PROC == hit->value.type &&
+          PMIX_CHECK_NSPACE(hit->value.data.proc->nspace, "some.app") &&
+          1 == hit->value.data.proc->rank);
+    hit = relay_find(out, nout, PRTE_PUBLISH_REQ_UID, &count);
+    CHECK("relay: ...under the uid its server gave",
+          1 == count && NULL != hit && reluid == hit->value.data.uint32);
+    PMIX_INFO_FREE(out, nout);
+
+    for (count = 0; count < 5; count++) {
+        PMIX_INFO_DESTRUCT(&in[count]);
+    }
+    reset_globals();
+    return failures;
+}
+
 /* ------------------------------------------------------------------ */
 /* progress threads                                                   */
 /* ------------------------------------------------------------------ */
@@ -2506,6 +2595,7 @@ int main(void)
     failures += test_data_server_access();
     failures += test_data_server_ownership();
     failures += test_data_server_requestor();
+    failures += test_data_server_relay_directives();
     failures += test_data_server_collect();
     failures += test_data_server_cap();
     failures += test_data_server_purge_parked();

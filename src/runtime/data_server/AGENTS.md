@@ -121,6 +121,16 @@ Three things follow, and each is load-bearing:
   is trying to act under a peer's identity, and it is dropped. Call it
   *after* your own directive scan, or the relay's `PMIX_USERID` lands on top
   of the claim.
+- **A relay can be relaying for a relay**, and the claim it received is the
+  one it passes on. A DVM that is the external server for one DVM and points
+  at another in turn receives requests from the first DVM's master *as a
+  tool*, carrying `PMIX_REQUESTOR`. `prte_ds_relay_directives()` resolves the
+  requester through `prte_ds_check_requestor()` — the same rule a local store
+  applies — strips every incoming claim key, and appends exactly one. It
+  used to relay the tool itself, so every item that first DVM published
+  belonged to one tool: a `NAMESPACE`-range item was visible to all of its
+  jobs, and the first job-end purge took everything any of them had
+  published.
 - **The primary server must be named per operation.** PMIx sends a tool's
   client-side call to whichever attached server is currently primary, and a
   master may also be attached to a scheduler. `prte_pmix_set_primary_server()`
@@ -132,13 +142,23 @@ way `PMIX_REQUESTOR` can reach `ds_purge`. Two senders pack it
 (`pmix_server_unpublish_fn`, `send_purge()` in `state_base_fns.c`) and two
 readers unpack it (`prte_ds_purge`, `prte_ds_relay`); they change together.
 
+**Only a job that has used the external server is purged there.**
+`prte_ds_relay()` sets `PRTE_JOB_FLAG_EXTERNAL_DATA` on the requester's job
+(the master holds every job object, and every relay runs on the master), and
+`purge_data()` relays no horizon for a job without it. The `PROC` horizon
+fires once per terminating process, so relaying it regardless cost every
+process in the DVM a round trip to another DVM that could only answer
+"nothing here". A purge does not set the flag, and a process claimed by a
+tool of another DVM has no job object here — its purges come from its own
+master.
+
 **A purge that arrives as a message must name a namespace**, and `ds_purge`
 refuses one that does not. The empty namespace is a wildcard to
 `PMIX_CHECK_PROCID`, which the `SESSION` horizon relies on when the master
 purges its *own* store by a direct call — but a session id is a counter each
 DVM starts from 1, so it names nothing at the far end. The master used to
 relay its session purges anyway: the external server took *its own* jobs'
-session data whenever the ids coincided, which is always, and released every
+session data whenever the ids coincided - both count from 1 - and released every
 lookup parked in its store without answering it. `purge_data()` no longer
 relays the `SESSION` horizon (see `docs/todo.rst` for what that leaves), and
 the server refuses the shape if anything else sends it. The horizon and its
@@ -713,7 +733,9 @@ including the `PMIX_RANGE_SESSION` default a request carries. And
 that counting takes nothing — a `FIRST_READ` value is still there and still
 counted afterwards — that collecting returns every value and drops the item
 it empties, and that another user's item holding the key is reported as
-denied. And the purge (`test_data_server_purge_parked`): which horizons drop
+denied. And the relay's directive array (`test_data_server_relay_directives`):
+one claim goes out, naming a tool's claimed process or an application
+itself. And the purge (`test_data_server_purge_parked`): which horizons drop
 a parked lookup, by direct call and by message, and that a message naming no
 namespace, or a horizon that cannot be read, is refused. And the cap
 (`test_data_server_cap`): that evicting a user's only

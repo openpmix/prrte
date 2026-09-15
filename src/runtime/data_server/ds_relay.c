@@ -246,14 +246,20 @@ static void lkcb(pmix_status_t status, pmix_pdata_t data[], size_t ndata,
     PRTE_PMIX_THREADSHIFT(cd, prte_event_base, relay_complete);
 }
 
-/* Build the directive array we hand to PMIx: whatever the requester sent,
- * plus the requestor identity the far end needs to attribute the operation
- * correctly.  See the note at the head of this file. */
-static pmix_status_t load_directives(prte_ds_relay_t *cd,
-                                     pmix_info_t *info, size_t ninfo,
-                                     pmix_proc_t *requestor)
+/* Is this one of the keys a relay uses to say whom it acts for? */
+static bool is_claim(const char *key)
 {
-    size_t n;
+    return (PMIx_Check_key(key, PMIX_REQUESTOR) ||
+            PMIx_Check_key(key, PRTE_PUBLISH_REQ_UID) ||
+            PMIx_Check_key(key, PRTE_PUBLISH_REQ_GID));
+}
+
+/* see ds.h */
+pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
+                                       pmix_proc_t *requestor,
+                                       pmix_info_t **out, size_t *nout)
+{
+    size_t n, m, nclaims = 0;
     uint32_t uid = UINT32_MAX, gid = UINT32_MAX;
 
     /* The requester's own uid and gid are in the array we were handed -
@@ -268,21 +274,40 @@ static pmix_status_t load_directives(prte_ds_relay_t *cd,
             uid = info[n].value.data.uint32;
         } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
             gid = info[n].value.data.uint32;
+        } else if (is_claim(info[n].key)) {
+            nclaims++;
         }
     }
 
-    cd->ninfo = ninfo + 3;
-    PMIX_INFO_CREATE(cd->info, cd->ninfo);
-    if (NULL == cd->info) {
-        cd->ninfo = 0;
+    /* The requester may be a relay itself - a tool acting for a process of
+     * its own DVM, which is what a DVM pointed at us that we in turn point
+     * elsewhere sends.  Its claim is honored under the same rule a local
+     * store applies, and it is what we pass on.  Relaying the tool's own
+     * identity in place of the claim attributed every item of that other
+     * DVM to one tool: a NAMESPACE-range item became visible to all of its
+     * jobs, and the first job-end purge took everything any of them had
+     * published. */
+    prte_ds_check_requestor(requestor, &uid, &gid, info, ninfo);
+
+    /* ...and exactly one claim goes on.  A copied claim ahead of ours would
+     * lose only because check_requestor keeps the last it sees, which is
+     * no way to decide an identity. */
+    *nout = ninfo - nclaims + 3;
+    PMIX_INFO_CREATE(*out, *nout);
+    if (NULL == *out) {
+        *nout = 0;
         return PMIX_ERR_NOMEM;
     }
-    for (n = 0; n < ninfo; n++) {
-        PMIX_INFO_XFER(&cd->info[n], &info[n]);
+    for (n = 0, m = 0; n < ninfo; n++) {
+        if (is_claim(info[n].key)) {
+            continue;
+        }
+        PMIX_INFO_XFER(&(*out)[m], (pmix_info_t *) &info[n]);
+        m++;
     }
-    PMIX_INFO_LOAD(&cd->info[ninfo], PMIX_REQUESTOR, requestor, PMIX_PROC);
-    PMIX_INFO_LOAD(&cd->info[ninfo + 1], PRTE_PUBLISH_REQ_UID, &uid, PMIX_UINT32);
-    PMIX_INFO_LOAD(&cd->info[ninfo + 2], PRTE_PUBLISH_REQ_GID, &gid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&(*out)[m], PMIX_REQUESTOR, requestor, PMIX_PROC);
+    PMIX_INFO_LOAD(&(*out)[m + 1], PRTE_PUBLISH_REQ_UID, &uid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&(*out)[m + 2], PRTE_PUBLISH_REQ_GID, &gid, PMIX_UINT32);
     return PMIX_SUCCESS;
 }
 
@@ -349,6 +374,7 @@ pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
                             uint8_t command, pmix_data_buffer_t *buffer)
 {
     prte_ds_relay_t *cd;
+    prte_job_t *jdata;
     pmix_proc_t requestor;
     pmix_info_t *info = NULL;
     size_t ninfo = 0;
@@ -397,7 +423,7 @@ pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
         return rc;
     }
 
-    rc = load_directives(cd, info, ninfo, &requestor);
+    rc = prte_ds_relay_directives(info, ninfo, &requestor, &cd->info, &cd->ninfo);
     if (NULL != info) {
         PMIX_INFO_FREE(info, ninfo);
     }
@@ -435,6 +461,20 @@ pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) command,
                         PRTE_NAME_PRINT(&requestor),
                         PRTE_NAME_PRINT(&prte_pmix_server_globals.server));
+
+    /* Mark the job as one the external server holds something for, so the
+     * lifecycle purges know to tell it - and, far more often, know they need
+     * not.  A job that never reached the far end has nothing there to
+     * purge, and without the mark every process termination in the DVM
+     * cost a round trip to another DVM.  A purge is not use; neither is a
+     * claimed process of another DVM, which has no job object here and
+     * whose purges arrive from its own master. */
+    if (PRTE_PMIX_PURGE_PROC_CMD != command) {
+        jdata = prte_get_job_data_object(requestor.nspace);
+        if (NULL != jdata) {
+            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_EXTERNAL_DATA);
+        }
+    }
 
     switch (command) {
     case PRTE_PMIX_PUBLISH_CMD:
