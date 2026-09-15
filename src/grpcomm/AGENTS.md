@@ -719,6 +719,14 @@ can never complete, and the next fence with the same signature would
 *find* it, see a rollup expecting nothing, and answer immediately with
 data it never gathered.
 
+**A controller with no map for a participant's namespace counts itself in
+and keeps reading.** That is a namespace whose participants can only be on
+the controller (a tool connected to it, for instance). The resolution used
+to *stop* there, which dropped the daemons hosting every later entry of the
+signature and left the controller out too — the rollup expected nobody,
+converged on the controller's own contribution, and released before any
+other participant reported. `test_fence_tracker_mapless` pins both halves.
+
 **Every exit from the `fence()` handler destructs the signature it built
 and completes the caller.** The signature is a stack object with a
 malloc'd proc array that `get_tracker()` copies rather than adopts, so
@@ -853,6 +861,15 @@ otherwise microseconds.  Drive it at `rml_base_radix 1` so the tree is a chain
 and the delayed daemon is genuinely interior; hanging it off the HNP as a leaf
 tests nothing.  See the *"a contribution for the next round does not join this
 one"* case in `contrib/dockerswarm`.
+
+**A controller that cannot emit the release must abort, not return.**
+`converged` is latched before the release is built, and the recovery
+restart skips a converged tracker on the controller, so a pack or
+broadcast failure there used to hang every participant for good.
+`check_complete()` falls back to `abort_fence_op()`, the smallest release
+there is — the same rule the group collective follows.
+`test_fence_release_failure` drives it through the restart, the one way to
+converge a fence with no message in hand.
 
 **A release with no local callback still has data to free.** A daemon
 holding a tracker only because it relayed for its subtree has no `cbfunc`
