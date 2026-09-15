@@ -194,7 +194,7 @@ collective and the other is just freeing memory.
   by a *signature* — for `fence`, the array of participating procs
   (matched **byte-for-byte** with `memcmp`, so the order PMIx hands down
   is load-bearing); for `group`, the `groupID` + operation; for `xcast`,
-  an HNP-assigned globally-unique `op_id`. A signature lets
+  the pair (tree, `op_id`) — see *An op is its tree and its id* below. A signature lets
   independently-arriving pieces of the same collective find each other.
 - **Trackers.** Each daemon keeps a per-collective tracker on a global
   list, counting `nexpected` vs `nreported`. When a tracker completes
@@ -225,7 +225,8 @@ The most intricate file. `prte_grpcomm_xcast()` is just
    The initiating op is then discarded — it is not the tracked op. A
    master originator also enqueues one entry on `pending_completions`.
 3. **HNP assigns the op-id.** `sig.op_id == 0` becomes
-   `++op_id_inited` — globally unique and monotonic. A non-zero op-id
+   `++op_id_inited` for the tree the broadcast travels — unique and
+   monotonic **within that tree**, not across trees. A non-zero op-id
    arriving at the HNP is a bug (`PRTE_ERR_DUPLICATE_MSG`).
 4. **Forward down the tree** to each routing-tree child, then process
    locally.
@@ -474,6 +475,32 @@ the model — the swarm's wire is loopback, so `B` is enormous and no `d * k` a
 by ~250:1. Any compression number read off it is fiction; `--entropy` fills with
 an xorshift stream instead, which is the floor. Real modex data — endpoints,
 keys, addresses — sits much closer to the floor than to the ramp.
+
+### An op is its tree and its id
+
+Every tree keeps its own op-id sequence (`XCAST.tree[]`), and each starts
+at 1, so a routing-tree broadcast and a release-tree broadcast routinely
+carry the same number while both are in flight in the one `XCAST.ops`
+list. Anything that looks an op up or places it must compare **both**:
+
+- `find_op()` matches on topology and id. Matching on the id alone handed
+  a broadcast the other tree's op of the same number — the arrival was
+  taken for a duplicate and never forwarded or delivered (a lost launch
+  message, or a fence release that hung every participant), an ack was
+  counted against the wrong op, and on the master the
+  `pending_completions` FIFO was never popped, so every later callback
+  fired for the wrong broadcast. Nothing about it is rare at scale: a
+  full-modex release is in flight for seconds, and any routing broadcast
+  numbered the same in that window collides.
+- `insert_forwarded_op()` keeps ops in id order **per tree**; the trees
+  interleave freely. Its position and duplicate tests skip ops of other
+  trees — "before the first higher id of any tree" can put an op ahead of
+  a lower id of its own, and `finish_op()` then retires them out of order.
+  The newest op of a tree is simply appended, which is the path every
+  ordinary broadcast takes, so keep that case free of the walk.
+
+`test_xcast_tree_identity` (`test/unit/grpcomm`) drives the controller's
+receive and ack paths with one op of each tree held in flight.
 
 ### Ordering and fault tolerance
 

@@ -390,9 +390,15 @@ void prte_grpcomm_xcast_recv(
     uint32_t sender_version;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
     {
+        /* treated like every other field of the forward - a broadcast that
+         * cannot be read is lost to this daemon's whole subtree, and dropping
+         * it without a word left nothing to say where it went */
         int32_t cnt = 1;
-        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &sender_version,
-                                             &cnt, PMIX_UINT32)) {
+        int rc = PMIx_Data_unpack(NULL, buffer, &sender_version,
+                                  &cnt, PMIX_UINT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
             return;
         }
     }
@@ -1267,37 +1273,57 @@ static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
     return rc;
 }
 
+/* An op is found by its whole identity - the tree AND the id.  Every tree
+ * numbers its ops from 1, so the id alone names one op per tree, and the list
+ * holds ops of every tree at once.  Matching on the id alone handed a release
+ * broadcast the routing op that happened to share its number: the release was
+ * taken for a duplicate and never forwarded or delivered, and an ack for one
+ * was counted against the other. */
 static op_t* find_op(signature_t* sig){
     op_t* op = NULL;
     PMIX_LIST_FOREACH(op, &XCAST.ops, op_t){
-        if(sig->op_id == op->sig.op_id) return op;
+        if(sig->topology == op->sig.topology && sig->op_id == op->sig.op_id){
+            return op;
+        }
     }
     return NULL;
 }
 
+/* Ops are held in op-id order *within each tree*; the ops of different trees
+ * interleave in whatever order they arrived, and their ids say nothing about
+ * each other.  So both the position and the duplicate test look only at ops of
+ * the same tree - placing an op before the first higher id of ANY tree can put
+ * it ahead of a lower id of its own, and finish_op then retires the two out of
+ * order. */
 static op_t* insert_forwarded_op(signature_t* sig) {
     op_t* op = PMIX_NEW(op_t);
+    op_t* next_op;
     op->sig = *sig;
 
+    /* The ordinary case, and the one every broadcast takes: the newest op of
+     * its tree belongs after every op of that tree already held, so it goes
+     * on the end without walking the list.  Our caller has already looked it
+     * up, so it cannot be a duplicate. */
     if(sig->op_id == TREE_OF(*sig).op_id_inited){
         pmix_list_append(&XCAST.ops, &op->super);
-    } else {
-        op_t* next_op = NULL;
-        PMIX_LIST_FOREACH(next_op, &XCAST.ops, op_t){
-            if(next_op->sig.op_id > sig->op_id) break;
-        }
-        pmix_list_insert_pos(&XCAST.ops, &next_op->super, &op->super);
+        return op;
     }
 
-    op_t* prev = (op_t*) pmix_list_get_prev(op);
-    bool dup = prev != (op_t*) &XCAST.ops.pmix_list_sentinel
-        && prev->sig.op_id == op->sig.op_id;
-    if(dup){
-        PRTE_ERROR_LOG(PRTE_ERR_DUPLICATE_MSG);
-        pmix_list_remove_item(&XCAST.ops, &op->super);
-        PMIX_RELEASE(op);
-        return prev;
+    PMIX_LIST_FOREACH(next_op, &XCAST.ops, op_t){
+        if(next_op->sig.topology != sig->topology){
+            continue;
+        }
+        if(next_op->sig.op_id == sig->op_id){
+            PRTE_ERROR_LOG(PRTE_ERR_DUPLICATE_MSG);
+            PMIX_RELEASE(op);
+            return next_op;
+        }
+        if(next_op->sig.op_id > sig->op_id){
+            pmix_list_insert_pos(&XCAST.ops, &next_op->super, &op->super);
+            return op;
+        }
     }
+    pmix_list_append(&XCAST.ops, &op->super);
     return op;
 }
 
