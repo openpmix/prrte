@@ -149,6 +149,14 @@ For the communication-loss family — `COMM_FAILED`, `HEARTBEAT_FAILED`,
    `node-died` (unless `FAILED_TO_START`; and a daemon that was recorded
    but never placed has no `node`, so the message names it "unknown"
    rather than dereferencing NULL), call `prte_rml_route_lost`.
+   **Except while the DVM is first forming** (`!prte_dvm_started`): a
+   `FAILED_TO_START` daemon then skips the repair and falls through to the
+   abort below. On the HNP `prte_rml_route_lost` succeeds for any daemon, and
+   the sweep that follows ends jobs by terminating their procs - but nothing
+   is mapped before the DVM forms, so there is nothing to terminate, and the
+   launch waited forever for a daemon that had already exited (any daemon
+   that died at startup, e.g. one that found no usable interface, hung
+   `prterun`).
    On success **the HNP walks every job** and marks each proc that lived
    on the lost daemon's node `PRTE_PROC_STATE_TERM_WO_SYNC`, then
    `goto cleanup`. (That sweep used to be gated on `PRTE_PROC_MY_NAME->rank
