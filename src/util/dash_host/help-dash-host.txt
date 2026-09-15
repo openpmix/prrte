@@ -38,7 +38,7 @@ application.  Users can specify a a comma-delimited list of node
 names, each entry optionally containing a ":N" extension indicating
 the number of slots to assign to that entry:
 
-   --host node01:5,node02
+   --add-host node01:5,node02
 
 Only a DVM started in elastic mode ("--prtemca prte_elastic_mode 1")
 can change its membership.  Any other DVM is fixed for its lifetime,
@@ -59,16 +59,16 @@ The list can include nodes that are already part of the DVM — in this
 case, the number of slots available on those nodes will be set to the
 new specification, or adjusted as directed:
 
-   --host node01:5,node02
+   --add-host node01:5,node02
 
 would direct that node01 be set to 5 slots and node02 will have 1
 slot, while
 
-   --host node01:+5,node02
+   --add-host node01:+5,node02
 
 would add 5 slots to the current value for node01, and
 
-   --host node01:-5,node02
+   --add-host node01:-5,node02
 
 would subtract 5 slots from the current value.
 
