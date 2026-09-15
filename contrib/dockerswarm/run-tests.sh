@@ -1798,6 +1798,37 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: a dead waiter takes nothing"
+    # A process parks a PMIX_WAIT lookup and is killed.  Its lookup must go
+    # with it: left parked, the next publish of the key answered a process
+    # that no longer exists, and a FIRST_READ value was consumed on its
+    # behalf -- so the reader that came later, the one actually waiting for
+    # the handover, found nothing.  The lifecycle purges became direct calls
+    # and only the old message form dropped parked requests.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the dead-waiter test"
+    else
+        PRUN_BG /tmp/ds-orphan.out "--host node3:1 -n 1 $DS lookupwait prte.test.orphan 60"
+        sleep 8
+        if ! RUN 'grep -q "^WAITING" /tmp/ds-orphan.out'; then
+            skp "the waiting lookup never started; the dead-waiter case cannot run"
+        else
+            ON 3 'pkill -9 -f "dataserver lookupwait prte.test.orphan"; true'
+            sleep 5
+            out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.orphan handed first-read 0" 2>&1)
+            echo "$out" | grep -q '^PUBLISHED prte.test.orphan' \
+                || bad "the first-read publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(PRUN "--host node4:1 -n 1 $DS lookup prte.test.orphan" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.orphan handed' \
+                && ok "a killed process's parked lookup did not consume the value" \
+                || bad "the value went to a dead waiter: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "runtime/data_server: unpublish removes the data"
     # Only the publisher may unpublish its own keys, so this runs in one
     # process: publish, confirm, unpublish, confirm gone.

@@ -280,6 +280,15 @@ PRTE_EXPORT size_t prte_ds_collect(prte_data_req_t *req, char **keys,
  * nothing, while it must keep waiting. */
 PRTE_EXPORT bool prte_ds_answer_parked(prte_data_req_t *req);
 
+/* Send a parked request its one reply: room number, the command it
+ * answers, the status, and - when "pbo" is given - the values.  A status
+ * with no payload is read as the whole answer by the daemon-side receiver,
+ * so this is also how a parked request is told it failed.  It does not
+ * take the request off prte_data_store.pending or release it; the caller
+ * does both. */
+PRTE_EXPORT void prte_ds_reply_parked(prte_data_req_t *req, pmix_status_t status,
+                                      pmix_byte_object_t *pbo);
+
 /* Relay a request to the external data server named by
  * prte_data_server_uri, and answer the requesting daemon when it replies.
  * Returns PMIX_SUCCESS once it owns the request - including when the

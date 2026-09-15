@@ -485,7 +485,13 @@ static void purge_data(pmix_proc_t *target, pmix_persistence_t horizon,
 {
     prte_data_server_purge_local(target, horizon, qualifier);
 
-    if (NULL != prte_data_server_uri && PRTE_PROC_IS_MASTER) {
+    /* Not the SESSION horizon.  A session id is this DVM's own counter and
+     * names nothing at the far end, whose own sessions are numbered from
+     * the same place, and its target is "anybody": the external server
+     * refuses it rather than take its own sessions' data.  See docs/todo.rst
+     * for what that leaves unreclaimed. */
+    if (NULL != prte_data_server_uri && PRTE_PROC_IS_MASTER &&
+        PMIX_PERSIST_SESSION != horizon) {
         send_purge(PRTE_PROC_MY_HNP->rank, PRTE_RML_TAG_DATA_SERVER, target,
                    horizon, qualifier);
     }
