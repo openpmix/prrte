@@ -1306,6 +1306,94 @@ static int mkhostfile_and_activate(const char *path, const char *content,
     return mkhostfile_and_activate2(path, content, "file=", with_addhost);
 }
 
+/*
+ * Only an elastic DVM changes size.  Outside elastic mode a request that
+ * would grow or shrink it is refused before anything is inserted, launched or
+ * asked of a scheduler.  A non-elastic DVM used to serve them: an --add-host
+ * launched its daemon, and when that daemon did not start, the job that asked
+ * waited forever on a daemon count nothing would complete.
+ */
+static pmix_status_t resize_status;
+static bool resize_answered;
+
+static void resize_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                      void *cbdata, pmix_release_cbfunc_t release_fn,
+                      void *release_cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) release_cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo, cbdata, release_fn);
+
+    resize_status = status;
+    resize_answered = true;
+    /* release_fn thread-shifts the release onto an event base nothing runs
+     * in a unit test, so drop the request here instead */
+    PMIX_RELEASE(req);
+}
+
+static pmix_status_t resize_request(pmix_alloc_directive_t dir, bool with_nodes)
+{
+    prte_pmix_server_req_t *req = PMIX_NEW(prte_pmix_server_req_t);
+
+    req->allocdir = dir;
+    if (with_nodes) {
+        req->ninfo = 1;
+        req->info = PMIx_Info_create(1);
+        PMIX_INFO_LOAD(&req->info[0], PMIX_ALLOC_NODE_LIST, "resize-nosuch", PMIX_STRING);
+    }
+    /* not added to prte_pmix_server_globals.local_reqs: nothing here
+     * initializes that array, and growing an uninitialized one divides by
+     * its zero block size - a SIGFPE on x86, silently zero on arm64 */
+    req->infocbfunc = resize_cb;
+    resize_answered = false;
+    resize_status = PMIX_SUCCESS;
+    prte_ras_base_modify(0, 0, req);
+    return resize_answered ? resize_status : PMIX_ERR_TIMEOUT;
+}
+
+static int test_resize_requires_elastic(void)
+{
+    int failures = 0;
+    bool saved_elastic = prte_elastic_mode;
+    bool saved_ready = prte_dvm_ready;
+    bool saved_owned = prte_ras_base.scheduler_owned;
+    prte_job_t *jdata;
+
+    prte_elastic_mode = false;
+    prte_ras_base.scheduler_owned = false;
+    prte_dvm_ready = true;
+    fprintf(stdout, "-- the next test refuses size changes outside elastic mode;"
+                    " the messages it prints are expected --\n");
+
+    /* the prun directives, refused synchronously - before the DVM is held */
+    jdata = mkactivate_job(NULL, true);
+    CHECK("resize: --add-host refused", PRTE_ERR_NOT_SUPPORTED == prte_ras_base_add_hosts(jdata));
+    CHECK("resize: ...without holding the DVM", prte_dvm_ready);
+    PMIX_RELEASE(jdata);
+
+    /* growth is refused whatever the module would have made of it */
+    CHECK("resize: EXTEND refused",
+          PMIX_ERR_NOT_SUPPORTED == resize_request(PMIX_ALLOC_EXTEND, true));
+    CHECK("resize: NEW naming nodes refused",
+          PMIX_ERR_NOT_SUPPORTED == resize_request(PMIX_ALLOC_NEW, true));
+
+    /* under a scheduler, a NEW and a RELEASE both mean nodes changing hands */
+    prte_ras_base.scheduler_owned = true;
+    CHECK("resize: NEW under a scheduler refused",
+          PMIX_ERR_NOT_SUPPORTED == resize_request(PMIX_ALLOC_NEW, false));
+    CHECK("resize: RELEASE under a scheduler refused",
+          PMIX_ERR_NOT_SUPPORTED == resize_request(PMIX_ALLOC_RELEASE, true));
+    prte_ras_base.scheduler_owned = false;
+
+    prte_elastic_mode = saved_elastic;
+    prte_ras_base.scheduler_owned = saved_owned;
+    prte_dvm_ready = saved_ready;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_resize_requires_elastic\n");
+    }
+    return failures;
+}
+
 static int test_activate_hosts(void)
 {
     int failures = 0;
@@ -1315,6 +1403,7 @@ static int test_activate_hosts(void)
     prte_node_state_t *parked;
     char *relative;
     const char *hf = "prte_test_activate_hosts.txt";
+    bool saved_elastic;
     int i, npool;
 
     /* The "+e" forms select across the whole pool, so this test needs to own
@@ -1371,6 +1460,18 @@ static int test_activate_hosts(void)
     /* a job with no directive at all is not this function's business */
     CHECK("activate: no directive is a no-op",
           PRTE_SUCCESS == activate(NULL, false));
+
+    /* --activate brings nodes into the DVM, and only an elastic DVM changes
+     * size: outside elastic mode it is refused before anything is marked */
+    saved_elastic = prte_elastic_mode;
+    prte_elastic_mode = false;
+    fprintf(stdout, "-- the next case refuses --activate outside elastic mode;"
+                    " the message it prints is expected --\n");
+    CHECK("activate: refused outside elastic mode",
+          PRTE_ERR_NOT_SUPPORTED == activate("act-idle1", false));
+    CHECK("activate: nothing marked outside elastic mode",
+          PRTE_NODE_STATE_UP == idle1->state);
+    prte_elastic_mode = true;
 
     /* a name the allocation does not contain is refused - this is the whole
      * difference from --add-host, which would have inserted it */
@@ -1511,6 +1612,7 @@ static int test_activate_hosts(void)
     free(relative);
 
     prte_hnp_is_allocated = saved_alloc;
+    prte_elastic_mode = saved_elastic;
     for (i = 0; i < npool; i++) {
         nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
         if (NULL == nptr) {
@@ -1570,6 +1672,10 @@ static int test_activate_nodes(void)
     const char *hf2 = "prte_test_activate_nodes2.txt";
     char *both;
     int i, npool, n = -1;
+    bool saved_elastic = prte_elastic_mode;
+
+    /* every case here grows the DVM, which only an elastic one does */
+    prte_elastic_mode = true;
 
     /* own the pool, as the +e forms above require - the same reason applies
      * to "+all" here */
@@ -1620,6 +1726,7 @@ static int test_activate_nodes(void)
      * produces, since the command line spells it "file=<path>" */
     idle1->state = PRTE_NODE_STATE_UP;
     if (PRTE_SUCCESS != mkactfile(hf1, "actn-idle1\n")) {
+        prte_elastic_mode = saved_elastic;
         return failures + 1;
     }
     CHECK("activate_nodes: hostfile argument accepted",
@@ -1642,6 +1749,7 @@ static int test_activate_nodes(void)
     idle1->state = PRTE_NODE_STATE_UP;
     idle2->state = PRTE_NODE_STATE_UP;
     if (PRTE_SUCCESS != mkactfile(hf2, "actn-idle2\n")) {
+        prte_elastic_mode = saved_elastic;
         return failures + 1;
     }
     pmix_asprintf(&both, "%s,%s", hf1, hf2);
@@ -1665,6 +1773,7 @@ static int test_activate_nodes(void)
 
     /* the refusal covers the hostfile argument too */
     if (PRTE_SUCCESS != mkactfile(hf2, "actn-nosuch\n")) {
+        prte_elastic_mode = saved_elastic;
         return failures + 1;
     }
     CHECK("activate_nodes: an unknown host in the hostfile is refused",
@@ -1682,6 +1791,7 @@ static int test_activate_nodes(void)
         nptr->state = parked[i];
     }
     free(parked);
+    prte_elastic_mode = saved_elastic;
     pmix_pointer_array_set_item(prte_node_pool, idle1->index, NULL);
     pmix_pointer_array_set_item(prte_node_pool, idle2->index, NULL);
     PMIX_RELEASE(idle1);
@@ -1952,6 +2062,7 @@ int main(void)
     failures += test_hnp_dedup();
     failures += test_flag_string();
     failures += test_dvm_growing();
+    failures += test_resize_requires_elastic();
     failures += test_activate_hosts();
     failures += test_activate_nodes();
     failures += test_spawn_alloc();

@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -15,6 +15,10 @@
 PRRTE allows a user to expand an existing DVM prior to launching an
 application.  Users can specify a hostfile that contains a list of
 nodes to be added to the DVM using normal hostfile syntax.
+
+Only a DVM started in elastic mode (``--prtemca prte_elastic_mode 1``)
+can change its membership.  Any other DVM is fixed for its lifetime,
+and this option is refused.
 
 The list can include nodes that are already part of the DVM |mdash| in
 this case, the number of slots available on those nodes will be set to
