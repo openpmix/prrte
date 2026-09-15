@@ -56,8 +56,10 @@ and `src/prted/prted_comm.c`):
    each child transitions to `PRTE_PROC_STATE_RUNNING`.
 
 The same module also fields the kill/signal daemon commands
-(`PRTE_DAEMON_KILL_LOCAL_PROCS`, `PRTE_DAEMON_SIGNAL_LOCAL_PROCS`) and
-the errmgr's restart path.
+(`PRTE_DAEMON_KILL_LOCAL_PROCS`, `PRTE_DAEMON_SIGNAL_LOCAL_PROCS`). Its
+fifth entry point, `restart_proc`, has no caller anywhere in the tree -
+nothing restarts a proc through the odls today, so that path is exercised
+by nothing, including the swarm.
 
 ---
 
@@ -70,7 +72,7 @@ odls/
   base/
     base.h                  # framework globals struct, base-fn prototypes, the two caddy classes,
                             #   PRTE_ACTIVATE_LOCAL_LAUNCH / PRTE_ODLS_SET_ERROR macros
-    odls_base_frame.c       # open/close/register; MCA params; the spawn-thread pool; class instances
+    odls_base_frame.c       # open/close/register; MCA params; class instances
     odls_base_select.c      # component selection (pick ONE, highest priority)
     odls_base_default_fns.c  # THE big one: build msg, parse msg, wireup, env setup, spawn, waitpid,
                             #   kill, restart — everything a component reuses
@@ -616,7 +618,7 @@ computed proc state.
 | Type | Where | Purpose |
 |------|-------|---------|
 | `prte_odls_base_module_t` | `odls.h` | The 5-pointer vtable; the selected one lives in the global `prte_odls`. |
-| `prte_odls_globals_t` / `prte_odls_globals` | `base.h` / `frame.c` | Framework-wide state: the spawn-thread pool, xterm ranks, exec agent, signal policy. |
+| `prte_odls_globals_t` / `prte_odls_globals` | `base.h` / `frame.c` | Framework-wide state: xterm ranks, exec agent, signal policy, the cpuset-slice rendezvous list, the fork-publish fault injection. |
 | `prte_local_children` | `src/runtime/prte_globals` (a `pmix_pointer_array_t`) | The daemon's authoritative list of the procs it launched — every base fn iterates it. Allocated at framework open, released at close. |
 | `prte_odls_spawn_caddy_t` | `base.h` | Per-child fork caddy: `cmd`, `wdir`, `argv`, `env`, `jdata`, `app`, `child`, IOF `opts`, and the `fork_local` fn ptr. Carries `ev` for thread-shifting. Heap-allocated, released after spawn. |
 | `prte_odls_launch_local_t` | `base.h` | Per-node "start launching job J" caddy carried by `PRTE_ACTIVATE_LOCAL_LAUNCH`; holds `job`, `fork_local`, and a `retries` counter for the sys-limit backoff. |
