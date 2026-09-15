@@ -131,6 +131,7 @@ typedef uint8_t prte_node_flags_t;
 typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAGS_T PRTE_UINT16
 #define PRTE_JOB_FLAG_UPDATED           0x0001 // job has been updated and needs to be included in the pidmap message
+#define PRTE_JOB_FLAG_LAUNCH_PENDING    0x0002 // registered to launch, launch message not yet broadcast (master only)
 #define PRTE_JOB_FLAG_RESTARTED         0x0004 // some procs in this job are being restarted
 #define PRTE_JOB_FLAG_ABORTED           0x0008 // did this job abort?
 #define PRTE_JOB_FLAG_FORWARD_OUTPUT    0x0020 // forward output from the apps
