@@ -44,7 +44,7 @@ communications and will therefore abort. Please correct the network
 specification and retry.
 #
 [invalid if_inexclude]
-WARNING: An invalid value was given for oob_tcp_if_%s.  This
+WARNING: An invalid value was given for prte_if_%s.  This
 value will be ignored.
 
   Local host: %s
