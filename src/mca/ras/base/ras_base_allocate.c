@@ -812,6 +812,61 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
 }
 #endif /* defined(PMIX_ALLOC_ACTIVATE) */
 
+/*
+ * Only an elastic DVM changes size.
+ *
+ * Outside elastic mode the set of daemons is fixed for the life of the DVM,
+ * and none of the machinery a size change needs exists: no grow or shrink
+ * campaign is recorded, no launch fence is raised, and a daemon that fails to
+ * start on an added node has nothing to roll it back.  Requests that would
+ * have changed the DVM were nonetheless served - an --add-host launched its
+ * daemon, and when that daemon did not start, the job that asked for it
+ * waited forever on a daemon count that could no longer be reached, as did
+ * every later launch that needed a new daemon.  Refuse them instead, before
+ * anything is inserted, launched, or asked of a scheduler.
+ */
+static bool ras_base_resize_allowed(const char *request)
+{
+    if (prte_elastic_mode) {
+        return true;
+    }
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:dvm-not-elastic",
+                   true, request);
+    return false;
+}
+
+/* does this request name nodes to bring into the DVM? */
+static bool ras_base_request_names_nodes(prte_pmix_server_req_t *req)
+{
+    for (size_t n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST) ||
+            PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST) ||
+            PMIx_Check_key(req->info[n].key, PMIX_ADD_HOSTFILE)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* would returning this reservation's nodes shrink the DVM - does any member
+ * node run a daemon other than our own? */
+static bool ras_base_session_has_daemons(prte_session_t *session)
+{
+    prte_node_t *nd;
+
+    if (NULL == session || NULL == session->nodes) {
+        return false;
+    }
+    for (int i = 0; i < session->nodes->size; i++) {
+        nd = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
+        if (NULL != nd && NULL != nd->daemon &&
+            nd->daemon->name.rank != PRTE_PROC_MY_NAME->rank) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -850,6 +905,39 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
 
     // set the default response
     req->pstatus = PMIX_ERR_NOT_SUPPORTED;
+
+    /* Refuse a size change outside elastic mode before any module acts on
+     * it: the scheduler-owned ones ask their scheduler first, and an
+     * allocation granted to a request we then refuse would be stranded.
+     * EXTEND and ACTIVATE always grow the DVM.  Under a scheduler, so do NEW
+     * (it is served by asking for nodes) and RELEASE (the nodes go back).
+     * Without one, a NEW that names no nodes reserves nodes the DVM already
+     * has, and a release shrinks only if its nodes carry daemons - those two
+     * are decided where the nodes are known, below. */
+    if (!prte_elastic_mode) {
+        bool resize = false;
+
+        switch (req->allocdir) {
+        case PMIX_ALLOC_EXTEND:
+#if defined(PMIX_ALLOC_ACTIVATE)
+        case PMIX_ALLOC_ACTIVATE:
+#endif
+            resize = true;
+            break;
+        case PMIX_ALLOC_NEW:
+            resize = prte_ras_base.scheduler_owned || ras_base_request_names_nodes(req);
+            break;
+        case PMIX_ALLOC_RELEASE:
+            resize = prte_ras_base.scheduler_owned;
+            break;
+        default:
+            break;
+        }
+        if (resize &&
+            !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+            goto respond;
+        }
+    }
 
 #if defined(PMIX_ALLOC_ACTIVATE)
     if (PMIX_ALLOC_ACTIVATE == req->allocdir) {
@@ -2162,6 +2250,12 @@ static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
         req->pstatus = PMIX_ERR_NO_PERMISSIONS;
         return true;
     }
+    /* returning the nodes shrinks their daemons out of the DVM */
+    if (ras_base_session_has_daemons(rsession) &&
+        !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+        req->pstatus = PMIX_ERR_NOT_SUPPORTED;
+        return true;
+    }
     prte_ras_base_teardown_reservation(rsession, true);
     req->pstatus = PMIX_SUCCESS;
     return true;
@@ -2208,6 +2302,11 @@ static void ras_base_complete_release_request(prte_pmix_server_req_t *req)
         req->pstatus = prte_pmix_convert_rc(ret);
         return;
     }
+    if (0 < nranks && !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+        free(ranks);
+        req->pstatus = PMIX_ERR_NOT_SUPPORTED;
+        return;
+    }
 
     ret = ras_base_start_dvm_shrink(req, ranks, nranks, NULL, false);
     free(ranks);
@@ -2243,6 +2342,10 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
 static int ras_base_add_hosts_allowed(void)
 {
     prte_ras_base_selected_module_t *mod;
+
+    if (!ras_base_resize_allowed("--add-host / --add-hostfile")) {
+        return PRTE_ERR_NOT_SUPPORTED;
+    }
 
     if (prte_ras_base.scheduler_owned) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:add-host-managed", true);
@@ -3035,6 +3138,11 @@ int prte_ras_base_activate_hosts(prte_job_t *jdata)
     if (!found) {
         PMIX_DESTRUCT(&sel);
         return PRTE_SUCCESS;
+    }
+
+    if (!ras_base_resize_allowed("--activate")) {
+        PMIX_DESTRUCT(&sel);
+        return PRTE_ERR_NOT_SUPPORTED;
     }
 
     /* every token resolved, so the selection can now be committed */
