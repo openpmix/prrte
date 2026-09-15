@@ -7242,6 +7242,28 @@ test_resize_elastic() {
         bad "could not start a DVM for the non-elastic resize test"
     fi
     cleanup_swarm
+
+    banner "plm: an elastic grow whose daemon cannot start fails the job, not the DVM"
+    # The launch agent is the DVM's, so every daemon launched after formation
+    # fails to start - which is exactly the grow under test.  The grow
+    # campaign rolls the node back out, so the job that asked is told and the
+    # DVM carries on.
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca prte_launch_agent /bin/false --host node1:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout -k 5 60 prun --add-host node2:1 --host node2:1 -n 1 hostname' 2>&1); rc=$?
+        [ "$rc" != 0 ] && [ "$rc" != 124 ] \
+            && ok "a grow whose daemon failed to start failed the job (rc=$rc)" \
+            || bad "a grow whose daemon failed to start: rc=$rc: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN 'timeout -k 5 30 prun -n 2 hostname' 2>&1); rc=$?
+        n=$(echo "$out" | grep -cE '^node1$')
+        [ "$rc" = 0 ] && [ "$n" = 2 ] && ok "...and the DVM still runs jobs" \
+                                      || bad "DVM unusable after a failed grow (rc=$rc, lines=$n)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1; rc=$?
+        [ "$rc" = 0 ] && ok "...and pterm takes it down" || bad "pterm failed after a failed grow (rc=$rc)"
+    else
+        bad "could not start an elastic DVM for the failed-grow test"
+    fi
+    cleanup_swarm
 }
 
 test_linux() {
