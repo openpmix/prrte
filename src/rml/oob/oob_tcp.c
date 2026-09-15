@@ -337,9 +337,8 @@ int prte_oob_open(void)
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
-    // start the listeners
+    // start the listeners - which says for itself why none could be opened
     if (PRTE_SUCCESS != (rc = prte_oob_tcp_start_listening())) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "no-listeners", true);
         PRTE_ERROR_LOG(rc);
     }
     return rc;

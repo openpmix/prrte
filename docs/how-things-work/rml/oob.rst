@@ -61,6 +61,38 @@ The header is exchanged **only** among daemons of the same DVM, all running the
 same build, so it is **not** a stable ABI.  Its layout may change freely, but
 every daemon in a build must agree; there is no versioning.
 
+Interfaces and listeners
+------------------------
+
+``prte_oob_open`` (``oob_tcp.c``) chooses the local interfaces the transport
+will use, and ``prte_oob_tcp_start_listening`` (``oob_tcp_listener.c``) opens
+the sockets that accept connections on them.
+
+**Selection.**  Every IPv4 interface (and IPv6, in a build configured with
+``--enable-ipv6``) is a candidate, apart from those that look virtual (a name
+beginning ``vir``).  The ``prte_if_include`` or ``prte_if_exclude`` MCA
+parameter — interface names or CIDR subnets — then narrows the set.  A
+loopback address is kept only by the DVM controller, since a daemon on another
+node could never reach it, and only in two cases: ``prte_if_include`` selects
+it and nothing else, or the host has no other interface at all.  So
+``--prtemca prte_if_include lo`` (``lo0`` on macOS) confines a DVM that runs
+on a single node to loopback.  An *exclude* list that removes every other
+interface is not taken as such a request, and fails at startup.  A DVM that is
+confined to loopback but asked to start a daemon on another node fails too:
+that daemon finds no usable interface, and the controller ends the launch.
+
+**Listeners.**  One listening socket is opened per selected address — never on
+the wildcard address — and all of an address family's sockets share one port.
+A peer learns where to connect only from a daemon's contact URI, which names
+exactly the selected addresses and a single port for them, so nothing is lost
+by binding narrowly; binding the wildcard instead would accept connections on
+interfaces the user excluded, and expose a loopback-confined DVM on every
+external interface of its host.  The port is the first entry of
+``prte_static_ipv4_ports`` / ``prte_static_ipv6_ports`` if given, otherwise the
+first port in ``prte_dynamic_ipv4_ports`` / ``prte_dynamic_ipv6_ports`` that
+every address can take, otherwise one the kernel chooses.  A family on which no
+socket can be opened is dropped from the contact URI.
+
 Sending
 -------
 
