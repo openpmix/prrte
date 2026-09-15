@@ -57,6 +57,8 @@
 #    include <sys/wait.h>
 #endif
 
+#include <pmix_server.h>
+
 #include "constants.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -277,6 +279,9 @@ static int test_classes(void)
     CHECK("spawn bind_cpuset NULL", NULL == cd->bind_cpuset);
     CHECK("spawn bind_fatal false", !cd->bind_fatal);
     CHECK("spawn do_membind false", !cd->do_membind);
+    CHECK("spawn job attributes unresolved",
+          !cd->do_not_spawn && !cd->stop_on_exec && !cd->report_bindings &&
+          !cd->hwt_cpus && !cd->report_physical_cpus && NULL == cd->exec_agent);
 #if PRTE_HAVE_SCHED_SETAFFINITY
     CHECK("spawn bind_mask NULL", NULL == cd->bind_mask);
     CHECK("spawn bind_masksize 0", 0 == cd->bind_masksize);
@@ -287,6 +292,7 @@ static int test_classes(void)
     cd->argv = PMIx_Argv_split("a b c", ' ');
     cd->env = PMIx_Argv_split("X=1 Y=2", ' ');
     cd->bind_cpuset = hwloc_bitmap_alloc();
+    cd->exec_agent = strdup("/usr/bin/env");
     PMIX_RELEASE(cd);
 
     /* spawn caddy again, released untouched: the all-NULL destructor path
@@ -807,13 +813,155 @@ static int test_mempolicy(void)
     return failures;
 }
 
+/*
+ * A kill that arrives while a child is still being forked.
+ *
+ * launch_local flags a child ALIVE and hands it to a worker thread, and the
+ * child has no pid until that worker's fork reports back.  A kill in that
+ * window has nothing to signal - and must not signal pid 0, which is the
+ * daemon's own process group - but it must not write the child off as never
+ * started either: the fork is going ahead.  Doing so is what let the
+ * process run to its own end after its job was aborted, with the job
+ * waiting on it.  The child is marked for the fork's completion to kill.
+ */
+static int test_kill_during_launch(void)
+{
+    int failures = 0;
+    prte_proc_t *launching, *never;
+    pmix_pointer_array_t procs;
+    prte_proc_t *req;
+    int i;
+
+    launching = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&launching->name, "odls-kill-test", 0);
+    launching->pid = 0;
+    launching->state = PRTE_PROC_STATE_INIT;
+    PRTE_FLAG_SET(launching, PRTE_PROC_FLAG_ALIVE);
+    pmix_pointer_array_add(prte_local_children, launching);
+
+    /* ...versus one that was never dispatched at all */
+    never = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&never->name, "odls-kill-test", 1);
+    never->pid = 0;
+    never->state = PRTE_PROC_STATE_INIT;
+    pmix_pointer_array_add(prte_local_children, never);
+
+    PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&procs, 2, INT_MAX, 2);
+    req = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&req->name, "odls-kill-test", PMIX_RANK_WILDCARD);
+    pmix_pointer_array_add(&procs, req);
+
+    nsignalled = 0;
+    prte_odls_base_default_kill_local_procs(&procs, recording_signal);
+
+    CHECK("nothing is signaled without a pid", 0 == nsignalled);
+    CHECK("a child still launching is marked for its launch to kill",
+          PRTE_FLAG_TEST(launching, PRTE_PROC_FLAG_KILL_PENDING));
+    CHECK("...and is not written off as terminated",
+          PRTE_PROC_STATE_INIT == launching->state &&
+          !PRTE_FLAG_TEST(launching, PRTE_PROC_FLAG_WAITPID));
+    CHECK("...and is still alive", PRTE_FLAG_TEST(launching, PRTE_PROC_FLAG_ALIVE));
+    CHECK("a child never dispatched is not marked",
+          !PRTE_FLAG_TEST(never, PRTE_PROC_FLAG_KILL_PENDING));
+    CHECK("...it is simply recorded as over",
+          PRTE_PROC_STATE_TERMINATED == never->state &&
+          PRTE_FLAG_TEST(never, PRTE_PROC_FLAG_WAITPID));
+
+    PMIX_RELEASE(req);
+    PMIX_DESTRUCT(&procs);
+    for (i = 0; i < prte_local_children->size; i++) {
+        prte_proc_t *p = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+        if (NULL != p) {
+            pmix_pointer_array_set_item(prte_local_children, i, NULL);
+            PMIX_RELEASE(p);
+        }
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_kill_during_launch\n");
+    }
+    return failures;
+}
+
+/*
+ * The cpuset-slice rendezvous (odls_base_default_fns.c).
+ *
+ * A daemon parks whichever half of a launch arrives first - the broadcast
+ * launch message or its own slice of the bindings - on
+ * prte_odls_globals.pending_slices.  What it parks for a job has to go when
+ * the DVM cleans that job up: a parked launch otherwise outlives the job it
+ * belongs to, and would register and fork a finished job's procs if the
+ * slice turned up after all.  The lookup is also strict: a namespace we
+ * could not decode must not match - and so discard - somebody else's parked
+ * launch.
+ */
+static int test_slice_discard(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t *buf;
+    pmix_nspace_t ns, other, bogus;
+    int32_t nprocs = 0;
+    pmix_status_t rc;
+
+    PMIX_LOAD_NSPACE(ns, "odls-slice-test@1");
+    PMIX_LOAD_NSPACE(other, "odls-slice-test@2");
+    PMIX_LOAD_NSPACE(bogus, NULL);
+
+    CHECK("no slices parked to begin with",
+          0 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+
+    /* a slice that beats its launch message here */
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &ns, 1, PMIX_PROC_NSPACE);
+    CHECK("pack slice nspace", PMIX_SUCCESS == rc);
+    rc = PMIx_Data_pack(NULL, buf, &nprocs, 1, PMIX_INT32);
+    CHECK("pack slice count", PMIX_SUCCESS == rc);
+    prte_odls_base_recv_cpuset_slice(PRTE_SUCCESS, NULL, buf, 0, NULL);
+    PMIX_DATA_BUFFER_RELEASE(buf);
+    CHECK("an early slice is parked",
+          1 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+    CHECK("...and a parked slice is not a launch awaiting one",
+          !prte_odls_base_awaiting_cpusets(ns));
+
+    prte_odls_base_discard_slices(bogus);
+    CHECK("an invalid namespace discards nothing",
+          1 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+    prte_odls_base_discard_slices(other);
+    CHECK("another job's namespace discards nothing",
+          1 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+
+    prte_odls_base_discard_slices(ns);
+    CHECK("cleaning the job up discards its slice",
+          0 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+    prte_odls_base_discard_slices(ns);
+    CHECK("...and doing it twice is harmless",
+          0 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_slice_discard\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
+    pmix_status_t prc;
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
+        return 1;
+    }
+
+    /* the slice test packs a buffer, and PMIx_Data_pack refuses to run
+     * until PMIx itself is up - a daemon gets there through
+     * PMIx_server_init, so do the same */
+    prc = PMIx_server_init(NULL, NULL, 0);
+    if (PMIX_SUCCESS != prc) {
+        fprintf(stderr, "PMIx_server_init failed: %s\n", PMIx_Error_string(prc));
+        prte_finalize();
         return 1;
     }
 
@@ -836,8 +984,13 @@ int main(void)
     failures += test_child_pipe_protocol();
     failures += test_signal_skips_dead_procs();
     failures += test_mempolicy();
+    failures += test_slice_discard();
+    failures += test_kill_during_launch();
 
+    /* frameworks before PMIx: under --enable-mca-dso, finalizing PMIx
+     * unloads the components the close would call into */
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
+    PMIx_server_finalize();
     prte_finalize();
 
     if (0 == failures) {

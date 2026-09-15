@@ -408,7 +408,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd, int gate_fd)
 
 #if PRTE_HAVE_STOP_ON_EXEC
     {
-        if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
+        if (cd->stop_on_exec) {
             errno = 0;
             i = ptrace(PRTE_TRACEME, 0, 0, 0);
             if (0 != errno) {
@@ -558,22 +558,18 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             close(read_fd);
-
-            if (NULL != cd->child) {
-                cd->child->state = PRTE_PROC_STATE_UNDEF;
-            }
             rc = prte_pmix_convert_status(rc);
             return rc;
         }
 
-        /* Otherwise, we got a warning or error message from the child */
-        if (NULL != cd->child) {
-            if (msg.fatal) {
-                PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            } else {
-                PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            }
-        }
+        /* Otherwise, we got a warning or error message from the child.
+         *
+         * NB: none of this writes to the child object, and nothing in this
+         * file may.  We run on a worker thread while the progress thread's
+         * reaper and IOF handlers can reach the same object; the base
+         * records what our return code says, on the progress thread (see
+         * spawn_done in odls_base_default_fns.c).  The pid is the one
+         * exception, and it is published behind the gate. */
 
         /* Render the human-readable diagnostic here in the parent, where
            allocation and show_help are safe. */
@@ -585,10 +581,6 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
            closed, indicating that the child launched
            successfully). */
         if (msg.fatal) {
-            if (NULL != cd->child) {
-                cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            }
             close(read_fd);
             return PRTE_ERR_SILENT;
         }
@@ -597,10 +589,6 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     /* If we got here, it means that the pipe closed without
        indication of a fatal error, meaning that the child process
        launched successfully. */
-    if (NULL != cd->child) {
-        cd->child->state = PRTE_PROC_STATE_RUNNING;
-        PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_ALIVE);
-    }
     close(read_fd);
 
     return PRTE_SUCCESS;
@@ -625,10 +613,6 @@ static int fork_local_proc(void *cdptr)
         cd->argv = malloc(sizeof(char *) * 2);
         if (NULL == cd->argv) {
             PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
-            if (NULL != child) {
-                child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                child->exit_code = PMIX_ERR_OUT_OF_RESOURCE;
-            }
             return PMIX_ERR_OUT_OF_RESOURCE;
         }
         cd->argv[0] = strdup(cd->app->app);
@@ -645,10 +629,6 @@ static int fork_local_proc(void *cdptr)
        the pipe, then the child was letting us know why it failed. */
     if (pipe(p) < 0) {
         PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
-        if (NULL != child) {
-            child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PMIX_ERR_SYS_LIMITS_PIPES;
-        }
         return PMIX_ERR_SYS_LIMITS_PIPES;
     }
 
@@ -663,10 +643,6 @@ static int fork_local_proc(void *cdptr)
         PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
         close(p[0]);
         close(p[1]);
-        if (NULL != child) {
-            child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PMIX_ERR_SYS_LIMITS_PIPES;
-        }
         return PMIX_ERR_SYS_LIMITS_PIPES;
     }
 
@@ -691,10 +667,6 @@ static int fork_local_proc(void *cdptr)
         close(gate[1]);
         close(p[0]);
         close(p[1]);
-        if (NULL != child) {
-            child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PMIX_ERR_SYS_LIMITS_CHILDREN;
-        }
         return PMIX_ERR_SYS_LIMITS_CHILDREN;
     }
 

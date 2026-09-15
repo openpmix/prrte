@@ -649,6 +649,14 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             goto CLEANUP;
         }
 
+        /* whatever half of this job's launch we are still holding for the
+         * other half to arrive, it is not going to be used now - and that
+         * includes a slice for a job whose launch message never came, so
+         * this comes before the job lookup */
+        if (!PRTE_PROC_IS_MASTER) {
+            prte_odls_base_discard_slices(job);
+        }
+
         /* look up job data object */
         if (NULL == (jdata = prte_get_job_data_object(job))) {
             /* we can safely ignore this request as the job

@@ -272,6 +272,12 @@ static void sccon(prte_odls_spawn_caddy_t *p)
     p->wdir = NULL;
     p->argv = NULL;
     p->env = NULL;
+    p->do_not_spawn = false;
+    p->stop_on_exec = false;
+    p->report_bindings = false;
+    p->hwt_cpus = false;
+    p->report_physical_cpus = false;
+    p->exec_agent = NULL;
     p->bind_cpuset = NULL;
     p->bind_fatal = false;
     p->do_membind = false;
@@ -297,6 +303,9 @@ static void scdes(prte_odls_spawn_caddy_t *p)
     }
     if (NULL != p->env) {
         PMIx_Argv_free(p->env);
+    }
+    if (NULL != p->exec_agent) {
+        free(p->exec_agent);
     }
     if (NULL != p->bind_cpuset) {
         hwloc_bitmap_free(p->bind_cpuset);

@@ -329,6 +329,7 @@ typedef uint16_t prte_proc_flags_t;
 #define PRTE_PROC_FLAG_DATA_RECVD       0x1000 // modex data for this proc has been received
 #define PRTE_PROC_FLAG_SM_ACCESS        0x2000 // indicate if process can read modex data from shared memory region
 #define PRTE_PROC_FLAG_TERM_REPORTED    0x4000 // proc termination has been reported
+#define PRTE_PROC_FLAG_KILL_PENDING     0x8000 // ordered to die while its fork was still in flight
 
 
 /***   PROCESS ATTRIBUTE KEYS   ***/
