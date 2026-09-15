@@ -604,7 +604,7 @@ There are two layers, and the split is dictated by what needs a live DVM.
 
 | Binary | Covers |
 |--------|--------|
-| `test_rml` | `prte_oob_split_and_resolve`: turning an if_include/if_exclude string into the interface list the transport binds to. Pure parsing, no socket. |
+| `test_rml` | `prte_oob_split_and_resolve`: turning an if_include/if_exclude string into the interface list the transport binds to; and `prte_oob_open` with real sockets - the loopback rule, and listeners bound to the selected addresses rather than the wildcard. |
 | `test_rml_routing` | The radix math (`radix.h`), the routing tree (`compute_routing_tree`, `get_route`, `get_subtree_index`, `get_num_contributors`), the dead/absent-rank restoration across a recompute, the lateral-link registry and its overlap-with-the-tree rule, the boot-epoch incarnation guard, `prte_rml_purge`, and `prte_rml_parse_uris`. |
 
 `test_rml_routing` stands `prte_rml_base` up by hand rather than calling

@@ -27,7 +27,7 @@ transport actually exists; that abstraction is precisely what was removed.
 | `oob_tcp.c` | OOB `open`/`close`/`register`: MCA parameter registration, local interface discovery, listener startup, the connection-handshake `recv_handler`, and `simulate_node_failure` (test hook). |
 | `oob_tcp_component.c` | Class instances for peers/addresses/messages, plus the `lost_connection` and `failed_to_connect` event handlers. |
 | `oob_tcp_connection.c` | The per-peer connection state machine: connect with retry/backoff, the IDENT ack/nack handshake, accept, and close. |
-| `oob_tcp_listener.c` | Listening sockets and the accept path. |
+| `oob_tcp_listener.c` | Listening sockets - one per selected address, sharing a port - and the accept path. |
 | `oob_tcp_sendrecv.c`, `.h` | The socket send/recv event handlers and their queueing macros. The recv-completion path decides **deliver locally vs. relay onward**. |
 | `oob_tcp_hdr.h` | The on-wire message header, `prte_oob_tcp_hdr_t`. |
 | `oob_tcp_peer.h` | The peer object (`prte_oob_tcp_peer_t`): name, addresses, socket, state, send queue, retry bookkeeping. |
@@ -373,6 +373,42 @@ the RML's incarnation table (`prte_rml_epoch_ok`, bootstrap only), which
 reallocates; it carries its own mutex in `src/rml/rml.c`. Anything else you make
 a socket handler call has to be safe off the main thread or has to be shifted.
 
+## Interface selection and the listeners
+
+`prte_oob_open` picks the interfaces; `prte_oob_tcp_start_listening` opens a
+socket on each. Two rules here are easy to break by "simplifying":
+
+- **Loopback is decided after the include list, not before.** `interface_selected()`
+  applies the address-family, `vir*`, and include/exclude filters. The master
+  keeps loopback only when no non-loopback interface survived them *and*
+  either an include list was given or the host has no non-loopback interface
+  at all. Deciding over every interface on the host - as the code once did -
+  silently discarded a loopback the user had explicitly included whenever the
+  host had any other interface, so `prte_if_include=lo0` for a single-node job
+  failed with "no usable network interfaces". Do not extend it to exclude
+  lists: an exclude that removes every real interface must fail at startup
+  (the `test_rml` swarm phase asserts that diagnostic). Falling back to
+  loopback there started the DVM and handed every remote daemon an address it
+  could not use. A daemon never keeps loopback: its peers are on other nodes.
+- **Listeners bind the selected addresses, never the wildcard.** One socket
+  per selected address (deduplicated - `pmix_if_list` can list an address
+  twice), all of a family on **one port**. One port because `set_addr` pairs
+  every address in a URI with the *first* port listed (`atoi` of the whole
+  port field), and because a static port - and the bootstrap's synthesized
+  URIs - assume the same port everywhere; per-address ports would advertise
+  ports nobody dials. With a kernel-chosen port the first address picks it and
+  the rest are bound to match, retrying a few times if another address has it
+  taken. Binding the wildcard would accept connections on excluded interfaces,
+  which is what made a loopback-confined macOS DVM still need the firewall's
+  permission for incoming connections. A family that cannot be listened on is
+  removed from the contact URI (`unadvertise()`), so no peer dials a dead port.
+- **Each family carries its own mask list** (`ipv4masks`, `ipv6masks`),
+  indexed like its address list. A single shared list gave an IPv6-enabled
+  build's URIs the other family's prefix lengths.
+- **`pmix_ifmatches` answers in PMIx status codes.** Anything other than
+  `PMIX_SUCCESS` or `PMIX_ERR_NOT_FOUND` is a specification it could not parse;
+  comparing its result against a `PRTE_ERR_*` code never matches.
+
 ## Gotchas before you edit
 
 - **Peer/socket state belongs to one thread at a time.** Cross-thread entry into
@@ -447,7 +483,14 @@ a socket handler call has to be safe off the main thread or has to be shifted.
 ## Testing
 
 `prte_oob_split_and_resolve` — the interface-selection parser — is covered by
-`test/unit/rml/test_rml`, which runs under `make check` with no DVM. So is the
+`test/unit/rml/test_rml`, which runs under `make check` with no DVM. So is
+`prte_oob_open` itself, with real sockets (`test_listeners_bound_to_selection`:
+no wildcard listener, every listener advertised, one port per family;
+`test_loopback_include_honored`: a loopback-only include opens on the master,
+binds only loopback, and is refused on a daemon; an exclude list that leaves
+only loopback is refused on the master too). Those two must run before
+`test_payload_outlives_sends`, whose `PMIx_server_finalize` takes PMIx's
+interface list down for the rest of the binary. Also covered: the
 handshake reader (`test_handshake_never_waits`, over a `socketpair`: a valid
 IDENT one byte at a time, a lone byte, a foreign namespace, a payload too
 short for its ack flag), the dial guard (`test_stale_attempt_does_not_dial`),
@@ -462,4 +505,6 @@ else in this directory needs sockets between real daemons and lives in the
 intermediate hop (which needs `--prtemca rml_base_radix 2`, since a ten-node
 DVM at the default radix 64 is flat), a payload large enough to force partial
 writes and reads, the message-size guard, interface include/exclude actually
-binding, and the teardown path when a daemon dies under a live DVM.
+binding (and binding *only* the selected interface, on both the HNP and a
+prted, checked with `ss`), a loopback-only single-node job, and the teardown
+path when a daemon dies under a live DVM.

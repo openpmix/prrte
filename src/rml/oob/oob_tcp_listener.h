@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,6 +48,7 @@ struct prte_oob_tcp_listener_t {
     bool tcp6;
     int sd;
     uint16_t port;
+    struct sockaddr_storage addr; // the address this socket is bound to
 };
 typedef struct prte_oob_tcp_listener_t prte_oob_tcp_listener_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_listener_t);
