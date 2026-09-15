@@ -90,6 +90,18 @@ In elastic mode the function also records a **grow campaign** and raises
   backpointers rather than trusting the first — see the framework guide
   for the shrink-then-grow case that motivated it.
 
+When a target fails to start, `prte_plm_base_grow_target_failed()` rolls its
+campaign back (`grow_rollback`), aborts the pre-map held jobs, and - once no
+campaign remains - calls `grow_failed_release_cache()`. That last step is the
+failure half of `VM_READY`'s re-entry: an `--add-host`, `--add-hostfile` or
+`--activate` marks the DVM not-ready and parks its job in `prte_cache`, and
+nothing else would ever mark it ready again. It answers the cached jobs that
+asked to grow with `ALLOC_FAILED` and launches the rest, taking the former
+out of the cache *before* draining it (the drain spawns synchronously). It is
+deliberately **not** called from `prte_plm_base_grow_drain(false)`, whose only
+caller is the DVM shutting down - releasing the cache there would launch jobs
+into a DVM on its way out.
+
 ---
 
 ## The daemon callback — `prte_plm_base_daemon_callback`
