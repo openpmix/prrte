@@ -106,10 +106,10 @@
  *       only the publisher may unpublish its own data.  Prints
  *       "UNPUBLISHED" and then the lookup outcome.
  *
- *       The two ranges are separate on purpose.  Duplicate keys are allowed
- *       on different ranges, so an unpublish removes only what was published
- *       to the range IT names (PMIX_RANGE_SESSION when it names none) - give
- *       the two arguments different values and the item must survive.
+ *       The two ranges are separate on purpose.  Removal is decided by
+ *       ownership, not by the range the unpublish names, so an owner takes
+ *       back what it published whatever the second argument says - give the
+ *       two different values and the item must still go.
  *
  * <range> is one of session (default), namespace, local, proc-local, global.
  *
