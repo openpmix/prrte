@@ -1199,6 +1199,9 @@ char* prte_print_job_flags(struct prte_job_t *ptr)
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_ERR_REPORTED)) {
         PMIx_Argv_append_nosize(&tmp, "ERROR-REPORTED");
     }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_EXTERNAL_DATA)) {
+        PMIx_Argv_append_nosize(&tmp, "EXTERNAL-DATA");
+    }
     ans = PMIx_Argv_join(tmp, '|');
     PMIx_Argv_free(tmp);
     return ans;

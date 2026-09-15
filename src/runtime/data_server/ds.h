@@ -298,6 +298,18 @@ PRTE_EXPORT pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
                                         uint8_t command,
                                         pmix_data_buffer_t *buffer);
 
+/* Build the directive array prte_ds_relay() hands to PMIx: the requester's
+ * own directives, less any identity claim, plus exactly one claim of our
+ * own - PMIX_REQUESTOR, PRTE_PUBLISH_REQ_UID and PRTE_PUBLISH_REQ_GID -
+ * naming the process the far end must attribute the operation to.  A
+ * requester that is itself a relay (a tool, under the rule
+ * prte_ds_check_requestor() applies) has its claim passed on; anybody else
+ * is named as itself.  "requestor" is updated to the identity relayed, and
+ * *out is the caller's to PMIX_INFO_FREE. */
+PRTE_EXPORT pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
+                                                   pmix_proc_t *requestor,
+                                                   pmix_info_t **out, size_t *nout);
+
 /* Honor the identity a RELAYED request claims: PMIX_REQUESTOR names the
  * process it is being made on behalf of, and PRTE_PUBLISH_REQ_UID /
  * PRTE_PUBLISH_REQ_GID that process's effective uid and gid.  Only a TOOL
