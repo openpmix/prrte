@@ -192,6 +192,35 @@ allocators would actually take.
 
 ## Who may add a node
 
+**Only an elastic DVM changes size.** Outside `prte_elastic_mode` the DVM's
+daemons are fixed for its lifetime, and none of the grow or shrink bookkeeping
+exists - no campaign, no launch fence, no rollback of a daemon that fails to
+start. `ras_base_resize_allowed()` refuses (`ras-base:dvm-not-elastic`)
+every request that would change the daemon set, and each check sits where it
+can still be refused cleanly:
+
+- `--add-host`/`--add-hostfile` in `ras_base_add_hosts_allowed()` and
+  `--activate` in `prte_ras_base_activate_hosts()` - synchronously, before
+  the DVM is held and the job parked (see the placement rule below);
+- `PMIX_ALLOC_EXTEND` and `PMIX_ALLOC_ACTIVATE` at the top of
+  `prte_ras_base_modify()`, and `PMIX_ALLOC_NEW`/`PMIX_ALLOC_RELEASE` there too
+  when the allocation is `scheduler_owned` (a NEW is served by asking the
+  scheduler for nodes, a release gives them back) or a NEW names nodes. This
+  is before any module runs, because the scheduler-owned modules ask their
+  scheduler first and an allocation granted to a request refused afterwards
+  would be stranded;
+- without a scheduler, a release by node list in
+  `ras_base_complete_release_request()` only when it has shrink targets, and
+  a release by allocation id in `ras_base_teardown_by_alloc_id()` only when
+  the reservation's nodes carry daemons. A NEW that names no nodes reserves
+  nodes the DVM already has, and a release of daemon-less nodes shrinks
+  nothing; both stay legal.
+
+A non-elastic DVM used to serve these. An `--add-host` launched its daemon,
+and when that daemon failed to start the requester waited forever on a daemon
+count nothing would complete - and so did every later launch that needed a
+new daemon.
+
 Each module states, in `prte_ras_base_module_t::scheduler_owned`, whether an
 external resource manager owns what it allocated. Slurm, PBS, LSF, Flux,
 gridengine and the PMIx scheduler say yes; hosts, bootstrap, simulator and
@@ -614,8 +643,9 @@ Elastic shrink is a two-phase collective: `PMIX_ALLOC_RELEASE` records a
 `prte_shrink_campaign_t`, xcasts the shrink command with a completion
 callback (`shrink_xcast_complete` → thread-shifted
 `shrink_campaign_complete`), which does a single batch routing-tree
-repair and per-target HNP teardown. This only engages under
-`prte_elastic_mode`; outside it the release is fire-and-forget.
+repair and per-target HNP teardown. Outside `prte_elastic_mode` a release
+that would remove a daemon is refused (see "Only an elastic DVM changes
+size" above).
 
 ---
 

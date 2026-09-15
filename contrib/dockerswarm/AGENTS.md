@@ -334,11 +334,12 @@ in a non-login `docker exec` shell (login shells get it automatically).
 Both `grow` and `shrink` should print
 `PHASE 2 (completion): received event PMIX_DVM_IS_READY` followed by `SUCCESS`.
 
-> **The flag that bites you.** PRRTE gates *all* of the grow/shrink launch-fence
-> and completion-event machinery behind `prte_elastic_mode` (default off).
-> Without `--prtemca prte_elastic_mode 1`, a grow returns phase-1 SUCCESS and
-> even launches daemons, but **never completes** — the client times out after
-> 60s. Always start with the flag.
+> **The flag that bites you.** Only an elastic DVM changes size, and
+> `prte_elastic_mode` is off by default. Without `--prtemca prte_elastic_mode 1`
+> every grow or shrink - `elastic grow`, `--add-host`, `--add-hostfile`,
+> `--activate`, a release that removes a daemon - is refused with
+> "A request to change the size of the DVM was refused". Always start with the
+> flag.
 
 > **Capturing HNP verbose output.** `prte --daemonize` detaches from stdio, so
 > a `>/tmp/prte.out` redirect captures nothing. To trace the HNP, run it in the

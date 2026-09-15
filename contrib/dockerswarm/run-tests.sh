@@ -7209,6 +7209,41 @@ test_include() {
     cleanup_swarm
 }
 
+test_resize_elastic() {
+    local out rc n
+
+    banner "ras: a DVM that is not elastic refuses to change size"
+    # Outside elastic mode the DVM's daemons are fixed for its lifetime, and
+    # none of the grow bookkeeping exists.  --add-host used to be served
+    # anyway: its daemon was launched, and when that daemon did not start the
+    # job that asked waited forever on a daemon count nothing would complete.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout -k 5 60 prun --add-host node2:1 -n 1 hostname' 2>&1); rc=$?
+        [ "$rc" != 0 ] && [ "$rc" != 124 ] \
+            && ok "--add-host refused by a non-elastic DVM (rc=$rc)" \
+            || bad "--add-host on a non-elastic DVM: rc=$rc: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q "elastic mode" \
+            && ok "...and said the DVM is not elastic" \
+            || bad "no elastic-mode diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        [ "$(prted_count 2)" = 0 ] && ok "...without launching a daemon" \
+                                   || bad "a daemon was launched on node2 anyway"
+        out=$(RUN 'timeout -k 5 60 prun --activate node2 -n 1 hostname' 2>&1); rc=$?
+        [ "$rc" != 0 ] && [ "$rc" != 124 ] \
+            && ok "--activate refused by a non-elastic DVM (rc=$rc)" \
+            || bad "--activate on a non-elastic DVM: rc=$rc: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN 'timeout -k 5 30 prun -n 2 hostname' 2>&1); rc=$?
+        n=$(echo "$out" | grep -cE '^node1$')
+        [ "$rc" = 0 ] && [ "$n" = 2 ] && ok "the DVM still runs jobs after the refusals" \
+                                      || bad "DVM unusable after a refused resize (rc=$rc, lines=$n)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the non-elastic resize test"
+    fi
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx "${NODE}1"; then
         # Name the swarm we looked for. Forgetting PRTE_SWARM on the compose
@@ -8185,7 +8220,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     # --daemonize, because a daemonized HNP detaches from its output and the
     # trace this case reads would go nowhere.
     cleanup_swarm
-    RUN_BG /tmp/prte.out 'prte --prtemca plm_base_verbose 5 --host node1:1,node2:1'
+    # --add-host changes the DVM, which only an elastic one may do.
+    RUN_BG /tmp/prte.out 'prte --prtemca prte_elastic_mode 1 --prtemca plm_base_verbose 5 --host node1:1,node2:1'
     sleep 8
     if RUN 'pgrep -x prte >/dev/null'; then
         first=$(RUN 'grep -c "setup_vm add new daemon" /tmp/prte.out' | tr -d '\r')
@@ -8843,7 +8879,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     # chain only runs multi-node, and its parser is separate from the flex
     # hostfile parser precisely so it can accept the slots=+N adjust syntax.
     cleanup_swarm
-    RUN 'nohup prte --daemonize --host node1:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --host node1:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     if RUN 'pgrep -x prte >/dev/null'; then
         RUN 'printf "node2 slots=2\nnode3 slots=2\n" > /tmp/addhosts.txt'
         out=$(RUN 'timeout 90 prun --add-hostfile /tmp/addhosts.txt --host node2:2,node3:2 -n 4 --map-by node hostname' 2>&1)
@@ -8870,6 +8906,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    test_resize_elastic
+
     banner "ras/hosts: --activate brings an allocated-but-idle node into the DVM"
     # The other half of the resize surface, and the only one permitted where a
     # scheduler owns the allocation: it starts a daemon on a node the
@@ -8887,7 +8925,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     cleanup_swarm
     # four allocated, two in the DVM: node3 exercises the named form and node4
     # the "+all" form, so neither is already in when its turn comes
-    RUN 'nohup prte --daemonize --prtemca prte_max_vm_size 2 --host node1:2,node2:2,node3:2,node4:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca prte_max_vm_size 2 --host node1:2,node2:2,node3:2,node4:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     if RUN 'pgrep -x prte >/dev/null'; then
         [ "$(prted_count 3 4)" = 0 ] \
             && ok "max_vm_size left node3+node4 allocated with no daemon" \

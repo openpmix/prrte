@@ -86,6 +86,15 @@ If the node you named is one the scheduler already granted, and you only want
 a daemon started on it, use "--activate" instead - it can name nothing the
 allocation does not already contain, so it needs no authority PRRTE lacks.
 
+[ras-base:dvm-not-elastic]
+A request to change the size of the DVM was refused:
+
+  Request: %s
+
+This DVM was not started in elastic mode, so the set of nodes it runs daemons
+on is fixed for its lifetime: nodes can be neither added to it nor released
+from it.  Start the DVM with "--prtemca prte_elastic_mode 1" to allow this.
+
 [ras-base:add-host-unsupported]
 An add-host or add-hostfile directive was given, but no active component can
 serve it.
