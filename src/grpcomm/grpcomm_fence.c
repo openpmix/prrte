@@ -64,7 +64,7 @@ static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body
 static bool tree_gather_converged(prte_grpcomm_fence_t *coll);
 static int  tree_gather_contribute(prte_grpcomm_fence_t *coll,
                                    pmix_data_buffer_t *payload);
-static void tree_gather_answer(prte_grpcomm_fence_t *coll);
+static int  tree_gather_answer(prte_grpcomm_fence_t *coll);
 
 /* PMIX_COLLECT_DATA is the whole of the classification, and its absence is a
  * barrier: a caller that named no directive asked to synchronize and nothing
@@ -470,8 +470,12 @@ static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
         return;
     }
     /* xcast copies the payload, so the buffer is still ours to free */
-    (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
+    rc = prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
     PMIX_DATA_BUFFER_RELEASE(reply);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        return;
+    }
     /* the tracker goes when that release comes back around */
     coll->aborting = true;
 }
@@ -794,8 +798,13 @@ static void fence(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
         bo.bytes = cd->data;
         bo.size = cd->ndata;
-        PMIx_Data_embed(&bkt, &bo);
-        rc = PMIx_Data_copy_payload(relay, &bkt);
+        /* an embed that failed leaves bkt empty, and an empty payload is a
+         * valid contribution - so unchecked, this daemon's data would vanish
+         * from the result while the rollup counted it as delivered */
+        rc = PMIx_Data_embed(&bkt, &bo);
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_copy_payload(relay, &bkt);
+        }
         PMIX_DATA_BUFFER_DESTRUCT(&bkt);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -1166,6 +1175,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
  * without depending on a message being present. */
 static void check_complete(prte_grpcomm_fence_t *coll)
 {
+    int rc;
 
     if (coll->converged || coll->aborting) {
         return;
@@ -1181,7 +1191,17 @@ static void check_complete(prte_grpcomm_fence_t *coll)
         prte_event_del(&coll->tev);
         coll->tev_active = false;
     }
-    tree_gather_answer(coll);
+    rc = tree_gather_answer(coll);
+    if (PRTE_SUCCESS != rc && PRTE_PROC_IS_MASTER) {
+        /* `converged` is latched, so nothing will drive this tracker again,
+         * and the recovery restart skips a converged tracker on the
+         * controller because its release should already be on the wire.  A
+         * controller that could not emit the release would therefore hang
+         * every participant in the DVM for good.  The abort is the smallest
+         * release there is - a signature and a status - so it is the one
+         * still worth trying. */
+        abort_fence_op(coll, prte_pmix_convert_rc(rc));
+    }
 }
 
 static bool tree_gather_converged(prte_grpcomm_fence_t *coll)
@@ -1215,7 +1235,7 @@ static int tree_gather_contribute(prte_grpcomm_fence_t *coll,
  * controller alone holds the answer, so it must fan the whole payload back out
  * over the tree, and for a full modex that fanout is essentially the entire
  * cost of the collective. */
-static void tree_gather_answer(prte_grpcomm_fence_t *coll)
+static int tree_gather_answer(prte_grpcomm_fence_t *coll)
 {
     pmix_data_buffer_t *reply, *framed;
     pmix_info_t *info = NULL;
@@ -1231,13 +1251,13 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            return;
+            return rc;
         }
         rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_INT32);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            return;
+            return prte_pmix_convert_status(rc);
         }
         /* Which round is being ended.  Carrying it down as well as up is what
          * lets a daemon that has not been present for every fence over these
@@ -1247,7 +1267,7 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            return;
+            return rc;
         }
         /* A barrier's release is the signature and the status: there is
          * nothing gathered to hand back, and saying so by sending nothing is
@@ -1260,13 +1280,16 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                return;
+                return prte_pmix_convert_status(rc);
             }
         }
         /* xcast copies the payload, so the buffer is still ours to free */
-        (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
+        rc = prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
+        return rc;
     }
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
@@ -1279,7 +1302,7 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+        return rc;
     }
 
     /* the aggregate travels as a contribution like any other, so it names its
@@ -1289,13 +1312,13 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+        return rc;
     }
     rc = fence_gen_pack(reply, coll->generation);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+        return rc;
     }
 
     /* rebuild the directives we accumulated */
@@ -1321,7 +1344,7 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
         PMIX_ERROR_LOG(rc);
         PMIX_INFO_FREE(info, ninfo);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+        return prte_pmix_convert_status(rc);
     }
     if (0 < ninfo) {
         rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
@@ -1329,7 +1352,7 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            return;
+            return prte_pmix_convert_status(rc);
         }
     }
 
@@ -1338,7 +1361,7 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            return;
+            return prte_pmix_convert_status(rc);
         }
     }
 
@@ -1349,13 +1372,14 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
     PMIX_DATA_BUFFER_RELEASE(reply);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(framed);
-        return;
+        return rc;
     }
     PRTE_RML_SEND(rc, PRTE_PROC_MY_PARENT->rank, framed, PRTE_RML_TAG_FENCE);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(framed);
     }
+    return rc;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1715,12 +1739,32 @@ static int create_dmns(prte_grpcomm_fence_signature_t *sig,
         }
         map = (prte_job_map_t*)jdata->map;
         if (NULL == map || 0 == map->num_nodes) {
-            /* we haven't generated a job map yet - if we are the HNP,
-             * then we should only involve ourselves. Otherwise, we have
-             * no choice but to abort to avoid hangs */
+            /* We haven't generated a job map yet - if we are the HNP, then
+             * the only daemon hosting these participants is us. Otherwise, we
+             * have no choice but to abort to avoid hangs.
+             *
+             * Involving ourselves means adding ourselves, and it means going
+             * on to the rest of the signature. Stopping here dropped every
+             * daemon hosting the entries after this one, and left us out as
+             * well - so the rollup was sized to expect nobody, converged on
+             * our own contribution alone, and released the answer before any
+             * other participant had reported. */
             if (PRTE_PROC_IS_MASTER) {
-                rc = PRTE_SUCCESS;
-                break;
+                found = false;
+                PMIX_LIST_FOREACH(nm, &ds, prte_namelist_t)
+                {
+                    if (nm->name.rank == PRTE_PROC_MY_NAME->rank) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    nm = PMIX_NEW(prte_namelist_t);
+                    PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace,
+                                     PRTE_PROC_MY_NAME->rank);
+                    pmix_list_append(&ds, &nm->super);
+                }
+                continue;
             }
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
