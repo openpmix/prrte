@@ -1015,7 +1015,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
     PRTE_RML_RELIABLE_SEND(
         rc, PRTE_PROC_MY_HNP->rank, xcast_msg, PRTE_RML_TAG_XCAST
     );
-    if (PMIX_SUCCESS != rc) {
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         if (NULL != pc) {
             pmix_list_remove_item(&XCAST.pending_completions, &pc->super);
@@ -1186,7 +1186,7 @@ static void finish_op(op_t* op) {
     }
 #define DIRECT_XCAST_UNPACK(buf, ptr, type)                            \
     {                                                                  \
-        int _count = 1;                                                \
+        int32_t _count = 1;                                            \
         int rc = PMIx_Data_unpack(NULL, buf, ptr, &_count, type);      \
         if (PMIX_SUCCESS != rc) {                                      \
             PMIX_ERROR_LOG(rc);                                        \
@@ -1327,25 +1327,6 @@ static op_t* insert_forwarded_op(signature_t* sig) {
     return op;
 }
 
-/* MOVEMENT: send the whole payload to each routing-tree child.
- *
- * Right for a small message, where the cost is the depth of the tree and a
- * high radix makes that 1 or 2 hops.  Wrong for a large one: a node with r
- * children serializes r full copies of the payload on its outbound link, at
- * every level, so the bandwidth term is d*r*M*beta - which is the entire cost
- * of broadcasting a launch message or a preload chunk at scale.
- *
- * The forward is byte-for-byte identical for every child - it carries the
- * op-id, the ack-id and the payload, none of which depend on the destination -
- * so it is packed once here and shared by every send.  Packing it per child
- * cost a full copy of the payload per child, and all of those copies were made
- * on the progress thread inside this one event callback, before any of them
- * could reach the wire: at the default radix, 64 copies of a launch message
- * made and held before the first byte moved.
- *
- * That is why pack_forward_msg takes no destination.  If a forward ever does
- * need to differ per child, this is the loop that has to go back to packing
- * inside it - the sharing is not an optimization the RML can make on its own. */
 /* Who this daemon relays to, and who relays to it, in a given tree.
  *
  * The routing tree's answer is already computed and cached - it is consulted
@@ -1414,6 +1395,25 @@ static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo)
     return PRTE_PROC_MY_PARENT->rank;
 }
 
+/* MOVEMENT: send the whole payload to each child in the op's tree.
+ *
+ * Right for a small message, where the cost is the depth of the tree and a
+ * high radix makes that 1 or 2 hops.  Wrong for a large one: a node with r
+ * children serializes r full copies of the payload on its outbound link, at
+ * every level, so the bandwidth term is d*r*M*beta - which is the entire cost
+ * of broadcasting a launch message or a preload chunk at scale.
+ *
+ * The forward is byte-for-byte identical for every child - it carries the
+ * op-id, the ack-id and the payload, none of which depend on the destination -
+ * so it is packed once here and shared by every send.  Packing it per child
+ * cost a full copy of the payload per child, and all of those copies were made
+ * on the progress thread inside this one event callback, before any of them
+ * could reach the wire: at the default radix, 64 copies of a launch message
+ * made and held before the first byte moved.
+ *
+ * That is why pack_forward_msg takes no destination.  If a forward ever does
+ * need to differ per child, this is the loop that has to go back to packing
+ * inside it - the sharing is not an optimization the RML can make on its own. */
 static void tree_whole_forward(op_t* op){
     pmix_rank_t* children;
     prte_rml_payload_t* payload;
@@ -1569,10 +1569,11 @@ static void forward_op(op_t* op){
  *
  * Dropping the expectation is the answer rather than failing the broadcast,
  * because a daemon that joins after op N was never going to see op N anyway:
- * the late-joiner catch-up in insert_forwarded_op has it adopt ops 1..N-1 as
- * complete when it arrives.  This only makes the sender agree with that.  A
- * child that genuinely died is a separate story and still takes the fault
- * handler's path, which recomputes nexpected and starts a fresh ack round. */
+ * the late-joiner catch-up in prte_grpcomm_xcast_recv has it adopt ops
+ * 1..N-1 as complete when it arrives.  This only makes the sender agree with
+ * that.  A child that genuinely died is a separate story and still takes the
+ * fault handler's path, which recomputes nexpected and starts a fresh ack
+ * round. */
 static void forward_lost(int status, pmix_proc_t *peer,
                          pmix_data_buffer_t *buffer,
                          prte_rml_tag_t tag, void *cbdata)
