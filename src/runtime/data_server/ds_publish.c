@@ -370,7 +370,14 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REPLACE)) {
             /* the publisher is updating something it published itself */
             replace = PMIX_INFO_TRUE(&info[n]);
-
+        } else if (PMIx_Check_key(info[n].key, PMIX_TIMEOUT)) {
+            /* A directive the Standard defines for PMIx_Publish, and one
+             * the daemon has already acted on (pmix_server_pub.c) - not
+             * data.  It used to fall through to the store as a published
+             * key named "pmix.timeout", so the same user's next publish
+             * that carried a timeout collided with it and was refused as a
+             * duplicate, whatever it was actually publishing. */
+            continue;
         } else {
             /* add it to the list of data */
             ds1 = PMIX_NEW(prte_info_item_t);
