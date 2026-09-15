@@ -197,9 +197,8 @@ typedef struct {
     bool joined_late;
     bool joined_late_known;
     // Send a fence's release down the low-radix tree rather than the routing
-    // tree. Off by default: the tree we have is the one we know works, and
-    // there is no measurement yet that says which is better on hardware where
-    // the cost model's constants mean what it assumes.
+    // tree. On by default; turning it off restores the single-tree behaviour
+    // exactly - see "Turning the release onto its own tree" in AGENTS.md.
     bool low_radix_release;
 } prte_grpcomm_globals_t;
 
@@ -247,14 +246,6 @@ void prte_grpcomm_fence_restart(void);
 
 PRTE_EXPORT extern prte_grpcomm_globals_t prte_grpcomm_globals;
 
-/* How a completed collective is released to every daemon that took part.
- * Today that is always a broadcast of the gathered result, because fence and
- * group both roll up to the controller and only the controller has the
- * answer.  It is indirected because that is precisely the part a different
- * release changes - an allgather would leave every daemon already holding
- * the result, with nothing to release - and because it is the only way the
- * unit test can see the release a controller would emit without standing up
- * an RML.  Production code sets this once, at startup, and never again. */
 /* Broadcast on a named tree. prte_grpcomm_xcast_nb is this with the routing
  * tree, which is what almost every caller wants. */
 PRTE_EXPORT
@@ -263,17 +254,28 @@ int prte_grpcomm_xcast_topo(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
                             prte_grpcomm_xcast_complete_fn_t cbfunc,
                             void *cbdata);
 
-/* The one seam every collective's release goes through - two sites in the
- * fence, two in the group. Putting the tree choice here rather than at each
- * of them is what stops the two collectives drifting into different methods
- * for the same job. */
+/* How a completed collective is released to every daemon that took part.
+ * Today that is always a broadcast of the gathered result, because fence and
+ * group both roll up to the controller and only the controller has the
+ * answer.  It is indirected because that is precisely the part a different
+ * release changes - an allgather would leave every daemon already holding
+ * the result, with nothing to release - and because it is the only way the
+ * unit test can see the release a controller would emit without standing up
+ * an RML.  Production code sets this once, at startup, and never again.
+ *
+ * It is the one seam every collective's release goes through - two sites in
+ * the fence, two in the group. Putting the tree choice here rather than at
+ * each of them is what stops the two collectives drifting into different
+ * methods for the same job. */
 typedef int (*prte_grpcomm_release_bcast_fn_t)(prte_rml_tag_t tag, pmix_data_buffer_t *msg);
 PRTE_EXPORT extern prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast;
-/* Which tree a release for this tag travels - the decision alone, so it can
- * be asserted without a DVM to send over. */
+
 /* Told by the RML that a lateral link died - see the definition for why a
  * derived tree needs this and the routing tree does not. */
 PRTE_EXPORT void prte_grpcomm_xcast_lateral_lost(pmix_rank_t rank);
+
+/* Which tree a release for this tag travels - the decision alone, so it can
+ * be asserted without a DVM to send over. */
 PRTE_EXPORT prte_grpcomm_topology_t prte_grpcomm_release_topology(prte_rml_tag_t tag);
 PRTE_EXPORT int prte_grpcomm_release_bcast_select(prte_rml_tag_t tag,
                                                   pmix_data_buffer_t *msg);
@@ -649,67 +651,6 @@ PRTE_EXPORT extern
 void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
                                 	 pmix_data_buffer_t *buffer,
                                 	 prte_rml_tag_t tag, void *cbdata);
-
-static inline void print_signature(prte_grpcomm_group_signature_t *sig)
-{
-    char **msg = NULL;
-    char *tmp;
-    size_t n;
-
-    PMIx_Argv_append_nosize(&msg, "SIGNATURE:");
-    pmix_asprintf(&tmp, "\tOP: %s", PMIx_Group_operation_string(sig->op));
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-
-    pmix_asprintf(&tmp, "\tGRPID: %s", sig->groupID);
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-
-    pmix_asprintf(&tmp, "\tASSIGN CTXID: %s", sig->assignID ? "T" : "F");
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-
-    if (sig->assignID) {
-        pmix_asprintf(&tmp, "\tCTXID: %lu", sig->ctxid);
-        PMIx_Argv_append_nosize(&msg, tmp);
-        free(tmp);
-    }
-
-    pmix_asprintf(&tmp, "\tNMEMBERS: %lu", sig->nmembers);
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-    if (0 < sig->nmembers) {
-        for (n=0; n < sig->nmembers; n++) {
-            pmix_asprintf(&tmp, "\t\t%s", PMIX_NAME_PRINT(&sig->members[n]));
-            PMIx_Argv_append_nosize(&msg, tmp);
-            free(tmp);
-        }
-    }
-
-    pmix_asprintf(&tmp, "\tBOOTSTRAP: %lu", sig->bootstrap);
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-
-    pmix_asprintf(&tmp, "\tFOLLOWER: %s", sig->follower ? "T" : "F");
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-
-    pmix_asprintf(&tmp, "\tNADDMEMBERS: %lu", sig->naddmembers);
-    PMIx_Argv_append_nosize(&msg, tmp);
-    free(tmp);
-    if (0 < sig->naddmembers) {
-        for (n=0; n < sig->naddmembers; n++) {
-            pmix_asprintf(&tmp, "\t\t%s", PMIX_NAME_PRINT(&sig->addmembers[n]));
-            PMIx_Argv_append_nosize(&msg, tmp);
-            free(tmp);
-        }
-    }
-
-    tmp = PMIx_Argv_join(msg, '\n');
-    PMIx_Argv_free(msg);
-    pmix_output(0, "%s", tmp);
-    free(tmp);
-}
 
 END_C_DECLS
 

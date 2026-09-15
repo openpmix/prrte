@@ -727,10 +727,6 @@ static void fence(int sd, short args, void *cbdata)
         }
     }
 
-    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
-                         "%s grpcomm: fence",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-
     // execute the fence operation
     PMIX_DATA_BUFFER_CREATE(relay);
     /* pack the signature */
@@ -1021,6 +1017,21 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     if (PRTE_GRPCOMM_FENCE_GEN_UNKNOWN == gen) {
         gen = prte_grpcomm_fence_gen_next(sig);
     }
+
+    /* A contribution from a daemon outside all of our subtrees is not ours to
+     * aggregate - we are not its parent.  Screened before the lookup, because
+     * the lookup creates: a tracker built for a message we then refuse is one
+     * nothing else will ever report to. */
+    slot = -1;
+    if (sender->rank != PRTE_PROC_MY_NAME->rank) {
+        slot = prte_rml_get_subtree_index(sender->rank);
+        if (0 > slot) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PMIX_RELEASE(sig);
+            return;
+        }
+    }
+
     if (NULL == (coll = get_tracker(sig, gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PMIX_RELEASE(sig);
@@ -1043,27 +1054,17 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         }
     }
 
-    /* Identify which child subtree this came from, and drop it whole if that
-     * subtree has already been heard from - see the matching note in the group
-     * path. Only the *test* happens here: the accounting is committed below,
-     * once the message has parsed, so a truncated one cannot leave a subtree
-     * counted with none of its data merged. */
-    slot = -1;
-    if (sender->rank == PRTE_PROC_MY_NAME->rank) {
+    /* Drop it whole if that subtree (or we ourselves) has already been heard
+     * from - see the matching note in the group path. Only the *test* happens
+     * here: the accounting is committed below, once the message has parsed,
+     * so a truncated one cannot leave a subtree counted with none of its data
+     * merged. */
+    if (0 > slot) {
         if (coll->self_reported) {
             return;
         }
-    } else {
-        slot = prte_rml_get_subtree_index(sender->rank);
-        if (0 > slot) {
-            /* not in any of our subtrees - we are not this daemon's parent,
-             * so this contribution is not ours to aggregate */
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            return;
-        }
-        if (pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
-            return;
-        }
+    } else if (pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
+        return;
     }
 
     // unpack the info structs
@@ -1774,7 +1775,7 @@ static int create_dmns(prte_grpcomm_fence_signature_t *sig,
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
                                  "%s grpcomm:fence::create_dmns called for all procs in job %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_JOBID_PRINT(sig->signature[0].nspace)));
+                                 PRTE_JOBID_PRINT(sig->signature[n].nspace)));
             /* all daemons hosting this jobid are participating */
             for (i = 0; i < map->nodes->size; i++) {
                 if (NULL == (node = pmix_pointer_array_get_item(map->nodes, i))) {
@@ -1904,9 +1905,15 @@ static int fence_sig_unpack(pmix_data_buffer_t *buffer,
         PMIX_RELEASE(s);
         return prte_pmix_convert_status(rc);
     }
+    /* the count the unpack takes is an int32_t, so a size it cannot hold is
+     * a corrupt message rather than a signature */
+    if (INT32_MAX < s->sz) {
+        PMIX_RELEASE(s);
+        return PRTE_ERR_BAD_PARAM;
+    }
     if (0 < s->sz) {
         PMIX_PROC_CREATE(s->signature, s->sz);
-        cnt = s->sz;
+        cnt = (int32_t) s->sz;
         rc = PMIx_Data_unpack(NULL, buffer, s->signature, &cnt, PMIX_PROC);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
