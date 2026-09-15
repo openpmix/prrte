@@ -37,13 +37,11 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
 
 #include "src/runtime/data_server/prte_data_server.h"
