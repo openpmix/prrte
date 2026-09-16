@@ -51,6 +51,7 @@ typedef struct {
 typedef size_t (*json_load_callback_t)(void *buffer, size_t buflen, void *data);
 
 json_t *json_loads(const char *input, size_t flags, json_error_t *error);
+json_t *json_loadb(const char *buffer, size_t buflen, size_t flags, json_error_t *error);
 json_t *json_load_callback(json_load_callback_t callback, void *data,
                            size_t flags, json_error_t *error);
 int json_unpack(json_t *root, const char *fmt, ...);
@@ -60,7 +61,9 @@ int json_unpack_ex(json_t *root, json_error_t *error, size_t flags,
 json_t *json_incref(json_t *json);
 void json_decref(json_t *json);
 
+json_t *json_object(void);
 json_t *json_object_get(const json_t *object, const char *key);
+int json_object_set_new(json_t *object, const char *key, json_t *value);
 size_t json_array_size(const json_t *array);
 json_t *json_array_get(const json_t *array, size_t index);
 
