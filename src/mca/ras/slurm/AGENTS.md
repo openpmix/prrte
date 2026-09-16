@@ -273,9 +273,42 @@ coverage follows that seam.
 | `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is one of the two automated builds that configure `--with-jansson`, so `ras_slurm_jansson.c` is compiled nowhere else |
 | the same surface against a scheduler that can refuse it | [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) — ten containers running a real SLURM, so `salloc` really allocates, `scontrol update ... ReqNodeList=` really has to be a resize SLURM accepts on a RUNNING job, and the JSON is SLURM's own |
 
+### A job record is streamed, never held
+
+Slurm prints every socket and every core of every allocated node, so a
+record grows with the total core count of the job's nodes: on a 10k-node DVM
+it is hundreds of megabytes, and several times that again as a jansson DOM.
+
+`prte_ras_slurm_json_run` therefore walks the record with
+`src/util/prte_json_window.c` through a fixed 1MB window
+(`PRTE_SLURM_JSON_WINDOW_SIZE`). The walker knows nothing about JSON beyond
+the punctuation between values: it hands this file the bytes of a member it
+asks for, and measures and discards every other member as it arrives. Jansson
+only ever sees the bytes of a member this file wants. Two entry points sit on
+it:
+
+- `prte_ras_slurm_read_job_fields` returns an object holding just the named
+  members, so the helpers that used to read a whole record work unchanged.
+- `prte_ras_slurm_walk_alloc_nodes` reports `job_resources.nodes.allocation`
+  one element at a time, releasing each before the next is read.
+
+The members to keep are listed by name and everything else goes, whatever it
+holds. `gres_detail` carries one string per node and arrives *before*
+`job_resources`, so discarding only the member known to be large would have
+left that one in memory.
+
+Two consequences worth knowing. The record is always drained, so `scontrol`
+exits on its own terms and its status means what it says. And
+`threads_per_core` is a member of the job that Slurm prints *after* the node
+array, which is why `add_modified_resources` settles slot counts once the
+walk returns rather than inside it.
+
+The only size that can still be refused is a single member larger than the
+window, which is reported by name and maps to `PMIX_ERR_OUT_OF_RESOURCE`.
+
 ### The extensions are a separate build gate: SLURM 24.05 or newer
 
-`prte_ras_slurm_get_jobinfo_json` reads
+The reader reads
 `job_resources.nodes.{count,list,allocation}`, which is the shape SLURM
 adopted in data parser **v0.0.41**. Through 23.11 the same query answers with
 `job_resources.nodes` as a plain *string* alongside a flat `allocated_nodes`
