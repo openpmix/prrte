@@ -121,6 +121,7 @@ pmix_status_t prte_pmix_convert_rc(int rc)
         return PMIX_ERR_JOB_SYS_OP_FAILED;
 
     case PRTE_ERR_OUT_OF_RESOURCE:
+    case PRTE_ERR_MEM_LIMIT_EXCEEDED:
         return PMIX_ERR_OUT_OF_RESOURCE;
 
     case PRTE_ERR_RESOURCE_BUSY:
