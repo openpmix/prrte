@@ -1364,7 +1364,8 @@ cleanup:
  *
  * @param[in] slurm_jobid SLURM job ID to monitor.
  */
-int prte_ras_slurm_check_resources(const char *slurm_jobid)
+int prte_ras_slurm_check_resources(const char *slurm_jobid, time_t *start_time,
+                                   time_t *end_time)
 {
     int err = PRTE_SUCCESS;
 
@@ -1380,7 +1381,7 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid)
     bool pending = false;
     bool cancelled = false;
 
-    static const char *const keys[] = {"job_state", NULL};
+    static const char *const keys[] = {"job_state", "start_time", "end_time", "time_limit", NULL};
 
     err = prte_ras_slurm_read_job_fields(slurm_jobid, keys, &job_info);
 
@@ -1423,8 +1424,17 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid)
         }
     }
 
+    /* Before the record goes: a time Slurm has not settled reads back as 0,
+     * which is what the caller already has to handle. */
+    err = prte_ras_slurm_read_job_times(job_info, start_time, end_time);
+
     json_decref(job_info);
     job_info = NULL;
+
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
 
     /* Exactly one recognized Slurm state is expected here. */
     int recognized_states = (running ? 1 : 0) + (pending ? 1 : 0) + (cancelled ? 1 : 0);

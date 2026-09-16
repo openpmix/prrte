@@ -60,9 +60,10 @@ int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session
 /**
  * Wait for SLURM job resources; returns PRTE_ERR_NOT_AVAILABLE if built without Jansson.
  */
-int prte_ras_slurm_check_resources(const char *slurm_jobid)
+int prte_ras_slurm_check_resources(const char *slurm_jobid, time_t *start_time,
+                                   time_t *end_time)
 {
-    PRTE_HIDE_UNUSED_PARAMS(slurm_jobid);
+    PRTE_HIDE_UNUSED_PARAMS(slurm_jobid, start_time, end_time);
     pmix_output(0, "ras:slurm:wait_resources: "
                 "Jansson support is required but not enabled in this build");
     return PRTE_ERR_NOT_AVAILABLE;
