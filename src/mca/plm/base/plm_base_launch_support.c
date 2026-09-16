@@ -2023,6 +2023,36 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 break;
             }
             if (!found) {
+                /* This node looks like nothing we have already recorded.
+                 *
+                 * Ordinarily that is simply a heterogeneous allocation, which
+                 * PRRTE discovers and handles.  Under --uniform-nodes it is
+                 * not: the user has told us the allocation is homogeneous and
+                 * PRRTE has believed them, to the point that only daemon 1 is
+                 * asked for a topology at all and every other node is handed
+                 * what that one reported.  A daemon whose hardware differs
+                 * says the assertion was false, and every node but this one
+                 * has been given the wrong hardware to be mapped and bound
+                 * against.  Nothing else would report it: the option's whole
+                 * effect is to stop asking.
+                 *
+                 * Only when our own node is IN the allocation, because only
+                 * then is our topology a statement about the allocation.  A
+                 * launcher may be sitting on a login node that is legitimately
+                 * unlike the compute nodes - which is exactly why the
+                 * homo_nodes path adopts daemon 1's topology rather than ours
+                 * instead of comparing the two. */
+                if (prte_homo_nodes && prte_hnp_is_allocated) {
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                                   "uniform-nodes-mismatch", true,
+                                   daemon->node->name);
+                    if (NULL != ptopo.source) {
+                        free(ptopo.source);
+                    }
+                    hwloc_topology_destroy(ptopo.topology);
+                    prted_failed_launch = true;
+                    goto CLEANUP;
+                }
                 // this is a new topology
                 t = PMIX_NEW(prte_topology_t);
                 t->topo = ptopo.topology;
