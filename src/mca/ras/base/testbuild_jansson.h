@@ -41,12 +41,12 @@ typedef struct {
     char source[80];
     int line;
     int column;
-    size_t position;
+    int position;
 } json_error_t;
 
-/* load flags */
+/* load flags, values as jansson.h defines them */
 #define JSON_REJECT_DUPLICATES 0x1
-#define JSON_DECODE_ANY        0x2
+#define JSON_DECODE_ANY        0x4
 
 typedef size_t (*json_load_callback_t)(void *buffer, size_t buflen, void *data);
 
