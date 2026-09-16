@@ -251,3 +251,16 @@ directive that caused some group members to be dropped - i.e., the
 provided final order does not cover some of the final group members.
 Please revise your final order directive so that all final group
 members can be included in the returned final membership.
+[uniform-nodes-mismatch]
+A node has reported hardware that differs from this node's:
+
+  Node: %s
+
+"--uniform-nodes" (or the prte_uniform_nodes MCA parameter) asserts that
+every node of the allocation is identical, and PRRTE acts on that rather
+than merely noting it: only one daemon is asked for its hardware, and every
+other node is given what that one reported. The node above disagrees, so the
+assertion does not hold and the other nodes have been described wrongly -
+their processes would be placed and bound against hardware they do not have.
+
+Remove the option and let PRRTE discover each node's hardware for itself.
