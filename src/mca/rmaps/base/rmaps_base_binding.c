@@ -240,7 +240,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
         bool physical;
-        physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+        physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
         tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads,
                                         physical, node->topology->topo);
         pmix_output(prte_rmaps_base_framework.framework_output, "%s BOUND PROC %s[%s] TO %s",

@@ -170,5 +170,50 @@ int test_sanity(void)
     CHECK("sanity:pe-in-a-path-not-a-conflict", PRTE_SUCCESS == rc);
     PMIX_DESTRUCT(&results);
 
+    /*** an option that reached here carrying no directive ***
+     *
+     * Two shapes, and the checker used to crash on both rather than refuse
+     * them.  "--map-by=" parses perfectly well and records the empty string;
+     * an option recorded by presence alone has no value array at all.  Every
+     * reader below indexed values[0], and PMIx_Argv_split() hands back NULL -
+     * not an empty array - for a string that yields no non-empty token, so
+     * the split of that empty value was indexed too.  These are the exact
+     * command lines that took the tool down: "--map-by=", "--map-by=:",
+     * "--output=", "--display=", "--rtos=", "--rtos :foo".
+     */
+    {
+        const char *keys[] = {PRTE_CLI_MAPBY, PRTE_CLI_RANKBY, PRTE_CLI_BINDTO,
+                              PRTE_CLI_OUTPUT, PRTE_CLI_DISPLAY, PRTE_CLI_RTOS,
+                              NULL};
+        const char *empties[] = {"", ":", ":::", NULL};
+        int k, e;
+
+        fprintf(stderr, "--- expected error output follows (empty directives) ---\n");
+        for (k = 0; NULL != keys[k]; k++) {
+            /* recorded with no value array at all */
+            PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+            schizo_test_add(&results, keys[k], NULL);
+            rc = prte_schizo_base_sanity(&results);
+            CHECK("sanity:no-value-refused", PRTE_SUCCESS != rc);
+            PMIX_DESTRUCT(&results);
+
+            for (e = 0; NULL != empties[e]; e++) {
+                PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+                schizo_test_add(&results, keys[k], empties[e], NULL);
+                rc = prte_schizo_base_sanity(&results);
+                CHECK("sanity:empty-value-refused", PRTE_SUCCESS != rc);
+                PMIX_DESTRUCT(&results);
+            }
+        }
+
+        /* "--rtos" accepts no qualifiers, so it is checked with a NULL
+         * qualifier table - which was walked anyway */
+        PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+        schizo_test_add(&results, PRTE_CLI_RTOS, ":foo", NULL);
+        rc = prte_schizo_base_sanity(&results);
+        CHECK("sanity:rtos-qualifier-refused", PRTE_SUCCESS != rc);
+        PMIX_DESTRUCT(&results);
+    }
+
     return failures;
 }

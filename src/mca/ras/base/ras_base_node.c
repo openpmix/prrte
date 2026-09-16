@@ -105,8 +105,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
 
     /* mark the job as being a large-cluster sim if that was requested */
     if (1 < prte_ras_base.multiplier && NULL != jdata) {
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM,
-                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, PRTE_ATTR_GLOBAL, true);
     }
 
     /* set the size of the global array - this helps minimize time
@@ -167,7 +166,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             prte_ras_base.total_slots_alloc += node->slots;
             /* copy the allocation data to that node's info */
             hnp_node->slots_max = node->slots_max;
-            if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
+            if (PRTE_ATTR_IS_TRUE(&node->attributes, PRTE_NODE_ADD_SLOTS)) {
                 hnp_node->slots += node->slots;
                 if (0 > hnp_node->slots) {
                     hnp_node->slots = 0;
@@ -263,7 +262,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                     if (PRTE_NODE_STATE_ADDED == node->state) {
                         nptr->state = PRTE_NODE_STATE_ADDED;
                     }
-                    if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
+                    if (PRTE_ATTR_IS_TRUE(&node->attributes, PRTE_NODE_ADD_SLOTS)) {
                         nptr->slots += node->slots;
                         if (0 > nptr->slots) {
                             nptr->slots = 0;
@@ -324,7 +323,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 }
             }
             if (NULL != djob &&
-                prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+                PRTE_ATTR_IS_TRUE(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH) &&
                 NULL == node->daemon) {
                 /* create a daemon for this node since we won't be launching
                  * and the mapper needs to see a daemon - this is used solely

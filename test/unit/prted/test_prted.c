@@ -314,14 +314,41 @@ static int test_xfer_job_info(void)
     pmix_envar_t envt;
     prte_attribute_t *attr;
     size_t nenvars;
-    bool found_app;
+    bool found_app, flag;
 
     /* a boolean directive lands as a job attribute */
     jdata = fresh_job();
-    PMIX_INFO_LOAD(&info[0], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
     CHECK("xfer/bool-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
     CHECK("xfer/bool-set",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_COMPLETION, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DVM_JOB));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* PMIX_NOTIFY_COMPLETION is recorded as its NEGATION, by presence.
+     *
+     * Notifying is the default, so what has to be written down is the
+     * request NOT to - which is what PRTE_JOB_SILENT_TERMINATION is. Asking
+     * for notification therefore leaves nothing set, and declining it is
+     * what records something. This was the half-wired directive that the
+     * attribute-pairing checker exists to catch: it used to be written to a
+     * key nothing read, while the reader asked for a key nothing wrote, so
+     * a tool declining notification was notified anyway. */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
+    CHECK("xfer/notify-true-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+    CHECK("xfer/notify-true-records-nothing",
+          PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes,
+                                                       PRTE_JOB_SILENT_TERMINATION));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    jdata = fresh_job();
+    flag = false;
+    PMIX_INFO_LOAD(&info[0], PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
+    CHECK("xfer/notify-false-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+    CHECK("xfer/notify-false-silences",
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_SILENT_TERMINATION));
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_RELEASE(jdata);
 

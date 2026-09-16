@@ -435,7 +435,7 @@ int main(int argc, char *argv[])
          * use our handy utility to parse it
          */
         pmix_util_parse_range_options(prte_daemon_cores, &cores);
-        physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+        physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
         if (NULL != cores) {
             ours = hwloc_bitmap_alloc();
             hwloc_bitmap_zero(ours);

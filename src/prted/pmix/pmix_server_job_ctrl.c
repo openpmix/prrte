@@ -43,6 +43,31 @@
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
+/* Record that a job is ending because someone asked for it to, rather than
+ * because it finished or failed.
+ *
+ * state/dvm reads PRTE_JOB_CANCELLED in the two places that decide what
+ * status a terminating job carries - check_complete_resume() and
+ * dvm_notify() - and answers PMIX_ERR_JOB_CANCELED there instead of the
+ * job's exit code.  Without it the tool is told whatever the processes
+ * happened to exit with when we killed them, which it cannot tell from the
+ * job having failed on its own.
+ *
+ * PRTE_ATTR_LOCAL: both readers run on the DVM master, against the master's
+ * own copy of the job, so this never needs to travel.
+ *
+ * The daemon job is not a job anybody cancelled, and a tool's job object
+ * never reaches those readers; skip both. */
+static void mark_cancelled(prte_job_t *jdata)
+{
+    if (NULL == jdata ||
+        PMIX_CHECK_NSPACE_STRICT(jdata->nspace, PRTE_PROC_MY_NAME->nspace) ||
+        PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+        return;
+    }
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, PRTE_ATTR_LOCAL, true);
+}
+
 /* process a job control request - runs on the PRRTE progress
  * thread, since it accesses proc objects and drives the PLM
  * and daemon-command xcasts */
@@ -69,6 +94,9 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
             } else {
                 PMIX_CONSTRUCT(&parray, pmix_pointer_array_t);
                 for (n = 0; n < ntargets; n++) {
+                    /* whatever we are about to kill, its job did not end of
+                     * its own accord */
+                    mark_cancelled(prte_get_job_data_object(targets[n].nspace));
                     if (PMIX_RANK_WILDCARD == targets[n].rank) {
                         /* create an object */
                         proc = PMIX_NEW(prte_proc_t);
@@ -109,7 +137,14 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
 
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_TERMINATE)) {
             if (NULL == targets) {
-                /* terminate the daemons and all running jobs */
+                /* terminate the daemons and all running jobs.  This is the
+                 * pterm path - it sends exactly this directive with no
+                 * targets - so every job still running in the DVM is being
+                 * cancelled, and each should say so rather than report the
+                 * status its processes happened to die with. */
+                for (n = 0; n < (size_t) prte_job_data->size; n++) {
+                    mark_cancelled((prte_job_t *) pmix_pointer_array_get_item(prte_job_data, n));
+                }
                 PMIX_DATA_BUFFER_CREATE(cmd);
                 /* pack the command */
                 cmmnd = PRTE_DAEMON_HALT_VM_CMD;

@@ -31,8 +31,7 @@ it in `prte_job_ident` for error reporting, then calls `discover`:
 - Opens `PBS_NODEFILE` (or `COBALT_NODEFILE`). PBS lists one line per
   allocated slot, so the *same hostname may repeat*; `discover` dedups by
   name and **bumps `slots` per repeat**. Each distinct host becomes a
-  `prte_node_t` at `PRTE_NODE_STATE_UP`, tagged with `PRTE_NODE_LAUNCH_ID`
-  (its ordinal in the file).
+  `prte_node_t` at `PRTE_NODE_STATE_UP`.
 - **SMP mode** (`ras_pbs_smp`, default false): for big SMP machines
   (e.g. SGI) where listing each node once/slot is impractical, the file
   lists each node once and `PBS_PPN` gives cpus/node. In SMP mode a
