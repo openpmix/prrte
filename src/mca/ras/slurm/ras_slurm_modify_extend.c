@@ -71,6 +71,9 @@ typedef struct {
     uint64_t retry_delay_usec;
     int attempts;
     int tracker_index;
+    /* What the grant check read from the expander's record, for the trim */
+    time_t start_time;
+    time_t end_time;
     /* Answered; the answer is posted but not yet delivered */
     bool completing;
 } prte_slurm_wait_tracker_t;
@@ -116,7 +119,7 @@ static int prte_ras_slurm_add_reused_nodes_to_session(const char *slurm_jobid,
 static void prte_ras_slurm_rollback_session(const char *slurm_jobid);
 static int prte_ras_slurm_vet_node_list(char **names, uint64_t *count);
 static int prte_ras_slurm_limit_to_parent_remainder(pmix_hash_table_t *fields, time_t parent_end);
-static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid);
+static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid, time_t start, time_t end);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
 static void slurm_grant_check_cb(int fd, short args, void *cbdata);
 static prte_slurm_wait_tracker_t *prte_ras_slurm_tracker_for_child(const prte_slurm_salloc_child_t *child);
@@ -183,6 +186,8 @@ static void swt_con(prte_slurm_wait_tracker_t *p)
     p->retry_delay_usec = PRTE_SLURM_GRANT_RETRY_MIN_USEC;
     p->attempts = 0;
     p->tracker_index = -1;
+    p->start_time = 0;
+    p->end_time = 0;
     p->completing = false;
 }
 
@@ -1297,15 +1302,13 @@ static int prte_ras_slurm_limit_to_parent_remainder(pmix_hash_table_t *fields, t
  *
  * @param[in] slurm_jobid Slurm job ID of the running expander job.
  */
-static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid)
+static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid, time_t start, time_t end)
 {
     int err = PRTE_SUCCESS;
     char *parent_jobid = NULL;
     char *cmd = NULL;
     FILE *fp = NULL;
     time_t parent_end = 0;
-    time_t start = 0;
-    time_t end = 0;
     long minutes;
     static const char *cmd_format = "scontrol update job %s TimeLimit=%ld 2>&1";
     char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN + 1];
@@ -1324,11 +1327,6 @@ static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid)
     parent_jobid = prte_common_slurm_jobid();
     if (NULL == parent_jobid) {
         return PRTE_ERR_NOT_FOUND;
-    }
-
-    err = prte_ras_slurm_get_job_times(slurm_jobid, &start, &end);
-    if (PRTE_SUCCESS != err) {
-        return err;
     }
 
     /* Slurm counts the limit from the start, so without one there is nothing
@@ -1470,7 +1468,8 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
      * failed trim is not fatal: the nodes are granted and usable, and the job
      * is scancelled with its session either way. */
     if (prte_mca_ras_slurm_component.propagate_time) {
-        int trim_err = prte_ras_slurm_trim_job_to_parent(job_id);
+        int trim_err = prte_ras_slurm_trim_job_to_parent(job_id, trk->start_time,
+                                                         trk->end_time);
 
         if (PRTE_SUCCESS != trim_err) {
             pmix_output(0, "ras:slurm:modify: could not align job %s with the end of"
@@ -1660,7 +1659,7 @@ static void slurm_grant_check_cb(int fd, short args, void *cbdata)
 
     int err;
 
-    err = prte_ras_slurm_check_resources(trk->job_id);
+    err = prte_ras_slurm_check_resources(trk->job_id, &trk->start_time, &trk->end_time);
 
     if (PRTE_ERR_RESOURCE_BUSY == err && PRTE_SLURM_GRANT_RETRY_MAX > trk->attempts) {
 
