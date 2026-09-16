@@ -346,7 +346,7 @@ int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace, pmix_rank_t 
 int prte_parse_appfile(const char *path, char ***pargv, int *pargc)
 {
     FILE *fp;
-    char *line, **split;
+    char *line, *p, **split;
     size_t n;
     bool first = true;
 
@@ -358,6 +358,15 @@ int prte_parse_appfile(const char *path, char ***pargv, int *pargc)
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
     while (NULL != (line = pmix_getline(fp))) {
+        /* skip blank lines and comments (a line whose first non-whitespace
+         * character is '#'), per the documented appfile format - neither
+         * should contribute any tokens to the resulting argv */
+        for (p = line; ' ' == *p || '\t' == *p; p++) {
+        }
+        if ('\0' == *p || '#' == *p) {
+            free(line);
+            continue;
+        }
         split = PMIx_Argv_split(line, ' ');
         free(line);
         if (NULL == split) {
