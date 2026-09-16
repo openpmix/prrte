@@ -14,10 +14,11 @@ SUBDIRS = rmaps runtime errmgr ess event filem grpcomm hwloc include odls iof pl
 # than letting the two drift.  Their baselines differ, being records of
 # two different code bases, and are not interchangeable.
 dist_check_SCRIPTS = check_static_init.pl check_query_authority.py \
-                     check_ctor_coverage.py
+                     check_ctor_coverage.py check_attr_pairing.py
 
 # check_ctor_coverage.py reads its baseline from the source directory, so it
 # has to travel with the script rather than only being in the repository.
 EXTRA_DIST = ctor_coverage_baseline.txt
 
-TESTS = check_static_init.pl check_query_authority.py check_ctor_coverage.py
+TESTS = check_static_init.pl check_query_authority.py check_ctor_coverage.py \
+        check_attr_pairing.py

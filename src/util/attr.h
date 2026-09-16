@@ -117,7 +117,7 @@ typedef uint8_t prte_node_flags_t;
 #define PRTE_NODE_START_KEY PRTE_APP_MAX_KEY
 
 #define PRTE_NODE_USERNAME      (PRTE_NODE_START_KEY + 1)
-#define PRTE_NODE_LAUNCH_ID     (PRTE_NODE_START_KEY + 2) // int32 - Launch id needed by some systems to launch a proc on this node
+// PRTE_NODE_START_KEY + 2 RETIRED (was PRTE_NODE_LAUNCH_ID) - do not reuse
 #define PRTE_NODE_HOSTID        (PRTE_NODE_START_KEY + 3) // pmix_rank_t - if this "node" is a coprocessor being hosted on a different node, then
                                                           // we need to know the id of our "host" to help any procs on us to determine locality
 #define PRTE_NODE_SERIAL_NUMBER (PRTE_NODE_START_KEY + 5) // string - serial number: used if node is a coprocessor
@@ -166,11 +166,11 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_REDUCER                    (PRTE_JOB_START_KEY +  14) // bool - job consists of MapReduce reducers
 #define PRTE_JOB_COMBINER                   (PRTE_JOB_START_KEY +  15) // bool - job consists of MapReduce combiners
 #define PRTE_JOB_INDEX_ARGV                 (PRTE_JOB_START_KEY +  16) // bool - automatically index argvs
-#define PRTE_JOB_NO_VM                      (PRTE_JOB_START_KEY +  17) // bool - do not use VM launch
+// PRTE_JOB_START_KEY + 17 RETIRED (was PRTE_JOB_NO_VM) - do not reuse
 #define PRTE_JOB_SPIN_FOR_DEBUG             (PRTE_JOB_START_KEY +  18) // bool - the prted's are to spin while waiting for debugger
 #define PRTE_JOB_CONTINUOUS                 (PRTE_JOB_START_KEY +  19) // bool - job consists of continuously operating apps
 #define PRTE_JOB_RECOVER_DEFINED            (PRTE_JOB_START_KEY +  20) // bool - recovery policy has been defined
-#define PRTE_JOB_NON_PRTE_JOB               (PRTE_JOB_START_KEY +  22) // bool - non-prte job
+// PRTE_JOB_START_KEY + 22 RETIRED (was PRTE_JOB_NON_PRTE_JOB) - do not reuse
 #define PRTE_JOB_STDOUT_TARGET              (PRTE_JOB_START_KEY +  23) // pmix_nspace_t - job that is to receive the stdout (on its
                                                                        //      stdin) from this one
 #define PRTE_JOB_POWER                      (PRTE_JOB_START_KEY +  24) // string - power setting for nodes in job
@@ -182,7 +182,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_PEER_MODX_ID               (PRTE_JOB_START_KEY +  30) // prte_grpcomm_coll_id_t - collective id
 #define PRTE_JOB_INIT_BAR_ID                (PRTE_JOB_START_KEY +  31) // prte_grpcomm_coll_id_t - collective id
 #define PRTE_JOB_FINI_BAR_ID                (PRTE_JOB_START_KEY +  32) // prte_grpcomm_coll_id_t - collective id
-#define PRTE_JOB_FWDIO_TO_TOOL              (PRTE_JOB_START_KEY +  33) // Forward IO for this job to the tool requesting its spawn
+// PRTE_JOB_START_KEY + 33 RETIRED (was PRTE_JOB_FWDIO_TO_TOOL) - do not reuse
 #define PRTE_JOB_LAUNCHED_DAEMONS           (PRTE_JOB_START_KEY +  35) // bool - Job caused new daemons to be spawned
 #define PRTE_JOB_REPORT_BINDINGS            (PRTE_JOB_START_KEY +  36) // bool - Report process bindings
 #define PRTE_JOB_CPUSET                     (PRTE_JOB_START_KEY +  37) // string - "soft" cgroup envelope for the job
@@ -199,7 +199,10 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_TAG_OUTPUT                 (PRTE_JOB_START_KEY +  47) // bool - tag stdout/stderr
 #define PRTE_JOB_TIMESTAMP_OUTPUT           (PRTE_JOB_START_KEY +  48) // bool - timestamp stdout/stderr
 #define PRTE_JOB_MULTI_DAEMON_SIM           (PRTE_JOB_START_KEY +  49) // bool - multiple daemons/node to simulate large cluster
-#define PRTE_JOB_NOTIFY_COMPLETION          (PRTE_JOB_START_KEY +  50) // bool - notify parent proc when spawned job terminates
+// offset 50 is RETIRED - it was PRTE_JOB_NOTIFY_COMPLETION, the write half of a
+// directive whose read half asked for PRTE_JOB_SILENT_TERMINATION below, so the
+// two never met. PMIX_NOTIFY_COMPLETION now records its negation there instead.
+// Do not reuse this offset.
 #define PRTE_JOB_TRANSPORT_KEY              (PRTE_JOB_START_KEY +  51) // string - transport keys assigned to this job
 #define PRTE_JOB_INFO_CACHE                 (PRTE_JOB_START_KEY +  52) // pmix_list_t - list of prte_value_t to be included in job_info
 #define PRTE_JOB_SILENT_TERMINATION         (PRTE_JOB_START_KEY +  54) // bool - do not generate an event notification when job
@@ -335,7 +338,7 @@ typedef uint16_t prte_proc_flags_t;
 /***   PROCESS ATTRIBUTE KEYS   ***/
 #define PRTE_PROC_START_KEY PRTE_JOB_MAX_KEY
 
-#define PRTE_PROC_NOBARRIER         (PRTE_PROC_START_KEY + 1) // bool  - indicates proc should not barrier in prte_init
+// PRTE_PROC_START_KEY + 1 RETIRED (was PRTE_PROC_NOBARRIER) - do not reuse
 #define PRTE_PROC_PRIOR_NODE        (PRTE_PROC_START_KEY + 5) // void* - pointer to prte_node_t where this proc last executed
 #define PRTE_PROC_NRESTARTS         (PRTE_PROC_START_KEY + 6) // int32 - number of times this process has been restarted
 #define PRTE_PROC_RESTART_TIME      (PRTE_PROC_START_KEY + 7) // timeval - time of last restart
@@ -395,11 +398,57 @@ typedef uint16_t prte_session_flags_t;
 
 PRTE_EXPORT const char *prte_attr_key_to_str(prte_attribute_key_t key);
 
-/* Retrieve the named attribute from a list */
+/*** BOOLEAN ATTRIBUTES ARE THREE-STATE ***
+ *
+ * A boolean attribute answers one of three things, and conflating the last
+ * two is the defect this type exists to prevent:
+ *
+ *   PRTE_ATTR_TRUE     - it is on the list, and its value is true
+ *   PRTE_ATTR_FALSE    - it is on the list, and its value is false
+ *   PRTE_ATTR_NOT_SET  - it is not on the list, so NOBODY HAS SAID
+ *
+ * "Not set" is not a truth value.  It is what a caller consults a default
+ * for - an MCA parameter, a personality's policy, an inherited setting -
+ * and a reader that cannot tell it from "false" cannot apply one.
+ *
+ * Booleans therefore have their own accessor rather than riding
+ * prte_get_attribute(), which answers only "found / not found" and would
+ * report all three states through a bool.  That is not a hypothetical
+ * hazard: it is how PMIX_DO_NOT_LAUNCH=false came to mean "do not launch",
+ * a false value being present and every reader testing presence.
+ */
+typedef enum {
+    PRTE_ATTR_NOT_SET = 0,
+    PRTE_ATTR_FALSE,
+    PRTE_ATTR_TRUE
+} prte_attr_state_t;
+
+/* Retrieve a BOOLEAN attribute's state. The value is the return, so there is
+ * no storage to pass in and nothing to unload. */
+PRTE_EXPORT prte_attr_state_t prte_get_bool_attribute(pmix_list_t *attributes,
+                                                      prte_attribute_key_t key);
+
+/* Shorthand for the commonest question - "was this explicitly turned ON?" -
+ * where NOT_SET and FALSE are the same answer because the caller has a
+ * default of its own and it is "off".  Reach for prte_get_bool_attribute()
+ * directly wherever the three states differ; that is the whole reason it
+ * returns them. */
+#define PRTE_ATTR_IS_TRUE(attrs, key) \
+    (PRTE_ATTR_TRUE == prte_get_bool_attribute((attrs), (key)))
+
+/* Record a BOOLEAN attribute's value. Both truths are STORED - a false one
+ * is not the same as an absent one, and removing it would throw away the
+ * fact that someone said so. Use prte_remove_attribute() to return a key to
+ * the "nobody has said" state. */
+PRTE_EXPORT int prte_set_bool_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
+                                        bool local, bool value);
+
+/* Retrieve the named attribute from a list.  NOT for PMIX_BOOL - see above. */
 PRTE_EXPORT bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void **data,
                                     pmix_data_type_t type);
 
-/* Set the named attribute in a list, overwriting any prior entry */
+/* Set the named attribute in a list, overwriting any prior entry.
+ * NOT for PMIX_BOOL - see above. */
 PRTE_EXPORT int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
                                    void *data, pmix_data_type_t type);
 

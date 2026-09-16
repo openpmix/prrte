@@ -527,7 +527,7 @@ static int raw_preposition_files(prte_job_t *jdata,
             continue;
         }
 
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_PRELOAD_BIN)) {
             /* add the executable to our list */
             PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: preload executable %s",
@@ -556,8 +556,7 @@ static int raw_preposition_files(prte_job_t *jdata,
              */
             fs->remote_target = strdup(prte_filem_base_strip_leading_dots(app->app));
             /* ensure the app uses that location as its cwd */
-            prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD,
-                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            prte_set_bool_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, PRTE_ATTR_GLOBAL, true);
         }
 
         filestring = NULL;
@@ -1241,7 +1240,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
         files = PMIx_Argv_split(filestring, ',');
         free(filestring);
     }
-    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_PRELOAD_BIN)) {
         /* add the app itself to the list */
         bname = pmix_basename(app->app);
         PMIx_Argv_append_nosize(&files, bname);

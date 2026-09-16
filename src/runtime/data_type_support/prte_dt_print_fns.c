@@ -56,9 +56,8 @@ static void display_cpus(prte_topology_t *t,
 
     char *tmp1, *tmp2;
 
-    use_hwthread_cpus = prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
-    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL,
-                                  PMIX_BOOL);
+    use_hwthread_cpus = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS);
+    physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
     avail = hwloc_bitmap_alloc();
     pmix_asprintf(&tmp1, "        <processors>\n");
     npkgs = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
@@ -113,7 +112,7 @@ void prte_job_print(char **output, prte_job_t *src)
                   "\nData for job: %s\tPersonality: %s\tRecovery: %s\n\tNum apps: %ld\tStdin "
                   "target: %s\tState: %s\tAbort: %s",
                   PRTE_JOBID_PRINT(src->nspace), tmp2,
-                  (prte_get_attribute(&src->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) ? "ENABLED" : "DISABLED",
+                  (PRTE_ATTR_IS_TRUE(&src->attributes, PRTE_JOB_RECOVERABLE)) ? "ENABLED" : "DISABLED",
                   (long) src->num_apps, PRTE_VPID_PRINT(src->stdin_target),
                   prte_job_state_to_str(src->state),
                   (PRTE_FLAG_TEST(src, PRTE_JOB_FLAG_ABORTED)) ? "True" : "False");
@@ -181,7 +180,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     /* set default result */
     *output = NULL;
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT)) {
         pmix_asprintf(&tmp, "    <host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n",
                       (NULL == src->name) ? "UNKNOWN" : src->name, (int) src->slots,
                       (int) src->slots_max);
@@ -230,7 +229,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
         return;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP)) {
         /* just provide a simple output for users */
         pmix_asprintf(&tmp, "\nData for node: %s\tNum slots: %ld\tMax slots: %ld\tNum procs: %ld",
                       (NULL == src->name) ? "UNKNOWN" : src->name, (long) src->slots,
@@ -328,15 +327,15 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     *output = NULL;
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
     }
 
-    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+    physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT)) {
         if (NULL != src->cpuset && NULL != src->node &&
             NULL != src->node->topology && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
@@ -385,7 +384,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
         return;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP)) {
         if (NULL != src->cpuset && NULL != src->node
             && NULL != src->node->topology && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
@@ -688,7 +687,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
     *output = NULL;
 
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT)) {
         /* creating the output in an XML format */
         pmix_asprintf(&tmp4, "<?xml version=\"1.0\" ?>\n<map>\n");
         tmp = (char*)malloc(1);
@@ -707,7 +706,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
             tmp = tmp3;
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
             pmix_asprintf(&tmp2, "%s<!-- \n"
                 "\tWarning: This map has been generated with the DONOTLAUNCH option;\n"
                 "\tThe compute node architecture has not been probed, and the displayed\n"
@@ -741,7 +740,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
         cpus_per_rank = strdup("N/A");
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
         cpu_type = "HWT";
     } else {
         cpu_type = "CORE";
@@ -758,7 +757,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
         cpuset = strdup("N/A");
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP)) {
         if (job_show_per_app_policy(jdata)) {
             char *plines = per_app_policy_lines(jdata, "");
             pmix_asprintf(
@@ -842,7 +841,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
     }
 
     /* put some warning out for the donotlaunch case */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
         pmix_asprintf(&tmp2, "%s\n\nWarning: This map has been generated with the DONOTLAUNCH option;\n"
                              "\tThe compute node architecture has not been probed, and the displayed\n"
                              "\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"

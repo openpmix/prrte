@@ -283,10 +283,10 @@ static void vm_ready(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
     /* if this is my job, then we are done */
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS)) {
         /* if there is more than one daemon in the job, then there
          * is just a little bit to do */
-        if (!prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
+        if (!PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)
             && 1 < prte_process_info.num_daemons) {
             /* send the daemon map to every daemon in this DVM - we
              * do this here so we don't have to do it for every
@@ -547,7 +547,7 @@ static void job_started(int fd, short args, void *cbdata)
 
     /* if there is an originator for this job, notify them
      * that the first process of the job has been started */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DVM_JOB)) {
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
         nptr = NULL;
@@ -682,7 +682,7 @@ static bool report_child_jobs_separately(void)
     if (NULL == djob) {
         return false;
     }
-    return prte_get_attribute(&djob->attributes, PRTE_JOB_REPORT_CHILD_SEP, NULL, PMIX_BOOL);
+    return PRTE_ATTR_IS_TRUE(&djob->attributes, PRTE_JOB_REPORT_CHILD_SEP);
 }
 
 static void check_complete(int fd, short args, void *cbdata)
@@ -756,7 +756,7 @@ static void check_complete(int fd, short args, void *cbdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, NULL, PMIX_POINTER)) {
         rc = prte_pmix_convert_rc(jdata->exit_code);
         /* or whether we got cancelled by the user */
-    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
+    } else if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CANCELLED)) {
         rc = prte_pmix_convert_rc(PRTE_ERR_JOB_CANCELLED);
     } else {
         rc = prte_pmix_convert_rc(jdata->exit_code);
@@ -833,7 +833,7 @@ static void check_complete_resume(int fd, short args, void *cbdata)
     hwloc_obj_t obj;
     hwloc_obj_type_t type;
     hwloc_cpuset_t boundcpus, tgt;
-    bool takeall, sep, *sepptr = &sep;
+    bool takeall;
     prte_pmix_server_pset_t *pst, *pst2;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -966,7 +966,7 @@ release:
     if (NULL != jdata->map) {
         map = jdata->map;
         takeall = false;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
             type = HWLOC_OBJ_PU;
         } else {
             type = HWLOC_OBJ_CORE;
@@ -1080,7 +1080,8 @@ release:
         nprocs = 0;
         PMIX_LIST_FOREACH(jptr, &jdata->children, prte_job_t)
         {
-            if (prte_get_attribute(&jptr->attributes, PRTE_JOB_CHILD_SEP, (void**)&sepptr, PMIX_BOOL) && !sep) {
+            /* only a child that was explicitly told NOT to run independently */
+            if (PRTE_ATTR_FALSE == prte_get_bool_attribute(&jptr->attributes, PRTE_JOB_CHILD_SEP)) {
                 proc = PMIX_NEW(prte_proc_t);
                 PMIX_LOAD_PROCID(&proc->name, jptr->nspace, PMIX_RANK_WILDCARD);
                 pmix_pointer_array_add(&procs, proc);
@@ -1130,8 +1131,15 @@ static void cleanup_job(int sd, short args, void *cbdata)
         prte_plm.terminate_orteds();
     }
     if (NULL != caddy->jdata) {
-        /* if the job had a spawn parent remove it from the parents child list */
-        if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
+        /* if the job had a spawn parent remove it from the parents child list.
+         * Seed the pointer and check it: prte_get_attribute() returns true for
+         * a key it found even when the unload that follows failed, and the
+         * PMIX_PROC arm fails by leaving a NULL behind (PMIX_PROC_CREATE came
+         * back empty).  job_started() and ready_for_debug() read this same
+         * attribute and both guard it; these two did not. */
+        nptr = NULL;
+        if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
+            && NULL != nptr) {
             if(NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
             !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)){
                 pmix_list_remove_item(&parent->children, &caddy->jdata->super);
@@ -1273,7 +1281,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         rc = jdata->exit_code;
         jstatus = prte_pmix_convert_job_state_to_error(jdata->state);
         /* or whether we got cancelled by the user */
-    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
+    } else if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CANCELLED)) {
         rc = PRTE_ERR_JOB_CANCELLED;
         jstatus = PMIX_ERR_JOB_CANCELED;
     } else {
@@ -1287,12 +1295,26 @@ static void dvm_notify(int sd, short args, void *cbdata)
     }
 
     if (0 == rc &&
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_SILENT_TERMINATION, NULL, PMIX_BOOL)) {
+        PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_SILENT_TERMINATION)) {
         notify = false;
     }
-    /* if the jobid matches that of the requestor, then don't notify */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &proc, PMIX_PROC)) {
-        if (PMIX_CHECK_NSPACE(proc->nspace, jdata->nspace)) {
+    /* if the jobid matches that of the requestor, then don't notify.
+     *
+     * PMIX_CHECK_NSPACE_STRICT, for the reason spawn_tree_active() gives
+     * above: the plain macro answers "true" the moment either side is empty,
+     * and an empty launch proxy is what prte_job_construct() leaves behind -
+     * it seeds jdata->originator with a NULL nspace, and both setters of this
+     * attribute copy that field.  A wildcard match here does not merely
+     * suppress an event: line for line below, this "notify" is also what
+     * gates the ONLY activation of PRTE_JOB_STATE_NOTIFIED in the tree, and
+     * cleanup_job - which releases the job and tells the server the job has
+     * departed - is that state's handler.
+     *
+     * Seed and check the pointer for the same reason as cleanup_job(). */
+    proc = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &proc, PMIX_PROC)
+        && NULL != proc) {
+        if (PMIX_CHECK_NSPACE_STRICT(proc->nspace, jdata->nspace)) {
             notify = false;
         }
         PMIX_PROC_RELEASE(proc);
@@ -1466,10 +1488,21 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_RELEASE(reply);
     }
 
-    // We are done with our use of job data and have notified the other daemons
-    if (notify) {
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFIED);
-    }
+    /* We are done with our use of job data and have notified the other
+     * daemons.  This activation is NOT conditional on having notified
+     * anyone.
+     *
+     * It is the only PRTE_JOB_STATE_NOTIFIED in the tree, and its handler
+     * cleanup_job() is what detaches the job from its spawn parent, tells
+     * the PMIx server the job has departed, and drops the job's creation
+     * reference - which is what frees the job and clears its slot in
+     * prte_job_data, since that array holds a borrowed pointer and
+     * prte_job_destruct() removes its own entry. Suppressing the
+     * ANNOUNCEMENT of a job's end must not suppress its RECLAMATION; while
+     * it did, a job that asked not to be notified would have been leaked,
+     * along with its registry slot, for the life of the DVM. That is why
+     * nothing could safely ask. */
+    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFIED);
 
     PMIX_RELEASE(caddy);
 }

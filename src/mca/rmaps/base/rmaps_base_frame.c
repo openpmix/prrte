@@ -427,8 +427,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                  * sent to the HNP - possibly itself - so the job that gets
                  * mapped is always an unpacked copy, and a LOCAL attribute
                  * would not survive the trip to be hoisted at all */
-                prte_set_attribute(attrs, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
-                                   NULL, PMIX_BOOL);
+                prte_set_bool_attribute(attrs, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL, true);
             }
             inherit_given = true;
 
@@ -443,8 +442,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             if (NULL == attrs) {
                 prte_rmaps_base.inherit = false;
             } else {
-                prte_set_attribute(attrs, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL,
-                                   NULL, PMIX_BOOL);
+                prte_set_bool_attribute(attrs, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL, true);
             }
             noinherit_given = true;
 
@@ -458,8 +456,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             if (NULL == attrs) {
                 prte_rmaps_base.hwthread_cpus = true;
             } else {
-                prte_set_attribute(attrs, (NULL != app) ? PRTE_APP_HWT_CPUS : PRTE_JOB_HWT_CPUS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                prte_set_bool_attribute(attrs, (NULL != app) ? PRTE_APP_HWT_CPUS : PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
             }
             hwthread_cpus_given = true;
 
@@ -477,17 +474,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 if (NULL == attrs) {
                     prte_rmaps_base.hwthread_cpus = true;
                 } else {
-                    prte_set_attribute(attrs,
-                                       (NULL != app) ? PRTE_APP_HWT_CPUS : PRTE_JOB_HWT_CPUS,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(attrs, (NULL != app) ? PRTE_APP_HWT_CPUS : PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
                 }
             } else {
                 if (NULL == attrs) {
                     prte_rmaps_base.hwthread_cpus = false;
                 } else {
-                    prte_set_attribute(attrs,
-                                       (NULL != app) ? PRTE_APP_CORE_CPUS : PRTE_JOB_CORE_CPUS,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(attrs, (NULL != app) ? PRTE_APP_CORE_CPUS : PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, true);
                 }
             }
             core_cpus_given = true;
@@ -607,9 +600,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
              * false removes it - which is exactly the default, so nothing
              * needs recording for shared=false */
             if (shared) {
-                prte_set_attribute(attrs,
-                                   (NULL != app) ? PRTE_APP_MAP_SHARED : PRTE_JOB_MAP_SHARED,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                prte_set_bool_attribute(attrs, (NULL != app) ? PRTE_APP_MAP_SHARED : PRTE_JOB_MAP_SHARED, PRTE_ATTR_GLOBAL, true);
             }
 
         } else {
@@ -705,25 +696,23 @@ int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
         }
 
         /***   INHERIT / NOINHERIT   ***/
-        if (prte_get_attribute(&app->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_JOB_INHERIT)) {
+            if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOINHERIT)) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
                                true, "INHERIT", app->app, "NOINHERIT");
                 return PRTE_ERR_SILENT;
             }
             prte_remove_attribute(&app->attributes, PRTE_JOB_INHERIT);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
-                               NULL, PMIX_BOOL);
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL, true);
         }
-        if (prte_get_attribute(&app->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_JOB_NOINHERIT)) {
+            if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_INHERIT)) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
                                true, "NOINHERIT", app->app, "INHERIT");
                 return PRTE_ERR_SILENT;
             }
             prte_remove_attribute(&app->attributes, PRTE_JOB_NOINHERIT);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL,
-                               NULL, PMIX_BOOL);
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL, true);
         }
     }
 
@@ -1028,8 +1017,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         if (NULL == jdata) {
             prte_rmaps_base.hwthread_cpus = true;
         } else {
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
-                               NULL, PMIX_BOOL);
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
         }
 
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PELIST)) {
@@ -1131,7 +1119,7 @@ setpolicy:
      * are no devices - refuse it by name rather than as an unknown
      * qualifier, since the spelling is legal, just not here */
     if (NULL != jdata
-        && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_SHARED, NULL, PMIX_BOOL)
+        && PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_MAP_SHARED)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
         prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
@@ -1375,8 +1363,7 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_HWT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
-        prte_set_attribute(&app->attributes, PRTE_APP_HWT_CPUS,
-                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+        prte_set_bool_attribute(&app->attributes, PRTE_APP_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PELIST)) {
         /* the cpus this app is to run on. Recorded per app, exactly as the
          * job-level parser records the job's: which cpus one app of an MPMD
@@ -1466,7 +1453,7 @@ setpolicy:
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
-    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL)
+    if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));

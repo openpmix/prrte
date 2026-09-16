@@ -235,8 +235,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
      * whole registration - on the very daemon that forked the asking client,
      * over procs it has already registered - once per such get. */
     if (PMIX_RANK_WILDCARD == req->tproc.rank) {
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED,
-                               NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED)) {
             pmix_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s DMODX REQ FOR %s:WILDCARD - ALREADY REGISTERED",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace);

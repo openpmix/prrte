@@ -301,8 +301,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
                 node->slots += slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 if (add_slots) {
-                    prte_set_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, PRTE_ATTR_GLOBAL, true);
                 }
             } else if (slots < 0) {
                 node->slots = 0;
@@ -332,8 +331,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
                 node->slots = slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 if (add_slots) {
-                    prte_set_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, PRTE_ATTR_GLOBAL, true);
                 }
             } else if (slots < 0) {
                 node->slots = 0;

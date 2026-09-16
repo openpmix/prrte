@@ -1195,7 +1195,7 @@ static int test_binding_policy(void)
         CHECK("a mapless job is refused",
               PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(nomap, "core:report"));
         CHECK("a refused mapless job records nothing",
-              !prte_get_attribute(&nomap->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL));
+              !PRTE_ATTR_IS_TRUE(&nomap->attributes, PRTE_JOB_REPORT_BINDINGS));
         PMIX_RELEASE(nomap);
     }
 
@@ -1307,7 +1307,7 @@ static int test_binding_policy(void)
     CHECK("a bad policy carrying a good qualifier is refused",
           PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(jdata, "sockets:report"));
     CHECK("a refused spec records nothing on the job",
-          !prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS));
 
     /* the job-only qualifiers are refused on the DVM default, where there is
      * no job to record them against */

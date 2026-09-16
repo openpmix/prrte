@@ -120,11 +120,11 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     bool parsable;
     pmix_proc_t source;
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED)) {
         return;
     }
 
-    parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+    parsable = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT);
     PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
 
     if (parsable) {
@@ -191,7 +191,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     } else {
         prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
     }
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, true);
 }
 
 static void display_cpus(prte_topology_t *t,
@@ -206,11 +206,10 @@ static void display_cpus(prte_topology_t *t,
     hwloc_cpuset_t allowed;
     bool parsable;
 
-    parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+    parsable = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT);
 
-    use_hwthread_cpus = prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
-    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL,
-                                  PMIX_BOOL);
+    use_hwthread_cpus = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS);
+    physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
     avail = hwloc_bitmap_alloc();
     if (NULL == avail) {
         return;
@@ -635,8 +634,7 @@ bool prte_ras_base_dvm_is_growing(void)
     if (NULL == daemons) {
         return false;
     }
-    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM,
-                           NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&daemons->attributes, PRTE_JOB_EXTEND_DVM)) {
         return true;
     }
     for (i = 0; i < daemons->procs->size; i++) {
@@ -1840,8 +1838,7 @@ void prte_ras_base_activate_dvm_grow(void)
 
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     /* mark that we need to extend the DVM */
-    prte_set_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM,
-                       PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM, PRTE_ATTR_LOCAL, true);
     /* mark that an updated nidmap must be communicated to existing daemons */
     prte_nidmap_communicated = false;
     PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);

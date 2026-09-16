@@ -188,8 +188,6 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     int32_t num_slots;
     int32_t i;
     int rc;
-    prte_job_t *daemons;
-    bool novm;
     char *hosts = NULL;
     prte_session_t **targets;
     size_t ntargets;
@@ -209,11 +207,6 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
         targets = deftarget;
         ntargets = 1;
     }
-
-    /* get the daemon job object */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    /* see if we have a vm or not */
-    novm = prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PMIX_BOOL);
 
     /* Build the job's node set from the resources of the session(s) it may
      * map onto, then narrow that set with whatever the app specified. The
@@ -274,7 +267,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
             /* if this node wasn't included in the vm (e.g., by -host), ignore it,
              * unless we are mapping prior to launching the vm
              */
-            if (NULL == node->daemon && !novm) {
+            if (NULL == node->daemon) {
                 PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                      "NODE %s HAS NO DAEMON", node->name));
                 continue;
@@ -534,16 +527,16 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     /* check for prior bookmark */
     prte_rmaps_base_get_starting_point(allocated_nodes, jdata);
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL) ||
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC) ||
         4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         bool parsable;
         char *tmp = NULL, *tmp2, *tmp3;
         prte_node_t *alloc;
         pmix_proc_t source;
 
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, NULL, PMIX_BOOL)) {
+        if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED)) {
 
-            parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+            parsable = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT);
             PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
 
             if (parsable) {
@@ -584,7 +577,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
             }
             free(tmp);
             prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, true);
         }
     }
 

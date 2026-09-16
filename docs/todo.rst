@@ -927,3 +927,32 @@ stays — it is what lets the cpuset scatter be answered — but this entry is
 closed, not deferred.  Reopen it only on a measurement showing that the table
 PMIx actually builds is what hurts, and that is a PMIx question, not a PRRTE
 one.
+
+Attribute keys with only one end
+--------------------------------
+
+An attribute key that is only ever written, or only ever read, is a feature
+that does nothing.  ``PMIX_NOTIFY_COMPLETION`` was such a case for a long
+time: the spawn path recorded it as ``PRTE_JOB_NOTIFY_COMPLETION``, which
+nothing read, while ``state/dvm``'s ``dvm_notify()`` asked for
+``PRTE_JOB_SILENT_TERMINATION``, which nothing wrote.  Both halves compiled
+and each looked live on its own, so a tool asking not to be notified when
+its spawned job ended was told nothing and notified anyway.
+
+``test/unit/check_attr_pairing.py`` now fails ``make check`` on a new one.
+Six were present when it was written.  Five have since been removed, their
+function having been superseded by PMIx attributes --- ``PRTE_JOB_NO_VM``,
+``PRTE_NODE_LAUNCH_ID``, ``PRTE_PROC_NOBARRIER``, ``PRTE_JOB_NON_PRTE_JOB``
+and ``PRTE_JOB_FWDIO_TO_TOOL``.  Their numeric offsets are marked retired in
+``src/util/attr.h`` and must not be reused: offsets are hand-assigned, and
+reusing one silently makes two keys compare equal.
+
+All six are now closed.  Five were removed, and ``PRTE_JOB_CANCELLED`` has
+been given the writer it was missing: ``pmix_server_job_ctrl.c`` sets it for
+a job named by ``PMIX_JOB_CTRL_KILL``, and for every job still running when
+``PMIX_JOB_CTRL_TERMINATE`` arrives with no targets --- which is the
+``pterm`` path.  A cancelled job now reports ``PMIX_ERR_JOB_CANCELED``
+rather than whatever status its processes happened to die with.  Note that
+this is a different symbol from the error code ``PRTE_ERR_JOB_CANCELLED``,
+which is live in ``ras/slurm`` for a cancelled SLURM allocation.  The
+checker's ``EXEMPT`` set is empty, and is meant to stay that way.

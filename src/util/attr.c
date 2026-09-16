@@ -50,6 +50,14 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
     prte_attribute_t *kv;
     int rc;
 
+    /* booleans are three-state and have their own accessor - see attr.h.
+     * Answering one through a bool cannot distinguish "false" from "nobody
+     * has said", which is the whole point of the other function. */
+    if (PMIX_BOOL == type) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return false;
+    }
+
     PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
     {
         if (key == kv->key) {
@@ -72,31 +80,75 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
     return false;
 }
 
+prte_attr_state_t prte_get_bool_attribute(pmix_list_t *attributes, prte_attribute_key_t key)
+{
+    prte_attribute_t *kv;
+
+    PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    {
+        if (key == kv->key) {
+            if (PMIX_BOOL != kv->data.type) {
+                pmix_output(0, "PRTE ERROR: attribute %s holds %s, requested as a boolean",
+                            prte_attr_key_to_str(key),
+                            PMIx_Data_type_string(kv->data.type));
+                PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
+                return PRTE_ATTR_NOT_SET;
+            }
+            return kv->data.data.flag ? PRTE_ATTR_TRUE : PRTE_ATTR_FALSE;
+        }
+    }
+    /* nobody has said */
+    return PRTE_ATTR_NOT_SET;
+}
+
+int prte_set_bool_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
+                            bool local, bool value)
+{
+    prte_attribute_t *kv;
+
+    PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    {
+        if (key == kv->key) {
+            if (PMIX_BOOL != kv->data.type) {
+                return PRTE_ERR_TYPE_MISMATCH;
+            }
+            /* Both truths are stored.  This deliberately does NOT remove the
+             * entry for a false value: "false" and "nobody has said" are
+             * different answers, and a reader that wants a default applied
+             * asks for the latter. prte_remove_attribute() is how a key goes
+             * back to being unset. */
+            kv->data.data.flag = value;
+            return PRTE_SUCCESS;
+        }
+    }
+
+    kv = PMIX_NEW(prte_attribute_t);
+    kv->key = key;
+    kv->local = local;
+    kv->data.type = PMIX_BOOL;
+    kv->data.data.flag = value;
+    pmix_list_append(attributes, &kv->super);
+    return PRTE_SUCCESS;
+}
+
 int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
                        bool local, void *data,
                        pmix_data_type_t type)
 {
     prte_attribute_t *kv;
-    bool *bl, bltrue = true;
     int rc;
+
+    /* booleans are three-state and have their own setter - see attr.h */
+    if (PMIX_BOOL == type) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
     {
         if (key == kv->key) {
             if (kv->data.type != type) {
                 return PRTE_ERR_TYPE_MISMATCH;
-            }
-            if (PMIX_BOOL == type) {
-                if (NULL == data) {
-                    bl = &bltrue;
-                } else {
-                    bl = (bool*)data;
-                }
-                if (false == *bl) {
-                    pmix_list_remove_item(attributes, &kv->super);
-                    PMIX_RELEASE(kv);
-                    return PRTE_SUCCESS;
-                }
             }
             if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
                 PRTE_ERROR_LOG(rc);
@@ -337,8 +389,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NODE-USERNAME";
         case PRTE_NODE_PORT:
             return "NODE-PORT";
-        case PRTE_NODE_LAUNCH_ID:
-            return "NODE-LAUNCHID";
         case PRTE_NODE_HOSTID:
             return "NODE-HOSTID";
         case PRTE_NODE_SERIAL_NUMBER:
@@ -378,16 +428,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-COMBINER";
         case PRTE_JOB_INDEX_ARGV:
             return "JOB-INDEX-ARGV";
-        case PRTE_JOB_NO_VM:
-            return "JOB-NO-VM";
         case PRTE_JOB_SPIN_FOR_DEBUG:
             return "JOB-SPIN-FOR-DEBUG";
         case PRTE_JOB_CONTINUOUS:
             return "JOB-CONTINUOUS";
         case PRTE_JOB_RECOVER_DEFINED:
             return "JOB-RECOVERY-DEFINED";
-        case PRTE_JOB_NON_PRTE_JOB:
-            return "JOB-NON-PRTE-JOB";
         case PRTE_JOB_STDOUT_TARGET:
             return "JOB-STDOUT-TARGET";
         case PRTE_JOB_POWER:
@@ -408,8 +454,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-INIT-BAR-ID";
         case PRTE_JOB_FINI_BAR_ID:
             return "JOB-FINI-BAR-ID";
-        case PRTE_JOB_FWDIO_TO_TOOL:
-            return "JOB-FWD-IO-TO-TOOL";
         case PRTE_JOB_LAUNCHED_DAEMONS:
             return "JOB-LAUNCHED-DAEMONS";
         case PRTE_JOB_REPORT_BINDINGS:
@@ -442,8 +486,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE-JOB-TIMESTAMP-OUTPUT";
         case PRTE_JOB_MULTI_DAEMON_SIM:
             return "PRTE_JOB_MULTI_DAEMON_SIM";
-        case PRTE_JOB_NOTIFY_COMPLETION:
-            return "PRTE_JOB_NOTIFY_COMPLETION";
         case PRTE_JOB_TRANSPORT_KEY:
             return "PRTE_JOB_TRANSPORT_KEY";
         case PRTE_JOB_INFO_CACHE:
@@ -607,9 +649,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
 
         case PRTE_JOB_OUTPUT_FILE_PATTERN:
             return "JOB-OUTPUT-FILE-PATTERN";
-
-        case PRTE_PROC_NOBARRIER:
-            return "PROC-NOBARRIER";
         case PRTE_PROC_PRIOR_NODE:
             return "PROC-PRIOR-NODE";
         case PRTE_PROC_NRESTARTS:

@@ -2491,7 +2491,7 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
         rc = PMIX_ERR_NOT_FOUND;
         goto respond;
     }
-    noagg = prte_get_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, NULL, PMIX_BOOL);
+    noagg = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOAGG_HELP);
 
     /* unpack the number of info */
     cnt = 1;

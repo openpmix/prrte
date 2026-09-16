@@ -577,13 +577,14 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, bool devices,
 
     /* NO ATTRIBUTE LIST GOES ON THE WIRE.
      *
-     * Exactly one proc attribute exists anywhere in this tree -
-     * PRTE_PROC_NOBARRIER - and it is PRTE_ATTR_LOCAL, which this filter
-     * excluded; it is also set by the odls on the daemon that forks the
-     * proc, which is after this packing and on the far side of it. So the
-     * count was 4 bytes per proc introducing a list that has been empty in
-     * every job ever launched - 512 KB of a 1.9 MB launch message at
-     * 1000 nodes x 128 ppn, buying nothing at any scale.
+     * NO proc attribute exists anywhere in this tree.  There was exactly
+     * one - PRTE_PROC_NOBARRIER - and it was PRTE_ATTR_LOCAL, which this
+     * filter excluded, and was set by the odls on the daemon that forks the
+     * proc, which is after this packing and on the far side of it; it has
+     * since been retired.  So the count was 4 bytes per proc introducing a
+     * list that has been empty in every job ever launched - 512 KB of a
+     * 1.9 MB launch message at 1000 nodes x 128 ppn, buying nothing at any
+     * scale.
      *
      * If you add a PRTE_ATTR_GLOBAL proc attribute, it has to come back
      * here and in prte_proc_unpack, together. The check below is what will

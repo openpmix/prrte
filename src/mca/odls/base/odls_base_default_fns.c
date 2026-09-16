@@ -405,7 +405,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_GRPID, &gid, PMIX_UINT32);
 
     /* if they haven't harvested envars, do so now */
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED, NULL, PMIX_BOOL)) {
+    if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED)) {
         PMIX_INFO_LIST_ADD(ret, ilist, PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
     }
     /* convert the job info into an array */
@@ -1194,11 +1194,6 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                 pmix_pointer_array_add(prte_local_children, pptr);
             }
 
-            /* if the job is in restart mode, the child must not barrier when launched */
-            if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
-                prte_set_attribute(&pptr->attributes, PRTE_PROC_NOBARRIER, PRTE_ATTR_LOCAL, NULL,
-                                   PMIX_BOOL);
-            }
             /* mark that this app_context is being used on this node */
             app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, pptr->app_idx);
             if (NULL == app) {
@@ -1282,7 +1277,7 @@ static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
     char *session_dir;
     bool usercwd = false;
 
-    if (prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_SSNDIR_CWD)) {
         /* move us to that location. Use the job handed in by our caller: the
          * app->job back-pointer is a raw pointer that is never serialized into
          * the launch message, so it is NULL on any daemon that unpacked this
@@ -1318,7 +1313,7 @@ static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
            exists and is executable The function will
            take care of outputting a pretty error message, if required
         */
-        if (prte_get_attribute(&app->attributes, PRTE_APP_USER_CWD, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_USER_CWD)) {
             usercwd = true;
         }
         rc = pmix_util_check_context_cwd(&app->cwd, true, usercwd);
@@ -1951,15 +1946,11 @@ static void spawn_caddy_resolve(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat)
 {
     char *agent = NULL;
 
-    cd->do_not_spawn = prte_get_attribute(&jobdat->attributes, PRTE_JOB_DO_NOT_SPAWN,
-                                          NULL, PMIX_BOOL);
-    cd->stop_on_exec = prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC,
-                                          NULL, PMIX_BOOL);
-    cd->report_bindings = prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS,
-                                             NULL, PMIX_BOOL);
-    cd->hwt_cpus = prte_get_attribute(&jobdat->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
-    cd->report_physical_cpus = prte_get_attribute(&jobdat->attributes,
-                                                  PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+    cd->do_not_spawn = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_DO_NOT_SPAWN);
+    cd->stop_on_exec = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC);
+    cd->report_bindings = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS);
+    cd->hwt_cpus = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_HWT_CPUS);
+    cd->report_physical_cpus = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
     if (NULL != cd->exec_agent) {
         free(cd->exec_agent);
         cd->exec_agent = NULL;
@@ -2070,7 +2061,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     }
 
     /* track if we are indexing argvs so we don't check every time */
-    index_argv = prte_get_attribute(&jobdat->attributes, PRTE_JOB_INDEX_ARGV, NULL, PMIX_BOOL);
+    index_argv = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_INDEX_ARGV);
 
     /* compute the total number of local procs currently alive and about to be launched */
     total_num_local_procs = compute_num_procs_alive(job) + jobdat->num_local_procs;
@@ -2570,7 +2561,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
      * Do NOT fall through to the exit-handling logic below. */
     if (WIFSTOPPED(proc->exit_code) && WSTOPSIG(proc->exit_code) == SIGTRAP) {
         if (NULL != jobdat &&
-            prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
+            PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC)) {
             PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:waitpid_fired ptrace-stop for %s, detaching with SIGSTOP",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -2620,8 +2611,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         if (NULL == jobdat) {
             flag = prte_state_base.error_non_zero_exit;
         } else {
-            flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL,
-                                      PMIX_BOOL);
+            flag = PRTE_ATTR_IS_TRUE(&jobdat->attributes, PRTE_JOB_ERROR_NONZERO_EXIT);
         }
 
         /* check to see if a sync was required and if it was received */
