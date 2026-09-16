@@ -39,7 +39,6 @@
 #include "ras_slurm.h"
 #include "src/mca/common/slurm/common_slurm.h"
 
-#define PRTE_SLURM_JOB_INFO_MAX_SIZE (1 * 1024 * 1024)
 /* The largest value the reader ever parses is one node's socket and core
  * map, and a node past PRTE_SLURM_MAX_CORE_COUNT cores is refused before
  * this limit is reached: Slurm spends about 140 bytes per core, so that
@@ -53,16 +52,6 @@
  */
 static int prte_ras_slurm_get_json_numobj_field(json_t *job, const char *key, pmix_hash_table_t *values_table);
 static int prte_ras_slurm_get_json_numobj_value(json_t *job, const char *key, int64_t *out);
-static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job_info_out);
-static size_t prte_ras_slurm_jansson_cbfunc(void *buffer, size_t buflen, void *data);
-
-/* Bounded reader for Slurm JSON output */
-typedef struct {
-    FILE *fp;
-    size_t remaining;
-    bool truncated;
-    bool io_error;
-} jansson_limited_reader_t;
 
 /*
  * Parse a numeric-object field from JSON and store it as a string in a hash table.
@@ -153,197 +142,6 @@ static int prte_ras_slurm_get_json_numobj_field(json_t *job, const char *key, pm
     }
 
     return PRTE_SUCCESS;
-}
-
-/*
- * Jansson input callback with read size limiting.
- *
- * Reads data from a FILE stream into the provided buffer, enforcing a
- * maximum total number of bytes that can be consumed. If the limit is
- * reached, the reader is marked as truncated and no further data is read.
- * Intended for use with json_load_callback().
- *
- * @param[out] buffer
- *     Destination buffer for read data.
- * @param[in] buflen
- *     Maximum number of bytes to read into the buffer.
- * @param[in,out] data
- *     Pointer to a jansson_limited_reader_t structure containing the FILE
- *     stream, remaining byte budget, and truncation and error flags.
- *
- * @return Number of bytes read into buffer. Returns 0 when no more data
- *         should be read (EOF or limit reached).
- */
-static size_t prte_ras_slurm_jansson_cbfunc(void *buffer, size_t buflen, void *data)
-{
-    jansson_limited_reader_t *reader = data;
-
-    if (reader->remaining == 0) {
-        reader->truncated = 1;
-        return 0;
-    }
-
-    if (buflen > reader->remaining) {
-        buflen = reader->remaining;
-    }
-
-    size_t len = fread(buffer, 1, buflen, reader->fp);
-
-    if (0 == len && ferror(reader->fp)) {
-        reader->io_error = true;
-    }
-
-    reader->remaining -= len;
-    return len;
-}
-
-/*
- * Query Slurm job information and return the job object as Jansson JSON.
- *
- * Executes `scontrol show job <jobid> --json`, parses the resulting JSON,
- * and returns the single job object contained in the response. On success,
- * the returned JSON object is referenced for the caller, who becomes responsible
- * for releasing it with json_decref().
- *
- * @param[in] slurm_jobid
- *     SLURM job ID to query.
- * @param[out] job_info_out
- *     Output pointer receiving the parsed JSON object for the job. Set to
- *     NULL on entry and on failure.
- */
-static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job_info_out)
-{
-    if(NULL == slurm_jobid || NULL == job_info_out) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    *job_info_out = NULL;
-
-    int err = PRTE_SUCCESS;
-
-    /* Make sure the job ID given is within constraints */
-    err = prte_ras_slurm_validate_jobid(slurm_jobid);
-
-    if(PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        return err;
-    }
-
-    static const char *cmd_format = "scontrol show job %s --json";
-
-    json_error_t json_err;
-
-    json_t *parent_json = NULL;
-
-    FILE *fp = NULL;
-
-    char *cmd = NULL;
-
-    if(0 > asprintf(&cmd, cmd_format, slurm_jobid)) {
-        cmd = NULL;
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(err);
-        return err;
-    }
-
-    fp = popen(cmd, "r");
-
-    if(NULL == fp) {
-        err = PRTE_ERR_FILE_OPEN_FAILURE;
-        goto cleanup;
-    }
-
-    jansson_limited_reader_t lr = {
-        .fp = fp,
-        .remaining = PRTE_SLURM_JOB_INFO_MAX_SIZE,
-        .truncated = false,
-        .io_error = false
-    };
-
-    parent_json = json_load_callback(
-        prte_ras_slurm_jansson_cbfunc,
-        &lr,
-        JSON_REJECT_DUPLICATES,
-        &json_err
-    );
-
-    int status = pclose(fp);
-    fp = NULL;
-
-    if (-1 == status) {
-        pmix_output(0, "ras:slurm:get_jobinfo_json: pclose failed: %s.", strerror(errno));
-        err = PRTE_ERR_IN_ERRNO;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    if (!WIFEXITED(status) || 0 != WEXITSTATUS(status)) {
-        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-            "%s ras:slurm:get_jobinfo_json: non-zero exit code (%d) from scontrol command.",
-            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-            WIFEXITED(status) ? WEXITSTATUS(status) : -1));
-        err = PRTE_ERR_SLURM_QUERY_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    if(!parent_json) {
-
-        if(lr.io_error) {
-            err = PRTE_ERR_FILE_READ_FAILURE;
-            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-            "%s ras:slurm:get_jobinfo_json: error reading from stream.",
-            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        } else if(lr.truncated) {
-            err = PRTE_ERR_MEM_LIMIT_EXCEEDED;
-            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-            "%s ras:slurm:get_jobinfo_json: job info JSON was truncated.",
-            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        } else {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-            "%s ras:slurm:get_jobinfo_json: job info JSON parse failed.",
-            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        }
-
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    /* Jobs array: we expect and require exactly one job in the result  */
-    json_t *jobs_arr = json_object_get(parent_json, "jobs");
-    if (NULL == jobs_arr || !json_is_array(jobs_arr) || 1 != json_array_size(jobs_arr)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *job = json_array_get(jobs_arr, 0);
-    if (NULL == job || !json_is_object(job)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    /* Ensure job information is not destroyed */
-    json_incref(job);
-
-    *job_info_out = job;
-
-    cleanup:
-
-    if(NULL != fp) {
-        pclose(fp);
-    }
-
-    if(NULL != parent_json) {
-        json_decref(parent_json);
-    }
-
-    free(cmd);
-
-    return err;
 }
 
 /*
@@ -1390,16 +1188,97 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
  * @param[in,out] session Session to update.
  * @param[out] removed_nodes Receives detached nodes; must be empty.
  */
-int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session, pmix_pointer_array_t *removed_nodes)
+/* The session's nodes, and which of them the record still lists. */
+typedef struct {
+    pmix_pointer_array_t *matched;
+    pmix_pointer_array_t *unmatched;
+    size_t session_nodes;
+} prte_ras_slurm_detach_t;
+
+static int prte_ras_slurm_detach_count(size_t node_count, void *cbdata)
 {
-    if (NULL == slurm_jobid || NULL == removed_nodes ||
-        NULL == session || NULL == session->nodes || 
-        0 != removed_nodes->size) {
+    prte_ras_slurm_detach_t *detach = (prte_ras_slurm_detach_t *) cbdata;
+
+    /* Sanity checks the matching below relies on. Slurm states this count
+     * ahead of the nodes themselves, and the walk holds the list to it. */
+    if (0 == node_count || 0 == detach->session_nodes || node_count >= detach->session_nodes) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
 
-    int err = PRTE_SUCCESS;
+    return PRTE_SUCCESS;
+}
+
+static int prte_ras_slurm_detach_node(size_t index, json_t *node_obj, void *cbdata)
+{
+    prte_ras_slurm_detach_t *detach = (prte_ras_slurm_detach_t *) cbdata;
+    const char *nodename_string;
+    json_t *nodename;
+    int session_node_idx;
+    int err;
+    int j;
+
+    if (!json_is_object(node_obj)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    nodename = json_object_get(node_obj, "name");
+
+    if (NULL == nodename || !json_is_string(nodename)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    nodename_string = json_string_value(nodename);
+
+    if (NULL == nodename_string || '\0' == nodename_string[0]) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    session_node_idx = (int) index;
+
+    /* find the equivalent node in the list of unmatched nodes.
+     * We expect (but do not strictly require) the ordering here
+     * to be favorable; i.e. node at index i should be the
+     * one we are looking for */
+    for (j = 0; j < detach->unmatched->size; j++) {
+        prte_node_t *curr = (prte_node_t *) pmix_pointer_array_get_item(detach->unmatched,
+                                                                        session_node_idx);
+
+        if (NULL != curr && NULL != curr->name && 0 == strcmp(curr->name, nodename_string)) {
+            pmix_pointer_array_add(detach->matched, curr);
+            pmix_pointer_array_set_item(detach->unmatched, session_node_idx, NULL);
+            return PRTE_SUCCESS;
+        }
+
+        if (++session_node_idx >= detach->unmatched->size) {
+            session_node_idx = 0;
+        }
+    }
+
+    err = PRTE_ERR_NOT_FOUND;
+    PRTE_ERROR_LOG(err);
+    return err;
+}
+
+int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session, pmix_pointer_array_t *removed_nodes)
+{
+    pmix_pointer_array_t matched_nodes, unmatched_nodes;
+    prte_ras_slurm_detach_t detach;
+    int err;
+    int i;
+
+    if (NULL == slurm_jobid || NULL == removed_nodes ||
+        NULL == session || NULL == session->nodes ||
+        0 != removed_nodes->size) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     err = prte_ras_slurm_validate_jobid(slurm_jobid);
 
@@ -1408,124 +1287,36 @@ int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session
         return err;
     }
 
-    pmix_pointer_array_t matched_nodes, unmatched_nodes;
     PMIX_CONSTRUCT(&matched_nodes, pmix_pointer_array_t);
     PMIX_CONSTRUCT(&unmatched_nodes, pmix_pointer_array_t);
 
-    json_t *root = NULL;
+    detach.matched = &matched_nodes;
+    detach.unmatched = &unmatched_nodes;
+    detach.session_nodes = 0;
 
-    err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &root);
-
-    if(PRTE_SUCCESS != err) {
-        goto cleanup;
-    }
-
-    json_t *job_resources = json_object_get(root, "job_resources");
-
-    if(NULL == job_resources || !json_is_object(job_resources)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *nodes = json_object_get(job_resources, "nodes");
-
-    if(NULL == nodes || !json_is_object(nodes)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *allocation = json_object_get(nodes, "allocation");
-
-    if (NULL == allocation || !json_is_array(allocation)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    size_t new_alloc_size = json_array_size(allocation);
-    size_t session_nodes_size = 0;
-
-    for (int i = 0; i < session->nodes->size; i++) {
+    /* Built before the record is read, so the count Slurm states can be
+     * judged the moment it arrives. */
+    for (i = 0; i < session->nodes->size; i++) {
         prte_node_t *node_ptr = (prte_node_t *)pmix_pointer_array_get_item(session->nodes, i);
 
         if (NULL != node_ptr) {
             pmix_pointer_array_add(&unmatched_nodes, node_ptr);
-            session_nodes_size++;
+            detach.session_nodes++;
         }
     }
 
-    /* sanity checks, as we rely on these assumptions implicitly later */
-    if (0 == new_alloc_size || 0 == session_nodes_size 
-        || new_alloc_size >= session_nodes_size) {
-        err = PRTE_ERR_BAD_PARAM;
-        PRTE_ERROR_LOG(err);
+    err = prte_ras_slurm_walk_alloc_nodes(slurm_jobid, prte_ras_slurm_detach_count,
+                                          prte_ras_slurm_detach_node, &detach, NULL);
+
+    if(PRTE_SUCCESS != err) {
         goto cleanup;
-    }
-
-    /* retrieve surviving nodes in Slurm-provided order */
-
-    for (size_t i = 0; i < new_alloc_size; i++) {
-        json_t *node_obj = json_array_get(allocation, i);
-
-        if (!json_is_object(node_obj)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        json_t *nodename = json_object_get(node_obj, "name");
-
-        if (NULL == nodename || !json_is_string(nodename)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        const char *nodename_string = json_string_value(nodename);
-
-        if (NULL == nodename_string || '\0' == nodename_string[0]) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        int session_node_idx = (int)i;
-        bool found = false;
-
-        /* find the equivalent node in the list of unmatched nodes. 
-         * We expect (but do not strictly require) the ordering here
-         * to be favorable; i.e. node at index i should be the
-         * one we are looking for */
-        for (int j = 0; j < unmatched_nodes.size; j++) {
-            prte_node_t *curr = (prte_node_t *)pmix_pointer_array_get_item(&unmatched_nodes, (int)session_node_idx);
-            
-            if (NULL != curr && NULL != curr->name &&
-                0 == strcmp(curr->name, nodename_string)) {
-                found = true;
-                pmix_pointer_array_add(&matched_nodes, curr);
-                pmix_pointer_array_set_item(&unmatched_nodes, session_node_idx, NULL);
-                break;
-            }
-            
-            if(++session_node_idx >= unmatched_nodes.size) {
-                session_node_idx = 0;
-            }
-        }
-
-        if(!found) {
-            err = PRTE_ERR_NOT_FOUND;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
     }
 
     /* success, clear out old entries and reconstruct the node list*/
 
     pmix_pointer_array_remove_all(session->nodes);
 
-    for (int i = 0; i < matched_nodes.size; i++) {
+    for (i = 0; i < matched_nodes.size; i++) {
         prte_node_t *curr = (prte_node_t *)pmix_pointer_array_get_item(&matched_nodes, i);
         if(NULL != curr) {
             pmix_pointer_array_set_item(session->nodes, i, curr);
@@ -1534,7 +1325,7 @@ int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session
 
     pmix_pointer_array_remove_all(&matched_nodes);
 
-    for (int i = 0; i < unmatched_nodes.size; i++) {
+    for (i = 0; i < unmatched_nodes.size; i++) {
         prte_node_t *curr = (prte_node_t *)pmix_pointer_array_get_item(&unmatched_nodes, i);
         if(NULL != curr) {
             pmix_pointer_array_add(removed_nodes, curr);
@@ -1544,10 +1335,6 @@ int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session
     pmix_pointer_array_remove_all(&unmatched_nodes);
 
 cleanup:
-
-    if(NULL != root) {
-        json_decref(root);
-    }
 
     PMIX_DESTRUCT(&matched_nodes);
     PMIX_DESTRUCT(&unmatched_nodes);
