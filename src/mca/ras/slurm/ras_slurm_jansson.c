@@ -836,6 +836,133 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
 }
 
 /*
+ * One node as the allocation array describes it.
+ *
+ * The list is built whole before any prte_node_t is, so a record that fails
+ * partway adds nothing to the caller's list.
+ */
+typedef struct {
+    char *name;
+    int core_count;
+    int cpu_count;
+} prte_ras_slurm_alloc_node_t;
+
+typedef struct {
+    prte_ras_slurm_alloc_node_t *nodes;
+    size_t count;
+    size_t cap;
+} prte_ras_slurm_alloc_list_t;
+
+static void prte_ras_slurm_alloc_list_destruct(prte_ras_slurm_alloc_list_t *list)
+{
+    size_t i;
+
+    for (i = 0; i < list->count; i++) {
+        free(list->nodes[i].name);
+    }
+
+    free(list->nodes);
+    list->nodes = NULL;
+    list->count = 0;
+    list->cap = 0;
+}
+
+static int prte_ras_slurm_alloc_list_add(prte_ras_slurm_alloc_list_t *list, const char *name,
+                                         int core_count, int cpu_count)
+{
+    char *name_dup;
+
+    if (list->count == list->cap) {
+        size_t cap = (0 == list->cap) ? 16 : list->cap * 2;
+        prte_ras_slurm_alloc_node_t *grown = realloc(list->nodes, cap * sizeof(*grown));
+
+        if (NULL == grown) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+
+        list->nodes = grown;
+        list->cap = cap;
+    }
+
+    name_dup = strdup(name);
+
+    if (NULL == name_dup) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    list->nodes[list->count].name = name_dup;
+    list->nodes[list->count].core_count = core_count;
+    list->nodes[list->count].cpu_count = cpu_count;
+    list->count++;
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Turn a collected allocation into nodes the DVM can be grown onto.
+ *
+ * "cpus" is the number of hardware threads the node offers. To respect what
+ * the original job asked for, slots are (allocated cores * threads_per_core)
+ * held to that ceiling.
+ */
+static int prte_ras_slurm_alloc_list_to_nodes(prte_ras_slurm_alloc_list_t *list,
+                                              int threads_per_core, pmix_list_t *node_list)
+{
+    size_t i;
+
+    for (i = 0; i < list->count; i++) {
+        prte_ras_slurm_alloc_node_t *entry = &list->nodes[i];
+        prte_node_t *node;
+        int slots;
+
+        if (entry->core_count > INT_MAX / threads_per_core) {
+            PRTE_ERROR_LOG(PRTE_ERR_JSON_PARSE_FAILURE);
+            return PRTE_ERR_JSON_PARSE_FAILURE;
+        }
+
+        slots = entry->core_count * threads_per_core;
+
+        if (slots > entry->cpu_count) {
+            slots = entry->cpu_count;
+        }
+
+        node = PMIX_NEW(prte_node_t);
+
+        if (NULL == node) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+
+        /* These nodes are being added to a DVM that is already running, so
+         * they must carry the mark the DVM extension selects on: a grow
+         * launches daemons on the nodes in PRTE_NODE_STATE_ADDED and only
+         * those (prte_plm_base_setup_virtual_machine). Handing them over as
+         * plain UP - the state an initial discovery uses - left every node
+         * Slurm granted us sitting in the pool with no daemon on it, so the
+         * extend added resources the DVM could never use. The other producers
+         * of a grow (ras/hosts, the no-scheduler insert path, and the
+         * reused-node branch of this component) all mark ADDED for exactly
+         * this reason. */
+        node->state = PRTE_NODE_STATE_ADDED;
+        node->name = entry->name;
+        entry->name = NULL;
+        node->slots_inuse = 0;
+        node->slots_max = 0;
+        node->slots = slots;
+        /* derived from the allocation Slurm just granted - authoritative */
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+
+        pmix_list_append(node_list, &node->super);
+
+        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+            "%s ras:slurm:add_modified_resources: discovered node %s with %d slots",
+            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
  * Fetch and parse Slurm job resource JSON and add allocated nodes and slots.
  *
  * Given a Slurm job ID, this function retrieves the job resource description,
@@ -879,6 +1006,8 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
     }
 
     int threads_per_core = 1;
+
+    prte_ras_slurm_alloc_list_t collected = {NULL, 0, 0};
 
     json_t *root = NULL;
 
@@ -1091,65 +1220,20 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
             goto cleanup;
         }
 
-        if (core_count > INT_MAX / threads_per_core) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
+        err = prte_ras_slurm_alloc_list_add(&collected, nodename_string, core_count,
+                                            cpu_max_count);
+
+        if (PRTE_SUCCESS != err) {
             PRTE_ERROR_LOG(err);
             goto cleanup;
         }
-
-        char *nodename_dyn = strdup(nodename_string);
-
-        if (NULL == nodename_dyn) {
-            err = PRTE_ERR_OUT_OF_RESOURCE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        /*
-        The "cpus" field represents the number of hardware
-        threads available. To respect the preferences of the
-        original job, we calculate (cores * threads_per_core),
-        ensuring it does not exceed the available count as provided
-        by the "cpus" field. Note that if threads_per_core is
-        unset, infinite, or out of expected bounds, we default to 1.
-        If threads_per_core is missing entirely, we error out.
-        */
-
-        int slots = core_count * threads_per_core;
-
-        if(slots > cpu_max_count) {
-            slots = cpu_max_count;
-        }
-
-        prte_node_t *node = PMIX_NEW(prte_node_t);
-
-        /* These nodes are being added to a DVM that is already running, so
-         * they must carry the mark the DVM extension selects on: a grow
-         * launches daemons on the nodes in PRTE_NODE_STATE_ADDED and only
-         * those (prte_plm_base_setup_virtual_machine). Handing them over as
-         * plain UP - the state an initial discovery uses - left every node
-         * Slurm granted us sitting in the pool with no daemon on it, so the
-         * extend added resources the DVM could never use. The other producers
-         * of a grow (ras/hosts, the no-scheduler insert path, and the
-         * reused-node branch of this component) all mark ADDED for exactly
-         * this reason. */
-        node->state = PRTE_NODE_STATE_ADDED;
-        node->name = nodename_dyn;
-        node->slots_inuse = 0;
-        node->slots_max = 0;
-        node->slots = slots;
-        /* derived from the allocation Slurm just granted - authoritative */
-        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-
-        pmix_list_append(node_list, &node->super);
-
-        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-        "%s ras:slurm:add_modified_resources: discovered node %s with "
-        "%d slots",
-        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
     }
 
+    err = prte_ras_slurm_alloc_list_to_nodes(&collected, threads_per_core, node_list);
+
     cleanup:
+
+    prte_ras_slurm_alloc_list_destruct(&collected);
 
     if(NULL != root) {
         json_decref(root);
