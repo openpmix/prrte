@@ -144,10 +144,9 @@ int test_job_qualifiers(void)
     rc = prte_rmaps_base_hoist_job_directives(jdata, &oversub);
     CHECK("inherit: rc", PRTE_SUCCESS == rc);
     CHECK("inherit: on the job",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_INHERIT));
     CHECK("inherit: off the app",
-          !prte_get_attribute(&appn(jdata, 1)->attributes, PRTE_JOB_INHERIT,
-                              NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&appn(jdata, 1)->attributes, PRTE_JOB_INHERIT));
     PMIX_RELEASE(jdata);
 
     /* === one app inheriting while another refuses to has no meaning === */
@@ -166,7 +165,7 @@ int test_job_qualifiers(void)
     CHECK("silent apps: rc", PRTE_SUCCESS == rc);
     CHECK("silent apps: nothing hoisted", 0 == oversub);
     CHECK("silent apps: no inherit",
-          !prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_INHERIT));
     PMIX_RELEASE(jdata);
 
     return failures;

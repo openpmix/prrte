@@ -51,25 +51,16 @@
 
 #include "src/mca/state/base/base.h"
 
-/* Apply one boolean runtime option.
- *
- * Every consumer of these attributes tests them by PRESENCE -
- * prte_get_attribute(&attrs, KEY, NULL, PMIX_BOOL) returns true as soon as
- * the key is on the list, whatever value it carries.  So a directive of
- * "opt=false" has to REMOVE the attribute: storing a false value under the
- * key leaves it present, and every one of those call sites then reads the
- * option as ENABLED - the exact opposite of what the user asked for.  This
- * is the same translation the defaults branch below performs, and its
- * comment explains the rationale: callers should not have to check a value
- * everywhere a boolean option is used.
- */
+/* Record what a directive on the command line or in a PMIX_RUNTIME_OPTIONS
+ * spec asked for.  BOTH truths are stored: the user writing "opt=false" has
+ * answered the question, and the defaults pass above must leave that answer
+ * alone rather than mistake it for the key nobody mentioned.  This used to
+ * remove the attribute for a false value, because every reader tested
+ * presence and a stored false read as enabled; readers use
+ * PRTE_ATTR_IS_TRUE now, which is false for FALSE and for NOT_SET alike. */
 static void set_bool_option(prte_job_t *jdata, prte_attribute_key_t key, bool flag)
 {
-    if (flag) {
-        prte_set_attribute(&jdata->attributes, key, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-    } else {
-        prte_remove_attribute(&jdata->attributes, key);
-    }
+    prte_set_bool_attribute(&jdata->attributes, key, PRTE_ATTR_GLOBAL, flag);
 }
 
 /* Does SPEC - a runtime-option string as it came off a command line - ask
@@ -121,116 +112,67 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
 {
     char **options, *ptr, *bkpt;
     int n, k, tm;
-    bool flag, *fptr = &flag;
     int32_t i32;
+    bool flag;
     prte_job_t *djob;
     prte_app_context_t *app;
     pmix_info_t info;
     pmix_value_t value;
 
     if (NULL == spec) {
-        /* set everything to the defaults if not already set. We don't want to
-         * have to check the value of BOOL settings everywhere we use them, so
-         * we translate them here by removing the attribute if it is set to false,
-         * and leaving it if it is set to true. If it isn't present, then it wasn't
-         * provided via PMIx_Spawn and we instead set it based on the defaults
-         */
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_state_base.error_non_zero_exit) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        /* Fill in the options nobody has expressed a view on.
+         *
+         * A boolean attribute is three-state (see attr.h), which is what
+         * makes this possible: an option the spawn explicitly set to FALSE
+         * is left exactly as it was given, while one that is NOT_SET is
+         * nobody's answer and takes this framework's default. Readers test
+         * with PRTE_ATTR_IS_TRUE, so an explicit false reads as off.
+         *
+         * This used to depend on prte_set_attribute() APPENDING a false
+         * boolean, so that "the user said no" could be told from "nobody
+         * said" by the value, and then removed the false one to leave
+         * something the presence tests could read. Both halves of that are
+         * gone. */
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
+                                    prte_state_base.error_non_zero_exit);
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_state_base.show_launch_progress) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
+                                    prte_state_base.show_launch_progress);
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_state_base.recoverable) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, PRTE_ATTR_GLOBAL,
+                                    prte_state_base.recoverable);
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_state_base.continuous) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, PRTE_ATTR_GLOBAL,
+                                    prte_state_base.continuous);
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_state_base.notifyerrors) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, PRTE_ATTR_GLOBAL,
+                                    prte_state_base.notifyerrors);
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_state_base.autorestart) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART, PRTE_ATTR_GLOBAL,
+                                    prte_state_base.autorestart);
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_report_child_jobs_separately) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP, PRTE_ATTR_GLOBAL,
+                                    prte_report_child_jobs_separately);
         }
 
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, NULL, PMIX_STRING)) {
@@ -241,18 +183,10 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             }
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void**)&fptr, PMIX_BOOL)) {
-            /* it is present - check the value */
-            if (!flag) {
-                /* remove the attribute */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT);
-            }
-        } else {
-            /* set it based on default value */
-            if (prte_fwd_environment) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT)) {
+            /* nobody has said - take the default */
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL,
+                                    prte_fwd_environment);
         }
 
         /* check the apps for max restarts */
@@ -380,8 +314,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
                 flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL, true);
                 } else {
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC);
                 }
@@ -389,8 +322,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
                 flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL, true);
                     /* also must add to job-level cache */
                     PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
                     pmix_server_cache_job_info(jdata, &info);
@@ -414,8 +346,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     bkpt = ptr;
                 }
                 if (flag) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL, true);
                     /* also must add to job-level cache */
                     PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL);
                     pmix_server_cache_job_info(jdata, &info);
@@ -497,8 +428,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_FWD_ENVIRON)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL, flag);
 
             } else {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy", true,
@@ -517,9 +447,9 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
      * then notifications will not be given as we will terminate the job upon
      * error. Detect that situation, provide a show-help explaining the problem,
      * and then error out */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, NULL, PMIX_BOOL) &&
-        !prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL) &&
-        !prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS) &&
+        !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE) &&
+        !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CONTINUOUS)) {
         prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "bad-combination", true);
         return PRTE_ERR_SILENT;
     }

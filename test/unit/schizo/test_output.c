@@ -232,6 +232,9 @@ int test_output(void)
     char *dvals3[] = {"map:parseable", NULL};
     char *dvals4[] = {"topo=node1;node2", NULL};
     char *dvals5[] = {"map:bogus", NULL};
+    char *evals1[] = {"bogus", NULL};
+    char *evals2[] = {"bogus", NULL};
+    char *evals3[] = {"tag:bogus", NULL};
     char *bvals1[] = {"tag=0", NULL};
     char *bvals2[] = {"tag=1,timestamp=false", NULL};
     char *bvals3[] = {"tag=maybe", NULL};
@@ -346,6 +349,28 @@ int test_output(void)
     rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dvals5,
                     &iptr, &ninfo);
     CHECK("display:bad-qual", PRTE_SUCCESS != rc);
+
+    /*** so is an unknown DIRECTIVE - in either parser ***
+     *
+     * The sanity checker refuses these before a command line ever reaches
+     * these parsers, but the "prte_output"/"prte_display" MCA params do not
+     * go through it: prun_common.c and prte.c hand the param's value
+     * straight to the parser when the option is absent.  A directive the
+     * parser did not recognize simply emitted no key, so "--prtemca
+     * prte_output bogus" ran the job with no tagging, no file, and an exit
+     * status of 0 - while "--output bogus" was reported.  Refusing here
+     * covers both doors.
+     */
+    fprintf(stderr, "--- expected error output follows (bad directives) ---\n");
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, evals1,
+                    &iptr, &ninfo);
+    CHECK("output:bad-directive", PRTE_SUCCESS != rc);
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, evals2,
+                    &iptr, &ninfo);
+    CHECK("display:bad-directive", PRTE_SUCCESS != rc);
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, evals3,
+                    &iptr, &ninfo);
+    CHECK("output:bad-qualifier", PRTE_SUCCESS != rc);
 
     /*** THE VALUE FORM.
      ***

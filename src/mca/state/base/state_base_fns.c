@@ -355,7 +355,7 @@ void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
         return;
     }
 
-    found = prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
+    found = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
     if (found) {
         if (0 == jdata->num_daemons_reported % 100 ||
             jdata->num_daemons_reported == prte_process_info.num_daemons) {
@@ -698,9 +698,9 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL) ||
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, NULL, PMIX_BOOL) ||
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC) ||
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_INIT) ||
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_APP)) {
             if (PRTE_PROC_IS_MASTER) {
                 threshold = jdata->num_procs;
             } else {
@@ -825,10 +825,15 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
          * remain (might be some from another job)
          */
         if (prte_prteds_term_ordered && 0 == prte_rml_base.n_children) {
+            /* a scratch pointer of its own: everything below this block
+             * still needs pdata to be the proc we are tracking, and the
+             * only thing that kept that true was both exits from here
+             * happening to reach cleanup */
+            prte_proc_t *cptr;
             for (i = 0; i < prte_local_children->size; i++) {
-                pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
-                if (NULL != pdata &&
-                    PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
+                cptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL != cptr &&
+                    PRTE_FLAG_TEST(cptr, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     goto cleanup;
                 }
@@ -1000,6 +1005,25 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
     node = pptr->node;
     map = jdata->map;
 
+    /* Nothing to recover from a proc that holds no node, or for a job whose
+     * map has already been torn down.  Neither is corruption - both are
+     * ordinary states by the time the errmgr reaches this.
+     *
+     * prte_node_destruct() clears proc->node on every proc it knows about,
+     * because a proc outlives its node (its job holds a reference too), and
+     * prte_proc_construct() starts it NULL for a proc that was never
+     * placed; errmgr/dvm is aware of it, printing
+     * "(NULL == pptr->node) ? \"unknown\"" five lines before it calls here
+     * for PRTE_PROC_STATE_KILLED_BY_RELEASE.  state/dvm's check_complete
+     * releases the map and sets jdata->map to NULL, and this routine exists
+     * to be re-entered for the same proc, so a later terminal state can
+     * arrive after that.  Reading either one unconditionally took the HNP -
+     * and therefore the whole DVM - down with the proc it was trying to
+     * account for. */
+    if (NULL == node || NULL == map) {
+        return;
+    }
+
     /* Find this proc in the node's proc array.  This routine can be entered
      * more than once for the same proc - e.g. a daemon loss marks the proc
      * PRTE_PROC_STATE_TERM_WO_SYNC and a subsequent job abort delivers a
@@ -1037,12 +1061,13 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
         }
         if (nptr == node) {
             node_idx = n;
+            break;
         }
     }
 
     // determine how cpus were handled
     takeall = false;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
         type = HWLOC_OBJ_PU;
     } else {
         type = HWLOC_OBJ_CORE;

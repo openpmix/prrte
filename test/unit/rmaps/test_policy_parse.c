@@ -47,7 +47,7 @@ static uint16_t get_u16(pmix_list_t *attrs, prte_attribute_key_t key)
 
 static bool get_bool(pmix_list_t *attrs, prte_attribute_key_t key)
 {
-    return prte_get_attribute(attrs, key, NULL, PMIX_BOOL);
+    return PRTE_ATTR_IS_TRUE(attrs, key);
 }
 
 static char *get_str(pmix_list_t *attrs, prte_attribute_key_t key)
@@ -310,7 +310,7 @@ int test_policy_parse(void)
     CHECK("mapby device=nic: ndev qualifier",
           2 == get_u16(&app->attributes, PRTE_APP_MAP_NDEV));
     CHECK("mapby device=nic: shared qualifier",
-          prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     PMIX_RELEASE(app);
 
     app = PMIX_NEW(prte_app_context_t);
@@ -386,14 +386,14 @@ int test_policy_parse(void)
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared");
     CHECK("mapby shared: rc", PRTE_SUCCESS == rc);
     CHECK("mapby shared: recorded",
-          prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     PMIX_RELEASE(app);
 
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared=true");
     CHECK("mapby shared=true: recorded",
           PRTE_SUCCESS == rc
-          && prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+          && PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     PMIX_RELEASE(app);
 
     /* false is the default, so it records nothing - and must not be an error */
@@ -401,7 +401,7 @@ int test_policy_parse(void)
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared=false");
     CHECK("mapby shared=false: accepted", PRTE_SUCCESS == rc);
     CHECK("mapby shared=false: not recorded",
-          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     PMIX_RELEASE(app);
 
     app = PMIX_NEW(prte_app_context_t);
@@ -422,7 +422,7 @@ int test_policy_parse(void)
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:s");
     CHECK("mapby ':s' : rc", PRTE_SUCCESS == rc);
     CHECK("mapby ':s' still means SPAN, not shared",
-          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
     CHECK("mapby ':s' set the SPAN directive",
           0 != (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(u16)));
@@ -432,7 +432,7 @@ int test_policy_parse(void)
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:sh");
     CHECK("mapby ':sh' is shared",
           PRTE_SUCCESS == rc
-          && prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+          && PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     PMIX_RELEASE(app);
 
     /* --- ndev: several devices to each proc --- */

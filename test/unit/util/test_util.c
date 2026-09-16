@@ -566,7 +566,7 @@ static int test_attr_round_trip(void)
     int failures = 0;
     pmix_list_t attrs;
     int ival = 42, iout = 0, *iptr = &iout;
-    bool bout = false, *bptr = &bout;
+
     char *sout = NULL;
     pmix_envar_t envar, *eout = NULL;
     prte_attribute_t *kv;
@@ -592,26 +592,59 @@ static int test_attr_round_trip(void)
     CHECK("a reset does not duplicate the entry", 1 == pmix_list_get_size(&attrs));
 
     /* asking for the wrong type must fail rather than reinterpret bytes */
-    CHECK("a type mismatch on get is refused",
-          !prte_get_attribute(&attrs, PRTE_JOB_ROOM_NUM, (void **) &bptr, PMIX_BOOL));
     CHECK("a type mismatch on set is refused",
-          PRTE_ERR_TYPE_MISMATCH == prte_set_attribute(&attrs, PRTE_JOB_ROOM_NUM,
-                                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL));
+          PRTE_ERR_TYPE_MISMATCH == prte_set_bool_attribute(&attrs, PRTE_JOB_ROOM_NUM, PRTE_ATTR_GLOBAL, true));
+    CHECK("a type mismatch on the bool get answers NOT_SET",
+          PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&attrs, PRTE_JOB_ROOM_NUM));
 
-    /* bool: presence means true, and setting false removes the entry */
-    CHECK("set a bool by presence",
-          PRTE_SUCCESS == prte_set_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, PRTE_ATTR_GLOBAL,
-                                             NULL, PMIX_BOOL));
-    bptr = &bout;
-    CHECK("a present bool reads true",
-          prte_get_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, (void **) &bptr, PMIX_BOOL)
-              && bout);
-    bout = false;
-    CHECK("setting a bool false removes it",
-          PRTE_SUCCESS == prte_set_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, PRTE_ATTR_GLOBAL,
-                                             &bout, PMIX_BOOL));
-    CHECK("a removed bool is absent",
+    /*** BOOLEANS ARE THREE-STATE ***
+     *
+     * "false" and "nobody has said" are different answers, and the whole
+     * point of the dedicated accessor is that a caller can tell them apart -
+     * a default is what NOT_SET is for. The generic accessors refuse
+     * PMIX_BOOL outright so that no reader can collapse the three into a
+     * bool by accident, which is how PMIX_DO_NOT_LAUNCH=false came to mean
+     * "do not launch".
+     */
+    CHECK("the generic getter refuses a boolean",
           !prte_get_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, NULL, PMIX_BOOL));
+    CHECK("the generic setter refuses a boolean",
+          PRTE_ERR_BAD_PARAM == prte_set_attribute(&attrs, PRTE_JOB_DEBUG_TARGET,
+                                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL));
+
+    CHECK("an unmentioned bool is NOT_SET",
+          PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET));
+    CHECK("...and PRTE_ATTR_IS_TRUE says no",
+          !PRTE_ATTR_IS_TRUE(&attrs, PRTE_JOB_DEBUG_TARGET));
+
+    CHECK("set a bool true",
+          PRTE_SUCCESS == prte_set_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, PRTE_ATTR_GLOBAL, true));
+    CHECK("a true bool reads TRUE",
+          PRTE_ATTR_TRUE == prte_get_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET));
+    CHECK("...and PRTE_ATTR_IS_TRUE says yes",
+          PRTE_ATTR_IS_TRUE(&attrs, PRTE_JOB_DEBUG_TARGET));
+
+    /* the crux: a false value is STORED, not removed */
+    CHECK("set the same bool false",
+          PRTE_SUCCESS == prte_set_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, PRTE_ATTR_GLOBAL, false));
+    CHECK("a false bool reads FALSE, not NOT_SET",
+          PRTE_ATTR_FALSE == prte_get_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET));
+    CHECK("...and is still on the list",
+          NULL != prte_fetch_attribute(&attrs, NULL, PRTE_JOB_DEBUG_TARGET));
+    CHECK("...and PRTE_ATTR_IS_TRUE says no",
+          !PRTE_ATTR_IS_TRUE(&attrs, PRTE_JOB_DEBUG_TARGET));
+
+    /* and removing it is how a key goes back to "nobody has said" */
+    prte_remove_attribute(&attrs, PRTE_JOB_DEBUG_TARGET);
+    CHECK("a removed bool is NOT_SET again",
+          PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET));
+
+    /* setting false on a key nobody has mentioned still records the answer */
+    CHECK("set an absent bool false",
+          PRTE_SUCCESS == prte_set_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET, PRTE_ATTR_GLOBAL, false));
+    CHECK("an absent key set false reads FALSE",
+          PRTE_ATTR_FALSE == prte_get_bool_attribute(&attrs, PRTE_JOB_DEBUG_TARGET));
+    prte_remove_attribute(&attrs, PRTE_JOB_DEBUG_TARGET);
 
     /* string - unload allocates */
     CHECK("set a string",
@@ -791,12 +824,10 @@ static int test_dash_host(void)
     free(spec);
     nd = find_node(&nodes, "nodeA");
     CHECK("the increment is recorded on nodeA",
-          NULL != nd && prte_get_attribute(&nd->attributes, PRTE_NODE_ADD_SLOTS, NULL,
-                                           PMIX_BOOL));
+          NULL != nd && PRTE_ATTR_IS_TRUE(&nd->attributes, PRTE_NODE_ADD_SLOTS));
     nd = find_node(&nodes, "nodeB");
     CHECK("the increment does not leak onto nodeB",
-          NULL != nd && !prte_get_attribute(&nd->attributes, PRTE_NODE_ADD_SLOTS, NULL,
-                                            PMIX_BOOL));
+          NULL != nd && !PRTE_ATTR_IS_TRUE(&nd->attributes, PRTE_NODE_ADD_SLOTS));
     CHECK("nodeB's absolute count is intact", NULL != nd && 3 == nd->slots);
     PMIX_LIST_DESTRUCT(&nodes);
 

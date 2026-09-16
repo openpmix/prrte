@@ -149,6 +149,36 @@ int test_directives(void)
           prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals,
                                             "ppr"));
 
+    /*** an option written with no directive at all ***
+     *
+     * PMIx_Argv_split() hands back NULL - not an empty array - for a string
+     * that is empty or yields no non-empty token, and every walk in this
+     * validator indexes what it returns.  "--map-by=" and "--map-by=:" both
+     * arrived here and dereferenced that NULL, killing the tool before it
+     * could report anything.  They have to be refusals, not crashes.
+     */
+    fprintf(stderr, "--- expected error output follows (empty directives) ---\n");
+    CHECK("check_directives:empty",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, ""));
+    CHECK("check_directives:null",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, NULL));
+    CHECK("check_directives:colon-only",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, ":"));
+    CHECK("check_directives:colons-only",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, ":::"));
+
+    /*** an option that accepts no qualifiers at all ***
+     *
+     * "--runtime-options" is checked with a NULL qualifier table, so a
+     * qualifier written on it has nothing to match against.  Walking the
+     * NULL table indexed it: "--rtos :anything" crashed the tool.
+     */
+    fprintf(stderr, "--- expected error output follows (qualifier, no table) ---\n");
+    CHECK("check_directives:null-qualtable",
+          !prte_schizo_base_check_directives(PRTE_CLI_RTOS, mappers, NULL, ":span"));
+    CHECK("check_qualifiers:null-table",
+          !prte_schizo_base_check_qualifiers(PRTE_CLI_RTOS, NULL, "span"));
+
     /*** check_qualifiers directly ***/
     CHECK("check_qualifiers:valid",
           prte_schizo_base_check_qualifiers(PRTE_CLI_MAPBY, mapquals, "span"));

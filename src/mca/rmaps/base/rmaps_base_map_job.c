@@ -330,9 +330,9 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     }
 
     /* 4. PRTE_APP_HWT_CPUS / PRTE_APP_CORE_CPUS → opts->use_hwthreads */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_HWT_CPUS)) {
         opts->use_hwthreads = true;
-    } else if (prte_get_attribute(&app->attributes, PRTE_APP_CORE_CPUS, NULL, PMIX_BOOL)) {
+    } else if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_CORE_CPUS)) {
         opts->use_hwthreads = false;
     }
 
@@ -368,8 +368,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     }
 
     /* 9. PRTE_APP_MAP_SHARED → opts->map_shared */
-    opts->map_shared = prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED,
-                                          NULL, PMIX_BOOL);
+    opts->map_shared = PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED);
 
     /* 10. PRTE_APP_MAP_NDEV → opts->map_ndev */
     u16 = 0;
@@ -615,7 +614,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     pmix_data_array_t *darray = NULL;
     pmix_list_t nodes;
     int slots, len;
-    bool flag, *fptr;
+    prte_attr_state_t astate;
     bool map_succeeded = false;
     prte_mapping_policy_t job_oversub = 0;
 
@@ -641,15 +640,14 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         jdata->map = PMIX_NEW(prte_job_map_t);
     }
     jdata->state = PRTE_JOB_STATE_MAP;
-    fptr = &flag;
 
     /* check and set some general options */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
         options.donotlaunch = true;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH) ||
+        PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_MAP) ||
+        PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP)) {
         options.dobind = true;
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, (void**) &u16ptr, PMIX_UINT16)) {
@@ -811,24 +809,22 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
              * So capture the explicit refusal, and the parent, here:
              * two of the arms below null the parent out. */
             iof_parent = parent;
-            iof_declined = prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT,
-                                              NULL, PMIX_BOOL) ||
-                           prte_get_attribute(&parent->attributes, PRTE_JOB_NOINHERIT,
-                                              NULL, PMIX_BOOL);
+            iof_declined = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOINHERIT) ||
+                           PRTE_ATTR_IS_TRUE(&parent->attributes, PRTE_JOB_NOINHERIT);
             if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
                 // we don't inherit anything from tools as they were not
                 // mapped by us
                 inherit = false;
                 parent = NULL;
 
-            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
+            } else if (PRTE_ATTR_IS_TRUE(&parent->attributes, PRTE_JOB_INHERIT)) {
                 inherit = true;
                 // if they didn't specifically direct it not inherit, then pass this on to the child
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_INHERIT, NULL, PMIX_BOOL);
+                if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOINHERIT)) {
+                    prte_set_bool_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_INHERIT, true);
                 }
 
-            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+            } else if (PRTE_ATTR_IS_TRUE(&parent->attributes, PRTE_JOB_NOINHERIT)) {
                 inherit = false;
                 parent = NULL;
 
@@ -857,8 +853,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                  * PMIx information is built and can carry it there. Set
                  * only to say NO: absence of the attribute, like absence
                  * of PMIX_IOF_INHERIT, means the job inherits. */
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NO_IOF_INHERIT,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_NO_IOF_INHERIT, PRTE_ATTR_GLOBAL, true);
             } else if (NULL != iof_parent) {
                 rc = pmix_bitmap_copy(&jdata->iof_daemons, &iof_parent->iof_daemons);
                 if (PMIX_SUCCESS != rc) {
@@ -943,42 +938,50 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     }
                 }
                 /* if not already assigned, inherit the parent's cpu designation */
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
-                    !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS) &&
+                    !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CORE_CPUS)) {
                     /* get the parent job's designation, if it had one */
-                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                    } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    if (PRTE_ATTR_IS_TRUE(&parent->attributes, PRTE_JOB_HWT_CPUS)) {
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
+                    } else if (PRTE_ATTR_IS_TRUE(&parent->attributes, PRTE_JOB_CORE_CPUS)) {
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, true);
                     } else {
                         /* default */
                         if (prte_rmaps_base.hwthread_cpus) {
-                            prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
                         } else {
-                            prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, true);
                         }
                     }
                 }
                 /* if not already assigned, inherit the parent's GPU support directive */
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, NULL, PMIX_BOOL)) {
-                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_GPU_SUPPORT, (void **) &fptr, PMIX_BOOL)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT)) {
+                    astate = prte_get_bool_attribute(&parent->attributes, PRTE_JOB_GPU_SUPPORT);
+                    if (PRTE_ATTR_NOT_SET != astate) {
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL,
+                                                PRTE_ATTR_TRUE == astate);
                     }
                 }
                 /* if not already assigned, inherit the parent's output directives */
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
-                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_TAG_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT)) {
+                    astate = prte_get_bool_attribute(&parent->attributes, PRTE_JOB_TAG_OUTPUT);
+                    if (PRTE_ATTR_NOT_SET != astate) {
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL,
+                                                PRTE_ATTR_TRUE == astate);
                     }
                 }
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
-                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT)) {
+                    astate = prte_get_bool_attribute(&parent->attributes, PRTE_JOB_TIMESTAMP_OUTPUT);
+                    if (PRTE_ATTR_NOT_SET != astate) {
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL,
+                                                PRTE_ATTR_TRUE == astate);
                     }
                 }
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
-                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void **) &fptr, PMIX_BOOL)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT)) {
+                    astate = prte_get_bool_attribute(&parent->attributes, PRTE_JOB_MERGE_STDERR_STDOUT);
+                    if (PRTE_ATTR_NOT_SET != astate) {
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL,
+                                                PRTE_ATTR_TRUE == astate);
                     }
                 }
 
@@ -997,12 +1000,12 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
                     options.cpus_per_rank = u16;
                 }
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
-                    !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS) &&
+                    !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CORE_CPUS)) {
                     if (prte_rmaps_base.hwthread_cpus) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
                     } else {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, true);
                     }
                 }
 
@@ -1073,8 +1076,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     // forward the environment if requested to do so
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void **) &fptr, PMIX_BOOL)) {
-        if (flag) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        if (PRTE_ATTR_TRUE == astate) {
             // forward the environment
             for (n = 0; n < jdata->apps->size; n++) {
                 app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
@@ -1088,10 +1092,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     } else if (NULL != parent) {
         /* we always inherit a parent's fwd environment directive unless the job assigned it */
-        if (prte_get_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void **) &fptr, PMIX_BOOL)) {
-            if (flag) {
+        astate = prte_get_bool_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT);
+        if (PRTE_ATTR_NOT_SET != astate) {
+            if (PRTE_ATTR_TRUE == astate) {
                 // update the child's flag so any subsequent children can inherit it
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL, true);
                 // forward the environment
                 for (n = 0; n < jdata->apps->size; n++) {
                     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
@@ -1110,7 +1115,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&options.cpuset, PMIX_STRING);
     prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_DEVICE, (void**)&options.map_device, PMIX_STRING);
     prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_INTERLEAVE, (void**)&options.map_interleave, PMIX_STRING);
-    options.map_shared = prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_SHARED, NULL, PMIX_BOOL);
+    options.map_shared = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_MAP_SHARED);
     {
         uint16_t nd = 0, *ndptr = &nd;
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_NDEV, (void**)&ndptr, PMIX_UINT16)) {
@@ -1122,7 +1127,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     } else {
         options.cpus_per_rank = 1;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
         options.use_hwthreads = true;
     }
 
@@ -1729,12 +1734,12 @@ ranking:
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_MAP) ||
+        PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
     } else if (options.donotlaunch &&
-               prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL)) {
+               PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS)) {
         prte_rmaps_base_report_bindings(jdata, &options);
     }
 
@@ -1799,7 +1804,7 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
     bool physical;
 
     // see if we are to report physical (vs logical) cpu IDs
-    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+    physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
     for (n=0; n < jdata->procs->size; n++) {
         proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, n);
         if (NULL == proc) {

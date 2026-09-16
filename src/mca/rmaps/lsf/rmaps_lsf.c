@@ -130,9 +130,9 @@ static int lsf_map(prte_job_t *jdata,
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+    physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
     /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
     options->use_hwthreads = true;
     /* don't override something provided by the user, but default to bind-to hwthread */
     if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {

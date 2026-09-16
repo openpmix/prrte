@@ -227,3 +227,11 @@ also why two app contexts cannot ask for different answers.
 
 There is no way to honor both. Please give the directive once, or give the
 same value everywhere, and try again.
+[empty-directive]
+The following command line option was given without a directive:
+
+  Option:  --%s
+
+This option requires at least one directive. Please provide one and
+try again - "--help %s" lists the directives it accepts.
+#

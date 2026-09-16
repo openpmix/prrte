@@ -965,7 +965,7 @@ static int test_setup_vm(void)
      * looks like */
     pool_node("plm-test-n4", PRTE_NODE_STATE_ADDED);
     jdata = spawn_job("plm-test-job4");
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, PRTE_ATTR_GLOBAL, true);
     CHECK("setup_vm fixed-dvm succeeds",
           PRTE_SUCCESS == prte_plm_base_setup_virtual_machine(jdata));
     CHECK("fixed dvm launches nothing", 0 == map->num_new_daemons);

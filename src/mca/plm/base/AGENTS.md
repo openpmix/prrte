@@ -38,7 +38,7 @@ creates the daemon procs:
 | fixed DVM | `PRTE_JOB_FIXED_DVM` | none — returns at once |
 | **grow** | `PRTE_JOB_EXTEND_DVM` | pool nodes marked `PRTE_NODE_STATE_ADDED`, and *only* those |
 | dynamic spawn | the job has an originator | first pass: the whole pool (singleton); later: `ADDED` nodes |
-| no-VM / multi-sim | `PRTE_JOB_NO_VM` or `PRTE_JOB_MULTI_DAEMON_SIM` | pool nodes carrying procs |
+| multi-sim | `PRTE_JOB_MULTI_DAEMON_SIM` | pool nodes carrying procs |
 | initial VM | otherwise | the whole pool, filtered through the app specs |
 
 ### The per-launch reset (read this before adding a branch)

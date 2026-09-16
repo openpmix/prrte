@@ -106,8 +106,7 @@ static void _nspace_reg_done(int sd, short args, void *cbdata)
      * have not published yet - so it has to mean "PMIx has our answer",
      * not "we have finished assembling it". */
     if (PMIX_SUCCESS == cd->status && NULL != cd->jdata) {
-        prte_set_attribute(&cd->jdata->attributes, PRTE_JOB_NSPACE_REGISTERED,
-                           PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+        prte_set_bool_attribute(&cd->jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, PRTE_ATTR_LOCAL, true);
     }
 
     if (NULL != cd->cbfunc) {
@@ -167,7 +166,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     pmix_topology_t topo;
     prte_job_t *parent = NULL;
     pmix_data_array_t darray, lparray;
-    bool flag, *fptr, newpset;
+    bool flag, newpset;
+    prte_attr_state_t astate;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -506,24 +506,38 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     // job session dir will have been stored in the jdata object
     PMIX_INFO_LIST_ADD(ret, info, PMIX_NSDIR, jdata->session_dir, PMIX_STRING);
 
-    /* check for output directives */
-    fptr = &flag;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+    /* check for output directives.  Each of these is published with the
+     * value it was given and omitted when nobody has set it - "off" and
+     * "nobody said" are different answers, and only the first is ours to
+     * state on the job's behalf. */
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_DETAILED, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_DETAILED);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_DETAILED_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_FULLNAME, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_FULLNAME);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_FULLNAME_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_RANK_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_XML_OUTPUT, &flag, PMIX_BOOL);
     }
 #ifdef PMIX_IOF_INHERIT
@@ -536,7 +550,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
      *
      * Sent only to say NO: absence means inherit, on both sides of the
      * interface, so a job with no opinion adds nothing to the wire. */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NO_IOF_INHERIT, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_IOF_INHERIT)) {
         bool noinherit = false;
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_INHERIT, &noinherit, PMIX_BOOL);
     }
@@ -553,24 +567,34 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         PMIX_INFO_LIST_ADD(ret, info, PMIX_OUTPUT_TO_DIRECTORY, tmp, PMIX_STRING);
         free(tmp);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_OUTPUT_NOCOPY, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_FILE_PATTERN, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_FILE_PATTERN);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         /* PMIx expands the pattern when it opens the sink, so the flag has to
          * reach the nspace it will read the filename from */
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_FILE_PATTERN, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_OUTPUT_RAW, &flag, PMIX_BOOL);
     }
 
     // check for GPU directives
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, (void**)&fptr, PMIX_BOOL)) {
+    astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT);
+    if (PRTE_ATTR_NOT_SET != astate) {
+        flag = (PRTE_ATTR_TRUE == astate);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_GPU_SUPPORT, &flag, PMIX_BOOL);
     }
 
