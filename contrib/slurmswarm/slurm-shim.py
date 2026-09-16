@@ -44,8 +44,20 @@
 #   bad_json 1     `scontrol show job ... --json` prints garbage, exits 0
 #   scancel_fail 1 `scancel` fails with far more output than PRRTE's capture
 #                  buffer holds, so the truncation path is taken
+#   fat_json <n>   the real record, with a member PRRTE does not read added
+#                  to the job and padded to n bytes.  It is skipped whatever
+#                  its size, so it costs nothing however far past the window
+#                  it goes
+#   fat_field <n>  the real record, with a member PRRTE DOES read padded to n
+#                  bytes.  That one has to be held whole, so past the window
+#                  it is refused by name
+#   fat_nodes <n>  the real record, with its allocation array replicated to n
+#                  nodes.  The job stays one Slurm can act on; only the part
+#                  PRRTE streams grows
 
+import json
 import os
+import subprocess
 import sys
 
 STATE = os.environ.get("SLURM_SHIM_STATE", "/tmp/slurm-shim")
@@ -132,6 +144,62 @@ def main():
         # caught by the caller's status check and never reach the parser,
         # which is the code under test.
         sys.stdout.write("{ this is not json, and never was\n")
+        return 0
+
+    if "scontrol" == name and "--json" in argv and (
+            flag("fat_json") not in (None, "", "0")
+            or flag("fat_field") not in (None, "", "0")
+            or flag("fat_nodes") not in (None, "", "0")):
+        # Forks where the other faults exec, because the scheduler's own
+        # record has to come back here to be grown.  Safe for scontrol, which
+        # PRRTE reads through popen and does not track by pid.
+        real = real_command(name)
+        if real is None:
+            sys.stderr.write("slurm-shim: no real %s on PATH\n" % name)
+            return 127
+        out = subprocess.run([real] + argv, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, universal_newlines=True)
+        if 0 != out.returncode:
+            sys.stdout.write(out.stdout)
+            sys.stderr.write(out.stderr)
+            return out.returncode
+        try:
+            doc = json.loads(out.stdout)
+        except ValueError:
+            sys.stdout.write(out.stdout)
+            return 0
+
+        job = doc["jobs"][0]
+
+        pad = int(flag("fat_json") or 0)
+        if pad > 0:
+            # Inside the job, where PRRTE is reading, rather than beside it in
+            # the envelope, which it skips whatever we put there.  A NEW key:
+            # PRRTE rejects duplicates, so padding an existing one would be
+            # refused as malformed and prove nothing about size.
+            job["prte_shim_padding"] = "x" * pad
+
+        wide = int(flag("fat_field") or 0)
+        if wide > 0:
+            # Replacing the value of a member PRRTE keeps, which is the only
+            # way to make it hold something too large.  A replacement, not a
+            # second copy: PRRTE refuses a duplicate member, which would end
+            # the read before its size ever mattered.
+            job["current_working_directory"] = "/" + "x" * wide
+
+        nodes = int(flag("fat_nodes") or 0)
+        if nodes > 0:
+            alloc = job["job_resources"]["nodes"]["allocation"]
+            grown = []
+            for i in range(nodes):
+                entry = json.loads(json.dumps(alloc[i % len(alloc)]))
+                entry["index"] = i
+                entry["name"] = "%s-shim%06d" % (entry["name"], i)
+                grown.append(entry)
+            job["job_resources"]["nodes"]["allocation"] = grown
+            job["job_resources"]["nodes"]["count"] = nodes
+
+        sys.stdout.write(json.dumps(doc))
         return 0
 
     if "scancel" == name and "1" == flag("scancel_fail"):
