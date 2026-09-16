@@ -536,7 +536,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     if (PRTE_PROC_STATE_CALLED_ABORT == state) {
         /* update the state */
         child->state = state;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, NULL, PMIX_BOOL)) {
+        if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED)) {
             PMIX_DATA_BUFFER_CREATE(alert);
             /* pack update state command */
             cmd = PRTE_PLM_UPDATE_PROC_STATE;
@@ -575,9 +575,8 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* mark that we notified the HNP for this job so we don't do it again;
              * recoverable jobs need to receive every notifications, though. */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                                   PMIX_BOOL);
+            if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE)) {
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, true);
             }
         }
         goto cleanup;
@@ -602,7 +601,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         child->state = state;
         /* report this as abnormal termination to the HNP, unless we already have
          * done so for this job */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, NULL, PMIX_BOOL)) {
+        if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED)) {
             PMIX_DATA_BUFFER_CREATE(alert);
             /* pack update state command */
             cmd = PRTE_PLM_UPDATE_PROC_STATE;
@@ -641,9 +640,8 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* mark that we notified the HNP for this job so we don't do it again;
              * recoverable jobs need to receive every notifications, though. */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                                   PMIX_BOOL);
+            if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE)) {
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, true);
             }
         }
         /* if the proc has terminated, notify the state machine */
@@ -733,7 +731,7 @@ static void proc_errors(int fd, short args, void *cbdata)
          * terminated, then we need to alert the HNP right away - but
          * only do this once!
          */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, NULL, PMIX_BOOL)) {
+        if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED)) {
             PMIX_DATA_BUFFER_CREATE(alert);
             /* pack update state command */
             cmd = PRTE_PLM_UPDATE_PROC_STATE;
@@ -774,9 +772,8 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_FLAG_SET(child, PRTE_PROC_FLAG_TERM_REPORTED);
             /* mark that we notified the HNP for this job so we don't do it again;
              * recoverable jobs need to receive every notifications, though. */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED,
-                                   PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+            if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE)) {
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, true);
             }
         }
         /* if the proc has terminated, notify the state machine */

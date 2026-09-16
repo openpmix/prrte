@@ -212,6 +212,29 @@ table.
   per-option value-count limits (`check_ndirs`); and flags the map-by
   PE / bind-to conflict.
 
+  **An option can reach the sanity checker with nothing to check, and that
+  has to be a refusal rather than a crash.** `--map-by=` parses perfectly
+  well and records the empty string; a synonym expanded by presence alone
+  records no value array at all. `PMIx_Argv_split()` hands back **NULL —
+  not an empty array** — for a string that is empty or yields no non-empty
+  token, and every walk in `check_directives`/`check_qualifiers` indexes
+  what it returns. So `--map-by=`, `--map-by=:`, `--output=`, `--display=`
+  and `--rtos=` each dereferenced that NULL and killed the tool before it
+  could say anything. `first_value()` is the one reader of a single-valued
+  option, `check_directives` refuses a NULL or empty directive with the
+  `empty-directive` topic, and both splits inside it are NULL-guarded. The
+  same shape bites the qualifier side: `--runtime-options` is checked with
+  a **NULL qualifier table** (it accepts none), so `check_qualifiers` has
+  to treat that as "nothing matches" rather than walk it —
+  `--rtos :anything` crashed on exactly that.
+
+  **The sanity checker walks every value of an option, not just
+  `values[0]`.** `pmix_cmd_line_get_ninsts()` counts *values*, so the
+  duplicate check above catches `--display map --display bind`; `--output`
+  is deliberately absent from that list because repeating it is legal, and
+  each repetition lands on the same instance's value array. Checking only
+  the first left every later one validated by nothing.
+
   `check_ndirs` is worth understanding before touching it.
   `pmix_cmd_line_parse` appends **every occurrence** of an option to the
   *same* `pmix_cli_item_t`'s value array, and every consumer of the keys
@@ -240,11 +263,49 @@ table.
   same directive — `--bind-to` has two (job-level in
   [`src/hwloc`](../../hwloc/AGENTS.md), per-app in
   [`rmaps/base`](../rmaps/AGENTS.md)).
+
+  **Both halves of the map-by-PE / bind-to conflict test read a
+  *directive*, never a substring.** Asking for specific cpus and then
+  binding to something coarser is the conflict, and both sides of it are
+  found by splitting the option's value on `:` and matching the tokens —
+  `pe-list=` is a directive and `PE=n` a qualifier on the `--map-by` side,
+  `core`/`hwthread` is the directive on the `--bind-to` side. Searching the
+  raw text for the letters instead is how `device=openfabrics` and a
+  rankfile under `/home/pete` came to be refused as PE requests. The
+  `--bind-to` half kept that shape after the `--map-by` half was fixed, and
+  it was also the tree's **only** use of `strcasestr()` — a GNU/BSD
+  extension present in neither POSIX nor C11, with no configure check and
+  no fallback anywhere in PRRTE. There are now none; do not reintroduce
+  one.
 - **`prte_schizo_base_parse_display` / `_parse_output`** — convert a
   parsed `--display` / `--output` option into `PMIX_INFO` list entries
   (`PMIX_DISPLAY_MAP`, `PMIX_IOF_TAG_OUTPUT`, `PMIX_IOF_OUTPUT_TO_FILE`,
   …) on the job-info object. These are where the human-facing directive
   strings become PMIx keys.
+
+  **These two parsers are also the only validator the MCA-param path
+  has.** `prun_common.c` and `prte.c` hand `prte_schizo_base.default_output_options`
+  / `..._display_options` — the `prte_output` and `prte_display` params —
+  straight to them, in a hand-built `pmix_cli_item_t`, whenever the option
+  is absent from the command line. That value never goes near
+  `prte_schizo_base_sanity`. So a parser that merely declines to emit a key
+  for a directive it does not recognize makes the param silently inert:
+  `--prtemca prte_output bogus` ran the job with no tagging, no file and an
+  exit status of 0, while the identical `--output bogus` was reported.
+  Both parsers now refuse an unrecognized directive (and `parse_output` an
+  unrecognized qualifier) themselves, which covers both doors. Keep it that
+  way — every arm of those if/else chains must end in an `else` that
+  reports.
+
+  **They work on copies, so calling one twice on the same option is
+  safe**, and `prterun` does exactly that: `prte.c` runs `parse_display`
+  over its own `results` for the DVM-level directives, then hands the same
+  `results` to `prte_prun_parse_common_cli()`, which runs it again for the
+  job. The `*cptr = '\0'` and `*ptr = '\0'` truncations inside both parsers
+  land on the `PMIx_Argv_split()` copy, never on `opt->values[n]`. If you
+  ever make one write through to the caller's value, that second pass
+  starts reading a truncated directive list and silently loses every
+  qualifier.
 
   Two shape rules govern both, and both have been got wrong before —
   each time silently, because an unrecognized directive here is simply

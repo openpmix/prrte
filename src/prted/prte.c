@@ -1156,11 +1156,9 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                 size_t dn;
                 for (dn = 0; dn < darray2.size; dn++) {
                     if (PMIX_CHECK_KEY(&dptr[dn], PMIX_DISPLAY_ALLOCATION)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
-                                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, PRTE_ATTR_GLOBAL, true);
                     } else if (PMIX_CHECK_KEY(&dptr[dn], PMIX_DISPLAY_PARSEABLE_OUTPUT)) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
-                                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, PRTE_ATTR_GLOBAL, true);
                     }
                 }
                 PMIX_DATA_ARRAY_DESTRUCT(&darray2);

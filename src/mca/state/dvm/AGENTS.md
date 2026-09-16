@@ -162,7 +162,8 @@ optional abort text), packs it, and `xcast`s it on
 xcasts `PRTE_DAEMON_DVM_CLEANUP_JOB_CMD` on `PRTE_RML_TAG_DAEMON` so even
 non-participating daemons release the terminated job's slot accounting
 (critical now that mapping runs on the backend daemons). Ends by
-activating `NOTIFIED`.
+activating `NOTIFIED` — **unconditionally**, even when the event itself was
+suppressed by `PMIX_NOTIFY_COMPLETION=false`; see the gotchas below.
 
 ### `cleanup_job`
 On `NOTIFIED`: if `terminate_dvm` was flagged, terminate the orteds
@@ -201,6 +202,19 @@ the PMIx server for nspace deregistration and events, and `prte_plm`
   prted component's `track_procs`, and in
   `prte_state_base_recover_resources` (the errmgr's per-proc recovery). A
   change to how resources are recovered usually needs to be mirrored.
+
+  They have already drifted in one place, benignly, and it is worth knowing
+  which way before "fixing" it. Four sites look up
+  `jdata->apps[proc->app_idx]` and then test `PRTE_APP_FLAG_TOOL` on the
+  result, which is a bare `(p)->flags &` dereference:
+  `plm_base_launch_support.c` and `prte_state_base_track_procs` NULL-check
+  the lookup first; `check_complete_resume` here and `state_prted.c`'s
+  `track_procs` do not. The unguarded pair are reached only from a walk of
+  `jdata->map`, and the job shapes whose apps array could come back empty —
+  a tool job — never get a map at all (`plm_base_receive.c` gives a tool
+  job a proc and a borrowed `proc->node`, but never adds it to
+  `node->procs` and never builds a map). So the two are not reachable
+  today. If you ever give a tool job a map, they both become segfaults.
 - **A handler that hands its caddy to a continuation must NOT release it.**
   `check_complete` returns without releasing once it has passed the caddy
   to `PMIx_server_deregister_nspace`; `check_complete_resume` owns it from
@@ -217,6 +231,63 @@ the PMIx server for nspace deregistration and events, and `prte_plm`
   `PRTE_JOB_LAUNCH_PROXY` hands back an allocated `pmix_proc_t`;
   `ready_for_debug` released it as soon as it had been copied into the
   info list, and then released it *again* on a later error path.
+- **Seed that pointer to `NULL` and check it, too.** `prte_get_attribute()`
+  returns `true` for a key it *found* even when the unload that follows
+  failed — it logs the error and returns true anyway — and the `PMIX_PROC`
+  arm fails by leaving a `NULL` behind, because `PMIX_PROC_CREATE` came back
+  empty. Four handlers here read this one attribute; `job_started` and
+  `ready_for_debug` guarded it and `cleanup_job` and `dvm_notify` did not.
+  All four do now.
+- **The notify test is `PMIX_CHECK_NSPACE_STRICT`, and that matters more
+  than it looks.** `dvm_notify` suppresses the job-end event when the launch
+  proxy *is* the job. The plain `PMIX_CHECK_NSPACE` answers "true" the moment
+  either side is empty, and an empty launch proxy is exactly what
+  `prte_job_construct()` leaves behind — it seeds `jdata->originator` with a
+  `NULL` nspace, and both setters of `PRTE_JOB_LAUNCH_PROXY`
+  (`pmix_server_dyn.c`, `pmix_server_session.c`) copy that field. Today both
+  fill `originator` in from a real requestor first, so the wildcard does not
+  fire; `spawn_tree_active()` in this same file already spells out why it
+  must not be relied on.
+
+- **Suppressing the job-end event must not suppress the job's
+  reclamation.** `dvm_notify` ends by activating
+  `PRTE_JOB_STATE_NOTIFIED` **unconditionally**, and that is deliberate.
+  It is the only activation of that state anywhere in the tree, and its
+  handler `cleanup_job` is what detaches the job from its spawn parent,
+  tells the PMIx server the job has departed, and drops the job's creation
+  reference — which is what frees the job *and* clears its slot in
+  `prte_job_data`, since that array holds a borrowed pointer and
+  `prte_job_destruct` removes its own entry. While that activation sat
+  inside `if (notify)`, a job that asked not to be announced would have
+  been leaked, with its registry slot, for the life of the DVM. Do not put
+  it back under the flag.
+
+- **`PMIX_NOTIFY_COMPLETION` is recorded as its negation, by presence.**
+  A tool spawning a job may ask not to be told when it ends.
+  `pmix_server_dyn.c` translates that directive, and because notifying is
+  the **default**, what it writes down is the request *not* to — which is
+  what `PRTE_JOB_SILENT_TERMINATION` is. `dvm_notify` reads it with
+  `prte_get_attribute(..., NULL, PMIX_BOOL)`, i.e. by presence, so the
+  false case must leave the attribute **absent** rather than store a false
+  boolean: `prte_set_attribute()` drops a false boolean that is already on
+  the list but **appends** one that is not, and a stored `false` then reads
+  as `true` to every presence test in the tree. This is the same shape the
+  runtime-option parser uses for `aggregate-help`, which it records as
+  `PRTE_JOB_NOAGG_HELP` via `set_bool_option()`; see the boolean-option
+  note in the [framework guide](../AGENTS.md).
+
+  Note the suppression is gated on `0 == rc`, so it only silences a
+  *clean* termination — a job that failed is reported whatever it asked
+  for.
+
+  This was broken for a long time and silently: the directive was written
+  to `PRTE_JOB_NOTIFY_COMPLETION`, which nothing in the tree ever read,
+  while `dvm_notify` asked for `PRTE_JOB_SILENT_TERMINATION`, which
+  nothing in the tree ever wrote. The two ends of one feature used
+  different keys, so the directive was accepted and ignored. Offset 50 in
+  [`src/util/attr.h`](../../../util/attr.h) is retired and must not be
+  reused.
+
 - **Clear `PRTE_NODE_FLAG_MAPPED` before releasing the node.** The map
   holds a reference, so `PMIX_RELEASE(node)` can be the last one; touching
   the flag afterwards is a use-after-free waiting for the refcount to line

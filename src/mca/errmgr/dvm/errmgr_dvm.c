@@ -647,8 +647,8 @@ keep_going:
     }
 
     /* simplify later checks */
-    flag = (prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL) ||
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL));
+    flag = (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE) ||
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CONTINUOUS));
 
     /* ensure we record the failed proc properly so we can report
      * the error once we terminate
@@ -845,7 +845,7 @@ keep_going:
         ++i32;
         prte_set_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, PRTE_ATTR_LOCAL, i32ptr,
                            PMIX_INT32);
-        if (flag && prte_get_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL)) {
+        if (flag && PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT)) {
             check_send_notification(jdata, pptr, PMIX_ERR_EXIT_NONZERO_TERM);
             // recover the resources used by this proc
             prte_state_base_recover_resources(jdata, pptr);
@@ -901,7 +901,7 @@ static void check_send_notification(prte_job_t *jdata,
                         PMIx_Error_string(event),
                         PRTE_NAME_PRINT(&proc->name));
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, NULL, PMIX_BOOL) ||
+    if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS) ||
         prte_dvm_abort_ordered) {
         return;
     }

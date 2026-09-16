@@ -283,8 +283,7 @@ static int test_node_insert(void)
         found->slots_max = 8;
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
         nd = mknode(&nodes, "unittest-n02", 3);
-        prte_set_attribute(&nd->attributes, PRTE_NODE_ADD_SLOTS, PRTE_ATTR_LOCAL,
-                           NULL, PMIX_BOOL);
+        prte_set_bool_attribute(&nd->attributes, PRTE_NODE_ADD_SLOTS, PRTE_ATTR_LOCAL, true);
         rc = prte_ras_base_node_insert(&nodes, NULL);
         PMIX_DESTRUCT(&nodes);
         CHECK("addslots: rc", PRTE_SUCCESS == rc);
@@ -1188,8 +1187,7 @@ static int test_dvm_growing(void)
 
     /* state 1: the grow has been requested but setup_virtual_machine has not
      * run yet -- no campaign exists and the new daemons have no procs */
-    prte_set_attribute(&djob->attributes, PRTE_JOB_EXTEND_DVM,
-                       PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&djob->attributes, PRTE_JOB_EXTEND_DVM, PRTE_ATTR_LOCAL, true);
     CHECK("dvm_is_growing: a requested-but-unstarted grow is growing",
           prte_ras_base_dvm_is_growing());
     prte_remove_attribute(&djob->attributes, PRTE_JOB_EXTEND_DVM);

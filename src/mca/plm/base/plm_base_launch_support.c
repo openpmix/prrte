@@ -133,7 +133,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 
     /* if we are not launching, then we just assume that all
      * daemons share our topology */
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
         node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
         if (NULL == node || NULL == node->topology) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -246,7 +246,7 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
     /* if we don't want to launch, then we at least want
      * to map so we can see where the procs would have
      * gone - so skip to the mapping state */
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
         node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 0);
         if (NULL == node) {
             // should never happen
@@ -664,7 +664,7 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
     PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_TIMEOUT);
 
     /* see if they want proc states reported */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_STATE)) {
         /* output the results - note that the output might need to go to a
          * tool instead of just to stderr, so we use the PMIx IOF deliver
          * function to ensure it gets where it needs to go. */
@@ -677,7 +677,7 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
     }
 
     /* see if they want stacktraces */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STACKTRACES)) {
         /* if they asked for stack_traces, attempt to get them, but timeout
          * if we cannot do so */
         rc = get_traces(jdata);
@@ -858,13 +858,12 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
 
     // if we are not going to launch this job, then ensure we output something - otherwise,
     // we will simply silently exit
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
-        !prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) &&
-        !prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) &&
-        !prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH) &&
+        !PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_MAP) &&
+        !PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP) &&
+        !PRTE_ATTR_IS_TRUE(&caddy->jdata->attributes, PRTE_JOB_REPORT_BINDINGS)) {
         // default to the devel map
-        prte_set_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, PRTE_ATTR_GLOBAL,
-                           NULL, PMIX_BOOL);
+        prte_set_bool_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, PRTE_ATTR_GLOBAL, true);
     }
 
     /* set the job state to the next position */
@@ -946,7 +945,7 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
                          PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* pack the appropriate add_local_procs command */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_FIXED_DVM)) {
         command = PRTE_DAEMON_DVM_ADD_PROCS;
     } else {
         command = PRTE_DAEMON_ADD_LOCAL_PROCS;
@@ -1015,7 +1014,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
                          jdata->num_procs));
 
     /* if we don't want to launch the apps, now is the time to leave */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
         /* go ahead and register the job - the completion callback
          * advances the job state once the registration is done */
         rc = prte_pmix_server_register_nspace(jdata, donotlaunch_reg_complete, jdata);
@@ -1269,7 +1268,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
     }
 
     /* if the response has already been sent, don't do it again */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED)) {
         return PRTE_SUCCESS;
     }
 
@@ -1329,7 +1328,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
      * error status carried by the spawn response itself, which is what
      * releases it from PMIx_Spawn. */
     if (PMIX_SUCCESS == status &&
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
+        PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DVM_JOB)) {
 
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
@@ -1445,8 +1444,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
      * (inside pmix_server_notify_spawn), so a process that answered by sending
      * would answer again on every later call - and each of those extra
      * responses arrives at a requestor whose request is long retired */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
-                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, PRTE_ATTR_GLOBAL, true);
 
     return PRTE_SUCCESS;
 }
@@ -1723,7 +1721,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
     /* get the daemon job */
     jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    show_progress = prte_get_attribute(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
+    show_progress = PRTE_ATTR_IS_TRUE(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS);
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;
@@ -2714,7 +2712,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
 
     /* if this job is being launched against a fixed DVM, then there is
      * nothing for us to do - the DVM will stand as is */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_FIXED_DVM)) {
         /* mark that the daemons have reported so we can proceed - the
          * accounting above already says "nothing to launch" */
         daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
@@ -2723,7 +2721,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_EXTEND_DVM)) {
         // nodes have been added, so extend the DVM
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM);
         /* A grow launches daemons on the nodes THIS request added, and only
@@ -2863,8 +2861,8 @@ static int setup_virtual_machine(prte_job_t *jdata)
      * look across all jobs and ensure that the "VM" contains
      * all nodes with application procs on them
      */
-    multi_sim = prte_get_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, NULL, PMIX_BOOL);
-    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PMIX_BOOL) || multi_sim) {
+    multi_sim = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM);
+    if (multi_sim) {
         /* loop across all nodes and include those that have
          * num_procs > 0 && no daemon already on them
          */
@@ -3267,8 +3265,7 @@ process:
     /* if new daemons are being launched, mark that this job
      * caused it to happen */
     if (0 < map->num_new_daemons) {
-        rc = prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, true,
-                                NULL, PMIX_BOOL);
+        rc = prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, true, true);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             free(new_vpids);

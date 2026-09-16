@@ -78,9 +78,23 @@ Things that are easy to get wrong:
   *always* packed, so the mapper sees an unpacked **copy** of the job — any
   attribute the mapper must read has to be `PRTE_ATTR_GLOBAL`. This has bitten
   the mapper before.
-- **A `PMIX_BOOL` attribute means "true" by its presence.** `prte_set_attribute`
-  with `NULL` data records true; setting it to `false` *removes the entry*.
-  Test with `prte_get_attribute(list, key, NULL, PMIX_BOOL)`.
+- **A `PMIX_BOOL` attribute is THREE-STATE, and has its own accessors.**
+  `prte_get_bool_attribute()` answers `PRTE_ATTR_TRUE`, `PRTE_ATTR_FALSE` or
+  `PRTE_ATTR_NOT_SET`, and `prte_set_bool_attribute()` stores **both** truths
+  — a false value is not removed, because "false" and "nobody has said" are
+  different answers and only the second is what a caller applies a default
+  to. `prte_remove_attribute()` is how a key goes back to unset.
+  `PRTE_ATTR_IS_TRUE(list, key)` is the shorthand for "explicitly on" and is
+  false for `FALSE` and `NOT_SET` alike; reach past it wherever the three
+  states differ.
+
+  `prte_get_attribute()`/`prte_set_attribute()` **refuse `PMIX_BOOL`**, and
+  [`test/unit/check_attr_pairing.py`](../../test/unit/check_attr_pairing.py)
+  fails the build on one. That is not tidiness: reads used to be by presence
+  while the setter *removed* a false boolean already on the list but
+  *appended* one that was not, so the same call did opposite things — and a
+  stored false read as **true**, which is how `PMIX_DO_NOT_LAUNCH=false` came
+  to mean "do not launch".
 - **`prte_get_attribute` refuses a type mismatch** rather than reinterpreting
   the bytes, and logs it. Pass the type the setter used.
 - **Unload allocates for the pointer types** (`PMIX_STRING`, `PMIX_BYTE_OBJECT`,

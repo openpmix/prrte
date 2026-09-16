@@ -637,8 +637,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL,
-                                   NULL, PMIX_BOOL);
+                prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL, true);
 
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
                 if (NULL == jdata) {

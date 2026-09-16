@@ -1512,8 +1512,7 @@ static void forward_op(op_t* op){
      * object nobody set it. */
     prte_job_t* daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if(NULL != daemons &&
-       prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH,
-                          NULL, PMIX_BOOL)){
+       PRTE_ATTR_IS_TRUE(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH)){
         return;
     }
 

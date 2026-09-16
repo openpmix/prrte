@@ -338,8 +338,7 @@ Runs **on every daemon** (including the HNP). This is the mirror image of
   PRTE_PROC_MY_NAME->rank`, the proc is *mine*. Local procs are retained
   onto the global **`prte_local_children`** array, flagged
   `PRTE_PROC_FLAG_LOCAL`, counted into `jdata->num_local_procs`, and their
-  app is flagged `PRTE_APP_FLAG_USED_ON_NODE`. Restart jobs get
-  `PRTE_PROC_NOBARRIER` set.
+  app is flagged `PRTE_APP_FLAG_USED_ON_NODE`.
 - Registers the nspace with the PMIx server
   (`prte_pmix_server_register_nspace`) and **returns**. The registration
   completes asynchronously; a `prte_odls_jcaddy_t` carries the launch across

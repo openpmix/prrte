@@ -133,7 +133,6 @@ static int finalize(void)
 
 static int discover(pmix_list_t *nodelist, char *pbs_jobid)
 {
-    int32_t nodeid;
     prte_node_t *node;
     FILE *fp;
     char *hostname, *cppn;
@@ -185,7 +184,6 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
        resolving to the same hostname (i.e., vcpu's on a single
        host). */
 
-    nodeid = 0;
     while (NULL != (hostname = pbs_getline(fp))) {
 
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -226,8 +224,6 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
 
             node = PMIX_NEW(prte_node_t);
             node->name = hostname;
-            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID,
-                               PRTE_ATTR_LOCAL, &nodeid, PMIX_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = ppn;
@@ -241,8 +237,6 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
             free(hostname);
         }
 
-        /* up the nodeid */
-        nodeid++;
     }
     fclose(fp);
 

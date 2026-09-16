@@ -764,8 +764,7 @@ static int test_app_copy(void)
     PRTE_FLAG_SET(src, PRTE_APP_FLAG_USED_ON_NODE);
     prte_set_attribute(&src->attributes, PRTE_APP_PMIX_PREFIX, PRTE_ATTR_GLOBAL,
                        "/opt/prte", PMIX_STRING);
-    prte_set_attribute(&src->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL,
-                       NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&src->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL, true);
 
     CHECK("appcopy: copy succeeds", PRTE_SUCCESS == prte_app_copy(&cpy, src));
     if (NULL == cpy) {
@@ -791,11 +790,11 @@ static int test_app_copy(void)
           prte_get_attribute(&cpy->attributes, PRTE_APP_PMIX_PREFIX, (void **) &ppr, PMIX_STRING));
     CHECK("appcopy: ...with its value intact", NULL != ppr && 0 == strcmp("/opt/prte", ppr));
     free(ppr);
-    bval = prte_get_attribute(&cpy->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL);
+    bval = PRTE_ATTR_IS_TRUE(&cpy->attributes, PRTE_APP_PRELOAD_BIN);
     CHECK("appcopy: a bool attribute is findable by key", bval);
     /* and nothing invented itself */
     CHECK("appcopy: an unset attribute is still unset",
-          !prte_get_attribute(&cpy->attributes, PRTE_APP_NO_CACHEDIR, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&cpy->attributes, PRTE_APP_NO_CACHEDIR));
 
     PMIX_RELEASE(cpy);
     PMIX_RELEASE(src);
@@ -919,7 +918,7 @@ static int test_pack_roundtrip(void)
      * load-bearing (the mapper reads an unpacked copy of the job), so test
      * both dispositions */
     prte_set_attribute(&src->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, "2:node", PMIX_STRING);
-    prte_set_attribute(&src->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&src->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_LOCAL, true);
 
     app = PMIX_NEW(prte_app_context_t);
     app->idx = 0;
@@ -1008,7 +1007,7 @@ static int test_pack_roundtrip(void)
         sval = NULL;
         /* a LOCAL attribute deliberately does not */
         CHECK("wire: a LOCAL attribute does not cross",
-              !prte_get_attribute(&dst->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL));
+              !PRTE_ATTR_IS_TRUE(&dst->attributes, PRTE_JOB_DO_NOT_LAUNCH));
 
         CHECK("wire: num_apps round-trips", 1 == dst->num_apps);
         app2 = (prte_app_context_t *) pmix_pointer_array_get_item(dst->apps, 0);

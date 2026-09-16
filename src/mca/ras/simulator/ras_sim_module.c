@@ -107,7 +107,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
 
     /* see if they want are using hwthreads as cpus */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -193,8 +193,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
     // ensure we do not attempt to launch this job
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                       NULL, PMIX_BOOL);
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL, true);
 
     if (NULL != max_slot_cnt) {
         PMIx_Argv_free(max_slot_cnt);

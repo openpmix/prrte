@@ -364,9 +364,9 @@ static void track_procs(int fd, short argc, void *cbdata)
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL) ||
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, NULL, PMIX_BOOL) ||
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL)) {
+        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC) ||
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_INIT) ||
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_APP)) {
             if (PMIX_RANK_LOCAL_PEERS == proc->rank) {
                 jdata->num_ready_for_debug += jdata->num_local_procs;
             } else {
@@ -554,7 +554,7 @@ static void track_procs(int fd, short argc, void *cbdata)
         }
         /* track job status */
         if (jdata->num_terminated == jdata->num_local_procs
-            && !prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED, NULL, PMIX_BOOL)) {
+            && !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED)) {
             /* pack update state command */
             cmd = PRTE_PLM_UPDATE_PROC_STATE;
             PMIX_DATA_BUFFER_CREATE(alert);
@@ -581,8 +581,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                 PMIX_DATA_BUFFER_RELEASE(alert);
             }
             /* mark that we sent it so we ensure we don't do it again */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                               PMIX_BOOL);
+            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED, PRTE_ATTR_LOCAL, true);
             /* cleanup the procs as these are gone */
             for (i = 0; i < prte_local_children->size; i++) {
                 pptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);

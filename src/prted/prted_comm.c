@@ -516,7 +516,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         }
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         if (NULL != jdata &&
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }
@@ -561,7 +561,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
 
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         if (NULL != jdata &&
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+            PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }

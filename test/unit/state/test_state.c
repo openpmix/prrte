@@ -385,7 +385,7 @@ static int test_runtime_options(void)
           prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, (void **) &tmoptr, PMIX_INT));
     CHECK("timeout value", 60 == tmo);
     CHECK("directive after timeout applied",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE));
     PMIX_RELEASE(jdata);
 
     /* and a directive AFTER "max-restarts=" must still be applied */
@@ -404,7 +404,7 @@ static int test_runtime_options(void)
           prte_get_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, (void **) &rptr, PMIX_INT32));
     CHECK("max-restarts value", 3 == restarts);
     CHECK("directive after max-restarts applied",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CONTINUOUS));
     PMIX_RELEASE(jdata);
 
     /* a bare directive carries no '=' and means "true" */
@@ -415,7 +415,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("bare directive means true",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE));
     PMIX_RELEASE(jdata);
 
     /* An explicit "=false" must leave the attribute ABSENT.  Every consumer
@@ -429,7 +429,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("false directive leaves it unset",
-          !prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE));
     PMIX_RELEASE(jdata);
 
     /* "aggregate-help" drives PRTE_JOB_NOAGG_HELP, which is its NEGATION:
@@ -441,7 +441,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("aggregate-help=true does not set NOAGG",
-          !prte_get_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOAGG_HELP));
     PMIX_RELEASE(jdata);
 
     jdata = PMIX_NEW(prte_job_t);
@@ -451,7 +451,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("aggregate-help=false sets NOAGG",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOAGG_HELP));
     PMIX_RELEASE(jdata);
 
     /* The matcher accepts any unambiguous PREFIX of an option's name, so a
@@ -465,7 +465,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("and means the same thing as the short form",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOAGG_HELP));
     PMIX_RELEASE(jdata);
 
     /* "report-child-jobs-separately" was listed in the runtime-options help
@@ -478,7 +478,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("report-child-jobs-separately recorded",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP));
     PMIX_RELEASE(jdata);
 
     /* and "=false" must leave it off, like every other boolean directive */
@@ -489,7 +489,7 @@ static int test_runtime_options(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("report-child-jobs-separately=false leaves it unset",
-          !prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP));
     PMIX_RELEASE(jdata);
 
     /* the defaults path seeds it from the MCA param */
@@ -498,7 +498,7 @@ static int test_runtime_options(void)
     PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-rcs3");
     CHECK("defaults accepted", PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, NULL));
     CHECK("the MCA param seeds the attribute",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP));
     PMIX_RELEASE(jdata);
     prte_report_child_jobs_separately = false;
 
@@ -584,8 +584,7 @@ static int test_report_child_sep_reader(void)
         spec = strdup(specs[n]);
         CHECK(specs[n], PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
         free(spec);
-        viawalk = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP,
-                                     NULL, PMIX_BOOL);
+        viawalk = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP);
         spec = strdup(specs[n]);
         CHECK(specs[n], viawalk == prte_state_base_report_child_sep(spec));
         free(spec);
@@ -625,7 +624,7 @@ static int test_stop_in_app(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("bare sets stop-in-app",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_APP));
     CHECK("bare names no breakpoint",
           !prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, NULL, PMIX_STRING));
 
@@ -636,7 +635,7 @@ static int test_stop_in_app(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("name sets stop-in-app",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_APP));
     bkpt = NULL;
     CHECK("name recorded",
           prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, (void **) &bkpt,
@@ -646,7 +645,7 @@ static int test_stop_in_app(void)
         free(bkpt);
     }
     CHECK("directive after the name applied",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE));
 
     /* asserting the boolean afterwards drops the name: the job is no longer
      * to stop at that one place */
@@ -655,7 +654,7 @@ static int test_stop_in_app(void)
           PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("true keeps stop-in-app",
-          prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+          PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_APP));
     CHECK("true clears the name",
           !prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, NULL, PMIX_STRING));
 
@@ -667,7 +666,7 @@ static int test_stop_in_app(void)
     CHECK("false accepted", PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
     free(spec);
     CHECK("false clears stop-in-app",
-          !prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+          !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_STOP_IN_APP));
     CHECK("false clears the name",
           !prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, NULL, PMIX_STRING));
     PMIX_RELEASE(jdata);
@@ -890,6 +889,76 @@ static int test_state_log(void)
     return failures;
 }
 
+
+/*
+ * prte_state_base_recover_resources() - returning one proc's slot and cpus
+ * to its node, and dropping the node from the map once the job has nothing
+ * left on it.  The errmgr calls this from six different proc states as a
+ * job absorbs a failure and keeps running.
+ *
+ * It is written to be idempotent, because a proc really does arrive twice
+ * (a daemon loss marks TERM_WO_SYNC, a later abort delivers a second
+ * terminal state).  What it was not written for is the two pointers it
+ * reaches through being legitimately absent by then.
+ */
+static int test_recover_resources(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    prte_node_t *node;
+
+    /*** a proc that holds no node ***
+     *
+     * prte_node_destruct() clears proc->node on every proc it knows about -
+     * "a proc can outlive its node (its job holds a reference too)" - and
+     * prte_proc_construct() starts it NULL for a proc that was never
+     * placed.  The errmgr is aware of it: five lines before it calls this
+     * function for PRTE_PROC_STATE_KILLED_BY_RELEASE it prints
+     * (NULL == pptr->node) ? "unknown" : pptr->node->name.  This function
+     * then read node->procs unconditionally, so the HNP went down with the
+     * proc.  There is nothing to recover from a proc holding no node.
+     */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "recover-test");
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, 0);
+    CHECK("recover:proc-starts-with-no-node", NULL == proc->node);
+    prte_state_base_recover_resources(jdata, proc);
+    CHECK("recover:no-node-is-a-no-op", true);
+    PMIX_RELEASE(proc);
+    PMIX_RELEASE(jdata);
+
+    /*** a proc whose job has already had its map torn down ***
+     *
+     * state/dvm's check_complete releases the map and sets jdata->map to
+     * NULL.  Since a second terminal state for the same proc can arrive
+     * after that - which is the whole reason this routine is idempotent -
+     * the map walk has to tolerate not having one.
+     */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "recover-test2");
+    node = PMIX_NEW(prte_node_t);
+    node->name = strdup("nodeA");
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, 0);
+    /* the node's array holds a reference of its own, which is the one this
+     * routine drops */
+    PMIX_RETAIN(proc);
+    pmix_pointer_array_set_item(node->procs, 0, proc);
+    node->num_procs = 1;
+    node->slots_inuse = 1;
+    proc->node = node;
+    CHECK("recover:map-starts-null", NULL == jdata->map);
+    prte_state_base_recover_resources(jdata, proc);
+    CHECK("recover:no-map-is-a-no-op", true);
+    PMIX_RELEASE(proc);
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(jdata);
+
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -942,6 +1011,7 @@ int main(void)
     failures += test_stop_in_app();
     failures += test_component_selection();
     failures += test_state_log();
+    failures += test_recover_resources();
 
     /* the framework close frees log_file, so take a copy to clean up with */
     logfile = (NULL == prte_state_base.log_file) ? NULL : strdup(prte_state_base.log_file);

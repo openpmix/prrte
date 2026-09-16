@@ -148,7 +148,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         return PRTE_ERR_BAD_PARAM;
     }
 
-    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+    physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rank_file: mapping job %s", PRTE_JOBID_PRINT(jdata->nspace));
