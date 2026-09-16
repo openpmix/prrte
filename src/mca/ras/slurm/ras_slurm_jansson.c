@@ -463,6 +463,162 @@ static int prte_ras_slurm_json_keep_member(prte_json_window_t *win, const char *
 }
 
 /*
+ * How a job's allocated nodes are reported.
+ *
+ * The nodes sit three levels below the job, and each level skips every member
+ * it was not asked for:
+ *
+ *     jobs[0]
+ *       job_resources
+ *         nodes
+ *           count         what Slurm says the array holds
+ *           allocation[]  one element per node, each carrying a bit for
+ *                         every socket and every core of that node
+ *
+ * That is one handler per level, and then one call per node:
+ *
+ *     job_nodes_member  keeps threads_per_core, descends into job_resources
+ *     resources_member  descends into nodes
+ *     nodes_member      takes count, walks allocation
+ *     alloc_element     parses one node and hands it to node_cb
+ *
+ * count_cb runs once with the count, before the first node, and may refuse.
+ * node_cb runs once per node with that node's record, which is released as
+ * soon as it returns.
+ */
+typedef int (*prte_ras_slurm_alloc_count_fn_t)(size_t node_count, void *cbdata);
+typedef int (*prte_ras_slurm_alloc_node_fn_t)(size_t index, json_t *node_obj, void *cbdata);
+
+typedef struct {
+    prte_ras_slurm_alloc_count_fn_t count_cb;
+    prte_ras_slurm_alloc_node_fn_t node_cb;
+    void *cbdata;
+    prte_ras_slurm_json_keep_t keep;
+    size_t stated;              /* nodes/count, when the record gave one  */
+    size_t seen;                /* elements handed to node_cb             */
+    bool have_count;
+    bool seen_resources;
+    bool seen_allocation;
+} prte_ras_slurm_alloc_walk_t;
+
+static int prte_ras_slurm_json_alloc_element(prte_json_window_t *win, size_t index, void *cbdata)
+{
+    prte_ras_slurm_alloc_walk_t *walk = (prte_ras_slurm_alloc_walk_t *) cbdata;
+    json_t *node_obj = NULL;
+    int err = prte_ras_slurm_json_load(win, "an allocated node", &node_obj);
+
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    walk->seen++;
+    err = walk->node_cb(index, node_obj, walk->cbdata);
+    json_decref(node_obj);
+    return err;
+}
+
+/*
+ * Take the count Slurm states for the array.
+ *
+ * This is the only thing that lets a caller size anything up front. It is
+ * Slurm's claim about the array and not a fact about it, so the walk checks
+ * it against the elements it actually reads.
+ */
+static int prte_ras_slurm_json_take_node_count(prte_json_window_t *win,
+                                               prte_ras_slurm_alloc_walk_t *walk)
+{
+    json_t *value = NULL;
+    int err;
+
+    if (walk->have_count) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    /* Named as a literal: key points into the window, and loading the value
+     * is what lets the window reuse the room the name sits in. */
+    err = prte_ras_slurm_json_load(win, "the node count", &value);
+
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    if (!json_is_integer(value) || 0 > json_integer_value(value)) {
+        json_decref(value);
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    walk->stated = (size_t) json_integer_value(value);
+    walk->have_count = true;
+    json_decref(value);
+
+    if (NULL != walk->count_cb) {
+        return walk->count_cb(walk->stated, walk->cbdata);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/* Walk the array of allocated nodes, one element at a time. */
+static int prte_ras_slurm_json_walk_allocation(prte_json_window_t *win,
+                                               prte_ras_slurm_alloc_walk_t *walk)
+{
+    if (walk->seen_allocation) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    /* A caller that sizes something from the count needs it before the first
+     * element, and Slurm prints it first. */
+    if (NULL != walk->count_cb && !walk->have_count) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    walk->seen_allocation = true;
+    return prte_json_window_walk_array(win, prte_ras_slurm_json_alloc_element, walk);
+}
+
+static int prte_ras_slurm_json_nodes_member(prte_json_window_t *win, const char *key, void *cbdata)
+{
+    prte_ras_slurm_alloc_walk_t *walk = (prte_ras_slurm_alloc_walk_t *) cbdata;
+
+    if (0 == strcmp(key, "count")) {
+        return prte_ras_slurm_json_take_node_count(win, walk);
+    }
+
+    if (0 == strcmp(key, "allocation")) {
+        return prte_ras_slurm_json_walk_allocation(win, walk);
+    }
+
+    return prte_json_window_skip(win);
+}
+
+static int prte_ras_slurm_json_resources_member(prte_json_window_t *win, const char *key,
+                                                void *cbdata)
+{
+    if (0 == strcmp(key, "nodes")) {
+        return prte_json_window_walk_object(win, prte_ras_slurm_json_nodes_member, cbdata);
+    }
+
+    return prte_json_window_skip(win);
+}
+
+static int prte_ras_slurm_json_job_nodes_member(prte_json_window_t *win, const char *key,
+                                                void *cbdata)
+{
+    prte_ras_slurm_alloc_walk_t *walk = (prte_ras_slurm_alloc_walk_t *) cbdata;
+
+    if (0 == strcmp(key, "job_resources")) {
+        if (walk->seen_resources) {
+            return PRTE_ERR_JSON_PARSE_FAILURE;
+        }
+
+        walk->seen_resources = true;
+        return prte_json_window_walk_object(win, prte_ras_slurm_json_resources_member, cbdata);
+    }
+
+    return prte_ras_slurm_json_keep_member(win, key, &walk->keep);
+}
+
+/*
  * How a record is read.
  *
  * "scontrol show job <id> --json" answers with one document, shaped so:
@@ -695,6 +851,79 @@ static int prte_ras_slurm_read_job_fields(const char *slurm_jobid, const char *c
 
     *job_info_out = keep.kept;
     return PRTE_SUCCESS;
+}
+
+/*
+ * Report a job's allocated nodes without holding its record.
+ *
+ * Each node's record is handed to node_cb and released before the next is
+ * read, so the cost is one node rather than the job. count_cb, where given,
+ * runs first with the count Slurm states, and the array is then required to
+ * hold exactly that many.
+ *
+ * threads_per_core is a member of the job rather than of a node, and Slurm
+ * prints it after the array, so it is only settled once this returns. It
+ * reads back as 1 where the record leaves it unset or infinite.
+ *
+ * @param[in]  slurm_jobid       Slurm job ID to query.
+ * @param[in]  count_cb          called once with nodes/count; may be NULL.
+ * @param[in]  node_cb           called once per allocated node.
+ * @param[in]  cbdata            passed to both callbacks.
+ * @param[out] threads_per_core  the job's threads_per_core; may be NULL.
+ */
+static int prte_ras_slurm_walk_alloc_nodes(const char *slurm_jobid,
+                                           prte_ras_slurm_alloc_count_fn_t count_cb,
+                                           prte_ras_slurm_alloc_node_fn_t node_cb, void *cbdata,
+                                           int *threads_per_core)
+{
+    static const char *const keys[] = {"threads_per_core", NULL};
+
+    prte_ras_slurm_alloc_walk_t walk = {0};
+    int64_t threads = 0;
+    int err;
+
+    if (NULL == node_cb) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    walk.count_cb = count_cb;
+    walk.node_cb = node_cb;
+    walk.cbdata = cbdata;
+    walk.keep.keys = keys;
+    walk.keep.kept = json_object();
+
+    if (NULL == walk.keep.kept) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    err = prte_ras_slurm_json_run(slurm_jobid, prte_ras_slurm_json_job_nodes_member, &walk);
+
+    if (PRTE_SUCCESS == err && !walk.seen_allocation) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    if (PRTE_SUCCESS == err && walk.have_count && walk.seen != walk.stated) {
+        pmix_output(0, "ras:slurm:walk_alloc_nodes: job %s says it holds %lu nodes"
+                       " but listed %lu.",
+                    slurm_jobid, (unsigned long) walk.stated, (unsigned long) walk.seen);
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    if (PRTE_SUCCESS == err && NULL != threads_per_core) {
+        err = prte_ras_slurm_get_json_numobj_value(walk.keep.kept, "threads_per_core", &threads);
+
+        /* Unset, infinite and out of range all read back as one thread. */
+        if (PRTE_SUCCESS == err) {
+            *threads_per_core = (0 < threads && PRTE_SLURM_MAX_THREADS_PER_CORE >= threads)
+                                    ? (int) threads
+                                    : 1;
+        }
+    }
+
+    json_decref(walk.keep.kept);
+    return err;
 }
 
 /**
@@ -980,23 +1209,157 @@ static int prte_ras_slurm_alloc_list_to_nodes(prte_ras_slurm_alloc_list_t *list,
  * @param[in] slurm_jobid Slurm job ID.
  * @param[in,out] node_list. A pmix_list_t to add nodes to.
  */
-int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list)
+/* One element of the allocation array: its name, and how many of its cores
+ * Slurm marked allocated. */
+static int prte_ras_slurm_collect_alloc_node(size_t index, json_t *node_obj, void *cbdata)
 {
-    if(NULL == slurm_jobid || NULL == node_list) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-
+    prte_ras_slurm_alloc_list_t *collected = (prte_ras_slurm_alloc_list_t *) cbdata;
     int err = PRTE_SUCCESS;
 
-    err = prte_ras_slurm_validate_jobid(slurm_jobid);
+    PRTE_HIDE_UNUSED_PARAMS(index);
 
-    if(PRTE_SUCCESS != err) {
+    if (!json_is_object(node_obj)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
         PRTE_ERROR_LOG(err);
         return err;
     }
 
+    json_t *nodename = json_object_get(node_obj, "name");
+
+    if (NULL == nodename || !json_is_string(nodename)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    const char *nodename_string = json_string_value(nodename);
+
+    if (NULL == nodename_string || '\0' == nodename_string[0]) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    json_t *cpu_info = json_object_get(node_obj, "cpus");
+
+    if (NULL == cpu_info || !json_is_object(cpu_info)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    json_t *cpu_count_obj = json_object_get(cpu_info, "count");
+
+    if (NULL == cpu_count_obj || !json_is_integer(cpu_count_obj)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    json_int_t cpu_count_num = json_integer_value(cpu_count_obj);
+
+    if (0 >= cpu_count_num || INT_MAX < cpu_count_num) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    int cpu_max_count = (int)cpu_count_num;
+
+    int core_count = 0;
+
+    json_t *sockets = json_object_get(node_obj, "sockets");
+
+    if(NULL == sockets || !json_is_array(sockets)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    size_t socket_idx;
+    json_t *socket_obj;
+
+    json_array_foreach(sockets, socket_idx, socket_obj) {
+
+        if (!json_is_object(socket_obj)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+        }
+
+        json_t *cores = json_object_get(socket_obj, "cores");
+
+        if (NULL == cores || !json_is_array(cores)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+        }
+
+        size_t core_idx;
+        json_t *core_obj;
+
+        json_array_foreach(cores, core_idx, core_obj) {
+
+        if(!json_is_object(core_obj)) {
+            err = PRTE_ERR_JSON_PARSE_FAILURE;
+            PRTE_ERROR_LOG(err);
+            return err;
+        }
+
+        json_t *statuses = json_object_get(core_obj, "status");
+        if (NULL == statuses || !json_is_array(statuses)) {
+            err = PRTE_ERR_JSON_PARSE_FAILURE;
+            PRTE_ERROR_LOG(err);
+            return err;
+        }
+
+        size_t status_idx;
+        json_t *status_obj;
+
+        json_array_foreach(statuses, status_idx, status_obj) {
+
+            if(!json_is_string(status_obj)) {
+                err = PRTE_ERR_JSON_PARSE_FAILURE;
+                PRTE_ERROR_LOG(err);
+                return err;
+            }
+
+            if (0 == strcmp(json_string_value(status_obj), "ALLOCATED")) {
+                core_count++;
+
+                if(PRTE_SLURM_MAX_CORE_COUNT < core_count) {
+                err = PRTE_ERR_JSON_PARSE_FAILURE;
+                PRTE_ERROR_LOG(err);
+                return err;
+                }
+
+                break;
+            }
+        }
+        }
+    }
+
+    if(0 >= core_count) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    return prte_ras_slurm_alloc_list_add(collected, nodename_string, core_count,
+                                        cpu_max_count);
+}
+
+int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list)
+{
+    prte_ras_slurm_alloc_list_t collected = {NULL, 0, 0};
+    int threads_per_core = 1;
     uint32_t jobid_val;
+    int err;
+
+    if(NULL == slurm_jobid || NULL == node_list) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     err = prte_ras_slurm_convert_jobid(slurm_jobid, &jobid_val);
 
@@ -1005,239 +1368,14 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
         return err;
     }
 
-    int threads_per_core = 1;
+    err = prte_ras_slurm_walk_alloc_nodes(slurm_jobid, NULL, prte_ras_slurm_collect_alloc_node,
+                                          &collected, &threads_per_core);
 
-    prte_ras_slurm_alloc_list_t collected = {NULL, 0, 0};
-
-    json_t *root = NULL;
-
-    err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &root);
-
-    if(PRTE_SUCCESS != err) {
-        goto cleanup;
+    if(PRTE_SUCCESS == err) {
+        err = prte_ras_slurm_alloc_list_to_nodes(&collected, threads_per_core, node_list);
     }
-
-    json_t *tpc_obj = json_object_get(root, "threads_per_core");
-
-    if(NULL == tpc_obj || !json_is_object(tpc_obj)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *tpc_set_flag = json_object_get(tpc_obj, "set");
-
-    if(NULL == tpc_set_flag || !json_is_boolean(tpc_set_flag)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *tpc_inf_flag = json_object_get(tpc_obj, "infinite");
-
-    if(NULL == tpc_inf_flag || !json_is_boolean(tpc_inf_flag)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *tpc_val = json_object_get(tpc_obj, "number");
-
-    if(NULL == tpc_val || !json_is_integer(tpc_val)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_int_t tpc = json_integer_value(tpc_val);
-
-    if(json_is_true(tpc_set_flag) && json_is_false(tpc_inf_flag)) {
-        if (tpc > 0 && tpc <= PRTE_SLURM_MAX_THREADS_PER_CORE) {
-            threads_per_core = (int)tpc;
-        } else if (tpc == 0) {
-            /* Slurm could set to 0 in some cases */
-            threads_per_core = 1;
-        } else {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-    }
-
-    json_t *job_resources = json_object_get(root, "job_resources");
-
-    if(NULL == job_resources || !json_is_object(job_resources)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *nodes = json_object_get(job_resources, "nodes");
-
-    if(NULL == nodes || !json_is_object(nodes)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    json_t *allocation = json_object_get(nodes, "allocation");
-
-    if (NULL == allocation || !json_is_array(allocation)) {
-        err = PRTE_ERR_JSON_PARSE_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    size_t node_idx;
-    json_t *node_obj;
-
-    /* Retrieve node names and allocated slots */
-    json_array_foreach(allocation, node_idx, node_obj) {
-        if (!json_is_object(node_obj)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        json_t *nodename = json_object_get(node_obj, "name");
-
-        if (NULL == nodename || !json_is_string(nodename)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        const char *nodename_string = json_string_value(nodename);
-
-        if (NULL == nodename_string || '\0' == nodename_string[0]) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        json_t *cpu_info = json_object_get(node_obj, "cpus");
-
-        if (NULL == cpu_info || !json_is_object(cpu_info)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        json_t *cpu_count_obj = json_object_get(cpu_info, "count");
-
-        if (NULL == cpu_count_obj || !json_is_integer(cpu_count_obj)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        json_int_t cpu_count_num = json_integer_value(cpu_count_obj);
-
-        if (0 >= cpu_count_num || INT_MAX < cpu_count_num) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        int cpu_max_count = (int)cpu_count_num;
-
-        int core_count = 0;
-
-        json_t *sockets = json_object_get(node_obj, "sockets");
-
-        if(NULL == sockets || !json_is_array(sockets)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        size_t socket_idx;
-        json_t *socket_obj;
-
-        json_array_foreach(sockets, socket_idx, socket_obj) {
-
-            if (!json_is_object(socket_obj)) {
-                err = PRTE_ERR_JSON_PARSE_FAILURE;
-                PRTE_ERROR_LOG(err);
-                goto cleanup;
-            }
-
-            json_t *cores = json_object_get(socket_obj, "cores");
-
-            if (NULL == cores || !json_is_array(cores)) {
-                err = PRTE_ERR_JSON_PARSE_FAILURE;
-                PRTE_ERROR_LOG(err);
-                goto cleanup;
-            }
-
-            size_t core_idx;
-            json_t *core_obj;
-
-            json_array_foreach(cores, core_idx, core_obj) {
-
-                if(!json_is_object(core_obj)) {
-                    err = PRTE_ERR_JSON_PARSE_FAILURE;
-                    PRTE_ERROR_LOG(err);
-                    goto cleanup;
-                }
-
-                json_t *statuses = json_object_get(core_obj, "status");
-                if (NULL == statuses || !json_is_array(statuses)) {
-                    err = PRTE_ERR_JSON_PARSE_FAILURE;
-                    PRTE_ERROR_LOG(err);
-                    goto cleanup;
-                }
-
-                size_t status_idx;
-                json_t *status_obj;
-
-                json_array_foreach(statuses, status_idx, status_obj) {
-
-                    if(!json_is_string(status_obj)) {
-                        err = PRTE_ERR_JSON_PARSE_FAILURE;
-                        PRTE_ERROR_LOG(err);
-                        goto cleanup;
-                    }
-
-                    if (0 == strcmp(json_string_value(status_obj), "ALLOCATED")) {
-                        core_count++;
-
-                        if(PRTE_SLURM_MAX_CORE_COUNT < core_count) {
-                            err = PRTE_ERR_JSON_PARSE_FAILURE;
-                            PRTE_ERROR_LOG(err);
-                            goto cleanup;
-                        }
-
-                        break;
-                    }
-                }
-            }
-        }
-
-        if(0 >= core_count) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        err = prte_ras_slurm_alloc_list_add(&collected, nodename_string, core_count,
-                                            cpu_max_count);
-
-        if (PRTE_SUCCESS != err) {
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-    }
-
-    err = prte_ras_slurm_alloc_list_to_nodes(&collected, threads_per_core, node_list);
-
-    cleanup:
 
     prte_ras_slurm_alloc_list_destruct(&collected);
-
-    if(NULL != root) {
-        json_decref(root);
-    }
 
     return err;
 }
