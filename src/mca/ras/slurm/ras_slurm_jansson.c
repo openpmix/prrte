@@ -52,6 +52,7 @@
  */
 static int prte_ras_slurm_get_json_numobj_field(json_t *job, const char *key, pmix_hash_table_t *values_table);
 static int prte_ras_slurm_get_json_numobj_value(json_t *job, const char *key, int64_t *out);
+static int prte_ras_slurm_read_job_times(json_t *job, time_t *start_time, time_t *end_time);
 
 /*
  * Parse a numeric-object field from JSON and store it as a string in a hash table.
@@ -746,7 +747,8 @@ bool prte_ras_slurm_have_jansson(void)
 
  * Note: On failure, values_table may be partially populated.
  */
-int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
+int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *start_time,
+                                      time_t *end_time)
 {
     if(NULL == values_table) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -765,7 +767,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
     }
 
     /* Built from the tables the loops below walk, so the two cannot drift. */
-    const char *keys[STR_FIELD_COUNT + NUM_OBJ_FIELD_COUNT + 1];
+    const char *keys[STR_FIELD_COUNT + NUM_OBJ_FIELD_COUNT + 3];
     size_t nkeys = 0;
 
     for(size_t i = 0; i < NUM_OBJ_FIELD_COUNT; i++) {
@@ -776,6 +778,8 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
         keys[nkeys++] = str_fields[i];
     }
 
+    keys[nkeys++] = "start_time";
+    keys[nkeys++] = "end_time";
     keys[nkeys] = NULL;
 
     err = prte_ras_slurm_read_job_fields(slurm_jobid, keys, &job);
@@ -851,6 +855,15 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
             goto cleanup;
         }
 
+    }
+
+    /* Record the job end time so we know what to trim the job to without
+     * paying for another query. */
+    err = prte_ras_slurm_read_job_times(job, start_time, end_time);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
     }
 
     cleanup:
@@ -1495,56 +1508,43 @@ static int prte_ras_slurm_get_json_numobj_value(json_t *job, const char *key, in
 }
 
 /*
- * Read a job's start and end times, in seconds since the epoch.
+ * Read a job's start and end times out of a record already in hand.
  *
- * Either output may be NULL. A time Slurm does not report comes back as 0, as
- * does the end of a job with no time limit: Slurm prints an end_time for one
- * anyway - its start plus a year - which is a placeholder, not a deadline.
+ * Either output may be NULL. Times Slurm does not report come back as 0, and
+ * so does the end of a job with no time limit, since the end_time Slurm
+ * prints for one is just its start plus a year.
  *
- * end_time is the start plus the CURRENT time limit, so it answers "when does
- * this allocation end" only once the job is running.
+ * Slurm derives end_time from the job's current time limit, so it describes
+ * the end of the allocation only once the job is running.
  *
- * @param[in]  slurm_jobid Slurm job ID to query.
- * @param[out] start_time  Job start time, or 0.
- * @param[out] end_time    Job end time, or 0 if it has none.
+ * @param[in]  job        Members read from a Slurm job record.
+ * @param[out] start_time Job start time, or 0.
+ * @param[out] end_time   Job end time, or 0 if it has none.
  */
-int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time)
+static int prte_ras_slurm_read_job_times(json_t *job, time_t *start_time, time_t *end_time)
 {
-    int err = PRTE_SUCCESS;
-    json_t *job_info = NULL;
     int64_t time_limit = 0;
     int64_t start = 0;
     int64_t end = 0;
+    int err;
 
-    if (NULL == slurm_jobid) {
+    if (NULL == job) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
 
-    static const char *const keys[] = {"start_time", "end_time", "time_limit", NULL};
-
-    err = prte_ras_slurm_read_job_fields(slurm_jobid, keys, &job_info);
-
-    if (PRTE_SUCCESS != err) {
-        return err;
-    }
-
-    err = prte_ras_slurm_get_json_numobj_value(job_info, "start_time", &start);
+    err = prte_ras_slurm_get_json_numobj_value(job, "start_time", &start);
 
     if (PRTE_SUCCESS == err) {
-        err = prte_ras_slurm_get_json_numobj_value(job_info, "end_time", &end);
+        err = prte_ras_slurm_get_json_numobj_value(job, "end_time", &end);
     }
 
     if (PRTE_SUCCESS == err) {
-        err = prte_ras_slurm_get_json_numobj_value(job_info,
-                                                   num_obj_fields[NUM_OBJ_TIME_LIMIT],
+        err = prte_ras_slurm_get_json_numobj_value(job, num_obj_fields[NUM_OBJ_TIME_LIMIT],
                                                    &time_limit);
     }
 
-    json_decref(job_info);
-
     if (PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
         return err;
     }
 
@@ -1561,4 +1561,39 @@ int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, ti
     }
 
     return PRTE_SUCCESS;
+}
+
+/*
+ * Read a job's start and end times, in seconds since the epoch.
+ *
+ * @param[in]  slurm_jobid Slurm job ID to query.
+ * @param[out] start_time  Job start time, or 0.
+ * @param[out] end_time    Job end time, or 0 if it has none.
+ */
+int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time)
+{
+    static const char *const keys[] = {"start_time", "end_time", "time_limit", NULL};
+
+    json_t *job_info = NULL;
+    int err;
+
+    if (NULL == slurm_jobid) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    err = prte_ras_slurm_read_job_fields(slurm_jobid, keys, &job_info);
+
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    err = prte_ras_slurm_read_job_times(job_info, start_time, end_time);
+    json_decref(job_info);
+
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+    }
+
+    return err;
 }
