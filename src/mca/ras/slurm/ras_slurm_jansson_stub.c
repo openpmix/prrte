@@ -26,9 +26,10 @@ bool prte_ras_slurm_have_jansson(void)
 /*
  * Extract SLURM job fields; returns PRTE_ERR_NOT_AVAILABLE if built without Jansson.
  */
-int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
+int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *start_time,
+                                      time_t *end_time)
 {
-    PRTE_HIDE_UNUSED_PARAMS(values_table);
+    PRTE_HIDE_UNUSED_PARAMS(values_table, start_time, end_time);
     pmix_output(0, "ras:slurm:extract_job_fields: "
                 "Jansson support is required but not enabled in this build");
     return PRTE_ERR_NOT_AVAILABLE;
