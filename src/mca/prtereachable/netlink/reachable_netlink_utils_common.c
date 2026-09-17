@@ -52,6 +52,7 @@
 #include "libnl_utils.h"
 
 /* Adapt this copied code for PRTE */
+#include "src/mca/prtereachable/base/base.h"
 #include "src/util/pmix_output.h"
 
 static struct nla_policy route_policy[RTA_MAX+1] = {
@@ -86,9 +87,11 @@ static int prte_reachable_netlink_is_nlreply_err(struct nlmsghdr *nlm_hdr)
     if (nlm_hdr->nlmsg_type == NLMSG_ERROR) {
         struct nlmsgerr *e = (struct nlmsgerr *) nlmsg_data(nlm_hdr);
         if (nlm_hdr->nlmsg_len >= (__u32) NLMSG_SIZE(sizeof(*e))) {
-            pmix_output_verbose(20, 0, "Received a netlink error message");
+            pmix_output_verbose(20, prte_prtereachable_base_framework.framework_output,
+                                "Received a netlink error message");
         } else {
-            pmix_output_verbose(20, 0, "Received a truncated netlink error message\n");
+            pmix_output_verbose(20, prte_prtereachable_base_framework.framework_output,
+                                "Received a truncated netlink error message");
         }
         return 1;
     }
@@ -247,8 +250,8 @@ static int prte_reachable_netlink_rt_raw_parse_cb(struct nl_msg *msg, void *arg)
             /* usually, this means that there is a route to the remote
                host, but that it's not through the given interface.  For
                our purposes, that means it's not reachable. */
-            pmix_output_verbose(20, 0,
-                                "Retrieved route has a different outgoing interface %d (expected %d)\n",
+            pmix_output_verbose(20, prte_prtereachable_base_framework.framework_output,
+                                "Retrieved route has a different outgoing interface %d (expected %d)",
                                 nla_get_u32(tb[RTA_OIF]), lookup_arg->oif);
         }
     }
@@ -285,15 +288,31 @@ int prte_reachable_netlink_rt_lookup(uint32_t src_addr, uint32_t dst_addr, int o
     /* allocate netlink message of type RTM_GETROUTE */
     nlm = nlmsg_alloc_simple(RTM_GETROUTE, 0);
     if (!nlm) {
-        pmix_output(0, "Failed to alloc nl message, %s\n", NL_GETERROR(err));
+        /* err is still the 0 that the socket allocation returned, so the
+         * usual "%s of NL_GETERROR(err)" would have said "Success" here */
+        pmix_output(0, "Failed to alloc nl message\n");
         err = ENOMEM;
         goto out;
     }
 
-    /* append route message and addresses to netlink message.   */
-    nlmsg_append(nlm, &rmsg, sizeof(rmsg), NLMSG_ALIGNTO);
-    nla_put_u32(nlm, RTA_DST, dst_addr);
-    nla_put_u32(nlm, RTA_SRC, src_addr);
+    /* Append route message and addresses to netlink message.  An unchecked
+     * failure here is not harmless: the query goes out without the address
+     * it is asking about, and the reply is then read as "no route to that
+     * pair" -- a wrong answer rather than an error. */
+    err = nlmsg_append(nlm, &rmsg, sizeof(rmsg), NLMSG_ALIGNTO);
+    if (0 == err) {
+        err = nla_put_u32(nlm, RTA_DST, dst_addr);
+    }
+    if (0 == err) {
+        err = nla_put_u32(nlm, RTA_SRC, src_addr);
+    }
+    if (0 != err) {
+        pmix_output(0, "Failed to build RTM_GETROUTE query message, error %s\n",
+                    NL_GETERROR(err));
+        nlmsg_free(nlm);
+        err = ENOMEM;
+        goto out;
+    }
 
     /* query kernel */
     err = prte_reachable_netlink_send_query(unlsk, nlm, NETLINK_ROUTE, NLM_F_REQUEST);
@@ -359,15 +378,29 @@ int prte_reachable_netlink_rt_lookup6(struct in6_addr *src_addr, struct in6_addr
     /* allocate netlink message of type RTM_GETROUTE */
     nlm = nlmsg_alloc_simple(RTM_GETROUTE, 0);
     if (!nlm) {
-        pmix_output(0, "Failed to alloc nl message, %s\n", NL_GETERROR(err));
+        /* see the IPv4 twin: err is 0 here, so NL_GETERROR would say
+         * "Success" */
+        pmix_output(0, "Failed to alloc nl message\n");
         err = ENOMEM;
         goto out;
     }
 
-    /* append route message and addresses to netlink message.   */
-    nlmsg_append(nlm, &rmsg, sizeof(rmsg), NLMSG_ALIGNTO);
-    nla_put(nlm, RTA_DST, sizeof(dst_addr->s6_addr), &(dst_addr->s6_addr));
-    nla_put(nlm, RTA_SRC, sizeof(src_addr->s6_addr), &(src_addr->s6_addr));
+    /* append route message and addresses to netlink message -- checked, for
+     * the reason given in the IPv4 twin */
+    err = nlmsg_append(nlm, &rmsg, sizeof(rmsg), NLMSG_ALIGNTO);
+    if (0 == err) {
+        err = nla_put(nlm, RTA_DST, sizeof(dst_addr->s6_addr), &(dst_addr->s6_addr));
+    }
+    if (0 == err) {
+        err = nla_put(nlm, RTA_SRC, sizeof(src_addr->s6_addr), &(src_addr->s6_addr));
+    }
+    if (0 != err) {
+        pmix_output(0, "Failed to build RTM_GETROUTE query message, error %s\n",
+                    NL_GETERROR(err));
+        nlmsg_free(nlm);
+        err = ENOMEM;
+        goto out;
+    }
 
     /* query kernel */
     err = prte_reachable_netlink_send_query(unlsk, nlm, NETLINK_ROUTE, NLM_F_REQUEST);
