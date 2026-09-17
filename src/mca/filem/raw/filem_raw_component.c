@@ -46,7 +46,7 @@ prte_filem_base_component_t prte_mca_filem_raw_component = {
     PMIX_MCA_BASE_MAKE_VERSION(component,
                                PRTE_MAJOR_VERSION,
                                PRTE_MINOR_VERSION,
-                               PMIX_RELEASE_VERSION),
+                               PRTE_RELEASE_VERSION),
 
     /* Component open and close functions */
     .pmix_mca_open_component = filem_raw_open,
