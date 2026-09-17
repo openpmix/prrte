@@ -93,13 +93,12 @@ static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
     int outgoing_interface, ret, weight, has_gateway;
 
     /* pmix_net_get_hostname returns a static buffer.  Great for
-       single address printfs, need to copy in this case */
+       single address printfs, need to copy in this case.  pmix_string_copy
+       guarantees the terminator, so there is nothing to add afterwards. */
     pmix_string_copy(str_local, pmix_net_get_hostname((struct sockaddr *) &local_if->if_addr),
                      sizeof(str_local));
-    str_local[sizeof(str_local) - 1] = '\0';
     pmix_string_copy(str_remote, pmix_net_get_hostname((struct sockaddr *) &remote_if->if_addr),
                      sizeof(str_remote));
-    str_remote[sizeof(str_remote) - 1] = '\0';
 
     /*  initially, assume no connection is possible */
     weight = calculate_weight(0, 0, CQ_NO_CONNECTION);

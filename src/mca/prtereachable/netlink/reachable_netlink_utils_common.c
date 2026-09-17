@@ -55,15 +55,15 @@
 #include "src/mca/prtereachable/base/base.h"
 #include "src/util/pmix_output.h"
 
-static struct nla_policy route_policy[RTA_MAX+1] = {
-	[RTA_IIF]	= { .type = NLA_STRING, .maxlen = IFNAMSIZ },
-	[RTA_OIF]	= { .type = NLA_U32 },
-	[RTA_PRIORITY]	= { .type = NLA_U32 },
-	[RTA_FLOW]	= { .type = NLA_U32 },
-	[RTA_MP_ALGO]	= { .type = NLA_U32 },
-	[RTA_CACHEINFO]	= { .minlen = sizeof(struct rta_cacheinfo) },
-	[RTA_METRICS]	= { .type = NLA_NESTED },
-	[RTA_MULTIPATH]	= { .type = NLA_NESTED },
+static struct nla_policy route_policy[RTA_MAX + 1] = {
+    [RTA_IIF] = {.type = NLA_STRING, .maxlen = IFNAMSIZ},
+    [RTA_OIF] = {.type = NLA_U32},
+    [RTA_PRIORITY] = {.type = NLA_U32},
+    [RTA_FLOW] = {.type = NLA_U32},
+    [RTA_MP_ALGO] = {.type = NLA_U32},
+    [RTA_CACHEINFO] = {.minlen = sizeof(struct rta_cacheinfo)},
+    [RTA_METRICS] = {.type = NLA_NESTED},
+    [RTA_MULTIPATH] = {.type = NLA_NESTED},
 };
 
 static int prte_reachable_netlink_is_nlreply_expected(struct prte_reachable_netlink_sk *unlsk,
