@@ -42,8 +42,9 @@ static int component_register(void);
 prte_reachable_base_component_t prte_mca_prtereachable_netlink_component = {
 
     .base_version = {
-        /* Indicate that we are a reachable v1.1.0 component (which also
-           implies a specific MCA version) */
+        /* The framework interface version this component was built
+           against.  The numbers live in prtereachable.h and nowhere else -
+           see the framework guide. */
 
         PRTE_MCA_BASE_VERSION(prtereachable),
 
