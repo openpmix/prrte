@@ -58,7 +58,7 @@ static bool at_least(int major, int minor, int want_major, int want_minor)
 }
 
 /**
- * Run "<cmd> --version" and parse "slurm <major>.<minor>..." out of it.
+ * Run "<cmd> --version" and parse "<package> <major>.<minor>..." out of it.
  *
  * Returns true when a version was obtained.  Note that a Slurm client
  * establishes a configuration source BEFORE it will print its version, so on
