@@ -62,6 +62,21 @@ cannot.
 
 ## Things to know before editing
 
+- **The first word of the version line is not always `slurm`.** Debian and
+  Ubuntu build Slurm under their own package name, so their clients answer
+  `slurm-wlm 23.11.4`, and the version they report carries a packaging
+  suffix (`21.08.8-2`). The parser therefore matches the package name as a
+  *prefix* and takes the version from after the first space; it must not
+  anchor on `"slurm "` or index a fixed number of characters into the line.
+  This has broken twice. It is worth knowing what the breakage looks like,
+  because it does not look like a parse error: the probe just reports
+  `available == false`, which is indistinguishable from a machine with no
+  Slurm at all, so `plm/slurm` declines to select and the DVM falls back to
+  `ssh` and a one-node allocation *inside a live Slurm allocation* — and
+  says nothing, because "not my environment" is a legitimate answer
+  everywhere it is asked. The same rule applies to the shell-side probe in
+  [`ras/slurm/configure.m4`](../../ras/slurm/configure.m4), which mis-reads
+  the same line into the build's idea of the version.
 - **`!available` is not "too old".** A Slurm client establishes a
   configuration source *before* it will print its version, so on a machine
   with the binaries but no reachable `slurm.conf` the command exits 1 having
@@ -87,8 +102,15 @@ cannot.
 
 ## Testing
 
-The version arithmetic has no unit test of its own — it is three
-comparisons — but every path through it is exercised by
+[`test/unit/common/test_common_slurm.c`](../../../../test/unit/common/test_common_slurm.c)
+covers the parser and the three thresholds without a scheduler: it writes
+stub `srun`/`scontrol`/`sbatch`/`sinfo` scripts that print a chosen line,
+puts them first on `PATH`, and runs each case in a forked child — the cache
+is per process by design, so one process can hold exactly one answer. That
+is also the only way to reach the parser at all, since it is static and its
+input comes from a subprocess.
+
+Everything above the parser is exercised by
 [`contrib/slurmswarm`](../../../../contrib/slurmswarm/), which runs PRRTE
 against a real Slurm whose version is pinned by the image and can be
 changed with a build argument. That harness is also where a wrong answer
