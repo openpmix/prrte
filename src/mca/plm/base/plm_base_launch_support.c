@@ -91,7 +91,15 @@ void prte_plm_base_set_slots(prte_node_t *node)
             node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_CORE);
         }
-    } else if (0 == strncmp(prte_set_slots, "sockets", strlen(prte_set_slots))) {
+        /* "packages" is hwloc's own name for the object, and the name
+         * prte_set_default_slots is documented as taking; "sockets" is what
+         * this code has always called it.  Both have to work - a user who
+         * follows the parameter's own help and writes "packages" used to
+         * match no keyword at all and fall through to the numeric arm below,
+         * where strtol read it as ZERO and left every node that lacked slot
+         * information with no slots to map onto. */
+    } else if (0 == strncmp(prte_set_slots, "packages", strlen(prte_set_slots)) ||
+               0 == strncmp(prte_set_slots, "sockets", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
             node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_SOCKET);
@@ -113,8 +121,36 @@ void prte_plm_base_set_slots(prte_node_t *node)
                                                    HWLOC_OBJ_PU);
         }
     } else {
-        /* must be a number */
-        node->slots = strtol(prte_set_slots, NULL, 10);
+        /* must be a number.  strtol yields a long and slots is an int32_t, so
+         * clamp rather than let a silly value wrap into a negative slot count
+         * that every later comparison reads as "no room here".
+         *
+         * And check that it WAS a number: strtol answers zero for anything it
+         * cannot read, so a misspelled keyword used to give the node zero
+         * slots silently - a DVM that refuses every launch for no stated
+         * reason.  Say so once and fall back to the documented default. */
+        char *endp = NULL;
+        long sl = strtol(prte_set_slots, &endp, 10);
+
+        if (NULL == endp || endp == prte_set_slots || '\0' != *endp) {
+            static bool warned = false;
+            if (!warned) {
+                warned = true;
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-base.txt",
+                               "bad-set-slots", true, prte_set_slots);
+            }
+            if (NULL != node->topology && NULL != node->topology->topo) {
+                node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                 HWLOC_OBJ_CORE);
+            }
+        } else {
+            if (0 > sl) {
+                sl = 0;
+            } else if (INT32_MAX < sl) {
+                sl = INT32_MAX;
+            }
+            node->slots = (int32_t) sl;
+        }
     }
     /* mark the node as having its slots "given" */
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
@@ -438,6 +474,7 @@ void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
         rc = PMIx_Data_unpack(NULL, &blob, &pid, &cnt, PMIX_PID);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
+            free(hostname);
             PMIX_DATA_BUFFER_DESTRUCT(&blob);
             goto DONE;
         }
@@ -480,9 +517,16 @@ DONE:
         }
         /* output the results - note that the output might need to go to a
          * tool instead of just to stderr, so we use the PMIx IOF deliver
-         * function to ensure it gets where it needs to go */
+         * function to ensure it gets where it needs to go.
+         *
+         * Every daemon answers this request, including one that found no
+         * live local proc of the job to trace - it packs the nspace and
+         * nothing else (see PRTE_DAEMON_GET_STACK_TRACES in prted_comm.c).
+         * So the array can still be empty here, and a job whose procs all
+         * exited while the request was in flight leaves it NULL outright:
+         * PMIx_Argv_append_nosize is what creates it. */
         PMIX_LOAD_PROCID(&name, jdata->nspace, PMIX_RANK_WILDCARD);
-        for (cnt=0; NULL != jdata->traces[cnt]; cnt++) {
+        for (cnt=0; NULL != jdata->traces && NULL != jdata->traces[cnt]; cnt++) {
             bo.bytes = jdata->traces[cnt];
             bo.size = strlen(jdata->traces[cnt]);
             PMIx_server_IOF_deliver(&name, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
@@ -1375,6 +1419,11 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
             ninfo = 0;
         } else if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
+            /* every caller reads this function's return as a PRRTE code -
+             * it logs it with PRTE_ERROR_LOG - and the exit status is a
+             * PRRTE code too, so convert rather than handing PMIx's
+             * numbering across the boundary */
+            rc = prte_pmix_convert_status(rc);
             PRTE_UPDATE_EXIT_STATUS(rc);
             PMIX_INFO_LIST_RELEASE(tinfo);
             /* NOTE: nptr was already released when it was added to the
@@ -1524,8 +1573,11 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
                 // should never happen
                 continue;
             }
-            fprintf(fp, "(rank, host, exe, pid) = (%u, %s, %s, %d)\n",
-                    proc->name.rank, proc->node->name, app->app, proc->pid);
+            /* pid_t is a signed integer type of unspecified width, so widen
+             * it rather than assuming %d matches - the same thing dump_job()
+             * and the stack-trace report do */
+            fprintf(fp, "(rank, host, exe, pid) = (%u, %s, %s, %ld)\n",
+                    proc->name.rank, proc->node->name, app->app, (long) proc->pid);
         }
         if (stdout != fp && stderr != fp) {
             fclose(fp);
@@ -1533,14 +1585,23 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     }
 
 next:
+    /* prte_get_attribute() hands back its OWN copy of a string attribute, so
+     * the proctable filename is ours to free - on every path, including the
+     * one that could not open it */
+    if (NULL != file) {
+        free(file);
+        file = NULL;
+    }
+
     /* The job is running, so an allocation obtained for it is now the job's
      * to hold: drop the note that says we still owe it a release.  From here
      * its disposition is the ordinary one for a reservation - the inheritance
      * rules applied when the owning namespace ends. */
     prte_remove_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_ID);
 
-    /* notify the spawn requestor */
-    rc = prte_plm_base_spawn_response(PRTE_SUCCESS, jdata);
+    /* notify the spawn requestor - the status is a PMIx one, as every
+     * other caller of this function passes */
+    rc = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -2069,7 +2130,18 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 }
                 PMIX_RETAIN(t);
                 daemon->node->topology = t;
+                /* a daemon can report in more than once (bootstrap unheal),
+                 * so drop what the node was holding from its last report -
+                 * the same reason the matched branch above does. The node's
+                 * topology IS this one now, so there is nothing to diff */
+                if (NULL != daemon->node->available) {
+                    hwloc_bitmap_free(daemon->node->available);
+                }
                 daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
+                if (NULL != daemon->node->topodiff) {
+                    hwloc_topology_diff_destroy(daemon->node->topodiff);
+                    daemon->node->topodiff = NULL;
+                }
                 prte_hwloc_base_setup_summary(t->topo);
             }
         }
@@ -2137,8 +2209,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                  prte_rml_tag_t tag, void *cbdata)
 {
-    int status, rc;
-    int32_t n;
+    int rc;
+    int32_t status, n;
     pmix_rank_t vpid;
     prte_proc_t *daemon = NULL;
     prte_job_t *jdatorted;
@@ -2167,9 +2239,18 @@ void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t
     /* unpack the exit status. This is already a plain status - the senders
      * on this tag report either a decoded exit status (ssh_wait_daemon) or a
      * PRTE error code (remote_spawn), never a raw waitpid() status, so it
-     * must NOT be run through WEXITSTATUS */
+     * must NOT be run through WEXITSTATUS.
+     *
+     * PMIX_INT32 because that is what both senders pack, and because that is
+     * what the value IS - an exit code or a PRRTE code, not a pmix_status_t.
+     * Asking for PMIX_STATUS here read a type the wire never carried: the
+     * two are distinct pmix_data_type_t values, so a fully-described buffer
+     * (the default in a debug build) refused the unpack with
+     * PMIX_ERR_PACK_MISMATCH and the daemon's real exit status was replaced
+     * by the fallback below.  A non-described buffer let it pass only because
+     * both types are four bytes wide. */
     n = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &status, &n, PMIX_STATUS);
+    rc = PMIx_Data_unpack(NULL, buffer, &status, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         status = PRTE_ERROR_DEFAULT_EXIT_CODE;
@@ -3142,6 +3223,7 @@ process:
         proc = PMIX_NEW(prte_proc_t);
         if (NULL == proc) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            free(new_vpids);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -3168,6 +3250,7 @@ process:
             /* no more daemons available */
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "out-of-vpids", true);
             PMIX_RELEASE(proc);
+            free(new_vpids);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -3180,6 +3263,7 @@ process:
             > (rc = pmix_pointer_array_set_item(daemons->procs, proc->name.rank, (void *) proc))) {
             PRTE_ERROR_LOG(rc);
             PMIX_RELEASE(proc);
+            free(new_vpids);
             PMIX_LIST_DESTRUCT(&nodes);
             return rc;
         }

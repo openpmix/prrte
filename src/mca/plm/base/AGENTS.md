@@ -62,6 +62,22 @@ it substitutes each node's own vpid per node. `test/unit/plm`'s
 `test_setup_vm` pins the invariant: each pass must report its own
 daemons.
 
+### Two things in here are not the leaks they look like
+
+`setup_virtual_machine` releases its candidate list two different ways, and
+the difference is deliberate. `PMIX_DESTRUCT(&nodes)` on a `pmix_list_t` only
+re-initializes the list - it releases nothing - so it appears every time to
+be dropping the `PMIX_RETAIN` each candidate was added under. It is not:
+every one of those calls sits on a path guarded by
+`0 == pmix_list_get_size(&nodes)`. Where the list can still hold something,
+the function uses `PMIX_LIST_DESTRUCT`, which does release the items. Check
+which of the two a path needs before changing one.
+
+The candidate loop also builds `new_vpids` with `realloc`, and that array
+belongs to the grow campaign only once the campaign exists. Every error
+return between the first assignment and `PMIX_NEW(prte_grow_campaign_t)`
+owns it and has to free it.
+
 ### vpid assignment
 
 Normally the next unused vpid (`daemons->num_procs`). In a **bootstrapped
@@ -223,6 +239,16 @@ not interchangeable:
 `PRTE_JOB_SPAWN_NOTIFIED` makes the whole thing single-shot on both the
 local and the relayed path.
 
+**The two ends of `prte_plm_base_spawn_response()` are in different
+numbering schemes, and both are load-bearing.** The `status` it takes is a
+**PMIx** status - it is packed as `PMIX_INT32` and `pmix_server_launch_resp()`
+hands it to the tool as-is, so a PRRTE code passed in here arrives at the
+requester as some other, real PMIx error. Its **return** is a PRRTE code:
+every caller in the tree spells the check `PRTE_SUCCESS != rc` and logs it
+with `PRTE_ERROR_LOG`. So a PMIx status produced inside the function has to be
+converted before it is returned, and the fact that `PRTE_SUCCESS` and
+`PMIX_SUCCESS` are both zero hides the mistake on the path everyone tests.
+
 That single-shot matters because a short job can be answered twice over:
 `state/dvm`'s `check_complete` responds when the job ends, and a launch
 report that arrived late still drives `prte_plm_base_post_launch` for a job
@@ -248,7 +274,42 @@ have no shared writer and no terminator: their readers loop until the
 buffer runs out. If you add a field to one, change both ends in the same
 commit — see the top-level AGENTS.md on mixed-version DVMs.
 
+`PRTE_RML_TAG_REPORT_REMOTE_LAUNCH` is a fourth such body, and the one
+whose two ends sit furthest apart: `plm/ssh` writes it (from
+`ssh_wait_daemon`, a decoded exit status, and from `remote_spawn`, a PRRTE
+error code) and `prte_plm_base_daemon_failed()` here reads it. Rank, then
+status, both `PMIX_INT32` — the status is **not** a `pmix_status_t` and must
+not be unpacked as `PMIX_STATUS`, which is a different
+`pmix_data_type_t` (20 vs 9).
+
+**A type disagreement on any of these is invisible in most builds.** PMIx
+tags each packed item with its type only when the buffer is *fully
+described*, and it picks that mode from **PMIx's** own build flags —
+`PMIX_ENABLE_DEBUG` — not PRRTE's. A PRRTE `--enable-debug` tree linked
+against an optimized PMIx packs non-described buffers, where two types of
+the same width are indistinguishable and a mismatched unpack silently
+returns the right bytes under the wrong name. Against a debug PMIx the same
+code fails the unpack with `PMIX_ERR_PACK_MISMATCH` and the value is lost.
+This is why these wires need a unit test rather than a run.
+
 ---
+
+## Slot sizing — the vocabulary lives in two places
+
+`prte_plm_base_set_slots()` is the only reader of the `prte_set_default_slots`
+MCA parameter, which is registered - and *documented* - over in
+[`src/runtime/prte_mca_params.c`](../../../runtime/prte_mca_params.c). The
+two drifted: the parameter advertised `"packages"`, which the reader did not
+recognize, so the value fell through to the numeric arm where `strtol` read
+it as **zero** and every node that arrived without slot information got no
+slots at all - a DVM that refuses every launch and says nothing about why.
+
+Two rules follow. Keep the accepted names and the registered description in
+step; and remember that the numeric arm is the *fallback*, so it must reject
+what is not a number (`strtol`'s `endptr`) rather than let a misspelling
+become a slot count. Matching is by prefix - `strncmp` against the length of
+the *given* string - which is why the registered default `"core"` works at
+all.
 
 ## `prte_plm_globals_t` — keep it honest
 
@@ -277,6 +338,14 @@ reads it.
 | [`test/unit/plm`](../../../../test/unit/plm/) | `plm_types.h` code uniqueness, the module vtable, `wrap_args`, `setup_prted_cmd`, the full `prted_append_basic_args` command line, `set_hnp_name`/`create_jobid`, the `UPDATE_PROC_STATE` round trip, and `setup_virtual_machine`'s per-launch accounting (`test_setup_vm`, which builds the global job/node pools by hand as `test/unit/ras` does) |
 | [`test/offline`](../../../../test/offline/) | `setup_virtual_machine` on the `DO_NOT_LAUNCH` path, across the mapper matrix |
 | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) | everything that needs daemons to actually come up: tree-spawn, throttling, the `=`-bearing MCA value, alias reconciliation, and a second launch adding a daemon to a running DVM |
+
+`test/unit/plm`'s `main()` sets `PMIX_BFROP_BUFFER_TYPE` to
+`PMIX_BFROP_BUFFER_FULLY_DESC` before it brings PMIx up, so every wire test
+in that binary is checked against the packed type tags no matter how the
+PMIx it links was built (see the note on the message bodies above). Leave
+that in place; without it `test_state_update_wire` and
+`test_remote_launch_wire` pass vacuously wherever PMIx was built optimized,
+which is nearly everywhere.
 
 A pure/structural check belongs in the unit test. Anything that needs a
 daemon belongs in the swarm. Note that a change to `plm_private.h` changes
