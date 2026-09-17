@@ -29,12 +29,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         valgrind \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- baked PMIx (default) ----
-# Cloned with submodules so autogen.pl runs normally.  PMIx master is the
-# default because the DVM size-change event codes (PMIX_DVM_IS_READY /
-# PMIX_ERR_DVM_MOD) the elastic client registers for may not be in a release
-# yet; override with --build-arg, or bind-mount your own via PMIX_SRC at run
-# time (see build.sh), in which case this baked copy is ignored.
+# ---- baked PMIx (fallback only) ----
+# This copy is frozen at image-build time, so build.sh does NOT use it by
+# default: it builds PMIx from source on every run instead, either from your
+# PMIX_SRC checkout or from one it maintains in the shared volume.  PRRTE uses
+# PMIx internals, and a suite that runs PRRTE against a PMIx this old can
+# neither catch a PMIx regression nor notice a PMIx fix.
+#
+# What it is still here for: it satisfies configure and the test-client
+# compiles before the volume has anything in it, it is what PMIX_SRC=baked
+# selects for working offline or against a deliberately pinned PMIx, and
+# keeping it means a first run needs no network beyond the image pull.
+#
+# Cloned with submodules so autogen.pl runs normally.  PMIx master rather than
+# a release because the DVM size-change event codes (PMIX_DVM_IS_READY /
+# PMIX_ERR_DVM_MOD) the elastic client registers for may not be in one yet;
+# override with --build-arg.
 # Do NOT pass --with-libevent=/usr: it forces /usr/lib and misses the multiarch
 # dir; let configure find the system libevent-dev/hwloc-dev.
 ARG PMIX_REPO=https://github.com/openpmix/openpmix.git
@@ -45,7 +55,10 @@ RUN git clone --recursive --depth=1 -b "$PMIX_REF" "$PMIX_REPO" /src/pmix \
     && ./configure --prefix=/usr/local \
     && make -j"$(nproc)" \
     && make install \
-    && ldconfig
+    && ldconfig \
+    && mkdir -p /usr/local/share/prte-swarm \
+    && git -C /src/pmix log -1 --format="%h %cs %s" \
+         > /usr/local/share/prte-swarm/baked-pmix-commit
 
 # ---- passwordless SSH between the container "nodes" ----
 RUN mkdir -p /var/run/sshd /root/.ssh \

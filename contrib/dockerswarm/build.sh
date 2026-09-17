@@ -61,9 +61,32 @@
 #
 # See AGENTS.md, "When a distclean is actually needed".
 #
-# Optional: point PMIX_SRC at a local openpmix checkout to build PMIx from
-# source too (covering both code bases); otherwise the baked-in PMIx (Linux) or
-# an installed PMIx (macOS, override with PMIX_HOME) is used.
+# PMIx is built FROM SOURCE on every Linux run, and that is not an option --
+# it is the only way this harness can be trusted about PMIx at all.  PRRTE
+# uses PMIx internals, so the pair is one code base with two repositories; a
+# suite that runs PRRTE against a PMIx frozen at image-build time can neither
+# catch a PMIx regression nor notice a PMIx fix.  It has already reported a
+# whole afternoon of failures for bugs openpmix had fixed three days earlier.
+#
+# Where that source comes from, in order:
+#
+#   PMIX_SRC=<path>   your own openpmix checkout, bind-mounted read-only.
+#                     Use this whenever you are changing PMIx: it is your tree
+#                     that gets built, uncommitted work and all.
+#   PMIX_SRC unset    a checkout this script maintains inside the shared
+#                     volume, cloned from PMIX_REPO at PMIX_REF (default
+#                     openpmix master) and fetched forward on every run.  No
+#                     host-side setup, and never older than the last run.
+#   PMIX_SRC=baked    the PMIx baked into the image at /usr/local.  The escape
+#                     hatch for working offline or for a deliberately pinned
+#                     PMIx -- and it prints how old that copy is, because
+#                     using it means the suite is not testing PMIx.
+#
+# Whichever is used, the build prints the PMIx commit it actually compiled, so
+# a run can never be quietly against something other than you think.
+#
+# On macOS, PMIX_SRC builds that checkout natively; otherwise PMIX_HOME, else
+# configure autodetects.
 #
 # Optional: PRTE_SWARM_MCA_DSO=1 builds every MCA component as a run-time
 # loadable DSO (--enable-mca-dso) instead of linking it into libprrte.  That is
@@ -311,7 +334,14 @@ build_linux() {
     prep_srcdir linux
 
     local pmix_mount=()
-    if [ -n "$PMIX_SRC" ]; then
+    if [ -n "$PMIX_SRC" ] && [ "$PMIX_SRC" != baked ]; then
+        if [ ! -d "$PMIX_SRC" ]; then
+            echo ">>> ERROR: PMIX_SRC is not a directory: $PMIX_SRC" >&2
+            echo ">>>        Point it at an openpmix checkout, unset it to let" \
+                 "this script maintain one, or set PMIX_SRC=baked to use the" \
+                 "image's copy." >&2
+            exit 2
+        fi
         check_foreign_srcdir "$(cd "$PMIX_SRC" && pwd)" PMIX_SRC
         gen_lex "$(cd "$PMIX_SRC" && pwd)"
         pmix_mount=(-v "$(cd "$PMIX_SRC" && pwd)":/pmix-src:ro)
@@ -329,6 +359,9 @@ build_linux() {
         -v "$VOLUME":/opt/prte \
         -e PRTE_SWARM_MCA_DSO="$MCA_DSO" \
         -e PRTE_SWARM_ASAN="$SWARM_ASAN" \
+        -e PMIX_MODE="${PMIX_SRC:-managed}" \
+        -e PMIX_REPO="${PMIX_REPO:-https://github.com/openpmix/openpmix.git}" \
+        -e PMIX_REF="${PMIX_REF:-master}" \
         ${pmix_mount[@]+"${pmix_mount[@]}"} \
         ${ompi_mount[@]+"${ompi_mount[@]}"} \
         "$IMAGE" bash -euo pipefail -c '
@@ -425,22 +458,96 @@ build_linux() {
                 echo ">>>> AddressSanitizer build (PRTE_SWARM_ASAN=1)"
             fi
 
+            # PMIx comes from source unless explicitly told otherwise - see
+            # the header.  Three sources, and each says which it used and what
+            # commit it was, because the one failure mode this whole block
+            # exists to prevent is a run that looks like it tested PMIx and
+            # tested something else.
+            pmix_srcdir=""
             if [ -d /pmix-src ]; then
+                # your own checkout, bind-mounted read-only
+                pmix_srcdir=/pmix-src
+                echo ">>>> PMIx from bind-mounted $pmix_srcdir"
+            elif [ "${PMIX_MODE:-managed}" = baked ]; then
+                PMIX_PREFIX=/usr/local
+                echo ">>>> PMIx: using the copy baked into the image ($PMIX_PREFIX)"
+                # NOT under /opt/prte: the volume mounts over that, so a
+                # file written there at image-build time is invisible at run
+                # time
+                if [ -r /usr/local/share/prte-swarm/baked-pmix-commit ]; then
+                    echo ">>>>   built from" \
+                         "$(cat /usr/local/share/prte-swarm/baked-pmix-commit)"
+                fi
+                echo ">>>>   NOTE: PMIx is NOT being tested on this run - the" \
+                     "baked copy is as old as the image."
+            else
+                # a checkout this script keeps in the volume, moved forward
+                # every run.  It lives here rather than being bind-mounted so
+                # it is writable: autogen.pl runs in the container, against
+                # the autotools the container itself has, which is the version
+                # its Makefiles will be regenerated with.
+                pmix_srcdir=/opt/prte/pmix-src
+                repo="${PMIX_REPO:-https://github.com/openpmix/openpmix.git}"
+                ref="${PMIX_REF:-master}"
+                if [ -d "$pmix_srcdir/.git" ]; then
+                    echo ">>>> PMIx: updating $pmix_srcdir ($ref)"
+                    if ! ( cd "$pmix_srcdir" \
+                           && git fetch --depth=1 origin "$ref" \
+                           && git reset --hard FETCH_HEAD \
+                           && git submodule update --init --recursive --depth=1 ); then
+                        # offline is a normal way to work, and testing
+                        # upstream as of yesterday is fine - being told so is
+                        # the part that matters
+                        echo ">>>> WARNING: could not fetch $repo - building the" \
+                             "checkout as it stands"
+                    fi
+                else
+                    echo ">>>> PMIx: cloning $repo ($ref) -> $pmix_srcdir"
+                    rm -rf "$pmix_srcdir"
+                    if ! git clone --recursive --depth=1 -b "$ref" "$repo" "$pmix_srcdir"; then
+                        rm -rf "$pmix_srcdir"
+                        echo ">>>> ERROR: could not clone $repo." >&2
+                        echo ">>>>        Point PMIX_SRC at a local openpmix" \
+                             "checkout, or set PMIX_SRC=baked to build against" \
+                             "the copy baked into the image - which does not" \
+                             "test PMIx at all." >&2
+                        exit 2
+                    fi
+                fi
+            fi
+
+            if [ -n "$pmix_srcdir" ]; then
                 PMIX_PREFIX=/opt/prte/pmix
-                echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
+                echo ">>>> PMIx commit: $(git -C "$pmix_srcdir" log -1 \
+                        --format="%h %cs %s" 2>/dev/null || echo "(no git metadata)")"
+                # a managed checkout is reset --hard on every run, which can
+                # leave configure older than what it is generated from
+                if [ -w "$pmix_srcdir" ] && \
+                   { [ ! -x "$pmix_srcdir/configure" ] || \
+                     [ "$pmix_srcdir/configure.ac" -nt "$pmix_srcdir/configure" ]; }; then
+                    echo ">>>> autogen.pl in $pmix_srcdir"
+                    ( cd "$pmix_srcdir" && ./autogen.pl )
+                fi
                 mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
                 pmix_args="--prefix=$PMIX_PREFIX"
-                if reconfigure_needed . "$pmix_args$asan_tag" /pmix-src; then
+                # the source tree identity is part of the configuration: a
+                # build dir configured against the bind mount cannot be reused
+                # for the managed checkout, and reconfiguring is not enough
+                # because the old objects reference the old paths
+                if reconfigure_needed . "$pmix_args$asan_tag [$pmix_srcdir]" "$pmix_srcdir"; then
                     echo ">>>> (re)configuring PMIx: $pmix_args"
-                    drop_orphans . /pmix-src
-                    /pmix-src/configure $pmix_args
-                    echo "$pmix_args$asan_tag" > .configure-args
+                    if [ -f .configure-args ] && \
+                       ! grep -qF "[$pmix_srcdir]" .configure-args; then
+                        echo ">>>> PMIx source tree changed - starting a clean build dir"
+                        cd / && rm -rf /opt/prte/vpath-linux-pmix
+                        mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
+                    fi
+                    drop_orphans . "$pmix_srcdir"
+                    "$pmix_srcdir/configure" $pmix_args
+                    echo "$pmix_args$asan_tag [$pmix_srcdir]" > .configure-args
                 fi
                 make -j"$jobs"
                 make install
-            else
-                PMIX_PREFIX=/usr/local
-                echo ">>>> PMIx: using baked $PMIX_PREFIX"
             fi
 
             # invalidate the freshness stamp up front: from here until the
@@ -845,7 +952,12 @@ build_linux() {
 build_macos() {
     prep_srcdir macos
     local pmix_arg=""
-    if [ -n "$PMIX_SRC" ]; then
+    # "baked" names the Linux image's PMIx, which does not exist here; on this
+    # host it simply means "do not build PMIx", so fall through to PMIX_HOME
+    # or to whatever configure can find.
+    if [ "$PMIX_SRC" = baked ]; then
+        echo ">>> PMIX_SRC=baked has no meaning natively - not building PMIx"
+    elif [ -n "$PMIX_SRC" ]; then
         local psrc pfx
         psrc="$(cd "$PMIX_SRC" && pwd)"
         pfx="$root/vpath-macos-pmix/install"
