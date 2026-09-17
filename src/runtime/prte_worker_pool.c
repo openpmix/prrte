@@ -31,10 +31,11 @@ int prte_num_worker_threads = 8;
 static pmix_ring_buffer_t bases = PMIX_RING_BUFFER_STATIC_INIT;
 
 /* Whether `bases` is currently constructed.  PMIX_DESTRUCT zeroes an object's
- * magic id and a debug PMIx asserts on the next one, so "finalize is safe to
- * call twice" - and it is, from a failed startup and again from
- * prte_finalize - has to mean something more careful than destructing
- * unconditionally. */
+ * magic id and a debug PMIx asserts on the next one, so "finalize is safe on
+ * a pool that was never started, and safe to call twice" - which is what the
+ * header promises, and what prte_finalize() relies on, since it calls this
+ * unconditionally including in a tool, which never builds a pool at all -
+ * has to mean something more careful than destructing unconditionally. */
 static bool ring_built = false;
 
 /* Names of the progress threads we started, in the order we started them.
@@ -81,7 +82,14 @@ int prte_worker_pool_init(void)
     }
 
     for (i = 0; i < prte_num_worker_threads; i++) {
-        pmix_asprintf(&tmp, "PRTE-WORKER-%d", i);
+        if (0 > pmix_asprintf(&tmp, "PRTE-WORKER-%d", i)) {
+            /* A failed asprintf leaves tmp NULL, and NULL is not "no name"
+             * to prte_progress_thread_init() - it is a request for the
+             * process-wide shared async thread, whose base would then be
+             * handed out as a worker and its refcount never given back.
+             * Stop with what we have instead. */
+            break;
+        }
         evb = prte_progress_thread_init(tmp);
         if (NULL == evb) {
             /* we could not get another thread - keep the ones we did get.
@@ -90,8 +98,16 @@ int prte_worker_pool_init(void)
             free(tmp);
             break;
         }
+        /* Record the name before taking the thread into the pool.  The name
+         * is the only handle finalize has on it, so a thread we cannot name
+         * is a thread we can never stop - better to hand this one straight
+         * back and run with a smaller pool. */
+        if (PMIX_SUCCESS != PMIx_Argv_append_nosize(&thread_names, tmp)) {
+            prte_progress_thread_finalize(tmp);
+            free(tmp);
+            break;
+        }
         pmix_ring_buffer_push(&bases, evb);
-        PMIx_Argv_append_nosize(&thread_names, tmp);
         free(tmp);
         ++nworkers;
     }
