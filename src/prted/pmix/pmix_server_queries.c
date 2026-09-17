@@ -281,7 +281,7 @@ static void _query(int sd, short args, void *cbdata)
     char *cmdline;
     const char *allocid;
 #ifdef PMIX_ALLOC_PROPERTY
-        const char *allocprop;
+    const char *allocprop;
 #endif
     char **ans, *tmp;
     size_t nkeys = 0;
@@ -524,7 +524,7 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == jdata) {
                         continue;
                     }
-                    /* don't show the requestor's job */
+                    /* don't show the DVM's own daemon job */
                     if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
                         PMIx_Argv_append_nosize(&nspaces, jdata->nspace);
                     }
@@ -993,7 +993,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIx_Argv_append_nosize(&ans, ps->name);
                 }
                 if (NULL == ans) {
-                    tmp = NULL;;
+                    tmp = NULL;
                 } else {
                     tmp = PMIx_Argv_join(ans, ',');
                     PMIx_Argv_free(ans);
@@ -1513,9 +1513,12 @@ static void _query(int sd, short args, void *cbdata)
                 dry.array = proc;
                 dry.size = sz;
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_RESOLVE_PEERS, &dry, PMIX_DATA_ARRAY);
-                if (NULL != proc) {
-                    free(proc);
-                }
+                /* the add copied it; drop our own without letting the shared
+                 * scratch array go on naming freed storage, as every other
+                 * arm that borrows into it does */
+                dry.array = NULL;
+                PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                free(proc);
                 PMIX_DESTRUCT(&procs);
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_RESOLVE_NODE)) {
@@ -1556,7 +1559,6 @@ static void _query(int sd, short args, void *cbdata)
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PROC_RESOURCE_USAGE)) {
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NODE_RESOURCE_USAGE)) {
-
 
             } else {
                 pmix_output_verbose(2, prte_pmix_server_globals.output,
