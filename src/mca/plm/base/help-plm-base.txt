@@ -124,3 +124,16 @@ for an application context:
 
 We cannot execute both of those, so please correct this and
 try again.
+#
+[bad-set-slots]
+The "prte_set_default_slots" MCA parameter was given a value that is
+neither a recognized object name nor a number:
+
+    Value: %s
+
+Recognized object names are "cores", "packages" (also spelled
+"sockets"), "numas", and "hwthreads"; any other value must be a plain
+decimal number of slots to apply to every node.
+
+Nodes that arrived without slot information will be sized by the number
+of cores instead.  Please correct the value and try again.
