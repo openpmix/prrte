@@ -328,6 +328,23 @@ tool connection (and under `prterun` it *is* the tool).
 - falls back to local delivery if there is no HNP to send to yet (early
   startup, or teardown), so a message is never simply lost.
 
+**Local delivery sometimes has to write `stderr` itself, and that write is
+not suppressed.** `pmix_show_help_norender()` is not a local write on a
+daemon: PMIx routes a *server* peer's log through IOF, and IOF honors
+`PMIX_IOF_LOCAL_OUTPUT`, which PRRTE sets false for a persistent DVM's HNP
+and for every `prted`. So where PRRTE has concluded the message is its to
+show and nobody else's — a `prted` with no HNP to relay to, and a
+persistent DVM that has not started yet — `deliver_locally()` writes it
+out directly. PMIx's duplicate suppression lives *downstream* of that, in
+`plog` (`pmix_help_check_dups`), so the direct write bypasses it: while a
+persistent DVM is starting, one message relayed by N daemons prints N
+times rather than once with a count. Do not reach for
+`pmix_help_check_dups()` to close that — its list is process-global,
+carries no lock, and must be called on the **PMIx** progress thread, which
+is not the thread `deliver_locally()` runs on. The missing piece is a PMIx
+entry point meaning "write this to my own stderr, with suppression", and it
+belongs beside `pmix_show_help_norender()` in PMIx.
+
 ### The first argument names the job the message is about
 
 PMIx keys duplicate suppression on `(nspace, filename, topic)`, so every
