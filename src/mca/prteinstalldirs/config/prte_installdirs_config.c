@@ -27,7 +27,7 @@ const prte_prteinstalldirs_base_component_t prte_mca_prteinstalldirs_config_comp
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
-                                   PMIX_RELEASE_VERSION),
+                                   PRTE_RELEASE_VERSION),
 
     },
 
