@@ -70,7 +70,7 @@ static bool at_least(int major, int minor, int want_major, int want_minor)
 static bool probe_command(const char *cmd)
 {
     FILE *fp;
-    char line[1024], *ptr, *endptr;
+    char line[1024], *ptr, *endptr, *verptr;
     long major, minor;
 
     fp = popen(cmd, "r");
@@ -84,17 +84,31 @@ static bool probe_command(const char *cmd)
     pclose(fp);
 
     /* The line has to BE a version report.  Slurm prefixes its diagnostics
-     * with the tool name ("srun: fatal: ..."), so anything that does not
-     * start with "slurm " is an error message, not an answer. */
-    if (0 != strncmp(line, "slurm ", 6)) {
+     * with the tool name ("srun: fatal: ..."), so a line whose first word
+     * does not name the package is an error message, not an answer.
+     *
+     * Match the package name as a PREFIX, not as the whole word: Debian and
+     * Ubuntu build Slurm under the name "slurm-wlm", so their clients report
+     * "slurm-wlm 23.11.4" and a test for "slurm " rejects the answer of the
+     * most widely deployed packaging there is.  Rejecting it is not a quiet
+     * degradation -- it leaves available == false, which is how a machine
+     * with no Slurm at all reads, so plm/slurm declines to select and the
+     * DVM falls back to ssh inside a live allocation. */
+    if (0 != strncmp(line, "slurm", 5)) {
         return false;
     }
-    ptr = line + 6;
+    /* the version is whatever follows the first space */
+    verptr = strchr(line, ' ');
+    if (NULL == verptr) {
+        return false;
+    }
+    ++verptr;
 
     /* Parse on the dots.  Step over the separator only if there IS one:
      * "slurm 23" with no minor leaves ptr on the terminating NUL, and
      * walking past that reads whatever the uninitialized tail of the fgets
      * buffer happens to hold. */
+    ptr = verptr;
     major = strtol(ptr, &endptr, 10);
     if (endptr == ptr) {
         return false;
@@ -112,12 +126,11 @@ static bool probe_command(const char *cmd)
     slurm_version.minor = (int) minor;
 
     /* keep the reported string, trimmed of its newline, for diagnostics */
-    ptr = line + 6;
-    endptr = strpbrk(ptr, " \t\r\n");
+    endptr = strpbrk(verptr, " \t\r\n");
     if (NULL != endptr) {
         *endptr = '\0';
     }
-    pmix_string_copy(slurm_version.version, ptr, PRTE_COMMON_SLURM_VERSION_MAX);
+    pmix_string_copy(slurm_version.version, verptr, PRTE_COMMON_SLURM_VERSION_MAX);
 
     return true;
 }
