@@ -1122,7 +1122,9 @@ static int test_node_pack_roundtrip(void)
     int rc;
 
     src = make_node("wire-node");
-    src->num_procs = 6;
+    /* a value that needs BOTH bytes of the prte_node_rank_t: the field used
+     * to be packed as a PMIX_PROC_RANK, which is four bytes wide */
+    src->num_procs = 0xbeef;
     src->state = PRTE_NODE_STATE_UP;
     PRTE_FLAG_SET(src, PRTE_NODE_FLAG_OVERSUBSCRIBED);
     prte_set_attribute(&src->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_GLOBAL,
@@ -1141,7 +1143,8 @@ static int test_node_pack_roundtrip(void)
     if (NULL != dst) {
         CHECK("wire: node name round-trips",
               NULL != dst->name && 0 == strcmp("wire-node", dst->name));
-        CHECK("wire: node num_procs round-trips", 6 == dst->num_procs);
+        CHECK("wire: node num_procs round-trips", 0xbeef == dst->num_procs);
+        CHECK("wire: the node's proc array survived the unpack", NULL != dst->procs);
         CHECK("wire: node state round-trips", PRTE_NODE_STATE_UP == dst->state);
         CHECK("wire: the oversubscribed flag round-trips",
               PRTE_FLAG_TEST(dst, PRTE_NODE_FLAG_OVERSUBSCRIBED));
