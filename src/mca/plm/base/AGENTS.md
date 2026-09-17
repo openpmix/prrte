@@ -62,16 +62,19 @@ it substitutes each node's own vpid per node. `test/unit/plm`'s
 `test_setup_vm` pins the invariant: each pass must report its own
 daemons.
 
-### Two things in here are not the leaks they look like
+### Releasing the candidate list, and the vpid array beside it
 
-`setup_virtual_machine` releases its candidate list two different ways, and
-the difference is deliberate. `PMIX_DESTRUCT(&nodes)` on a `pmix_list_t` only
-re-initializes the list - it releases nothing - so it appears every time to
-be dropping the `PMIX_RETAIN` each candidate was added under. It is not:
-every one of those calls sits on a path guarded by
-`0 == pmix_list_get_size(&nodes)`. Where the list can still hold something,
-the function uses `PMIX_LIST_DESTRUCT`, which does release the items. Check
-which of the two a path needs before changing one.
+`setup_virtual_machine` returns from a dozen places, and every one of them
+releases the candidate list with **`PMIX_LIST_DESTRUCT`**. Keep it that way.
+`PMIX_DESTRUCT` on a `pmix_list_t` only re-initializes it - it releases
+nothing - so it silently drops the `PMIX_RETAIN` each candidate was added
+under. Five of the returns used to spell it that way and were correct only
+because each sat behind a `0 == pmix_list_get_size(&nodes)` guard; that made
+every one of them a thing a reader had to go and verify, and a thing a later
+edit could quietly invalidate by letting a node reach the path. Since
+`PMIX_LIST_DESTRUCT` is a drain loop followed by `PMIX_DESTRUCT`, it is
+exactly equivalent on an empty list and correct on a full one, so there is
+no case that wants the other.
 
 The candidate loop also builds `new_vpids` with `realloc`, and that array
 belongs to the grow campaign only once the campaign exists. Every error
