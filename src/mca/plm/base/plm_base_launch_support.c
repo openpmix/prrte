@@ -636,7 +636,7 @@ static int get_traces(prte_job_t *jdata)
     pmix_data_buffer_t buffer;
     pmix_byte_object_t bo;
     pmix_proc_t pc;
-    pmix_status_t rc;
+    int rc;
 
     PMIX_LOAD_PROCID(&pc, jdata->nspace, PMIX_RANK_WILDCARD);
     bo.bytes = "Waiting for stack traces (this may take a few moments)...\n";
@@ -1037,6 +1037,8 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     /* convenience */
     jdata = caddy->jdata;
@@ -1516,7 +1518,9 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     jdata = caddy->jdata;
 
     /* if a timer was defined, cancel it */
-    if (prte_get_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT_EVENT, (void **) &timer, PMIX_POINTER)) {
+    timer = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT_EVENT, (void **) &timer, PMIX_POINTER) &&
+        NULL != timer) {
         prte_event_evtimer_del(timer->ev);
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:launch deleting spawn timeout for job %s",
@@ -1780,8 +1784,14 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
-    /* get the daemon job */
+    /* get the daemon job - there is nothing to record a report against
+     * without it, and prte_plm_base_daemon_failed() below guards the same
+     * lookup for the same reason */
     jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == jdatorted) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
     show_progress = PRTE_ATTR_IS_TRUE(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS);
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
@@ -2491,7 +2501,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         for (j=0; NULL != skips[j]; j++) {
             if (0 == strncmp(prted_cmd_line[i + 1], skips[j], strlen(skips[j])) ||
                 0 == strcmp(prted_cmd_line[i + 1], "plm")) {
-                ignore = true;;
+                ignore = true;
                 break;
             }
         }
@@ -2864,7 +2874,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
             PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                  "%s plm:base:setup_vm no new daemons required",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             /* mark that the daemons have reported so we can proceed */
             daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
             PRTE_FLAG_UNSET(daemons, PRTE_JOB_FLAG_UPDATED);
@@ -2928,7 +2938,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
             PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                  "%s plm:base:setup_vm no new daemons required",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             /* mark that the daemons have reported so we can proceed */
             daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
             PRTE_FLAG_UNSET(daemons, PRTE_JOB_FLAG_UPDATED);
@@ -2994,7 +3004,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
                 PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s plm:base:setup_vm only HNP in use",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                PMIX_DESTRUCT(&nodes);
+                PMIX_LIST_DESTRUCT(&nodes);
                 map->num_nodes = 1;
                 /* mark that the daemons have reported so we can proceed */
                 daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
@@ -3092,7 +3102,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
                              "%s plm:base:setup_vm only HNP in allocation",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         /* cleanup */
-        PMIX_DESTRUCT(&nodes);
+        PMIX_LIST_DESTRUCT(&nodes);
         /* mark that the daemons have reported so we can proceed */
         daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
         PRTE_FLAG_UNSET(daemons, PRTE_JOB_FLAG_UPDATED);
@@ -3173,7 +3183,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:setup_vm only HNP left",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PMIX_DESTRUCT(&nodes);
+        PMIX_LIST_DESTRUCT(&nodes);
         /* mark that the daemons have reported so we can proceed */
         daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
         PRTE_FLAG_UNSET(daemons, PRTE_JOB_FLAG_UPDATED);
