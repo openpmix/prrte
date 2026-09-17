@@ -478,7 +478,7 @@ int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
     }
 
     /* pack the state */
-    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->state, 1, PMIX_UINT8);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->state, 1, PMIX_INT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -631,7 +631,7 @@ int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
     prte_attribute_t *kv;
 
     /* pack the application index (for multiapp jobs) */
-    rc = PMIx_Data_pack(NULL, bkt, &app->idx, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, &app->idx, 1, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -700,7 +700,7 @@ int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
     }
 
     /* pack the flags */
-    rc = PMIx_Data_pack(NULL, bkt, &app->flags, 1, PMIX_INT8);
+    rc = PMIx_Data_pack(NULL, bkt, &app->flags, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -771,7 +771,7 @@ int prte_map_pack(pmix_data_buffer_t *bkt, struct prte_job_map_t *mp)
     }
 
     /* pack the number of nodes involved in the job */
-    rc = PMIx_Data_pack(NULL, bkt, &map->num_nodes, 1, PMIX_UINT32);
+    rc = PMIx_Data_pack(NULL, bkt, &map->num_nodes, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
