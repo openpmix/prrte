@@ -97,6 +97,7 @@ static int pack_proc_map(pmix_data_buffer_t *bkt, prte_job_t *job, prte_app_idx_
 {
     char **fields = NULL, **micro;
     char *tmp;
+    char rankstr[16];
     prte_node_t *node;
     prte_proc_t *proc;
     int n, m, rc;
@@ -118,7 +119,17 @@ static int pack_proc_map(pmix_data_buffer_t *bkt, prte_job_t *job, prte_app_idx_
             if (proc->app_idx != idx) {
                 continue;
             }
-            PMIx_Argv_append_nosize(&micro, PRTE_VPID_PRINT(proc->name.rank));
+            /* Render the rank, do NOT print it.  PRTE_VPID_PRINT is a
+             * display helper: it renders each of the five sentinel ranks as
+             * a word - PMIX_RANK_INVALID as "INVALID" - and the decoder
+             * reads this field with strtoul, which makes that word a zero.
+             * A proc left unranked by the mapper would therefore have
+             * silently overwritten rank 0's node, app and local rank on
+             * every daemon.  "%u" is what the helper emits for every real
+             * rank, so this changes nothing that ever worked; a sentinel
+             * now arrives above num_procs and is rejected there. */
+            snprintf(rankstr, sizeof(rankstr), "%u", proc->name.rank);
+            PMIx_Argv_append_nosize(&micro, rankstr);
         }
         if (NULL == micro) {
             PMIx_Argv_append_nosize(&fields, "-");

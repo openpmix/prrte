@@ -65,6 +65,20 @@ those nodes, in the same order, the ranks of that app resident on it, with
 through `PMIx_generate_regex2`, so they compress with the number of *nodes*
 rather than growing with the number of *processes*.
 
+**A proc map is data, so build it with `snprintf`, never with
+`PRTE_NAME_PRINT`/`PRTE_VPID_PRINT`.** Those are display helpers over a
+rotating static buffer, and they render each of PMIx's five sentinel ranks
+as a *word* — `PMIX_RANK_INVALID` as `"INVALID"`. The decoder reads the
+field with `strtoul`, which turns any such word into a **zero**, so a proc
+the mapper left unranked — it is on `node->procs`, which is what the map is
+built from, but not in the rank-indexed `job->procs`, so it has no proc
+record — quietly handed rank 0 its node, its app index and its local rank on
+every daemon. Nothing failed and nothing was logged. `"%u"` is byte for byte
+what the helper emits for every real rank, so the wire is unchanged; a
+sentinel now arrives above `num_procs` and is refused. `unpack_layout`
+checks `strtoul`'s end pointer as well, because a field that is not a number
+at all is otherwise indistinguishable from rank 0.
+
 Five fields are therefore derived by `prte_job_unpack` rather than
 transmitted, and each is derivable for a specific reason:
 
