@@ -37,7 +37,7 @@ prte_schizo_ompi_component_t prte_mca_schizo_ompi_component = {
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
-                                   PMIX_RELEASE_VERSION),
+                                   PRTE_RELEASE_VERSION),
         .pmix_mca_query_component = component_query,
         .pmix_mca_register_component_params = component_register,
     },

@@ -50,7 +50,7 @@ prte_ras_sim_component_t prte_mca_ras_simulator_component = {
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
-                                   PMIX_RELEASE_VERSION),
+                                   PRTE_RELEASE_VERSION),
         .pmix_mca_query_component = ras_sim_component_query,
         .pmix_mca_register_component_params = ras_sim_register
     }
