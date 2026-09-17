@@ -3030,6 +3030,17 @@ int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
 /****    INSTANTIATE LOCAL OBJECTS    ****/
 static void opcon(prte_pmix_server_op_caddy_t *p)
 {
+    /* PMIX_NEW mallocs and does not zero, so a member this constructor
+     * skips is whatever the previous occupant of the block left there -
+     * the same trap rqcon() below documents for the request tracker.
+     * Every member gets a value here, including the ones only one or two
+     * paths use, because the caddy is a union of everything any operation
+     * needs and a handler cannot tell which of them its creator set. */
+    p->status = PMIX_SUCCESS;
+    p->codes = NULL;
+    p->ncodes = 0;
+    memset(&p->proc, 0, sizeof(pmix_proc_t));
+    p->msg = NULL;
     memset(&p->proct, 0, sizeof(pmix_proc_t));
     p->procs = NULL;
     p->nprocs = 0;
@@ -3044,6 +3055,8 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->ndirs = 0;
     p->apps = NULL;
     p->napps = 0;
+    p->queries = NULL;
+    p->nqueries = 0;
     p->cbfunc = NULL;
     p->infocbfunc = NULL;
     p->toolcbfunc = NULL;

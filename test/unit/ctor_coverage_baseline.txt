@@ -28,13 +28,6 @@ src/mca/odls/base/odls_base_frame.c prte_odls_spawn_caddy_t.jdata
 src/mca/odls/base/odls_base_frame.c prte_odls_spawn_caddy_t.membind_flags
 src/mca/odls/base/odls_base_frame.c prte_odls_spawn_caddy_t.membind_policy
 src/mca/plm/ssh/plm_ssh_module.c prte_plm_ssh_caddy_t.argc
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.codes
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.msg
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.ncodes
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.nqueries
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.proc
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.queries
-src/prted/pmix/pmix_server.c prte_pmix_server_op_caddy_t.status
 src/prted/pmix/pmix_server.c prte_pmix_server_req_t.cycle
 src/rml/oob/oob_tcp_component.c prte_oob_tcp_addr_t.if_mask
 src/rml/oob/oob_tcp_component.c prte_oob_tcp_peer_op_t.af_family
