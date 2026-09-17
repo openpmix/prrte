@@ -219,6 +219,17 @@ static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
                 /* apps outermost, node->procs order within: the same walk
                  * compute_local_rank() makes */
                 proc->local_rank = lranks[n]++;
+                /* applist holds one entry per proc of the job, which is the
+                 * most an app can have.  Nothing else bounds this: the
+                 * bounds check above vets each rank, but not how many of
+                 * them the map names, so a map that repeats a rank - or
+                 * simply names more of them than the job has - would write
+                 * off the end of the allocation. */
+                if ((size_t) jptr->num_procs <= napp) {
+                    PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                    rc = PRTE_ERR_BAD_PARAM;
+                    goto cleanup;
+                }
                 applist[napp++] = rank;
             }
             PMIx_Argv_free(ranks);
