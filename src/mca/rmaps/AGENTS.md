@@ -142,6 +142,11 @@ policy is whatever default was resolved for the apps that gave no directive,
 and seq/rank_file/ppr all defer on it. The base fills these fields from the
 job for a whole-job dispatch, so one test serves both paths.
 
+The same holds in the other direction. `map_job` copies the job's policies
+into `options` once, at the `ranking:` label, and everything downstream
+places against the copy — so *writing* a policy onto `jdata->map` after that
+point changes nothing at all. See [`base/AGENTS.md`](base/AGENTS.md).
+
 **The base records who mapped**, not the mapper, and it records it *per app*
 (`PRTE_APP_LAST_MAPPER`). A mapper that stamps itself on entry cannot know
 it will still be the answer, and in per-app dispatch it is asked once per
