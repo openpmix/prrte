@@ -24,10 +24,6 @@
 
 #include "src/util/prte_show_help.h"
 
-/* Emit here and now, through PMIx, which applies the duplicate
- * suppression and aggregation and then delivers.  Correct on the HNP, on
- * a tool, and in an application; see the header for why it is not on a
- * prted. */
 /* Emit a message we have decided we are the one to deliver.
  *
  * "emit_directly" says the caller knows nobody else will show it, and it has
@@ -50,7 +46,20 @@
  * command line before prte_init(), and prte_persistent is already true by
  * then (prte.c turns it off again only once it discovers an app was given).
  * So EVERY command-line diagnostic prte and prterun produce was emitted in
- * exactly this window, and every one of them was printed twice. */
+ * exactly this window, and every one of them was printed twice.
+ *
+ * KNOWN GAP: the direct write is not suppressed.  PMIx keys duplicate
+ * suppression in plog (pmix_help_check_dups, reached from
+ * plog_base_stubs.c), which is downstream of the delivery this path has
+ * just established will be dropped - so while a persistent DVM is still
+ * starting, the same message relayed by N daemons is printed N times
+ * rather than once with a count.  Calling pmix_help_check_dups() from here
+ * is NOT the fix: its list is process-global and carries no lock, and it
+ * documents that it must be called on the PMIx progress thread, which is
+ * not the thread any caller below is on.  What is missing is a PMIx entry
+ * point meaning "write this to my own stderr, with suppression", and it
+ * belongs in PMIx beside pmix_show_help_norender() rather than as a second
+ * suppression table here. */
 static void deliver_locally(const char *nspace, const char *filename,
                             const char *topic, const char *output,
                             bool emit_directly)
@@ -209,7 +218,18 @@ int prte_show_help(const pmix_nspace_t nspace, const char *filename,
      * one of the odls spawn-pool threads - render_child_msg() is called
      * from there - and the RML is progress-thread-only state. */
     cd = PMIX_NEW(prte_show_help_caddy_t);
+    if (NULL == cd) {
+        /* out of memory is exactly when a diagnostic is worth having, and
+         * our stderr may still be connected - say it here rather than
+         * faulting on the way to saying it somewhere better */
+        deliver_locally(nspace, filename, topic, output, true);
+        free(output);
+        return PRTE_SUCCESS;
+    }
     PMIX_LOAD_NSPACE(cd->nspace, nspace);
+    /* A strdup that fails costs the message its label, not the message:
+     * both the packer and the HNP's delivery carry a NULL through, and
+     * PMIx's suppression then keys it on the empty pair. */
     cd->filename = (NULL == filename) ? NULL : strdup(filename);
     cd->topic = (NULL == topic) ? NULL : strdup(topic);
     cd->output = output; /* the caddy takes it */
