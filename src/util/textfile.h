@@ -30,6 +30,16 @@
  * back whatever fits: a longer line would arrive split in two, and the
  * second half would be read as a record of its own.  A rankfile line
  * naming a long cpu list is not an absurd thing to write.
+ *
+ * The file has to be text.  A NUL byte stops the read and sets "failed",
+ * because the fields reach their callers as C strings and there is nothing
+ * a line-oriented configuration file can mean by one -- and because the
+ * alternative is worse than a refusal: read as a string, a NUL is
+ * indistinguishable from the end of the line, so the rest of that line is
+ * dropped and the next one read onto the end of it.  A hostfile saved as
+ * UTF-16 is a NUL after every ASCII character, and that is not a file
+ * nobody writes: this reader already treats CR as whitespace for the same
+ * user.
  */
 
 #ifndef PRTE_UTIL_TEXTFILE_H
