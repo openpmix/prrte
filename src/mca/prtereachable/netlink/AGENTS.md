@@ -221,6 +221,20 @@ says nothing at all, which is why it is allowed to be loud.
 - **Debug-only diagnostics.** Several `pmix_output`/`nl_msg_dump` calls
   are wrapped in `#if PRTE_ENABLE_DEBUG`; keep noisy netlink dumps behind
   that guard so production builds stay quiet.
+- **`query` claims priority 50 without checking that netlink works.** It
+  answers "yes, and I outrank weighted" on the strength of having been
+  compiled, and the first `socket(AF_NETLINK, ...)` does not happen until
+  the first peer is dialed. So in an environment that compiles against
+  libnl but refuses `AF_NETLINK` at run time — a sandbox or a seccomp
+  profile that filters it — every `rt_lookup` fails, every pair scores 0,
+  and the OOB concludes it can reach no peer at all, where `weighted`
+  (which asks the kernel nothing) would have worked. This was considered
+  and deliberately left alone: no such environment has been seen, the
+  failure is loud rather than silent (`sk_alloc` reports the refusal at
+  verbosity 0, once per pair), and the escape hatch already exists —
+  `--prtemca prtereachable weighted`. If one ever *is* seen, the fix is a
+  probe in `query`: open and close one `NETLINK_ROUTE` socket, and decline
+  selection if it fails, the same shape as `common/slurm`'s ask-once.
 - **`init`/`fini` are counters only.** No real teardown happens, and the
   framework never calls `finalize` anyway — keep the module free of
   process-global state that would leak.
