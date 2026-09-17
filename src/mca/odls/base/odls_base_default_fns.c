@@ -980,8 +980,9 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
 
     /* unpack the job we are to launch */
     rc = prte_job_unpack(buffer, &jdata, &mode);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != rc) {
+        /* the packers answer in PRRTE codes - see pmix_server_dyn.c */
+        PRTE_ERROR_LOG(rc);
         goto REPORT_ERROR;
     }
     if (PMIX_NSPACE_INVALID(jdata->nspace)) {
