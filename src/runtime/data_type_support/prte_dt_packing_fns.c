@@ -270,9 +270,9 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t
                 continue;
             }
             rc = prte_app_pack(bkt, app);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                return prte_pmix_convert_status(rc);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
             }
         }
     }
@@ -348,9 +348,9 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t
                 continue;
             }
             rc = prte_proc_pack(bkt, proc, devices, mode);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                return prte_pmix_convert_status(rc);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
             }
         }
     }
@@ -393,9 +393,9 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t
      */
     if (NULL != job->map) {
         rc = prte_map_pack(bkt, job->map);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            return prte_pmix_convert_status(rc);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
         }
     }
 
@@ -446,8 +446,11 @@ int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
 
     /* do not pack the daemon name or launch id */
 
-    /* pack the number of procs on the node */
-    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->num_procs, 1, PMIX_PROC_RANK);
+    /* pack the number of procs on the node.  This counts procs, not ranks:
+     * the field is a prte_node_rank_t (uint16_t), so PMIX_PROC_RANK would
+     * read four bytes out of a two-byte object and put its trailing padding
+     * on the wire.  See the type table in AGENTS.md. */
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->num_procs, 1, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);

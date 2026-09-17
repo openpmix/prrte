@@ -84,12 +84,28 @@ removed rather than left as a trap.
 
 `prte_proc_pack` is what remains: **only what the maps cannot say.** The
 node rank counts procs of *every* job on that node, so one job's map cannot
-produce it. The cpuset is the binding the mapper computed. The state and
-the attributes are the proc's own. That is ~13 bytes a proc against the ~25
-the full record cost, on top of the ~46 it cost before the namespace was
-hoisted out of it.
+produce it. The cpuset is the binding the mapper computed. The state is the
+proc's own. Its **attribute list is not on the wire at all** — see the long
+comment in `prte_proc_pack`, and the `#if PRTE_ENABLE_DEBUG` check beside it
+that shouts if a proc ever acquires a `PRTE_ATTR_GLOBAL` attribute. That is
+~13 bytes a proc against the ~25 the full record cost, on top of the ~46 it
+cost before the namespace was hoisted out of it.
 
-### The buffer says which shape it is: `prte_job_pack_mode_t`
+Two things the unpacker deliberately does **not** do, both of which look
+like omissions:
+
+- **It does not set `proc->node`,** and does not put the proc on
+  `node->procs`. The odls does that, in `construct_child_list`, by looking
+  `proc->parent` up in the daemon job — which is the only place that knows
+  which `prte_node_t` this daemon's copy of the pool holds for that vpid.
+  Setting it here would duplicate that and get it wrong on the HNP, which
+  throws the unpacked copy away and keeps its own.
+- **It does not retain `jptr->bookmark`.** The bookmark travels as the
+  node's **index in `prte_node_pool`**, which is meaningful on the receiver
+  only because the nidmap ships pool slots along with the names; the
+  resulting pointer is borrowed, and `prte_job_destruct` simply NULLs it.
+
+### The buffer says which shape it is: `prte_job_pack_mode_t` and `devices`
 
 Not every caller packs the same record. The launch message is broadcast to
 every daemon, but a proc's **cpuset** is read only by the daemon that forks
@@ -111,6 +127,16 @@ on the wire rather than agreed out of band:
   not my proc" when it is `NO_CPUSETS`, and the two have different right
   answers everywhere downstream — see
   [`src/prted/pmix/AGENTS.md`](../../prted/pmix/AGENTS.md).
+
+**The mode byte is not the only discriminator.** A `bool` follows it saying
+whether the per-proc records carry a device assignment, and it is set from
+`PRTE_MAPPING_BYDEVICE` on the job's mapping policy. It has to travel
+separately even though the policy itself is on the wire, because
+`prte_map_pack` runs *after* the proc array: by the time the decoder could
+read the policy it has already had to decide how wide a proc record is. Any
+further optional per-proc field needs the same treatment — a job-level
+discriminator packed ahead of the array, never a flag inside the record it
+governs.
 
 A *conditional trailing field* was tried instead and does not work:
 `prte_proc_pack` runs in a loop and more job-level fields follow the array,
@@ -228,14 +254,51 @@ iteration's contribution from the output.
   no check.
 - **Match the PMIx type to the C type.** `prte_app_idx_t` is `uint32_t`,
   `prte_node_state_t` is `int8_t`, `prte_local_rank_t`/`prte_node_rank_t`
-  are `uint16_t`, `prte_job_state_t`/`prte_exit_code_t` are `int32_t`. See
+  are `uint16_t`, `prte_proc_state_t` is `uint32_t`,
+  `prte_job_state_t`/`prte_exit_code_t` are `int32_t`,
+  `prte_job_flags_t` is `uint16_t`,
+  `prte_app_context_flags_t`/`prte_node_flags_t` are `uint8_t`. See
   [`src/include/types.h`](../../include/types.h),
-  [`src/util/attr.h`](../../util/attr.h), and
+  [`src/util/attr.h`](../../util/attr.h),
+  [`src/runtime/prte_globals.h`](../prte_globals.h), and
   [`src/mca/plm/plm_types.h`](../../mca/plm/plm_types.h).
+- **`PMIX_PROC_RANK` is four bytes, and not everything called a count of
+  procs is a rank.** PMIx packs and unpacks it as a `PMIX_UINT32`, so using
+  it on a narrower field reads and *writes* past that field. `prte_node_t`'s
+  `num_procs` is a `prte_node_rank_t` — two bytes — and was packed as a
+  `PMIX_PROC_RANK` from the day it stopped being a `prte_vpid_t`: the pack
+  put two bytes of the struct's padding on the wire and the unpack wrote
+  four bytes into two. It round-tripped, because both sides were wrong in
+  the same way, which is exactly why nothing found it. A mismatch of this
+  kind survives a round-trip test; only reading the field's declaration
+  catches it.
 - **`PMIx_Data_unpack`'s count is in/out.** Reset it to 1 before each call
   rather than relying on the previous call having left it there.
 - **An unpack that fails mid-object must release the partially built
   object.** All of these do; keep it that way when adding a field.
+- **These functions answer in PRRTE codes, not PMIx statuses.** Every one of
+  them converts at its own `PMIx_Data_*` calls and returns the result of
+  `prte_pmix_convert_status()`. So a caller — including one of these
+  functions calling another — tests `PRTE_SUCCESS`, logs with
+  `PRTE_ERROR_LOG`, and returns the code unchanged. Converting a second time
+  is not harmless: PRRTE codes sit at `PMIX_EXTERNAL_ERR_BASE`, which
+  `prte_pmix_convert_status()` does not recognise, so every specific failure
+  collapses into a bare `PRTE_ERROR` and `PMIX_ERROR_LOG` prints the wrong
+  name for it. `pmix_server_dyn.c` keeps the two spaces in separate
+  variables and says why; follow that.
+- **The wire trusts `job->num_apps`.** The packer writes it and then walks
+  `job->apps` packing every non-NULL entry, while the unpacker reads exactly
+  that many; the proc maps are keyed the same way. The two agree only
+  because every `jdata->num_apps++` in the tree sits beside a
+  `pmix_pointer_array_add(jdata->apps, ...)` and nothing ever removes an
+  app. If you ever make an app removable, this is the first thing that
+  breaks, and it breaks as a desynchronized buffer rather than as a wrong
+  app count.
+- **`prte_node_pack`/`prte_node_unpack` have no callers.** They are
+  exported, and `test/unit/runtime` round-trips them, but no message in the
+  tree carries a bare `prte_node_t` — nodes reach a daemon through the
+  nidmap. Keep them correct (they are the obvious thing to reach for), but
+  do not assume a live path is exercising them.
 - **Do not add a new attribute to the packer and forget its disposition.**
   If the receiving side needs it, it has to be `PRTE_ATTR_GLOBAL` where it
   is set — packing is filtered on that flag, not chosen per call site.
