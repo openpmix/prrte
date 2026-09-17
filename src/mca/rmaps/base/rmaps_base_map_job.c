@@ -644,6 +644,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_attr_state_t astate;
     bool map_succeeded = false;
     prte_mapping_policy_t job_oversub = 0;
+    bool job_nolocal = false;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -712,7 +713,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
      * The oversubscription answer is applied further down, once the job's
      * mapping policy has been resolved (that resolution assigns the whole
      * policy word and would otherwise overwrite it) */
-    rc = prte_rmaps_base_hoist_job_directives(jdata, &job_oversub);
+    rc = prte_rmaps_base_hoist_job_directives(jdata, &job_oversub, &job_nolocal);
     if (PRTE_SUCCESS != rc) {
         // the error message has been printed
         jdata->exit_code = rc;
@@ -1114,6 +1115,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
         }
         PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
+    }
+    /* likewise the nolocal answer hoisted off the apps - it too had to wait
+     * for the policy word to be settled before it could be written into it */
+    if (job_nolocal) {
+        PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_USE_LOCAL);
     }
 
     /* we always inherit a parent's oversubscribe flag unless the job assigned it */
