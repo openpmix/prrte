@@ -1034,10 +1034,63 @@ static int test_late_report_keeps_termination(void)
     return failures;
 }
 
+/*
+ * A daemon whose launch failed is reported to the HNP on
+ * PRTE_RML_TAG_REPORT_REMOTE_LAUNCH by plm/ssh - from ssh_wait_daemon (a
+ * decoded exit status) and from remote_spawn (a PRRTE error code).  Its only
+ * reader is prte_plm_base_daemon_failed(), and as with every other PLM body
+ * the wire carries no version, so the two must agree exactly.
+ *
+ * This packs what the senders pack and unpacks what the receiver unpacks.
+ * The status went out as PMIX_INT32 and was read back as PMIX_STATUS - two
+ * distinct pmix_data_type_t values - so a fully-described buffer refused it
+ * with PMIX_ERR_PACK_MISMATCH and the HNP substituted its default exit code
+ * for the one the daemon actually reported.  Note that a buffer is fully
+ * described only in a debug build; in an optimized one the mismatch was
+ * invisible because both types happen to be four bytes wide.  That is
+ * precisely why it needs a test rather than a run.
+ */
+static int test_remote_launch_wire(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t bkt;
+    pmix_rank_t vpid = 3, rvpid = PMIX_RANK_INVALID;
+    int32_t xstat = 127, rstat = 0;
+    int32_t count;
+    pmix_status_t rc;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
+
+    /* --- what plm/ssh packs --- */
+    rc = PMIx_Data_pack(NULL, &bkt, &vpid, 1, PMIX_PROC_RANK);
+    CHECK("remote launch: rank packs", PMIX_SUCCESS == rc);
+    rc = PMIx_Data_pack(NULL, &bkt, &xstat, 1, PMIX_INT32);
+    CHECK("remote launch: status packs", PMIX_SUCCESS == rc);
+
+    /* --- what prte_plm_base_daemon_failed unpacks --- */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, &bkt, &rvpid, &count, PMIX_PROC_RANK);
+    CHECK("remote launch: rank unpacks", PMIX_SUCCESS == rc);
+    CHECK("remote launch: rank round-trips", vpid == rvpid);
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, &bkt, &rstat, &count, PMIX_INT32);
+    CHECK("remote launch: status unpacks", PMIX_SUCCESS == rc);
+    CHECK("remote launch: status round-trips", xstat == rstat);
+
+    PMIX_DATA_BUFFER_DESTRUCT(&bkt);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_remote_launch_wire\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
     pmix_status_t prc;
+
+    /* read once, by whichever of the two inits below brings PMIx up */
+    setenv("PMIX_BFROP_BUFFER_TYPE", "PMIX_BFROP_BUFFER_FULLY_DESC", 1);
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
@@ -1049,7 +1102,16 @@ int main(void)
      * be open before they run */
     /* the state-update report packs a buffer, and PMIx_Data_pack refuses to
      * run until PMIx itself is up.  A daemon reaches that state through
-     * PMIx_server_init, so do the same */
+     * PMIx_server_init, so do the same.
+     *
+     * Ask for FULLY_DESC buffers first.  PMIx tags each item with its type
+     * only in that mode, and that tag is what turns a packer/unpacker type
+     * disagreement into an unpack failure the wire tests below can see; a
+     * non-described buffer carries values alone, so two same-width types are
+     * indistinguishable and the tests pass vacuously.  PMIx picks the mode
+     * from ITS OWN build flags - fully described only under
+     * PMIX_ENABLE_DEBUG - so a PRRTE debug build linked against an optimized
+     * PMIx would otherwise test nothing here. */
     prc = PMIx_server_init(NULL, NULL, 0);
     if (PMIX_SUCCESS != prc) {
         fprintf(stderr, "PMIx_server_init failed: %s\n", PMIx_Error_string(prc));
@@ -1072,6 +1134,7 @@ int main(void)
     failures += test_append_basic_args();
     failures += test_naming();
     failures += test_state_update_wire();
+    failures += test_remote_launch_wire();
     failures += test_late_report_keeps_termination();
     /* leaves the global job/node pools populated, so run it last */
     failures += test_setup_vm();

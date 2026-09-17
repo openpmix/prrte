@@ -563,9 +563,10 @@ int prte_register_params(void)
     local_setup_slots = NULL;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "set_default_slots",
                                       "Set the number of slots on nodes that lack such info to the"
-                                      " number of specified objects [a number, \"cores\" (default),"
-                                      " \"packages\", or \"hwthreads\" (default if hwthreads_as_cpus"
-                                      " is set), or a fixed number to be applied to all nodes",
+                                      " number of objects of the named type: \"cores\" (the"
+                                      " default), \"packages\" (also spelled \"sockets\"),"
+                                      " \"numas\", or \"hwthreads\" - or a plain number of slots"
+                                      " to apply to every such node",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &local_setup_slots);
     if (NULL == local_setup_slots) {
