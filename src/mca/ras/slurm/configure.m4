@@ -58,8 +58,14 @@ AC_DEFUN([PRTE_RAS_SLURM_CHECK_VERSION],[
         # Match only a line that IS a version report.  Slurm prefixes its
         # diagnostics with the tool name, so a "grep slurm" would happily
         # accept an error message.
+        #
+        # The package name is matched as a PREFIX because Debian and Ubuntu
+        # build Slurm as "slurm-wlm", so their clients answer "slurm-wlm
+        # 23.11.4"; anchoring on "slurm" followed by a space reads the most
+        # widely deployed packaging there is as "no Slurm here", which then
+        # enables the elastic extensions on a Slurm far too old for them.
         prte_slurm_ver_out=`$prte_slurm_ver_path --version 2>/dev/null | \
-            sed -n ['s/^slurm[ 	][ 	]*\([0-9][0-9]*\.[0-9][0-9]*[0-9.a-zA-Z-]*\).*$/\1/p'] | \
+            sed -n ['s/^slurm[^ 	]*[ 	][ 	]*\([0-9][0-9]*\.[0-9][0-9]*[0-9.a-zA-Z-]*\).*$/\1/p'] | \
             head -n 1`
         AS_IF([test -n "$prte_slurm_ver_out"],
               [prte_ras_slurm_version=$prte_slurm_ver_out
