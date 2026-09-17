@@ -54,7 +54,7 @@ prte_reachable_base_component_t prte_mca_prtereachable_netlink_component = {
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
-                                   PMIX_RELEASE_VERSION),
+                                   PRTE_RELEASE_VERSION),
 
         /* Component open and close functions */
 
