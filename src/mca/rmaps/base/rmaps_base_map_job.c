@@ -270,8 +270,6 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     bool have_map, have_rank, have_bind;
     prte_mapping_policy_t appmap = 0;
 
-    PRTE_HIDE_UNUSED_PARAMS(jdata);
-
     /* 1. PRTE_APP_MAPBY → opts->map plus the object type/depth and span/ordered
      * directives that flow from the mapping policy.  We store the bare policy
      * in opts->map (matching the job-level convention) and capture the full
@@ -410,7 +408,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         opts->limit = u16;
     }
 
-    /* 9. Ranking: an explicit per-app --rank-by wins.  Otherwise, when the app
+    /* 12. Ranking: an explicit per-app --rank-by wins.  Otherwise, when the app
      * supplied its own mapping policy, derive the ranking default from that
      * policy rather than inheriting the job-level ranking (which followed the
      * job map).  When the app changed neither, the job-level ranking stands. */
@@ -421,7 +419,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         opts->rank = prte_rmaps_base_derive_ranking(appmap);
     }
 
-    /* 10. Binding: an explicit per-app --bind-to wins (carrying its overload
+    /* 13. Binding: an explicit per-app --bind-to wins (carrying its overload
      * directive).  Otherwise, when the app supplied its own mapping policy,
      * recompute the default binding from that policy.  We deliberately do not
      * disable binding here just because oversubscription is permitted: like
@@ -731,7 +729,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
      */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE, (void **) &u16ptr, PMIX_UINT16)) {
         procs_per_target = u16;
-        if (procs_per_target == 0) {
+        if (0 == procs_per_target) {
             pmix_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u == 0\n", procs_per_target);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -751,7 +749,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             goto cleanup;
         }
         procs_per_target = u16;
-        if (procs_per_target == 0) {
+        if (0 == procs_per_target) {
             pmix_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u == 0\n", procs_per_target);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -802,7 +800,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERNODE, (void **) &u16ptr, PMIX_UINT16)) {
         procs_per_target = u16;
-        if (procs_per_target == 0) {
+        if (0 == procs_per_target) {
             pmix_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -821,7 +819,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             goto cleanup;
         }
         procs_per_target = u16;
-        if (procs_per_target == 0) {
+        if (0 == procs_per_target) {
             pmix_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -1185,7 +1183,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         options.use_hwthreads = true;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS, (void*)&tmp, PMIX_STRING)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS, (void **) &tmp, PMIX_STRING)) {
         prte_ras_base_display_cpus(jdata, tmp);
         free(tmp);
     }
@@ -1227,7 +1225,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     /* add up all the expected procs */
     for (n = 0; n < jdata->apps->size; n++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
-        if (NULL == app ) {
+        if (NULL == app) {
             continue;
         }
         if (0 < app->num_procs) {
@@ -1616,7 +1614,7 @@ ranking:
 
     if (colocate_daemons || colocate) {
         /* This is a colocation request, so we don't run any mapping modules */
-        if (procs_per_target == 0) {
+        if (0 == procs_per_target) {
             pmix_output(0, "Error: COLOCATION REQUESTED WITH ZERO PROCS/TARGET\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -2224,7 +2222,7 @@ static void inherit_env_directives(prte_job_t *jdata,
         // do we have a matching attribute in the new job?
         exists = false;
         PMIX_LIST_FOREACH(attr2, &jdata->attributes, prte_attribute_t) {
-            if (PMIX_ENVAR != attr->data.type) {
+            if (PMIX_ENVAR != attr2->data.type) {
                 continue;
             }
             val2 = &attr2->data;
@@ -2277,7 +2275,7 @@ static void inherit_env_directives(prte_job_t *jdata,
 
             exists = false;
             PMIX_LIST_FOREACH(attr2, &app2->attributes, prte_attribute_t) {
-                if (PMIX_ENVAR != attr->data.type) {
+                if (PMIX_ENVAR != attr2->data.type) {
                     continue;
                 }
                 val2 = &attr2->data;
