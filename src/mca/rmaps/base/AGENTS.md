@@ -112,6 +112,78 @@ no pattern" and quietly maps by the job's.
 
 ---
 
+## `rmaps_base_frame.c` — the parsers
+
+### A qualifier's value is checked here or nowhere
+
+`--map-by`, `--rank-by` and `--bind-to` values are strings, and this file is
+the only place between the command line and the mapper that looks at them.
+The three value-bearing mapping qualifiers now agree on the shape of that
+check — `strtol` with an end pointer, `errno`, and an explicit range — and
+they have to, because each one is either a `uint16_t` attribute, a divisor,
+or both:
+
+| Qualifier | Why the range matters |
+|---|---|
+| `PE=n` | A `uint16_t` attribute *and* the divisor in `prte_rmaps_base_check_avail()`'s `ncpus / cpus_per_rank`. `PE=0` is an integer division by zero in the HNP — silently zero on aarch64, **SIGFPE on x86-64**. `PE=70000` used to become 4464 and `PE=-1` became 65535. |
+| `LIMIT=n` | A `uint16_t` attribute, and `bind_generic` reads a limit of zero as "no limit at all" (`0 < options->limit`) rather than as what the user wrote. |
+| `NDEV=n` | A `uint16_t` attribute. |
+
+The `ppr:N:<object>` count is *not* checked here — this parser only splits
+the spec and stores it — which is why `ppr_count()` in `rmaps_base_map_job.c`
+is where that one is validated, for both the job-level and the per-app
+spelling.
+
+`check_pe_list()` has its own trap: **`PMIx_Argv_split()` keeps no empty
+tokens**, so an entry that is nothing but delimiters comes back NULL rather
+than as an empty array, and walking it as an array is a NULL dereference.
+`--map-by pe-list=-` segfaulted before the job was ever described. The outer
+split is guarded; so is the inner one now.
+
+### A directive only the job's policy word carries must be hoisted
+
+`prte_rmaps_base_hoist_job_directives()` exists because a per-app mapping
+spec may carry a qualifier that describes the whole job. Two different
+reasons put a qualifier on that list, and it is worth keeping them apart:
+
+- **OVERSUBSCRIBE/NOOVERSUBSCRIBE and INHERIT/NOINHERIT** are *meaningless*
+  per app — one app cannot oversubscribe its nodes while its siblings do not
+  — so they are hoisted, and apps that disagree are refused.
+- **NOLOCAL** is hoisted for a blunter reason: it is simply *unreadable* per
+  app. It travels in the mapping policy word's directive bits, and
+  `prte_rmaps_base_get_target_nodes()` is handed `jdata->map->mapping`
+  whichever app it is placing. Left on the app it was read by nothing at all
+  and the app ran on the head node anyway.
+
+That second test — "does anything downstream read this from the app?" — is
+the one to apply to any directive bit added here. `SPAN` and `ORDERED` pass
+it (`prte_rmaps_base_resolve_app_options()` lifts both onto `options`);
+`NO_USE_LOCAL` did not.
+
+The hoist also has to notice when what it removed was *all* the app had to
+say. An app left carrying nothing but `PRTE_MAPPING_GIVEN` names no mapping
+policy, and the attribute's mere presence is what puts the whole job on the
+per-app dispatch path — to be placed by a policy of zero.
+
+### What `NULL == jdata` means, and why the globals are safe
+
+The three-way `(NULL, NULL)` / `jdata` / `app` dispatch in `check_modifiers()`
+is not symmetric in one respect: the `NULL == attrs` arm writes **DVM-wide
+globals** (`prte_rmaps_base.default_pes`, `.inherit`, `.hwthread_cpus`,
+`.file`, `.mapping`, `.ranking`). That is only correct because the NULL-jdata
+entry point is reachable from exactly one place — `prte_rmaps_base_open()`,
+parsing the `mapby`/`rankby` MCA parameters before any job exists. Every
+other caller (`pmix_server_dyn.c`, schizo) passes a real job or app. Keep it
+that way: a spawn request that reached the NULL arm would rewrite the DVM's
+defaults for every later job.
+
+`prte_rmaps_base.ppr` and `.file` are allocated by this file and released in
+`prte_rmaps_base_close()`. `.default_mapping_policy` and
+`.default_ranking_policy` look the same but are **not** — the MCA variable
+system owns those, and freeing them is a double free.
+
+---
+
 ## `rmaps_base_devices.c` — mapping by device
 
 The framework guide's "Mapping by device" section says what the feature is
