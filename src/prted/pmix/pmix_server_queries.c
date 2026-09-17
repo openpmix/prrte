@@ -58,9 +58,20 @@
  * two numeric ones is a string that it then hands to strlen(), strcmp() or
  * PMIx_Check_nspace(), so a mistyped one is a fault - which any process or
  * tool attached to a daemon could produce with a single PMIx_Query_info. */
-static bool qual_string(const pmix_info_t *qual, char **str)
+static bool qual_string(const pmix_info_t *qual, char **str, bool nullok)
 {
     if (PMIX_STRING != qual->value.type) {
+        return false;
+    }
+    /* A PMIX_STRING carrying no string survives the wire as a NULL - the
+     * packer writes a zero length and the unpacker hands back NULL - so
+     * accepting it leaves the caller's variable at the value that means
+     * "this qualifier was not given", which for every one of these is a
+     * different answer rather than an error.  A NULL PMIX_HOSTNAME read as
+     * unset makes the server-URI query answer about *this* node; a NULL
+     * PMIX_ALLOC_ID makes an allocation query answer about the whole DVM.
+     * Only PMIX_NSPACE has a meaning for it, and says so at its call. */
+    if (NULL == qual->value.data.string && !nullok) {
         return false;
     }
     *str = qual->value.data.string;
@@ -278,6 +289,10 @@ static void _query(int sd, short args, void *cbdata)
     prte_app_context_t *app;
     prte_session_t *session;
     int matched;
+    /* set when a qualifier names something only the master can resolve, so
+     * every key of that query goes to the master rather than being answered
+     * out of state this daemon does not have */
+    bool defer_query;
     pmix_proc_info_t *procinfo;
     prte_proc_state_t pstate;
     pid_t ppid;
@@ -321,8 +336,14 @@ static void _query(int sd, short args, void *cbdata)
     /* see what they wanted */
     for (m = 0; m < cd->nqueries; m++) {
         q = &cd->queries[m];
+        defer_query = false;
         hostname = NULL;
         nodeid = UINT32_MAX;
+        /* every qualifier is scoped to the query that carried it, and this
+         * one was the exception: initialized once at its declaration, a
+         * session id given on one query went on selecting jobs for every
+         * query behind it in the same PMIx_Query_info */
+        sessionid = UINT32_MAX;
         psetname = NULL;
         allocid = NULL;
 #ifdef PMIX_ALLOC_PROPERTY
@@ -342,7 +363,7 @@ static void _query(int sd, short args, void *cbdata)
 
                 if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NSPACE)) {
                     char *nsq;
-                    if (!qual_string(&q->qualifiers[n], &nsq)) {
+                    if (!qual_string(&q->qualifiers[n], &nsq, true)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -372,8 +393,24 @@ static void _query(int sd, short args, void *cbdata)
                                             "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
                                             nsq);
-                        ret = PMIX_ERR_BAD_PARAM;
-                        goto done;
+                        /* A launch message goes only to the daemons that host
+                         * part of a job, so off the master "I have never heard
+                         * of this namespace" is a statement about this daemon,
+                         * not about the DVM - the same reason the proc-table
+                         * arm below defers rather than answering NOT_FOUND.
+                         * Rejecting it here as a client error made the answer
+                         * to one query depend on which node the client landed
+                         * on, and did it before any key could reach the
+                         * deferral that exists for exactly this.  The master
+                         * has heard of every job, so there the refusal is the
+                         * truth and stands. */
+                        if (PRTE_PROC_IS_MASTER) {
+                            ret = PMIX_ERR_BAD_PARAM;
+                            goto done;
+                        }
+                        defer_query = true;
+                        PMIX_LOAD_NSPACE(jobid, nsq);
+                        continue;
                     }
 
                     PMIX_LOAD_NSPACE(jobid, jdata->nspace);
@@ -389,7 +426,7 @@ static void _query(int sd, short args, void *cbdata)
                      * First check to see if we know about this group. If
                      * not then return an error. If so then continue on.
                      */
-                    if (!qual_string(&q->qualifiers[n], &grpq) || NULL == grpq) {
+                    if (!qual_string(&q->qualifiers[n], &grpq, false)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -417,7 +454,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_HOSTNAME)) {
-                    if (!qual_string(&q->qualifiers[n], &hostname)) {
+                    if (!qual_string(&q->qualifiers[n], &hostname, false)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -430,7 +467,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_PSET_NAME)) {
-                    if (!qual_string(&q->qualifiers[n], &psetname)) {
+                    if (!qual_string(&q->qualifiers[n], &psetname, false)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -443,14 +480,14 @@ static void _query(int sd, short args, void *cbdata)
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_ID)) {
-                    if (!qual_string(&q->qualifiers[n], (char **) &allocid)) {
+                    if (!qual_string(&q->qualifiers[n], (char **) &allocid, false)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
 
 #ifdef PMIX_ALLOC_PROPERTY
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_PROPERTY)) {
-                    if (!qual_string(&q->qualifiers[n], (char **) &allocprop)) {
+                    if (!qual_string(&q->qualifiers[n], (char **) &allocprop, false)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -459,11 +496,25 @@ static void _query(int sd, short args, void *cbdata)
 
             }
         }
+        /* The walk below runs to the array's NULL terminator, so a query
+         * carrying no keys at all is a NULL dereference - and the counting
+         * pass above already screens for it.  PMIx screens it too, in
+         * pmix_parse_localquery(), which is why the upcall never delivers
+         * one; but pmix_server_query_request() unpacks queries straight off
+         * the wire, and the PMIX_QUERY unpacker leaves "keys" NULL whenever
+         * the peer declared zero of them, reporting success. */
+        if (NULL == q->keys) {
+            continue;
+        }
         for (n = 0; NULL != q->keys[n]; n++) {
             ++nkeys;
             pmix_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s processing key %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->keys[n]);
+
+            if (defer_query) {
+                goto defer;
+            }
 
             if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NAMESPACES)) {
                 /* get the current jobids */
@@ -672,7 +723,12 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     PMIX_INFO_LIST_ADD(rc, results, PMIX_HWLOC_XML_V1, xmlbuffer, PMIX_STRING);
-                    free(xmlbuffer);
+                    /* hwloc allocated it, and where hwloc was built against
+                     * libxml2 it came from libxml2's allocator - which an
+                     * application may replace with xmlMemSetup().  Only
+                     * hwloc knows which of its two exporters produced this
+                     * buffer, so only hwloc can release it. */
+                    hwloc_free_xmlbuffer(prte_hwloc_topology, xmlbuffer);
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         goto done;
@@ -687,7 +743,7 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     PMIX_INFO_LIST_ADD(rc, results, PMIX_HWLOC_XML_V2, xmlbuffer, PMIX_STRING);
-                    free(xmlbuffer);
+                    hwloc_free_xmlbuffer(prte_hwloc_topology, xmlbuffer);
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         goto done;
@@ -828,6 +884,24 @@ static void _query(int sd, short args, void *cbdata)
                     procinfo[p].state = prte_pmix_convert_state(pstate);
                     ++p;
                 }
+                /* num_procs is a vpid SPAN, not a count: a bootstrap DVM
+                 * takes each daemon's vpid from its node's pool index, and a
+                 * job caught part-way through mapping has not filled every
+                 * rank yet.  Either way the array has holes, and the entries
+                 * they leave behind are zero-constructed - an empty nspace
+                 * at rank 0, in state and pid 0 - which a client cannot tell
+                 * from a real proc.  Report the entries we filled.
+                 *
+                 * None at all is not an empty table: PMIx refuses to copy a
+                 * zero-length array, and the destructor that would give the
+                 * block back does nothing when it is told the size is zero.
+                 * So that case answers, and frees, on its own. */
+                if (0 == p) {
+                    PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                dry.size = p;
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_PROC_TABLE, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 if (PMIX_SUCCESS != rc) {
@@ -887,6 +961,15 @@ static void _query(int sd, short args, void *cbdata)
                         ++p;
                     }
                 }
+                /* same as the table above: report the entries we filled,
+                 * not the ones we allocated room for, and answer none of
+                 * them as not-found rather than as an empty array */
+                if (0 == p) {
+                    PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                dry.size = p;
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_LOCAL_PROC_TABLE, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 if (PMIX_SUCCESS != rc) {
@@ -1044,7 +1127,6 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
                 PMIX_INFO_LIST_START(nodelist);
-                p = 0;
                 for (k=0; k < alloc_nodes->size; k++) {
                     node = (prte_node_t*)pmix_pointer_array_get_item(alloc_nodes, k);
                     if (NULL == node) {
@@ -1067,12 +1149,21 @@ static void _query(int sd, short args, void *cbdata)
                         PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_TOPOLOGY_INDEX,
                                            &node->topology->index, PMIX_INT);
                     }
-                    /* convert to array */
+                    /* convert to array.  The list remembers the first add
+                     * that failed and the conversion is where it says so -
+                     * so this is the one status in the node loop that has to
+                     * be tested.  Discarding it converted a node whose adds
+                     * had failed into an empty PMIX_NODE_INFO entry and
+                     * reported the allocation as successfully described. */
                     PMIX_INFO_LIST_CONVERT(rc, nodeinfolist, &dry);
                     PMIX_INFO_LIST_RELEASE(nodeinfolist);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_INFO_LIST_RELEASE(nodelist);
+                        goto done;
+                    }
                     /* now add the entry to the main list */
                     PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_NODE_INFO, &dry, PMIX_DATA_ARRAY);
-                    ++p;
                     PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 }
                 /* add topology info */
@@ -1086,11 +1177,15 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_HWLOC_XML_V2, str, PMIX_STRING);
-                    free(str);
+                    hwloc_free_xmlbuffer(topo->topo, str);
                 }
                 /* convert list to array */
                 PMIX_INFO_LIST_CONVERT(rc, nodelist, &dry);
                 PMIX_INFO_LIST_RELEASE(nodelist);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
                 /* add to results */
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_ALLOCATION, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
@@ -1311,6 +1406,23 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);
                 ret = PMIx_Get(&pproc, PMIX_MEM_ALLOC_KIND, &info, 1, &value);
                 if (PMIX_SUCCESS != ret) {
+                    goto done;
+                }
+                /* What comes back is whatever was stored under this key, and
+                 * what was stored is the requestor's own: the key is not one
+                 * prte_pmix_xfer_job_info() recognizes, so its default arm
+                 * caches the spawn directive verbatim and it is registered
+                 * with that type.  Reading data.string off a value a client
+                 * chose to send as, say, a PMIX_SIZE hands those eight bytes
+                 * to the strdup inside the add.  Check the type, as every
+                 * other crossing of this boundary does. */
+                if (NULL == value) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                if (PMIX_STRING != value->type || NULL == value->data.string) {
+                    PMIX_VALUE_RELEASE(value);
+                    ret = PMIX_ERR_TYPE_MISMATCH;
                     goto done;
                 }
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_MEM_ALLOC_KIND, value->data.string, PMIX_STRING);
@@ -1628,7 +1740,24 @@ void pmix_server_query_request(int status, pmix_proc_t *sender,
         rc = PMIX_ERR_BAD_PARAM;
         goto error;
     }
+    /* The count arrives off the wire in a size_t, and PMIX_QUERY_CREATE
+     * multiplies it by sizeof(pmix_query_t) with no overflow guard and then
+     * constructs every element it claimed - so a count large enough to wrap
+     * that product yields a short allocation whose constructor loop runs
+     * straight off the end, before the unpack below gets a chance to screen
+     * anything.  Require the count to survive the round trip through the
+     * int32_t the unpack consumes it as, which bounds it well clear of the
+     * wrap.  PMIx screens its own client-facing query the same way. */
+    cnt = (int32_t) nqueries;
+    if (0 > cnt || (size_t) cnt != nqueries) {
+        rc = PMIX_ERR_BAD_PARAM;
+        goto error;
+    }
     PMIX_QUERY_CREATE(queries, nqueries);
+    if (NULL == queries) {
+        rc = PMIX_ERR_NOMEM;
+        goto error;
+    }
     cnt = nqueries;
     rc = PMIx_Data_unpack(NULL, buffer, queries, &cnt, PMIX_QUERY);
     if (PMIX_SUCCESS != rc) {
