@@ -3039,7 +3039,12 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->status = PMIX_SUCCESS;
     p->codes = NULL;
     p->ncodes = 0;
-    memset(&p->proc, 0, sizeof(pmix_proc_t));
+    /* the sentinel rather than a zeroed identity: zero is rank 0, which is
+     * a real rank, and an empty nspace is PMIx's wildcard - so a caddy whose
+     * creator never named a proc would compare equal to a live one under
+     * PMIX_CHECK_PROCID.  rqcon() uses the same sentinel for the request
+     * tracker's proc fields, for the same reason. */
+    p->proc = *PRTE_NAME_INVALID;
     p->msg = NULL;
     memset(&p->proct, 0, sizeof(pmix_proc_t));
     p->procs = NULL;
