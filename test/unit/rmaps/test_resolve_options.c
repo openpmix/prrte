@@ -170,6 +170,43 @@ int test_resolve_options(void)
     CHECK("pehwt: use_hwthreads", opts.use_hwthreads);
     PMIX_RELEASE(app);
 
+    /* === resolve: a ppr pattern's count half ===
+     * The count is multiplied by an object count into an int, so anything
+     * that is not a positive integer fitting one has to be refused here.
+     * It used to go through a bare strtoul(): "-2" wrapped back to a
+     * NEGATIVE process count, a value past INT_MAX silently truncated, and
+     * non-numeric text became zero - which the ppr mapper reads as "this app
+     * named no pattern" and quietly maps by the job's instead. */
+    app = PMIX_NEW(prte_app_context_t);
+    prte_rmaps_base_set_app_mapping_policy(app, "ppr:2:core");
+    baseline(&opts);
+    CHECK("ppr: rc", PRTE_SUCCESS == prte_rmaps_base_resolve_app_options(NULL, app, &opts));
+    CHECK("ppr: policy", PRTE_MAPPING_PPR == opts.map);
+    CHECK("ppr: count", 2 == opts.pprn);
+    CHECK("ppr: maptype", HWLOC_OBJ_CORE == opts.maptype);
+    PMIX_RELEASE(app);
+
+    {
+        const char *bad[] = {"ppr:0:core",       /* zero places nothing */
+                             "ppr:-2:core",      /* wrapped to a negative count */
+                             "ppr:abc:core",     /* not a number at all */
+                             "ppr:2x:core",      /* trailing junk */
+                             "ppr:4294967296:core", /* past INT_MAX */
+                             NULL};
+        int b;
+        for (b = 0; NULL != bad[b]; b++) {
+            app = PMIX_NEW(prte_app_context_t);
+            prte_rmaps_base_set_app_mapping_policy(app, (char *) bad[b]);
+            baseline(&opts);
+            if (PRTE_SUCCESS == prte_rmaps_base_resolve_app_options(NULL, app, &opts)) {
+                fprintf(stderr, "FAIL [ppr bad]: %s was accepted (count %d)\n",
+                        bad[b], opts.pprn);
+                failures++;
+            }
+            PMIX_RELEASE(app);
+        }
+    }
+
     if (0 == failures) {
         fprintf(stdout, "  PASS test_resolve_options\n");
     }

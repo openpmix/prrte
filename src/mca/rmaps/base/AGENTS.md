@@ -29,6 +29,89 @@ shift — but equally nothing here may block.
 
 ---
 
+## `rmaps_base_map_job.c` — traps in the orchestrator
+
+The framework guide describes the seven phases and the `cleanup:` contract.
+This is what the file's shape invites that the phase list does not show.
+
+### `options` is a copy, and it is the copy that places the job
+
+`prte_rmaps_base_map_job()` reads `jdata->map->{mapping,ranking,binding}`
+into `options.{map,rank,bind}` once, at the `ranking:` label, and everything
+downstream consults the copy: `prte_rmaps_base_bind_proc()` dispatches on
+`options->bind`, `prte_rmaps_base_compute_vpids()` on `options->rank`,
+`bind_generic()` on `options->hwb`. **Writing a policy onto `jdata->map`
+after that point changes nothing.** `map_colocate()` did exactly that to say
+"daemons are never bound and always rank by-slot"; the daemons were bound to
+a core anyway, taking cpus from the very processes they were colocated with
+and failing the colocation outright on a node with none to spare. Set both,
+or set the one the reader uses.
+
+The framework guide states the mirror-image rule for reads ("a gate reads
+`options`, never `jdata->map`"). They are the same rule.
+
+### The colocation path skips most of the setup
+
+`colocate`/`colocate_daemons` jumps straight to `ranking:`, past the block
+that reads `PRTE_JOB_PES_PER_PROC`, `PRTE_JOB_CPUSET`, `PRTE_JOB_MAP_DEVICE`
+and friends, and past the loop that sums the apps' proc counts. So on that
+path `options.cpus_per_rank` is **0**, not 1; `options.nprocs` is 0; and
+`options.cpuset` is NULL. The zero proc count is why the derived binding
+comes out `BIND_TO_CORE` (`prte_hwloc_base_set_default_binding()` reads
+`nprocs <= 2` as "a couple of procs, bind to a cpu"), and the zero
+`cpus_per_rank` is a divisor in `prte_rmaps_base_check_avail()` — which the
+colocation path happens never to call. Anything new on this path has to
+assume those fields are unset rather than defaulted.
+
+### The map has to exist before the first `goto cleanup`
+
+`cleanup:` walks `jdata->map->nodes` to reset the flags the map set, so
+`jdata->map` is created at the very top — ahead of the personality check,
+which is the one guard that can fire before any mapping work. A job reaching
+`PRTE_JOB_STATE_MAP` need not have a map: `prte_job_construct()` leaves it
+NULL, and only some creation paths fill it in.
+
+### `map_colocate()` reads a tool's request, not our own data
+
+The `pmix_data_array_t` behind `PRTE_JOB_COLOCATE_PROCS` comes straight off a
+`PMIx_Spawn` request's `PMIX_COLOCATE_PROCS` value with nothing in between,
+so neither its element type nor its contents have been established. Reading
+a differently-typed array as `pmix_proc_t` walks off the end of the caller's
+allocation, and a target named with `PMIX_RANK_WILDCARD` may name a job that
+was never mapped — **a tool's job tracker has `map == NULL`** and is in
+`prte_job_data` like any other. Both are checked; keep them checked.
+
+The other half of that function's state is `PRTE_NODE_FLAG_MAPPED`, which it
+uses twice for two different questions ("already collected into `targets`?"
+and "already added to `map->nodes`?"). Every exit has to clear it on *both*
+the target list and the map, because an error exit from the target scan
+leaves it set on live pool nodes and the next colocation then reads those
+nodes as already collected and silently leaves them out.
+
+### The binding `limit` counters outlive the job
+
+`bind_generic()` keeps a per-object proc count on the hwloc object's
+`userdata`, and it lives for the life of the DVM. Only a job that set a
+limit bumps it, so only such a job has to clear it — but **`limit` has two
+spellings**, `PRTE_JOB_BINDING_LIMIT` and the per-app
+`PRTE_APP_BINDING_LIMIT`, and both have to trigger
+`prte_hwloc_base_reset_counters()`. Resetting on the job-level one alone
+left a second per-app `--bind-to <obj>:limit=N` finding every object already
+standing at its limit. See [`src/hwloc/AGENTS.md`](../../../hwloc/AGENTS.md).
+
+### A count that comes from a string is not a count yet
+
+The `N` of a `ppr:N:<object>` pattern is never validated by the `--map-by`
+parser — `prte_rmaps_base_set_mapping_policy()` only splits the spec and
+stores it — so `ppr_count()` here is the one place it is checked, for the
+job-level and the per-app spelling alike. A bare `strtoul()` is not enough:
+`ppr:-2:core` came back as a huge unsigned that truncated to a **negative**
+process count, a value past `INT_MAX` wrapped to whatever its low bits said,
+and `ppr:abc:core` became zero — which the mapper reads as "this app named
+no pattern" and quietly maps by the job's.
+
+---
+
 ## `rmaps_base_devices.c` — mapping by device
 
 The framework guide's "Mapping by device" section says what the feature is
