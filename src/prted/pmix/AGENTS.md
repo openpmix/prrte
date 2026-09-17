@@ -292,6 +292,17 @@ untrusted input. `pmix_pointer_array_get_item()` bounds-checks and
 returns NULL, so check for NULL — but do not then `return` without
 completing the request, because the requester is still waiting.
 
+**And a *count* arriving on the wire is untrusted in a second way.** The
+`PMIX_*_CREATE` macros multiply the count by the element size with no
+overflow guard and then run a constructor over every element they claimed,
+so a count large enough to wrap that product yields a short allocation and
+a constructor loop that walks off the end — before the unpack that would
+have rejected the buffer gets a chance to say anything. Screen it by
+requiring it to survive the round trip through the `int32_t` the unpack
+consumes it as (`pmix_server_query_request()` is the worked example; PMIx
+screens its own client-facing query the same way), and NULL-check the
+allocation afterwards.
+
 **A relay must answer even a request it cannot parse.** Every `goto reply`
 in `pmix_server_sched()` happens after the requestor's index has been
 unpacked, so there is always somebody addressable on the other end holding
@@ -775,6 +786,103 @@ hazards. Four things about it that are not local to any one arm:
   and found nothing" where the default arm would have said
   `PMIX_ERR_NOT_SUPPORTED`; see
   [`docs/todo.rst`](../../../docs/todo.rst).
+- **A qualifier belongs to the query that carried it, and only to that
+  one.** `_query()` walks an *array* of `pmix_query_t`, each with its own
+  qualifiers, and the scratch variables they are parsed into are declared
+  once for the whole function — so every one of them has to be reset at the
+  top of the query loop. `sessionid` was the one that was not: initialized
+  at its declaration and never again, a session id given on the first query
+  went on filtering the namespace-info answer for every query behind it.
+  Nothing catches this; the second query returns a plausible subset.
+
+### A qualifier's value is the client's, in type and in presence
+
+`qual_string()` is the screen, and it refuses two things rather than one.
+The wrong *type* is the loud case — six of these qualifiers are strings the
+arms hand to `strlen`, `strcmp`, `PMIx_Check_nspace` or a session lookup,
+so a `PMIX_SIZE` in that union faults the daemon. The **absent** case is
+the quiet one: a `PMIX_STRING` carrying no string survives the wire as a
+NULL (the packer writes a zero length, the unpacker hands back NULL), and
+accepting it leaves the arm's variable holding exactly the value that means
+"not given" — which for all of these is a *different answer*, not an error.
+A NULL `PMIX_HOSTNAME` makes the server-URI arm answer about this node; a
+NULL `PMIX_ALLOC_ID` makes the allocation arms answer about the whole DVM.
+`PMIX_NSPACE` is the sole exception, where no string legitimately means
+"any", and it passes `nullok` at its call to say so.
+
+**The same rule runs in the other direction**, on a value coming back out of
+the job store, and that is the half it is easy to miss. `PMIX_MEM_ALLOC_KIND`
+is not a key `prte_pmix_xfer_job_info()` recognizes, so its default arm
+caches the spawn directive **verbatim** and PMIx registers it with whatever
+type the spawning client chose. `PMIx_Get` hands it straight back, so
+reading `data.string` off it is reading the client's eight bytes again — any
+process able to spawn could fault the daemon answering the query. What this
+file fetches out of the job store is requestor data wearing a server's
+clothes; check its type on the way out as carefully as on the way in.
+
+### An unknown namespace is not always a client error
+
+The `PMIX_NSPACE` qualifier is validated by walking `prte_job_data`, and off
+the master that table holds only the jobs this daemon hosts part of. So "I
+have never heard of this namespace" from a prted is a statement about the
+daemon, not about the DVM — the same fact the proc-table arm is built on.
+Refusing it there with `PMIX_ERR_BAD_PARAM` made the answer to a query
+depend on which node the client happened to land on, and did it *before*
+any key could reach the deferral that exists for exactly this: the query is
+instead marked to defer wholesale, every key goes to the master, and the
+master — which has heard of every job — decides. On the master the refusal
+is the truth and stands.
+
+**`PMIX_GROUP_ID` deliberately does not do the same**, and that is worth
+knowing before someone makes them symmetrical. A group is appended to
+`prte_pmix_server_globals.groups` by `grp_release_complete()` on each daemon
+that took part in constructing it, so a daemon hosting no member never
+learns of it — **including the master**. There is no authority to defer to,
+and the local list is the whole of the answer available.
+
+### A proc table is sized by a span, not by a count
+
+`jdata->num_procs` is the vpid **span**: `plm_base_setup_virtual_machine()`
+grows it to cover the highest vpid handed out, and a bootstrap DVM takes
+each daemon's vpid from its node's pool index, which is not consecutive. A
+job caught part-way through mapping has holes for the same reason. So the
+`PMIX_PROC_INFO` array both proc-table arms allocate at that size is filled
+only at the indices that hold a proc, and the entries left over are
+zero-constructed — an empty nspace at rank 0, pid 0, state 0 — which a
+client cannot tell from a real proc. Report the count actually filled.
+
+Shrinking `dry.size` to that count is also the only thing that has to be
+watched on the way out: PMIx will not copy a zero-length array, and
+`PMIx_Data_array_destruct()` frees nothing at all when it is told the size
+is zero — so "none were filled" has to answer, and free, on its own rather
+than fall through as an empty array.
+
+### hwloc's buffers are hwloc's to free
+
+Three arms export this node's or a cached topology with
+`hwloc_topology_export_xmlbuffer()`. Where hwloc was built against libxml2
+and nolibxml export is not forced, that buffer comes from libxml2's
+allocator — which an application may replace through `xmlMemSetup()` — and
+only hwloc knows which of its two exporters produced it. Release it with
+`hwloc_free_xmlbuffer()`, never `free()`.
+
+### Two things here that look like rule violations and are not
+
+- **`qrel()` does not thread-shift**, although it is a release callback
+  handed to PMIx. PMIx invokes a `pmix_release_cbfunc_t` synchronously from
+  the completion callback it was passed alongside — `finalstep()` in
+  `src/common/pmix_query.c` — so it runs on whichever thread called
+  `cd->infocbfunc`, and both callers of `query_complete()` are already on
+  the PRRTE progress thread. Contrast `prte_pmix_server_req_release()`,
+  which *does* shift, because it touches `local_reqs`.
+- **The server-URI arm blocks in `PMIx_Get` on the progress thread**, and
+  says in a comment that it may. The reason it may is not that the key is
+  local: it is that a PMIx *server's* own get never leaves the process at
+  all (`pmix_client_get.c` answers `PMIX_ERR_NOT_FOUND` rather than going up
+  to a host or over a socket once it has missed in both hash tables). So the
+  PMIx progress thread completes it without ever needing this one, and there
+  is no cycle to deadlock on. A get that could reach a host upcall would
+  deadlock, because that upcall thread-shifts onto the base we are parked on.
 
 ---
 
