@@ -20,6 +20,18 @@ address out of *this* local interface, and does it go through a gateway
 Because its priority (50) beats `weighted` (1), netlink wins selection
 wherever it is built. It targets Linux exclusively.
 
+**It runs on the main progress thread, and it blocks there.** Every entry
+into `prte_oob_tcp_peer_try_connect()` arrives through
+`PRTE_ACTIVATE_TCP_CONN_STATE` or `PRTE_RETRY_TCP_CONN_STATE`
+([`src/rml/oob/oob_tcp_connection.h`](../../../rml/oob/oob_tcp_connection.h)),
+and both post to `prte_event_base` — not to the peer's worker base. So the
+whole N×M sweep of socket-open / query / receive / socket-close happens
+inline on the thread that runs everything else, once per peer the daemon
+dials. Nothing here may touch PRRTE globals (it does not), and nothing
+here may acquire a long wait: a component that blocked for the full
+`SO_RCVTIMEO` on every pair would stall the DVM, which is why the reply
+handling below matters more than it looks.
+
 ---
 
 ## When/why selected — the availability gate
@@ -153,6 +165,20 @@ actually decided:
 The callback returns `NL_STOP` after the first route, `NL_SKIP` to
 ignore an uninteresting/invalid message.
 
+**`NL_SKIP` on the kernel's error reply does not cost the receive
+timeout**, which is the thing to check before "optimizing" it. The
+ordinary "no route to that address" answer is an `NLMSG_ERROR` message,
+and the callback answers it `NL_SKIP` — which reads as "wait for more",
+and with a one-second `SO_RCVTIMEO` on the socket that would be a second
+of the main progress thread per unreachable pair. It is not, because
+libnl's `recvmsgs()` re-reads the socket only when it has seen
+`NLM_F_MULTI`: `NL_SKIP` advances to the next message *already in the
+buffer*, and with none left the loop ends and `nl_recvmsgs_default()`
+returns 0. Our query is a plain `NLM_F_REQUEST` (never a dump), so the
+reply is never multipart and the second read never happens. The
+`-NLE_AGAIN` arm of `NL_RECVMSGS` therefore only fires when the kernel
+says nothing at all, which is why it is allowed to be loud.
+
 ---
 
 ## Key structs
@@ -170,14 +196,24 @@ ignore an uninteresting/invalid message.
 - **The `RTA_OIF` match is the whole point.** A route existing is not
   enough — it must exit the *specific* local interface being scored, or
   the pair is not reachable via that interface. Don't relax that test.
+- **The two `pmix_pif_t` are always distinct objects.** They come off two
+  different lists — the local one is `prte_oob_base.local_ifs`, the remote
+  one is synthesized per peer in `oob_tcp_connection.c` — so "is this the
+  same address" has to compare the address bytes. The IPv4 branch does
+  (`local_ip` and `remote_ip` are `uint32_t` copies); the IPv6 branch holds
+  `struct in6_addr *` into the two objects, where `==` is a pointer test
+  that is never true.
 - **Keep IPv6 behind `#if PRTE_ENABLE_IPV6`.** `_rt_lookup6`,
   `sockaddr_in6` casts, and the `AF_INET6` branch in `get_weights` are
   all conditional; adding IPv6 code outside the guard breaks non-IPv6
   builds.
 - **Every lookup allocs and frees its own socket.** `rt_lookup` is called
   once per interface pair, so an N×M matrix opens N×M short-lived netlink
-  sockets. This is fine for the small interface counts the OOB sees, but
-  don't move socket setup into a hot loop that scales with daemon count.
+  sockets — and the matrix itself is built once per peer the daemon dials,
+  so this *already* scales with daemon count. N and M are small (the
+  interfaces on one machine), which is what keeps it affordable; the cost
+  to watch is not the socket but anything that can wait, since all of it
+  is on the main progress thread.
 - **This code is adapted from libfabric.** The BSD license block at the
   top of `reachable_netlink_utils_common.c`, `libnl_utils.h`, and
   `libnl3_utils.h` must be preserved (it is third-party-derived). Keep
