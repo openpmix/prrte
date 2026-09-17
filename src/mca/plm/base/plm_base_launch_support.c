@@ -1441,10 +1441,27 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         PMIX_INFO_FREE(iptr, ninfo);
     }
 
+    /* The room number is the address of the request that is waiting for this
+     * answer: it is recorded when the spawn is entered into the local request
+     * array, and it travels in the job's attributes to whichever daemon ends
+     * up reporting on the job.  A job carrying none is therefore a job no
+     * request is waiting on - a spawn refused before it was ever entered,
+     * whose requestor was answered directly by the server upcall that refused
+     * it, and which is only in the state machine at all so the one-shot DVM
+     * tears itself down.
+     *
+     * That is the same "nobody is waiting" case as the two tests at the top
+     * of this function, and it gets the same answer.  Reported as an error it
+     * put two spurious "Not found" logs in front of the real message on every
+     * mistyped launch directive: one from here, and one from the errmgr
+     * logging what this returned. */
     rmptr = &room;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                             "%s spawn response: job %s has no waiting request",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_JOBID_PRINT(jdata->nspace)));
+        return PRTE_SUCCESS;
     }
 
     /* if the originator is me, then just do the notification */
