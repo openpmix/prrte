@@ -148,7 +148,20 @@ static int prte_rmaps_base_close(void)
      * not leak what it left */
     PMIX_LIST_DESTRUCT(&prte_rmaps_base.resized_nodes);
     hwloc_bitmap_free(prte_rmaps_base.available);
+    prte_rmaps_base.available = NULL;
     hwloc_bitmap_free(prte_rmaps_base.baseset);
+    prte_rmaps_base.baseset = NULL;
+    /* the MCA variable system owns default_mapping_policy and
+     * default_ranking_policy; these two the framework allocated itself as it
+     * parsed them, so they are ours to release */
+    if (NULL != prte_rmaps_base.ppr) {
+        free(prte_rmaps_base.ppr);
+        prte_rmaps_base.ppr = NULL;
+    }
+    if (NULL != prte_rmaps_base.file) {
+        free(prte_rmaps_base.file);
+        prte_rmaps_base.file = NULL;
+    }
 
     return pmix_mca_base_framework_components_close(&prte_rmaps_base_framework, NULL);
 }
@@ -287,8 +300,12 @@ static int check_pe_list(const char *spec)
     }
     for (i = 0; NULL != entries[i] && PRTE_SUCCESS == rc; i++) {
         range = PMIx_Argv_split(entries[i], '-');
-        if (2 < PMIx_Argv_count(range)) {
-            /* can only have one '-' delimiter */
+        if (NULL == range || 2 < PMIx_Argv_count(range)) {
+            /* can only have one '-' delimiter - and an entry that is nothing
+             * but delimiters comes back NULL rather than empty, because
+             * PMIx_Argv_split() does not keep empty tokens. Walking it as an
+             * array is a NULL dereference: "--map-by pe-list=-" segfaulted
+             * before the job was ever described. */
             rc = PRTE_ERR_SILENT;
         } else {
             for (n = 0; NULL != range[n]; n++) {
@@ -324,7 +341,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
     bool shared = false;
-    long ndev;
+    long ndev, lval;
     char *eptr;
     uint16_t ndev16;
 
@@ -395,14 +412,23 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            u16 = strtol(val, &ptr, 10);
-            if ('\0' != *ptr) {
+            /* Must agree with LIMIT and NDEV: the attribute behind this is a
+             * uint16, so casting strtol()'s result into one turned "PE=70000"
+             * into 4464 and "PE=-1" into 65535. Zero is worse than wrong - it
+             * reaches prte_rmaps_base_check_avail() as the DIVISOR in
+             * "ncpus / cpus_per_rank", which is an integer division by zero:
+             * silently zero on aarch64, SIGFPE in the HNP on x86-64. */
+            errno = 0;
+            lval = strtol(val, &ptr, 10);
+            if (ptr == val || '\0' != *ptr || 0 != errno ||
+                0 >= lval || UINT16_MAX < lval) {
                 /* value is invalid */
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                "PE", ck2[i]);
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
+            u16 = (uint16_t) lval;
             if (NULL == attrs) {
                 prte_rmaps_base.default_pes = u16;
             } else {
@@ -637,16 +663,18 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
  * nothing overwrites, so it is applied here.
  */
 int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
-                                         prte_mapping_policy_t *oversubscribe)
+                                         prte_mapping_policy_t *oversubscribe,
+                                         bool *nolocal)
 {
     prte_app_context_t *app;
     prte_mapping_policy_t apppol, agreed = 0;
     uint16_t u16;
     uint16_t *u16ptr = &u16;
-    bool given = false, over = false, appover;
+    bool given = false, over = false, appover, changed;
     int i;
 
     *oversubscribe = 0;
+    *nolocal = false;
 
     /* a job-level mapping directive, if one was given, is the first answer -
      * read it now, before the mapping policy is resolved against a default */
@@ -669,6 +697,7 @@ int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
         /***   OVERSUBSCRIBE / NOOVERSUBSCRIBE   ***/
         if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, (void **) &u16ptr, PMIX_UINT16)) {
             apppol = u16;
+            changed = false;
             if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(apppol)) {
                 appover = !(PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(apppol));
                 if (given && over != appover) {
@@ -686,7 +715,31 @@ int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
                 /* the app no longer carries it */
                 PRTE_UNSET_MAPPING_DIRECTIVE(apppol, PRTE_MAPPING_SUBSCRIBE_GIVEN);
                 PRTE_UNSET_MAPPING_DIRECTIVE(apppol, PRTE_MAPPING_NO_OVERSUBSCRIBE);
-                if (0 == apppol) {
+                changed = true;
+            }
+
+            /***   NOLOCAL   ***/
+            /* "do not use the local node" is the job's answer too, and for a
+             * blunter reason than the qualifiers above: the directive reaches
+             * the mappers only through jdata->map->mapping - get_target_nodes()
+             * is handed the JOB's policy word whichever app it is placing - so
+             * a nolocal written on an app segment was read by nothing at all
+             * and the app ran on the head node anyway. */
+            if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(apppol)) {
+                *nolocal = true;
+                PRTE_UNSET_MAPPING_DIRECTIVE(apppol, PRTE_MAPPING_NO_USE_LOCAL);
+                changed = true;
+            }
+
+            if (changed) {
+                /* What is left may be nothing but the GIVEN marker: an app
+                 * whose spec held only job-wide qualifiers named no mapping
+                 * policy of its own, and leaving the attribute behind drags
+                 * the whole job onto the per-app dispatch path to be placed
+                 * by a policy of zero. Anything the app really did ask for -
+                 * a policy, SPAN, ORDERED - keeps it. */
+                if (0 == PRTE_GET_MAPPING_POLICY(apppol) &&
+                    0 == (PRTE_GET_MAPPING_DIRECTIVE(apppol) & ~PRTE_MAPPING_GIVEN)) {
                     prte_remove_attribute(&app->attributes, PRTE_APP_MAPBY);
                 } else {
                     prte_set_attribute(&app->attributes, PRTE_APP_MAPBY, PRTE_ATTR_GLOBAL,
