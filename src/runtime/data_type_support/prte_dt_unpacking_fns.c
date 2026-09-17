@@ -294,7 +294,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
                     prte_job_pack_mode_t *mode)
 {
     int rc;
-    int32_t k, n, count, bookmark;
+    int32_t k, n, count, bookmark, mapflag;
     prte_job_t *jptr;
     prte_app_idx_t j;
     prte_attribute_t *kv;
@@ -373,6 +373,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
             PMIX_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->data, &n, PMIX_VALUE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -453,7 +454,6 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
     if (0 < jptr->num_apps) {
         prte_app_context_t *app;
         for (j = 0; j < jptr->num_apps; j++) {
-            n = 1;
             rc = prte_app_unpack(bkt, &app);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
@@ -525,15 +525,14 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
      * nothing to pack. Instead, we packed a flag to indicate whether or not
      * the map is included */
     n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &j, &n, PMIX_INT32);
+    rc = PMIx_Data_unpack(NULL, bkt, &mapflag, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(jptr);
         return prte_pmix_convert_status(rc);
     }
-    if (0 < j) {
+    if (0 < mapflag) {
         /* unpack the map */
-        n = 1;
         rc = prte_map_unpack(bkt, &(jptr->map));
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
@@ -628,7 +627,7 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 
     /* unpack the state */
     n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &node->state, &n, PMIX_UINT8);
+    rc = PMIx_Data_unpack(NULL, bkt, &node->state, &n, PMIX_INT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(node);
@@ -658,6 +657,7 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
             PMIX_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->data, &n, PMIX_VALUE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -777,7 +777,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
 
     /* get the app index number */
     n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &app->idx, &n, PMIX_INT32);
+    rc = PMIx_Data_unpack(NULL, bkt, &app->idx, &n, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(app);
@@ -852,6 +852,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
     }
 
     /* unpack the cwd */
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &app->cwd, &n, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -861,7 +862,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
 
     /* get the flags */
     n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &app->flags, &n, PMIX_INT8);
+    rc = PMIx_Data_unpack(NULL, bkt, &app->flags, &n, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(app);
@@ -869,6 +870,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
     }
 
     /* unpack the attributes */
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -890,6 +892,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PMIX_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->data, &n, PMIX_VALUE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -947,8 +950,7 @@ int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **mp)
 
     /* unpack the number of nodes involved in the job */
     n = 1;
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &map->num_nodes, &n, PMIX_UINT32);
+    rc = PMIx_Data_unpack(NULL, bkt, &map->num_nodes, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(map);
