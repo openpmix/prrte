@@ -16,9 +16,8 @@
 #include "src/include/constants.h"
 #include "src/include/types.h"
 
-#ifdef HAVE_MATH_H
-#    include <math.h>
-#endif
+#include <stdlib.h> /* abs() */
+#include <string.h> /* memcmp() */
 
 #ifndef MIN
 #    define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -149,9 +148,17 @@ static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
 
         /* If the ips are identical, assume reachable through loopback. This
            is done artificially due to historical reasons. With this, we can
-           maintain similar behavior to previous implementations. */
-        if (local_ip == remote_ip) {
-            conn_type = "IPv4 SAME NETWORK";
+           maintain similar behavior to previous implementations.
+
+           Compare the addresses, not the pointers holding them: these point
+           into two different pmix_pif_t objects on two different lists, so
+           "local_ip == remote_ip" is never true and this short circuit never
+           fired.  What happened instead is that the pair went to the kernel,
+           which answers a route to one of our own addresses out of `lo` -- a
+           different interface index than the one being scored -- so the pair
+           came back NO CONNECTION where the IPv4 branch says SAME NETWORK. */
+        if (0 == memcmp(local_ip, remote_ip, sizeof(*local_ip))) {
+            conn_type = "IPv6 SAME NETWORK";
             weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                       CQ_SAME_NETWORK);
             goto out;
