@@ -282,7 +282,8 @@ PRTE could not read the hostfile to its end:
 The read stopped after line %d. Nothing in the file was used, because a
 hostfile that was only partly read would name only some of the nodes it
 lists. Check that the file is still readable - on a network file system,
-that the server is reachable - and try again.
+that the server is reachable - and that it is plain text: a file saved in
+an encoding such as UTF-16 is not, and stops the read in the same way.
 #
 [port]
 
