@@ -515,6 +515,48 @@ int test_policy_parse(void)
     CHECK("mapby pe-list with no value: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
+    /* an entry that is nothing but delimiters: PMIx_Argv_split() keeps no
+     * empty tokens, so it splits to NULL rather than to an empty array, and
+     * walking it as an array segfaulted before the job was ever described */
+    {
+        const char *pebad[] = {"pe-list=-", "pe-list=,-,", "pe-list=0,-", NULL};
+        int b;
+        for (b = 0; NULL != pebad[b]; b++) {
+            app = PMIX_NEW(prte_app_context_t);
+            rc = prte_rmaps_base_set_app_mapping_policy(app, (char *) pebad[b]);
+            if (PRTE_SUCCESS == rc) {
+                fprintf(stderr, "FAIL [pe-list empty entry]: %s was accepted\n", pebad[b]);
+                failures++;
+            }
+            PMIX_RELEASE(app);
+        }
+    }
+
+    /* PE is a uint16 attribute AND the divisor in "ncpus / cpus_per_rank",
+     * so a value that does not fit has to be refused rather than cast, and
+     * zero is an integer division by zero in the HNP - silent on aarch64,
+     * SIGFPE on x86-64 */
+    {
+        const char *pes[] = {"slot:PE=0", "slot:PE=-1", "slot:PE=70000",
+                             "slot:PE=x", "slot:PE=2x", NULL};
+        int b;
+        for (b = 0; NULL != pes[b]; b++) {
+            app = PMIX_NEW(prte_app_context_t);
+            rc = prte_rmaps_base_set_app_mapping_policy(app, (char *) pes[b]);
+            if (PRTE_SUCCESS == rc) {
+                fprintf(stderr, "FAIL [PE value]: %s was accepted (pes %u)\n",
+                        pes[b], get_u16(&app->attributes, PRTE_APP_PES_PER_PROC));
+                failures++;
+            }
+            PMIX_RELEASE(app);
+        }
+    }
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "slot:PE=65535");
+    CHECK("mapby PE=65535: accepted", PRTE_SUCCESS == rc);
+    CHECK("mapby PE=65535: value", 65535 == get_u16(&app->attributes, PRTE_APP_PES_PER_PROC));
+    PMIX_RELEASE(app);
+
     /* --- and it survives resolution into the per-app options struct, which
      * is what actually reaches the mapper --- */
     {

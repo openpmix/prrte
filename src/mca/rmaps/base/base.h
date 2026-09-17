@@ -165,10 +165,13 @@ PRTE_EXPORT int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app,
 
 /* move the qualifiers that describe the whole job off the apps that carried
  * them, holding the apps to agreeing about them. The agreed oversubscription
- * directive is returned for the caller to apply once the job's mapping policy
- * has been resolved */
+ * directive and the nolocal answer are returned rather than written to the
+ * job, for the caller to apply once the job's mapping policy has been
+ * resolved - resolving it assigns the whole policy word and would otherwise
+ * overwrite them */
 PRTE_EXPORT int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
-                                                     prte_mapping_policy_t *oversubscribe);
+                                                     prte_mapping_policy_t *oversubscribe,
+                                                     bool *nolocal);
 
 PRTE_EXPORT int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
                                                     prte_rmaps_options_t *options);
