@@ -119,10 +119,10 @@ static bool read_raw_line(prte_textfile_t *tf)
  * open block comment across the line break.
  *
  * A block comment is replaced by a space, not by nothing, because it
- * separates fields: the lexer this replaces ended a token at one, so a
- * name with a block comment written into the middle of it has always been
- * two names rather than one, and deleting the comment outright would
- * silently join them.
+ * separates fields: the lexer this replaces emitted a newline token at
+ * each marker, so a name with a block comment written into the middle of
+ * it has always been two names rather than one, and deleting the comment
+ * outright would silently join them.
  */
 static void strip_comments(prte_textfile_t *tf)
 {
@@ -281,6 +281,9 @@ void prte_textfile_close(prte_textfile_t *tf)
     tf->rawsize = 0;
     tf->nfields = 0;
     tf->in_comment = false;
-    /* "failed" is left as it is: it is the answer to a question a caller
-     * may still be asking after closing the file */
+    /* "failed" and "lineno" are left as they are: together they are the
+     * answer to a question a caller may still be asking after closing the
+     * file - whether the read reached the end, and where it stopped if not.
+     * prte_textfile_open() zeroes the whole struct, so reusing one for a
+     * second file does not inherit them. */
 }
