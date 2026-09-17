@@ -32,7 +32,7 @@ cached for the life of the process.
 
 ```c
 const prte_common_slurm_version_t *prte_common_slurm_version(void);
-const char                        *prte_common_slurm_jobid(void);
+char                              *prte_common_slurm_jobid(void);
 ```
 
 `prte_common_slurm_jobid()` returns the allocation's job id, reading
