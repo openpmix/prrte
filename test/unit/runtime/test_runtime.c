@@ -1108,6 +1108,30 @@ static int test_pack_roundtrip(void)
     PMIX_DATA_BUFFER_DESTRUCT(&buf);
     PMIX_RELEASE(saved_map);
 
+    /* A proc the mapper left unranked sits on the node but not in the job's
+     * rank-indexed procs array, so it has no proc record - yet the proc map
+     * is built by walking the NODE.  Rendering its rank with a display
+     * helper made it the word "INVALID", which the decoder's strtoul reads
+     * as zero: rank 0 silently inherited its node, app and local rank.  The
+     * rank travels numerically now, so the sentinel arrives above num_procs
+     * and the decode refuses it. */
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, "wire.job", PMIX_RANK_INVALID);
+    proc->app_idx = 0;
+    proc->state = PRTE_PROC_STATE_RUNNING;
+    pmix_pointer_array_add(wnode->procs, proc); // deliberately NOT in src->procs
+    dst = NULL;
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    if (PRTE_SUCCESS == prte_job_pack(&buf, src, PRTE_JOB_PACK_ALL)) {
+        rc = prte_job_unpack(&buf, &dst, NULL);
+        CHECK("wire: an unranked proc in the map is refused, not read as rank 0",
+              PRTE_SUCCESS != rc && NULL == dst);
+        if (NULL != dst) {
+            PMIX_RELEASE(dst);
+        }
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+
     PMIX_RELEASE(src);
     reset_globals();
     return failures;

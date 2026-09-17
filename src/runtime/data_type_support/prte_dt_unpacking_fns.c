@@ -190,8 +190,14 @@ static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
             }
             ranks = PMIx_Argv_split(fields[n], ',');
             for (i = 0; NULL != ranks && NULL != ranks[i]; i++) {
-                pmix_rank_t rank = (pmix_rank_t) strtoul(ranks[i], NULL, 10);
-                if (jptr->num_procs <= rank) {
+                char *end = NULL;
+                pmix_rank_t rank = (pmix_rank_t) strtoul(ranks[i], &end, 10);
+                /* strtoul reports "I parsed nothing" by leaving end at the
+                 * start of the string, and gives 0 for it - so a field that
+                 * is not a number has to be caught here or it lands on rank
+                 * 0.  end is never NULL; it is *end that says where it
+                 * stopped. */
+                if (end == ranks[i] || '\0' != *end || jptr->num_procs <= rank) {
                     PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                     rc = PRTE_ERR_BAD_PARAM;
                     goto cleanup;
