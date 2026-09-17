@@ -81,6 +81,52 @@ static char *read_all(const char *body, size_t bodylen)
     return out;
 }
 
+/* As read_all(), but also reports whether the reader stopped short.  A
+ * short read is not visible in the fields -- that is the whole point of the
+ * "failed" flag -- so it needs its own way in. */
+static char *read_all_status(const char *body, size_t bodylen, bool *failed)
+{
+    prte_textfile_t tf;
+    char path[256];
+    char *out = NULL, *tmp;
+    char **f;
+    FILE *fp;
+    int i;
+
+    *failed = false;
+    snprintf(path, sizeof(path), "prte_tf_%lu_%p.txt", (unsigned long) getpid(), (void *) body);
+    fp = fopen(path, "w");
+    if (NULL == fp) {
+        return NULL;
+    }
+    fwrite(body, 1, bodylen, fp);
+    fclose(fp);
+
+    if (PRTE_SUCCESS != prte_textfile_open(&tf, path)) {
+        unlink(path);
+        return strdup("<open failed>");
+    }
+
+    out = strdup("");
+    while (NULL != (f = prte_textfile_next(&tf))) {
+        pmix_asprintf(&tmp, "%s%d:", out, tf.lineno);
+        free(out);
+        out = tmp;
+        for (i = 0; NULL != f[i]; i++) {
+            pmix_asprintf(&tmp, "%s%s%s", out, (0 == i) ? "" : "|", f[i]);
+            free(out);
+            out = tmp;
+        }
+        pmix_asprintf(&tmp, "%s;", out);
+        free(out);
+        out = tmp;
+    }
+    *failed = tf.failed;
+    prte_textfile_close(&tf);
+    unlink(path);
+    return out;
+}
+
 static int expect(const char *label, const char *body, const char *want, int *failures)
 {
     char *got = read_all(body, strlen(body));
@@ -168,6 +214,45 @@ int test_textfile(void)
     }
     free(big);
     free(want);
+
+    /* --- a byte a text file cannot mean -----------------------------
+     * fgets() reports a line as a C string, so it cannot tell a NUL in the
+     * file from the end of the line: read that way, everything after the
+     * NUL is dropped and the following line is read onto the end of what
+     * came before it.  A hostfile saved as UTF-16 is exactly that file --
+     * a NUL after every ASCII character -- and it would have produced a
+     * node list assembled out of fragments and called it a success. */
+    {
+        static const char nul_mid[] = "hostA\nhost\0B\nhostC\n";
+        static const char utf16[] = "h\0o\0s\0t\0A\0\n\0";
+        bool failed = false;
+
+        got = read_all_status(nul_mid, sizeof(nul_mid) - 1, &failed);
+        CHECK("a NUL byte stops the read", NULL != got && 0 == strcmp(got, "1:hostA;"));
+        CHECK("a NUL byte is reported as a short read", failed);
+        if (NULL != got) {
+            free(got);
+        }
+
+        got = read_all_status(utf16, sizeof(utf16) - 1, &failed);
+        CHECK("a UTF-16 file yields no nodes", NULL != got && 0 == strcmp(got, ""));
+        CHECK("a UTF-16 file is reported as a short read", failed);
+        if (NULL != got) {
+            free(got);
+        }
+    }
+
+    /* and an ordinary file is not reported as a short read */
+    {
+        bool failed = true;
+
+        got = read_all_status("hostA\nhostB\n", 12, &failed);
+        CHECK("a clean file reads clean", NULL != got && 0 == strcmp(got, "1:hostA;2:hostB;"));
+        CHECK("a clean file is not a short read", !failed);
+        if (NULL != got) {
+            free(got);
+        }
+    }
 
     /* --- what open() refuses ---------------------------------------- */
     CHECK("a missing file is not found",
