@@ -973,7 +973,6 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         goto setpolicy;
     }
 
-    cptr = ck[0];
     // check for an '=' and split out the value from the option
     if (NULL != (ptr = strchr(ck[0], '='))) {
         *ptr = '\0';
@@ -1371,7 +1370,6 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         goto setpolicy;
     }
 
-    cptr = ck[0];
     if (NULL != (ptr = strchr(ck[0], '='))) {
         *ptr = '\0';
         cptr = strdup(ck[0]);
