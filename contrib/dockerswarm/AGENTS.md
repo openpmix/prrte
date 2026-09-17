@@ -88,9 +88,20 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
   (`vpath-macos`, on the host) coexist from the same pristine sources.
 - **Never stale, no commit.** Change a file, rerun `build.sh`, and the swarm
   runs your change (the build is incremental).
-- **Both code bases (optional).** Set `PMIX_SRC=/path/to/openpmix` and `build.sh`
-  builds PMIx from source too; otherwise PMIx is the copy baked into the image
-  (Linux) or an installed PMIx (macOS).
+- **Both code bases, always.** PRRTE uses PMIx *internals*, so the pair is one
+  code base in two repositories and testing one against a frozen copy of the
+  other tests neither properly. Every Linux run therefore builds PMIx from
+  source: from `PMIX_SRC=/path/to/openpmix` when you set it, otherwise from a
+  checkout `build.sh` maintains inside the volume and fetches forward each
+  run. `PMIX_SRC=baked` opts out to the image's copy, for working offline or
+  against a pinned PMIx, and says loudly that PMIx is not being tested. Every
+  path prints the PMIx commit it compiled. (macOS: `PMIX_SRC`, else
+  `PMIX_HOME`, else autodetect.)
+
+  This is not a preference. The suite once reported four failures in
+  `groupinv` and `fencer` that were PMIx bugs openpmix had fixed three days
+  earlier — the harness was simply running a PMIx older than the fixes, and
+  nothing in the output said so.
 
 ### When a distclean is actually needed
 
@@ -781,6 +792,27 @@ docker inspect prte-node1 --format '{{.Image}}'
 docker images --no-trunc --format '{{.ID}}' prte-swarm:latest
 ```
 
+### The baked PMIx is a fallback, and the managed checkout is why
+
+`build.sh` keeps its own openpmix checkout at `/opt/prte/pmix-src` in the
+shared volume, cloned from `PMIX_REPO` at `PMIX_REF` (default: openpmix
+master) and `git fetch`ed forward on every run. It lives in the volume rather
+than being bind-mounted because it has to be *writable*: `autogen.pl` runs in
+the container, against the autotools the container has. A tree autogen'd on a
+macOS host with automake 1.18 and then compiled against the container's 1.16
+walks straight into maintainer-mode regeneration and dies with
+`aclocal-1.18: command not found`.
+
+A fetch that fails (no network) is a warning, not an error — the checkout it
+already has still gets built, and the run says so. Having no checkout *and*
+no network is an error, because the alternative is silently testing the baked
+copy, which is the failure this whole arrangement exists to prevent.
+
+Switching between sources changes the PMIx build directory's source tree, so
+`.configure-args` records which tree configured it and the build dir is
+started clean when that changes. Objects compiled against `/pmix-src` cannot
+be relinked for `/opt/prte/pmix-src`; reconfiguring alone is not enough.
+
 ### Rebuilding the image really does need `--no-cache`
 
 `./build.sh image` alone is often not enough. The Dockerfile builds the
@@ -1161,10 +1193,12 @@ docker ps -q | xargs -I{} docker inspect --format \
 |----------|----|
 | pick up a PRRTE source edit | `./build.sh` (incremental into the volume) |
 | pick up an openpmix edit | `PMIX_SRC=/path/to/openpmix ./build.sh` |
+| test against current upstream PMIx | `./build.sh` — the default fetches the managed checkout forward and rebuilds it; no `PMIX_SRC` needed |
+| pin PMIx, or build with no network | `PMIX_SRC=baked ./build.sh` (the image's copy — PMIx is then not under test), or `PMIX_REF=v6.0 ./build.sh` |
 | run the suite against components built as DSOs | `PRTE_SWARM_MCA_DSO=1 ./build.sh` then the ordinary `./run-tests.sh linux` — see §6, "Components as DSOs" |
 | force a clean PRRTE rebuild | `docker volume rm prte-build && ./build.sh` |
 | pick up an **added or deleted `Makefile.am`** | `docker volume rm prte-build && ./build.sh` — not an ordinary `./build.sh`. The volume's build dir carries the previous `configure` run's dependency list, so a `Makefile.am` that no longer exists (or a new one) sends maintainer mode looking for `automake` *inside the container*, which does not have it: the build dies with `automake-1.18: command not found` and `Error 127` out of `/prrte-src/src/Makefile.in`. The host regenerating `Makefile.in` does not help — it is the build dir's own Makefile that is stale |
-| rebuild the base image (new baked PMIx) | `docker build --no-cache --build-arg PMIX_REF=master -t prte-swarm:latest .` — `./build.sh image` reuses docker's cached `git clone`; then wipe the volume's VPATH dirs and recreate the containers (see "The containers persist too") |
+| rebuild the base image | `docker build --no-cache --build-arg PMIX_REF=master -t prte-swarm:latest .` — `./build.sh image` reuses docker's cached `git clone`; then wipe the volume's VPATH dirs and recreate the containers (see "The containers persist too"). Rarely needed now that PMIx is built from source every run: this moves the *fallback* copy and the toolchain, not the PMIx under test |
 | tear down the swarm | `docker compose down` (the `prte-build` volume persists) |
 | run a second, independent swarm | `export PRTE_SWARM=alt` and repeat the quick start — see §4. Every command in this table then names that swarm's volume (`alt-build`) and containers (`alt-node*`), and **a `docker compose down` without the variable takes down the *default* swarm** |
 
