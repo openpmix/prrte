@@ -39,12 +39,23 @@
  * output and wrong for a daemon's own diagnostic, which is not application
  * output and has nowhere else to go when no tool is subscribed. Both callers
  * below reached a point where they had concluded the message was theirs to
- * show; without this it was simply dropped. */
+ * show; without this it was simply dropped.
+ *
+ * But it can only be dropped once there is a PMIx to drop it. That routing
+ * is PMIx's, and until PMIx has been initialized in this process
+ * pmix_show_help_norender() has nowhere to route to and writes the message
+ * to stderr itself - so writing it here as well says everything twice.
+ *
+ * That window is not an obscure one: prte parses and validates its entire
+ * command line before prte_init(), and prte_persistent is already true by
+ * then (prte.c turns it off again only once it discovers an app was given).
+ * So EVERY command-line diagnostic prte and prterun produce was emitted in
+ * exactly this window, and every one of them was printed twice. */
 static void deliver_locally(const char *nspace, const char *filename,
                             const char *topic, const char *output,
                             bool emit_directly)
 {
-    if (emit_directly) {
+    if (emit_directly && 0 != PMIx_Initialized()) {
         fprintf(stderr, "%s", output);
         fflush(stderr);
     }
