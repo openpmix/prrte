@@ -5048,10 +5048,88 @@ test_grpcomm() {
 
     test_grpcomm_invite
     test_grpcomm_ft
+    test_grpcomm_reuse
     test_fence_straggler
     test_fence_early_arrival
     test_low_radix_release
     test_low_radix_release_fault
+}
+
+test_grpcomm_reuse() {
+    local out n first
+
+    banner "grpcomm: a second construct over a reused group ID completes"
+    # A group ID belongs to the application and is legal to reuse once the
+    # operation that used it is over -- MPI_Comm_create_from_group's
+    # stringtag becomes one verbatim, so this is reachable from the top.
+    #
+    # completed_group_ops used to be a boolean "already released" memo,
+    # dropped again by group() on the grounds that a local client starting an
+    # operation proves the previous one of that name is finished.  group()
+    # runs only where a local client starts one, and a group rollup also
+    # passes through daemons that host no member of the group.  On one of
+    # those the entry was never dropped, so grp_recv discarded every
+    # contribution to the SECOND operation of that name and it hung.  It is
+    # now a count of releases per (groupID, op), and the round rides the wire
+    # in the signature.
+    #
+    # Running the job entirely OFF node1 is the whole point of the case.
+    # node1 is the HNP: it relays for a job it hosts no part of, which makes
+    # it exactly the daemon whose memo the old code could never drop.  A run
+    # that puts a rank on node1 passes with the bug present and asserts
+    # nothing, so the placement is checked before the reuse is -- see the
+    # "single-host test wearing a hat" note on the first grpcomm case.
+    cleanup_swarm
+    if ! RUN "test -x $GC"; then
+        skp "groupcon client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:1,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the group reuse test"
+        cleanup_swarm
+        return
+    fi
+
+    first=$(PRUN "--host node2:2,node3:2,node4:2 -n 6 --map-by node $GC reusedgrp" 2>&1)
+    n=$(echo "$first" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 6 ] \
+        && ok "the first construct over \"reusedgrp\" completed on all 6 ranks" \
+        || bad "$n of 6 ranks completed the first construct: $(echo "$first" | tr '\n' ' ' | tail -c 300)"
+
+    # If any rank landed on the HNP then group() ran there, the old memo was
+    # dropped, and the reuse below would pass with the bug present.
+    if echo "$first" | awk '$1=="GRP" && $3=="HOST" {print $4}' | sort -u | grep -qx 'node1'; then
+        bad "a rank landed on the HNP -- this case cannot show the bug"
+    else
+        ok "...with the HNP relaying for a job it hosts no part of"
+    fi
+
+    # THE CASE.  Same group ID, same DVM, same HNP with the same stale memo.
+    out=$(PRUN "--host node2:2,node3:2,node4:2 -n 6 --map-by node $GC reusedgrp" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 6 ] \
+        && ok "...and so did a SECOND construct over the same group ID" \
+        || bad "$n of 6 ranks completed the reused group ID -- a relaying daemon dropped their contributions: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # ...and it must keep working, not merely survive one extra round.
+    out=$(PRUN "--host node2:2,node3:2,node4:2 -n 6 --map-by node $GC reusedgrp" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 6 ] \
+        && ok "...and a third, so the count advances rather than just tolerating one reuse" \
+        || bad "$n of 6 ranks completed the third construct over the same group ID"
+
+    # Deliberately not phrased as "the DVM lost a daemon": with the bug
+    # present the collective is still hung when we get here, so what this
+    # reports is that the DVM could not run a follow-on job -- which is true
+    # whether the daemons died or are merely wedged.
+    out=$(PRUN "--host node1:1,node2:1,node3:1 -n 3 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c '^node')
+    [ "$n" = 3 ] \
+        && ok "...and the DVM still runs a follow-on job afterwards" \
+        || bad "the DVM could not run a follow-on job after the reuse ($n of 3)"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
 }
 
 test_fence_early_arrival() {
