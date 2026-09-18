@@ -1486,7 +1486,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                         PMIx_Error_string(lock.status));
         }
         rc = lock.status;
-        PRTE_UPDATE_EXIT_STATUS(rc);
+        /* PMIx_Spawn has just told this tool that its job never launched,
+         * and that is the tool's exit status. Force it: on a launch that
+         * failed on every node the DVM state machine has nothing left to
+         * account for and can record the job's per-proc reason first, which
+         * would otherwise stand instead - the same failure exiting 183
+         * rather than 75 depending on which got there first. See
+         * PRTE_FORCE_EXIT_STATUS. */
+        PRTE_FORCE_EXIT_STATUS(rc);
         goto DONE;
     }
     PMIX_LOAD_NSPACE(spawnednspace, lock.msg);
