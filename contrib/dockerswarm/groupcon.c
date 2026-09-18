@@ -20,10 +20,9 @@
  *
  *       --ft         ask for PMIX_GROUP_FT_COLLECTIVE, so the construct
  *                    completes on the survivors if a member is lost
- *       --order      supply PMIX_GROUP_FINAL_MEMBERSHIP_ORDER, listing the
- *                    ranks in reverse, so the group comes back in an order
- *                    the DVM had to impose rather than the one it would
- *                    have sorted into by itself
+ *       --reverse    pass the procs array itself with the ranks in
+ *                    reverse, and no order directive: the membership must
+ *                    come back in the order the participants gave it
  *       --fence      run a PMIx_Fence over the whole job instead of a
  *                    group construct.  Here --delay applies to the LAST
  *                    rank only, so everyone else blocks inside the fence
@@ -43,6 +42,8 @@
  *   GRP <rank> MEMBER-FAILED <nspace>:<rank>
  *   GRP <rank> CID-OK <n>            (read back n peers' local cids)
  *   GRP <rank> CID-FAIL <peer> <status>
+ *   GRP <rank> GRANK0 <jobrank> MATCH|MISMATCH   (group rank 0, resolved through
+ *                                    the group name, vs the membership's first)
  *   GRP <rank> DESTRUCT <status>
  *   GRP <rank> DONE <rc>
  *
@@ -153,7 +154,7 @@ int main(int argc, char **argv)
     bool idassigned = false;
     bool ft = false;
     bool dofence = false;
-    bool doorder = false;
+    bool doreverse = false;
 #ifdef PMIX_GROUP_MEMBER_FAILED
     pmix_status_t evcode = PMIX_GROUP_MEMBER_FAILED;
 #endif
@@ -164,8 +165,8 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (0 == strcmp(argv[i], "--ft")) {
             ft = true;
-        } else if (0 == strcmp(argv[i], "--order")) {
-            doorder = true;
+        } else if (0 == strcmp(argv[i], "--reverse")) {
+            doreverse = true;
         } else if (0 == strcmp(argv[i], "--fence")) {
             dofence = true;
         } else if (0 == strcmp(argv[i], "--delay") && (i + 1) < argc) {
@@ -180,7 +181,7 @@ int main(int argc, char **argv)
     }
     if (NULL == grpid) {
         fprintf(stderr,
-                "usage: %s [--ft] [--fence] [--order] [--delay <s>] <groupID> [seconds]\n",
+                "usage: %s [--ft] [--fence] [--reverse] [--delay <s>] <groupID> [seconds]\n",
                 argv[0]);
         return 2;
     }
@@ -237,7 +238,7 @@ int main(int argc, char **argv)
 
     PMIX_PROC_CREATE(procs, nprocs);
     for (n = 0; n < nprocs; n++) {
-        PMIX_PROC_LOAD(&procs[n], myproc.nspace, n);
+        PMIX_PROC_LOAD(&procs[n], myproc.nspace, doreverse ? nprocs - 1 - n : n);
     }
 
     /* --fence: exercise the allgather rather than the group collective. The
@@ -310,30 +311,6 @@ int main(int argc, char **argv)
     PMIx_Info_list_release(list);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
-    /* Ask for a specific final membership order - the ranks in reverse.
-     *
-     * This is the one directive that hands the DVM an array of procs to keep
-     * for the length of the operation, and the array belongs to the PMIx
-     * server that delivers it: the DVM must copy it, not point at it, or it
-     * frees what PMIx frees again.  Reversing is what makes the result
-     * checkable: the DVM sorts the membership itself when no order is given,
-     * so a directive that was quietly dropped looks exactly like the default.
-     */
-    if (doorder) {
-        PMIX_DATA_ARRAY_CONSTRUCT(&darray, nprocs, PMIX_PROC);
-        for (n = 0; n < nprocs; n++) {
-            PMIX_PROC_LOAD(&((pmix_proc_t *) darray.array)[n], myproc.nspace,
-                           nprocs - 1 - n);
-        }
-        rc = PMIx_Info_list_add(grpinfo, PMIX_GROUP_FINAL_MEMBERSHIP_ORDER,
-                                &darray, PMIX_DATA_ARRAY);
-        PMIX_DATA_ARRAY_DESTRUCT(&darray);
-        if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "ERROR list_add order: %s\n", PMIx_Error_string(rc));
-            goto done;
-        }
-    }
-
     rc = PMIx_Info_list_convert(grpinfo, &darray);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "ERROR list_convert grpinfo: %s\n", PMIx_Error_string(rc));
@@ -381,9 +358,9 @@ int main(int argc, char **argv)
     printf("GRP %u CONSTRUCT %s CID %lu ASSIGNED %s\n", myproc.rank,
            PMIx_Error_string(PMIX_SUCCESS), (unsigned long) cid, idassigned ? "T" : "F");
     fflush(stdout);
-    if (doorder && 0 < nmembers) {
+    if (doreverse && 0 < nmembers) {
         /* report the membership in the order we were handed it, so the
-         * caller can see whether the order it asked for was applied */
+         * caller can see whether the order the participants passed was kept */
         printf("GRP %u ORDER", myproc.rank);
         for (m = 0; m < nmembers; m++) {
             printf("%s%u", (0 == m) ? " " : ",", (unsigned) members[m].rank);
@@ -430,6 +407,30 @@ int main(int argc, char **argv)
         }
         ok++;
         PMIX_VALUE_RELEASE(val);
+    }
+    /* A group rank counts across the membership, so group rank 0 must be
+     * whichever proc the membership lists first - rank 7 of the job when
+     * the participants passed the ranks in reverse, not rank 0 as a
+     * membership re-sorted by the client library would have it. Reached
+     * through the group's own name as the nspace. */
+    if (0 < nmembers && PMIX_RANK_WILDCARD != members[0].rank) {
+        pmix_proc_t gproc;
+        PMIX_LOAD_PROCID(&gproc, grpid, 0);
+        val = NULL;  /* the loop above released it without clearing it */
+        rc = PMIx_Get(&gproc, PMIX_GROUP_LOCAL_CID, tinfo, 2, &val);
+        if (PMIX_SUCCESS == rc && PMIX_SIZE == val->type) {
+            printf("GRP %u GRANK0 %lu %s\n", myproc.rank,
+                   (unsigned long) (val->data.size - GROUPCON_BASE_CID),
+                   (GROUPCON_BASE_CID + (size_t) members[0].rank) == val->data.size
+                       ? "MATCH" : "MISMATCH");
+            PMIX_VALUE_RELEASE(val);
+        } else {
+            printf("GRP %u GRANK0 FAIL %s\n", myproc.rank, PMIx_Error_string(rc));
+            if (NULL != val) {
+                PMIX_VALUE_RELEASE(val);
+            }
+        }
+        fflush(stdout);
     }
     PMIX_INFO_DESTRUCT(&tinfo[0]);
     PMIX_INFO_DESTRUCT(&tinfo[1]);

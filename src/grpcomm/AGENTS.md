@@ -1020,16 +1020,25 @@ and payload.
   daemon reports straight to the controller); non-bootstrap ops send to
   self on `PRTE_RML_TAG_GROUP`.
 
-**A signature owns its arrays — always.** Two directives carry a proc
-array (`PMIX_GROUP_ADD_MEMBERS`, `PMIX_GROUP_FINAL_MEMBERSHIP_ORDER`), and
+**A signature owns its arrays — always.** A directive can carry a proc
+array (`PMIX_GROUP_ADD_MEMBERS` does), and
 the array inside a directive belongs to the **PMIx server** that delivered
 the upcall: PMIx frees the directives, arrays and all, once the operation
 completes. The signature's destructor frees what the signature holds, so
 the parse takes a *copy* of each. Pointing at the caller's array instead
 is a double free of live heap, and it is not theoretical. If you add a
-directive that carries an array, copy it in `copy_directive_procs()` like
-the other two; do not add a "clear it again before the destructor runs"
+directive that carries an array, copy it in `copy_directive_procs()` as
+add-members does; do not add a "clear it again before the destructor runs"
 step anywhere.
+
+**The membership comes back in the order the participants gave it.** The
+HNP assembles it once, as an order-preserving union of the contributions'
+procs arrays (each proc where it was first seen, then the add-members), and
+every member receives that one array in the release. It is deliberately not
+sorted: members agree on it without that, and trackers are keyed by group
+ID, not by membership. It used to be sorted, and
+`PMIX_GROUP_FINAL_MEMBERSHIP_ORDER` existed only to undo that; both are
+gone.
 
 **Completion** is `nleaders_reported >= nleaders && nfollowers_reported >=
 nfollowers` for bootstrap, else `nreported >= nexpected` — `>=` rather

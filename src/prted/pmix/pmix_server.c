@@ -363,7 +363,6 @@ static char *prte_attrs_group[] = {"PMIX_GROUP_ASSIGN_CONTEXT_ID",
                                    "PMIX_GROUP_BOOTSTRAP",
                                    "PMIX_GROUP_ADD_MEMBERS",
                                    "PMIX_GROUP_INFO",
-                                   "PMIX_GROUP_FINAL_MEMBERSHIP_ORDER",
 #if PRTE_PMIX_HAVE_GROUP_FT
                                    "PMIX_GROUP_FT_COLLECTIVE",
 #endif

@@ -172,19 +172,14 @@ static int test_classes(void)
     CHECK("grp sig follower false", !gsig->follower);
     CHECK("grp sig addmembers NULL", NULL == gsig->addmembers);
     CHECK("grp sig naddmembers 0", 0 == gsig->naddmembers);
-    CHECK("grp sig final_order NULL", NULL == gsig->final_order);
-    CHECK("grp sig nfinal 0", 0 == gsig->nfinal);
     /* a group is not fault tolerant unless somebody asks for it */
     CHECK("grp sig ft_collective false", !gsig->ft_collective);
-    /* exercise the destructor's free of groupID/members/addmembers and the
-     * final order, which the destructor used to leak */
+    /* exercise the destructor's free of groupID/members/addmembers */
     gsig->groupID = strdup("test-group");
     gsig->nmembers = 1;
     gsig->members = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     gsig->naddmembers = 1;
     gsig->addmembers = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    gsig->nfinal = 1;
-    PMIX_PROC_CREATE(gsig->final_order, gsig->nfinal);
     PMIX_RELEASE(gsig);
 
     /* fence tracker: clean rollup counters, constructed bucket */
@@ -348,13 +343,13 @@ static int test_group_directives(void)
     prte_grpcomm_group_signature_t sig;
     pmix_info_t *dirs;
     pmix_data_array_t darray;
-    pmix_proc_t *p, *dirmembers, *dirorder;
+    pmix_proc_t *p, *dirmembers;
     void *grpinfo, *endpts;
     pmix_status_t rc, st = PMIX_SUCCESS;
     int timeout = 0;
     size_t bootstrap = 3;
     int tmo = 42;
-    size_t ndirs = 5;
+    size_t ndirs = 4;
 
     PMIX_INFO_CREATE(dirs, ndirs);
     PMIX_INFO_LOAD(&dirs[0], PMIX_GROUP_ASSIGN_CONTEXT_ID, NULL, PMIX_BOOL);
@@ -370,14 +365,7 @@ static int test_group_directives(void)
     PMIX_INFO_LOAD(&dirs[3], PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
-    PMIX_DATA_ARRAY_CONSTRUCT(&darray, 1, PMIX_PROC);
-    p = (pmix_proc_t *) darray.array;
-    PMIX_LOAD_PROCID(&p[0], "grp-added", 1);
-    PMIX_INFO_LOAD(&dirs[4], PMIX_GROUP_FINAL_MEMBERSHIP_ORDER, &darray, PMIX_DATA_ARRAY);
-    PMIX_DATA_ARRAY_DESTRUCT(&darray);
-
     dirmembers = (pmix_proc_t *) dirs[3].value.data.darray->array;
-    dirorder = (pmix_proc_t *) dirs[4].value.data.darray->array;
 
     PMIX_CONSTRUCT(&sig, prte_grpcomm_group_signature_t);
     grpinfo = PMIx_Info_list_start();
@@ -396,13 +384,6 @@ static int test_group_directives(void)
           NULL != sig.addmembers &&
           0 == memcmp(sig.addmembers, dirmembers, 2 * sizeof(pmix_proc_t)));
 
-    CHECK("directives: final order counted", 1 == sig.nfinal);
-    CHECK("directives: final order copied, not borrowed",
-          NULL != sig.final_order && sig.final_order != dirorder);
-    CHECK("directives: final order content",
-          NULL != sig.final_order &&
-          0 == memcmp(sig.final_order, dirorder, sizeof(pmix_proc_t)));
-
     /* the destructor frees everything the signature owns. The directives
      * must come through it untouched, because their owner frees them next -
      * and would be freeing them a second time if we had borrowed */
@@ -411,9 +392,6 @@ static int test_group_directives(void)
           dirmembers == (pmix_proc_t *) dirs[3].value.data.darray->array &&
           2 == dirs[3].value.data.darray->size &&
           0 == strcmp("grp-added", dirmembers[0].nspace));
-    CHECK("directives: final-order array survives the signature",
-          dirorder == (pmix_proc_t *) dirs[4].value.data.darray->array &&
-          1 == dirs[4].value.data.darray->size);
     PMIx_Info_list_release(grpinfo);
     PMIx_Info_list_release(endpts);
     PMIX_INFO_FREE(dirs, ndirs);
