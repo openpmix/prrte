@@ -1251,13 +1251,17 @@ The generation is visible at `grpcomm_base_verbose 1` on the controller's
 "HNP reports complete for `<id>` gen `<n>`" line and at verbosity 2 on each
 arriving contribution, which is how you tell which round a hang is stuck in.
 
-> **Not yet watched failing.**  The single-node case cannot show the bug: the
-> HNP hosts every proc, so `group()` runs there and the old memo was always
-> dropped.  Reuse across a persistent DVM has been confirmed to advance the
-> count (`gen 0 → 1 → 2` over three `prun`s of the same group ID), but the
-> multi-daemon relay case this fixes needs `contrib/dockerswarm`.  Per the
-> rule above — a regression test for a race that has never been red proves
-> nothing — that case still owes its red run.
+**Watched failing.**  `contrib/dockerswarm`'s *"a second construct over a
+reused group ID completes"* case drives it, and it has been run with the fix
+reverted: the first construct completes on all 6 ranks, the second scores
+**0 of 6** — `PRUN`'s 60s bound expires with no `CONSTRUCT` line at all — and
+so does the third.  With the fix, 5 of 5.
+
+The single-node case cannot show it, which is why the case exists at swarm
+scale: on one host the HNP hosts every proc, so `group()` runs there and the
+old memo was always dropped.  The case therefore asserts its *placement*
+before it asserts the reuse — a run that puts a rank on node1 passes with the
+bug present and proves nothing.
 
 ---
 
