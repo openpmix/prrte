@@ -211,12 +211,6 @@ pmix_status_t prte_grpcomm_group_parse_directives(prte_grpcomm_group_signature_t
                 PMIX_ERROR_LOG(rc);
             }
 
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_FINAL_MEMBERSHIP_ORDER)) {
-            rc = copy_directive_procs(&directives[i], &sig->final_order, &sig->nfinal);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                return rc;
-            }
 #if PRTE_PMIX_HAVE_GROUP_FT
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_FT_COLLECTIVE)) {
             sig->ft_collective = PMIX_INFO_TRUE(&directives[i]);
@@ -1304,7 +1298,7 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
 static void check_complete(prte_grpcomm_group_t *coll)
 {
     int rc;
-    size_t m, n, ninfo, nfinal = 0;
+    size_t m, ninfo, nfinal = 0;
     pmix_proc_t *finalmembership = NULL;
     bool found;
     pmix_list_t nmlist;
@@ -1435,54 +1429,14 @@ static void check_complete(prte_grpcomm_group_t *coll)
             }
             PMIX_LIST_DESTRUCT(&nmlist);
 
-            // if they gave us a final order, then sort the final membership
-            // accordingly. Note that order entries that consist of nspace,wildcard
-            // indicate that all participants from the given nspace should be
-            // included in the final membership at that point - it does NOT mean
-            // that all procs from that nspace are included in the final membership
-            if (NULL != coll->sig->final_order) {
-                PMIX_CONSTRUCT(&nmlist, pmix_list_t);
-                for (m=0; m < coll->sig->nfinal; m++) {
-                    // search the array of final members to capture those that match
-                    for (n=0; n < nfinal; n++) {
-                        if (PMIX_CHECK_PROCID(&coll->sig->final_order[m], &finalmembership[n])) {
-                            // add this proc to the final list
-                            nm = PMIX_NEW(prte_namelist_t);
-                            memcpy(&nm->name, &finalmembership[n], sizeof(pmix_proc_t));
-                            pmix_list_append(&nmlist, &nm->super);
-                            // the final order may have included rank=wildcard - if so,
-                            // then we have to continue
-                            if (PMIX_RANK_WILDCARD != coll->sig->final_order[m].rank) {
-                                // nope - can only match once
-                                break;
-                            }
-                        }
-                    }
-                }
-                // did we lose anyone?
-                if (nfinal != pmix_list_get_size(&nmlist)) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bad-final-order", true);
-                    coll->status = PMIX_ERR_BAD_PARAM;
-                    PMIX_LIST_DESTRUCT(&nmlist);
-                    goto answer;
-                }
-                // just overwrite the final array
-                m = 0;
-                PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
-                    memcpy(&finalmembership[m], &nm->name, sizeof(pmix_proc_t));
-                    ++m;
-                }
-                PMIX_LIST_DESTRUCT(&nmlist);
+            /* The membership stays in the order the participants gave it:
+             * the union above keeps each proc where it was first seen, so
+             * callers that all pass the same array get it back as they
+             * passed it. It is not sorted - every member receives this one
+             * array in the release, so they agree on its order without
+             * that, and trackers are keyed by group ID rather than by
+             * membership. */
 
-                // zero out the final order cache - no need to send it around
-                PMIX_PROC_FREE(coll->sig->final_order, coll->sig->nfinal);
-                coll->sig->final_order = NULL;
-                coll->sig->nfinal = 0;
-
-            } else {
-                 /* sort the procs so everyone gets the same order */
-                qsort(finalmembership, nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
-            }
             /* a group of nobody is not a group - if the failure took every
              * member, there is nothing left to construct */
             if (0 == nfinal) {
@@ -2710,28 +2664,6 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_group_signature_t *sig,
                     PMIX_LIST_DESTRUCT(&plist);
                 }
             }
-            // if they specified a final order, see if one was already given
-            if (NULL != sig->final_order) {
-                if (NULL == coll->sig->final_order) {
-                    // cache the directive
-                    PMIX_PROC_CREATE(coll->sig->final_order, sig->nfinal);
-                    memcpy(coll->sig->final_order, sig->final_order, sig->nfinal * sizeof(pmix_proc_t));
-                    coll->sig->nfinal = sig->nfinal;
-                } else {
-                    // see if they match - for now, do a direct match
-                    if (coll->sig->nfinal != sig->nfinal) {
-                        // this is an error
-                        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
-                        return NULL;
-                    }
-                    if (0 != memcmp(coll->sig->final_order, sig->final_order, sig->nfinal * sizeof(pmix_proc_t))) {
-                        // this is an error
-                        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
-                        return NULL;
-                    }
-                    // they are the same, so just ignore the new directive
-                }
-            }
             if (!coll->sig->assignID && sig->assignID) {
                 coll->sig->assignID = true;
             }
@@ -2777,14 +2709,6 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_group_signature_t *sig,
     if (0 < sig->naddmembers) {
         PMIX_PROC_CREATE(coll->sig->addmembers, coll->sig->naddmembers);
         memcpy(coll->sig->addmembers, sig->addmembers, coll->sig->naddmembers * sizeof(pmix_proc_t));
-    }
-    // save any final membership order that was given - the match path
-    // above caches it, so failing to do so here would silently discard an
-    // order supplied by whichever daemon happens to create the tracker
-    if (NULL != sig->final_order) {
-        PMIX_PROC_CREATE(coll->sig->final_order, sig->nfinal);
-        memcpy(coll->sig->final_order, sig->final_order, sig->nfinal * sizeof(pmix_proc_t));
-        coll->sig->nfinal = sig->nfinal;
     }
     coll->nfollowers = coll->sig->naddmembers;
     // the accumulated signature is what we later pack onto the wire, so it
@@ -3138,20 +3062,6 @@ static int pack_signature(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
 
-    // pack final order, if given
-    rc = PMIx_Data_pack(NULL, bkt, &sig->nfinal, 1, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
-    }
-    if (0 < sig->nfinal) {
-        rc = PMIx_Data_pack(NULL, bkt, sig->final_order, sig->nfinal, PMIX_PROC);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            return prte_pmix_convert_status(rc);
-        }
-    }
-
     return PRTE_SUCCESS;
 }
 
@@ -3281,25 +3191,6 @@ static int unpack_signature(pmix_data_buffer_t *buffer,
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(s);
         return prte_pmix_convert_status(rc);
-    }
-
-    // unpack the final order
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &s->nfinal, &cnt, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(s);
-        return prte_pmix_convert_status(rc);
-    }
-    if (0 < s->nfinal) {
-        PMIX_PROC_CREATE(s->final_order, s->nfinal);
-        cnt = s->nfinal;
-        rc = PMIx_Data_unpack(NULL, buffer, s->final_order, &cnt, PMIX_PROC);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(s);
-            return prte_pmix_convert_status(rc);
-        }
     }
 
     *sig = s;

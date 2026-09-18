@@ -369,8 +369,6 @@ typedef struct {
     bool follower;
     pmix_proc_t *addmembers;  // procs supplied as add-members
     size_t naddmembers;
-    pmix_proc_t *final_order;
-    size_t nfinal;
     // Set when a participant asked for PMIX_GROUP_FT_COLLECTIVE: a construct
     // that loses a member should complete on the survivors rather than abort.
     // Accumulated by sticky-OR as contributions merge, so it means "some
