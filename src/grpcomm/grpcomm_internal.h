@@ -94,12 +94,25 @@ typedef struct {
     pmix_list_t fence_ops;
     // track ongoiong group operations - list of prte_grpcomm_group_t
     pmix_list_t group_ops;
-    // A short memory of group operations we have already released - list of
-    // prte_grpcomm_group_memo_t, capped at PRTE_GRPCOMM_GROUP_MEMO_MAX. A
-    // contribution can arrive after the release that retired its tracker has
-    // already been processed here; without this, get_tracker() would take it
-    // as the first contribution to a brand-new operation and build a tracker
-    // that nothing will ever complete or delete.
+    // How many group operations of each (groupID, op) this daemon has
+    // released - list of prte_grpcomm_group_memo_t, capped at
+    // PRTE_GRPCOMM_GROUP_MEMO_MAX. A contribution can arrive after the
+    // release that retired its tracker has already been processed here;
+    // without this, get_tracker() would take it as the first contribution to
+    // a brand-new operation and build a tracker that nothing will ever
+    // complete or delete.
+    //
+    // This was a boolean memo of "already released", forgotten again when a
+    // local client started another operation of the same name. That could
+    // not work, for the reason the fence commentary gives for not copying it
+    // (see grpcomm_fence.c): a daemon relaying for its subtree has no local
+    // client to do the forgetting. And a group rollup routinely has such
+    // daemons - get_tracker() says so itself, in the comment on testing
+    // whether this daemon is among the participants at all. On one of those
+    // the entry was never dropped, so every contribution to the NEXT
+    // operation of that name was discarded, which hangs it. So this counts
+    // releases, like the fence's, and the number rides the wire in the
+    // signature.
     pmix_list_t completed_group_ops;
     // How many fences over each signature this daemon has released - list of
     // prte_grpcomm_fence_memo_t, capped at PRTE_GRPCOMM_FENCE_MEMO_MAX. This
@@ -156,6 +169,30 @@ typedef struct {
     // Ships for the same reason its sibling does.
     int release_delay_ms;
     int release_delay_vpid;
+    // The same pair again, for the group collective.
+    //
+    // Separate knobs rather than shared ones because the two collectives are
+    // delayed at different places and a test wants to hold one back without
+    // disturbing the other - a group construct's rollup runs over its own
+    // participating daemons, and a DVM-wide fence delay would stall
+    // everything else those daemons are doing at the same time.
+    //
+    // The windows they open are the group equivalents of the fence's. The
+    // contribution delay puts a contribution on the wire for an operation
+    // that abort_group_op() has already ended, which is the straggler the
+    // generation has to recognize. The release delay holds this daemon's own
+    // processing back while its children get theirs on time, so a
+    // contribution to the NEXT operation of a reused group ID arrives while
+    // this daemon still has the previous one open - the window that the
+    // boolean memo got wrong, and the reason the memo became a counter.
+    //
+    // Ship for the same reason the fence's do: a race hook that only exists
+    // under PRTE_ENABLE_DEBUG cannot reproduce a race on the build that
+    // shows it. Off unless asked for - delay_ms 0 costs one compare.
+    int group_delay_ms;
+    int group_delay_vpid;
+    int group_release_delay_ms;
+    int group_release_delay_vpid;
     // Fault injection, the third: hold this daemon's *forward* of a broadcast
     // back, so the op stays in flight on the tree for as long as is asked
     // for.
@@ -205,6 +242,14 @@ typedef struct {
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
 #define PRTE_GRPCOMM_FENCE_MEMO_MAX 64
 
+/* "No round number is known here", for groups. Distinct from generation 0,
+ * which is a real round: a daemon grown into a running DVM has released none
+ * of the operations everyone else has counted, and a 0 from it would be read
+ * as long since released and its contribution dropped. The fence twin is
+ * PRTE_GRPCOMM_FENCE_GEN_UNKNOWN, and the two are deliberately the same
+ * value - they answer the same question about the same daemon. */
+#define PRTE_GRPCOMM_GROUP_GEN_UNKNOWN UINT32_MAX
+
 /* "No round number is known here." Distinct from generation 0, which is a
  * real round: a daemon that has never taken part in a fence over a signature
  * must be able to say so, because 0 would be read as a round already long
@@ -217,10 +262,16 @@ typedef struct {
  * and stamps them on the wire; see the tracker identity commentary below. */
 #define PRTE_GRPCOMM_FENCE_STEP_ROLLUP 0
 
+/* What this daemon remembers about a (groupID, op) once that operation is
+ * over: the number of the NEXT operation of that name and type, one past the
+ * last generation released here. It has to outlive the tracker, because the
+ * whole point is to recognize something that arrives after the tracker is
+ * gone. The fence twin is prte_grpcomm_fence_memo_t. */
 typedef struct {
     pmix_list_item_t super;
     char *groupID;
     pmix_group_operation_t op;
+    uint32_t next_generation;
 } prte_grpcomm_group_memo_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_group_memo_t);
 
@@ -326,6 +377,13 @@ typedef struct {
     // surviving participant asked for it" - a participant that requested it
     // and then died before its contribution rolled up cannot be seen here.
     bool ft_collective;
+    // Which round over this (groupID, op) the contribution belongs to. It
+    // lives in the signature rather than beside it - as the fence's does -
+    // because the signature is what every hop packs and unpacks, so putting
+    // it here is what carries it up the rollup and back down the release
+    // with no site having to remember to. It is also part of the tracker's
+    // identity: see get_tracker().
+    uint32_t generation;
 } prte_grpcomm_group_signature_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_group_signature_t);
 
@@ -619,6 +677,33 @@ void prte_grpcomm_fence_gen_record(prte_grpcomm_fence_signature_t *sig, uint32_t
  * because it carries no claim about a round at all.  Exported for the test. */
 PRTE_EXPORT
 bool prte_grpcomm_fence_gen_is_stale(prte_grpcomm_fence_signature_t *sig, uint32_t gen);
+
+/* The number of the next group operation over this (groupID, op) - one past
+ * the last generation released here - or PRTE_GRPCOMM_GROUP_GEN_UNKNOWN if
+ * this daemon joined a DVM that was already running them. Exported so the
+ * unit test can drive it. */
+PRTE_EXPORT
+uint32_t prte_grpcomm_group_gen_next(prte_grpcomm_group_signature_t *sig);
+
+/* What this daemon stamps on a contribution for a (groupID, op) it has no
+ * entry for: round 0 if it has been here since the start, UNKNOWN if it
+ * joined a running DVM. Exported so the unit test can drive both readings. */
+PRTE_EXPORT
+uint32_t prte_grpcomm_group_gen_baseline(void);
+
+/* Record that generation `gen` of this (groupID, op) has been released here,
+ * so the next one is gen+1. Adopts rather than increments, which is what puts
+ * a daemon that joined the DVM late - and so counted none of the earlier
+ * rounds - in step with everyone else after its first one. Exported for the
+ * unit test. */
+PRTE_EXPORT
+void prte_grpcomm_group_gen_record(prte_grpcomm_group_signature_t *sig, uint32_t gen);
+
+/* Is a contribution stamped `gen` one this daemon has already released? Only
+ * a stamp strictly below what we are expecting is stale; UNKNOWN never is,
+ * because it carries no claim about a round at all. Exported for the test. */
+PRTE_EXPORT
+bool prte_grpcomm_group_gen_is_stale(prte_grpcomm_group_signature_t *sig, uint32_t gen);
 
 /* group functions */
 PRTE_EXPORT extern

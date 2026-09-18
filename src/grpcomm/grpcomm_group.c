@@ -42,8 +42,6 @@
 static void group(int sd, short args, void *cbdata);
 static void check_complete(prte_grpcomm_group_t *coll);
 static void group_timeout(int sd, short args, void *cbdata);
-static bool group_op_completed(prte_grpcomm_group_signature_t *sig);
-static void group_op_forget(prte_grpcomm_group_signature_t *sig);
 #if PRTE_PMIX_HAVE_GROUP_FT
 static void collect_departed(prte_grpcomm_group_t *coll);
 #endif
@@ -598,6 +596,79 @@ void prte_grpcomm_group_fault_handler(const prte_rml_recovery_status_t* status)
 }
 
 
+/* Fault injection: carry a held-back contribution across the delay timer.
+ * Plain storage rather than a reference-counted object - it lives from the
+ * moment the timer is armed until it fires, exactly once, and nothing else
+ * ever looks at it. Zeroed on allocation because the embedded event must
+ * start clean.
+ *
+ * Unlike the fence's twin this carries its destination: a group contribution
+ * goes to the HNP for a bootstrap and to ourselves otherwise, and the delay
+ * has to be available on both paths. */
+typedef struct {
+    prte_event_t ev;
+    pmix_data_buffer_t *framed;
+    pmix_rank_t dest;
+} group_delay_caddy_t;
+
+static void group_delay_fire(int sd, short args, void *cbdata)
+{
+    group_delay_caddy_t *dc = (group_delay_caddy_t *) cbdata;
+    int rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:group releasing the held-back contribution",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    PRTE_RML_SEND(rc, dc->dest, dc->framed, PRTE_RML_TAG_GROUP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(dc->framed);
+    }
+    free(dc);
+}
+
+/* Should this daemon hold its contribution back? Only when a delay was asked
+ * for and either no vpid was named or this is the one named. */
+static bool group_should_delay(void)
+{
+    if (0 >= prte_grpcomm_globals.group_delay_ms) {
+        return false;
+    }
+    if (0 > prte_grpcomm_globals.group_delay_vpid) {
+        return true;
+    }
+    return ((pmix_rank_t) prte_grpcomm_globals.group_delay_vpid
+            == PRTE_PROC_MY_NAME->rank);
+}
+
+/* Arm the delay timer for a contribution bound for `dest`. Answers false if
+ * the caddy could not be allocated, in which case the caller still owns the
+ * buffer and sends it the ordinary way - a fault-injection hook must never
+ * be the reason an operation fails. */
+static bool group_delay_send(pmix_data_buffer_t *framed, pmix_rank_t dest)
+{
+    group_delay_caddy_t *dc;
+    struct timeval tv;
+
+    dc = (group_delay_caddy_t *) calloc(1, sizeof(*dc));
+    if (NULL == dc) {
+        return false;
+    }
+    dc->framed = framed;
+    dc->dest = dest;
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:group holding its contribution back %d ms",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         prte_grpcomm_globals.group_delay_ms));
+    tv.tv_sec = prte_grpcomm_globals.group_delay_ms / 1000;
+    tv.tv_usec = (prte_grpcomm_globals.group_delay_ms % 1000) * 1000;
+    prte_event_evtimer_set(prte_event_base, &dc->ev, group_delay_fire, dc);
+    PMIX_POST_OBJECT(dc);
+    prte_event_evtimer_add(&dc->ev, &tv);
+    return true;
+}
+
 static void group(int sd, short args, void *cbdata)
 {
     prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t*)cbdata;
@@ -648,10 +719,13 @@ static void group(int sd, short args, void *cbdata)
         goto error;
     }
 
-    /* a local client is starting this operation, which is proof that any
-     * earlier operation of the same name and type is finished with - drop it
-     * from the completed memo so this one is not mistaken for a straggler */
-    group_op_forget(&sig);
+    /* Which round of this (groupID, op) our client is taking part in. Every
+     * daemon sees every release of it - they are full-DVM broadcasts - so
+     * each one arrives at the same number independently, and the daemon
+     * whose client starts the operation is the one that names it. A daemon
+     * grown into the DVM stamps UNKNOWN and adopts a real number from the
+     * release; see prte_grpcomm_group_gen_baseline(). */
+    sig.generation = prte_grpcomm_group_gen_next(&sig);
 
     /* create a tracker for this operation. A failure here has to leave by the
      * error label like any other: the two info lists are open, and - more to
@@ -808,13 +882,26 @@ static void group(int sd, short args, void *cbdata)
                              "%s grpcomm:grp bootstrap sending %lu bytes to HNP",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), relay->bytes_used));
 
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, relay,
-                      PRTE_RML_TAG_GROUP);
-        if (PRTE_SUCCESS != rc) {
-            PMIX_DATA_BUFFER_RELEASE(relay);
-            rc = prte_pmix_convert_rc(rc);
-            PMIX_DESTRUCT(&sig);
-            goto error;
+        /* Hold it back, so that an operation ended without it - by a
+         * PMIX_TIMEOUT, or by losing a participant - has this contribution
+         * still on the wire when its release lands. That is the straggler the
+         * generation has to recognize, and it is otherwise unreachable from a
+         * test.
+         *
+         * The entry point already answered PRTE_SUCCESS, so nothing upstream
+         * is waiting on this send; if the operation is aborted meanwhile our
+         * own participants are completed by the release, exactly as they
+         * would be for a contribution genuinely lost in the network. */
+        if (!group_should_delay() ||
+            !group_delay_send(relay, PRTE_PROC_MY_HNP->rank)) {
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, relay,
+                          PRTE_RML_TAG_GROUP);
+            if (PRTE_SUCCESS != rc) {
+                PMIX_DATA_BUFFER_RELEASE(relay);
+                rc = prte_pmix_convert_rc(rc);
+                PMIX_DESTRUCT(&sig);
+                goto error;
+            }
         }
         PMIX_DESTRUCT(&sig);
         PMIX_RELEASE(cd);
@@ -827,12 +914,16 @@ static void group(int sd, short args, void *cbdata)
                          "%s grpcomm:grp sending to ourself",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, relay,
-                  PRTE_RML_TAG_GROUP);
-    if (PRTE_SUCCESS != rc) {
-        PMIX_DATA_BUFFER_RELEASE(relay);
-        rc = prte_pmix_convert_rc(rc);
-        goto error;
+    /* the same hold-back as the bootstrap path above - see the note there */
+    if (!group_should_delay() ||
+        !group_delay_send(relay, PRTE_PROC_MY_NAME->rank)) {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, relay,
+                      PRTE_RML_TAG_GROUP);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_DATA_BUFFER_RELEASE(relay);
+            rc = prte_pmix_convert_rc(rc);
+            goto error;
+        }
     }
     PMIX_RELEASE(cd);
     return;
@@ -954,15 +1045,57 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
         }
     }
 
-    /* if we have already released this operation, then this is a straggler
-     * that lost the race with the release - creating a tracker for it would
-     * strand one nothing will ever complete */
-    if (group_op_completed(sig)) {
+    pmix_output_verbose(2, prte_grpcomm_globals.output,
+                        "%s grpcomm group contribution for \"%s\" gen %u",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID,
+                        (unsigned) sig->generation);
+
+    /* A contribution from a round of this name we have already released.
+     * This is the straggler abort_group_op() makes possible: its operation
+     * was ended early, the release retired our tracker, and this was still
+     * climbing the tree.
+     *
+     * Dropping it here, before get_tracker(), is the whole point: creating a
+     * tracker for it and then discarding the message would strand one
+     * nothing will ever complete.
+     *
+     * What this must NOT do is drop a contribution to the *next* operation
+     * of the same name, which is what the boolean memo this replaced did on
+     * any daemon with no local client to forget it. The generation is what
+     * tells the two apart. */
+    if (prte_grpcomm_group_gen_is_stale(sig, sig->generation)) {
         pmix_output_verbose(1, prte_grpcomm_globals.output,
-                            "%s grpcomm group recv for completed op \"%s\" - ignoring",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID);
+                            "%s grpcomm group dropping a contribution to \"%s\" "
+                            "from generation %u (now at %u)",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID,
+                            (unsigned) sig->generation,
+                            (unsigned) prte_grpcomm_group_gen_next(sig));
         PMIX_RELEASE(sig);
         return;
+    }
+
+    /* Which round this contribution belongs to, and so which tracker it
+     * joins.
+     *
+     * A sender that named a round gets that round - including one AHEAD of
+     * where we are. That happens routinely rather than exceptionally: xcast
+     * hands a release to our children before we process it ourselves, so a
+     * child can be released, have its clients start the next operation of
+     * the same name, and reach us while we are still finishing this one. Its
+     * contribution gets a tracker of its own and accumulates there until our
+     * own release arrives and we catch up. Folding it into the round we are
+     * still in would put the next operation's data in a tracker holding this
+     * one's.
+     *
+     * A sender that named no round is a daemon a grow added, which has not
+     * learned this name's numbering yet. It joins whatever round we think is
+     * current, which is the right answer for a joiner and cannot be a
+     * straggler: it has no earlier operation of this name here to have
+     * straggled from. Without this the joiner's contribution would open an
+     * UNKNOWN tracker up here beside the real one, and neither would ever
+     * converge. */
+    if (PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == sig->generation) {
+        sig->generation = prte_grpcomm_group_gen_next(sig);
     }
 
     /* check for the tracker and create it if not found */
@@ -1202,8 +1335,9 @@ static void check_complete(prte_grpcomm_group_t *coll)
 
     if (PRTE_PROC_IS_MASTER) {
         pmix_output_verbose(1, prte_grpcomm_globals.output,
-                             "%s grpcomm group HNP reports complete for %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
+                             "%s grpcomm group HNP reports complete for %s gen %u",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID,
+                             (unsigned) coll->sig->generation);
 
         /* the allgather is complete - send the xcast */
         if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
@@ -1687,46 +1821,119 @@ static void grp_release_regcbfunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_THREADSHIFT(cd, prte_event_base, grp_release_resume);
 }
 
-/* Has this operation already been released here? */
-static bool group_op_completed(prte_grpcomm_group_signature_t *sig)
+/* ------------------------------------------------------------------ *
+ * Telling one operation over a (groupID, op) from the next.
+ *
+ * Nothing about a contribution says which operation of a reused name it
+ * belongs to. In the ordinary flow that costs nothing, because a daemon
+ * converges only once everything it expects has arrived and so nothing *can*
+ * arrive afterwards. But abort_group_op() ends an operation early - on a
+ * PMIX_TIMEOUT, and on a participant lost with a failed daemon - and a
+ * contribution still climbing the tree then reaches a daemon whose tracker
+ * the release already retired.
+ *
+ * This used to be a boolean memo of released operations, dropped again by
+ * group_op_forget() when a local client started another of the same name.
+ * The fence declined to copy that scheme, and gave the reason (see the
+ * commentary in grpcomm_fence.c): a daemon relaying for its subtree has no
+ * local client to do the forgetting, so the entry stays for ever and the
+ * next legitimate contribution is dropped - a hang in place of a wrong
+ * answer. A group rollup has exactly such daemons; get_tracker() says so in
+ * its own comment on testing whether this daemon is among the participants.
+ * On one of those, a second PMIx_Group_construct over a name already used
+ * once had every contribution discarded. So this counts releases, as the
+ * fence's does, and the number rides the wire in the signature.
+ * ------------------------------------------------------------------ */
+
+static prte_grpcomm_group_memo_t *group_gen_find(prte_grpcomm_group_signature_t *sig)
 {
     prte_grpcomm_group_memo_t *memo;
 
     PMIX_LIST_FOREACH(memo, &prte_grpcomm_globals.completed_group_ops,
                       prte_grpcomm_group_memo_t) {
         if (sig->op == memo->op && 0 == strcmp(sig->groupID, memo->groupID)) {
-            return true;
+            return memo;
         }
     }
-    return false;
+    return NULL;
 }
 
-/* Forget any record of this operation, so a fresh one of the same name and
- * type can run. Called when a local client starts one: the client asking is
- * proof that the previous operation of that name is over and done with. */
-static void group_op_forget(prte_grpcomm_group_signature_t *sig)
+uint32_t prte_grpcomm_group_gen_baseline(void)
 {
-    prte_grpcomm_group_memo_t *memo, *nxt;
-
-    PMIX_LIST_FOREACH_SAFE(memo, nxt, &prte_grpcomm_globals.completed_group_ops,
-                           prte_grpcomm_group_memo_t) {
-        if (sig->op == memo->op && 0 == strcmp(sig->groupID, memo->groupID)) {
-            pmix_list_remove_item(&prte_grpcomm_globals.completed_group_ops,
-                                  &memo->super);
-            PMIX_RELEASE(memo);
-        }
+    /* A daemon added to a running DVM cannot claim round 0: every daemon that
+     * has been present has released more of these than it has, and would
+     * drop a 0 as ancient. It says it does not know instead, which a
+     * receiver takes into whatever round is current - safe precisely because
+     * a joiner has no earlier operation of this name to have straggled from,
+     * so its first contribution cannot be one.
+     *
+     * "Joined late" is a property of the daemon, not of either collective,
+     * and is recorded once from the first wireup. The accessor is named for
+     * the fence because that is where the question was first asked; this
+     * reads the same flag rather than keeping a second copy of it. */
+    if (prte_grpcomm_globals.joined_late) {
+        return PRTE_GRPCOMM_GROUP_GEN_UNKNOWN;
     }
+    /* ...and a daemon that has been here since the start says 0, which is
+     * what bootstraps the counter. Without this nothing ever establishes a
+     * first round, every contribution is stamped UNKNOWN for ever, and the
+     * whole mechanism is inert. */
+    return 0;
 }
 
-/* Record that we released this operation, evicting the oldest entry once the
- * memo is full - it only has to outlive messages still in flight. */
-static void group_op_remember(prte_grpcomm_group_signature_t *sig)
+uint32_t prte_grpcomm_group_gen_next(prte_grpcomm_group_signature_t *sig)
+{
+    prte_grpcomm_group_memo_t *memo = group_gen_find(sig);
+
+    if (NULL == memo) {
+        return prte_grpcomm_group_gen_baseline();
+    }
+    return memo->next_generation;
+}
+
+bool prte_grpcomm_group_gen_is_stale(prte_grpcomm_group_signature_t *sig, uint32_t gen)
+{
+    uint32_t next;
+
+    /* a contribution that names no round makes no claim to be from an old
+     * one either - see the UNKNOWN commentary above */
+    if (PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == gen) {
+        return false;
+    }
+    next = prte_grpcomm_group_gen_next(sig);
+    if (PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == next) {
+        return false;
+    }
+    return (gen < next);
+}
+
+void prte_grpcomm_group_gen_record(prte_grpcomm_group_signature_t *sig, uint32_t gen)
 {
     prte_grpcomm_group_memo_t *memo;
 
-    if (group_op_completed(sig)) {
+    if (PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == gen) {
         return;
     }
+
+    memo = group_gen_find(sig);
+    if (NULL != memo) {
+        /* Adopt rather than increment. A daemon grown into the DVM after k
+         * operations of this name have run has counted none of them, and
+         * incrementing would leave it one behind for ever; taking the
+         * released generation from the wire puts it in step after its first
+         * one instead. The test is written so a release that arrives out of
+         * order cannot walk the counter backwards. */
+        if (memo->next_generation < gen + 1) {
+            memo->next_generation = gen + 1;
+        }
+        return;
+    }
+
+    /* Bounded, and evicting the oldest is safe in the way that matters: an
+     * entry only has to outlive the messages still in flight for its own
+     * operation. Losing one early does not corrupt anything - it returns
+     * that name to the behaviour this whole mechanism replaced, where a
+     * straggler is indistinguishable from the next operation. */
     while (PRTE_GRPCOMM_GROUP_MEMO_MAX <=
            pmix_list_get_size(&prte_grpcomm_globals.completed_group_ops)) {
         memo = (prte_grpcomm_group_memo_t *)
@@ -1739,26 +1946,83 @@ static void group_op_remember(prte_grpcomm_group_signature_t *sig)
         }
         PMIX_RELEASE(memo);
     }
+
     memo = PMIX_NEW(prte_grpcomm_group_memo_t);
+    if (NULL == memo) {
+        return;
+    }
     memo->groupID = strdup(sig->groupID);
+    if (NULL == memo->groupID) {
+        PMIX_RELEASE(memo);
+        return;
+    }
     memo->op = sig->op;
+    memo->next_generation = gen + 1;
     pmix_list_append(&prte_grpcomm_globals.completed_group_ops, &memo->super);
+}
+
+/* Find the tracker a release ends, adopting the round onto one that does not
+ * yet know its number.
+ *
+ * The fallback is for a daemon a grow added. It did not know this name's
+ * numbering when it opened its tracker, so that tracker is filed under
+ * UNKNOWN rather than under the round the rest of the DVM calls this one;
+ * the release is the first thing that tells it, so adopt the number here.
+ * There can only be the one such tracker per name: the next round opens with
+ * a real number, because recording this release gave us one.
+ *
+ * Not an error to find nothing - that just means we had no participants. */
+static prte_grpcomm_group_t *find_released_tracker(prte_grpcomm_group_signature_t *sig)
+{
+    prte_grpcomm_group_t *coll;
+    uint32_t gen;
+
+    coll = get_tracker(sig, false);
+    if (NULL != coll) {
+        return coll;
+    }
+    if (PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == sig->generation) {
+        /* nothing to adopt onto - the release itself names no round */
+        return NULL;
+    }
+    gen = sig->generation;
+    sig->generation = PRTE_GRPCOMM_GROUP_GEN_UNKNOWN;
+    coll = get_tracker(sig, false);
+    sig->generation = gen;
+    if (NULL != coll) {
+        pmix_output_verbose(1, prte_grpcomm_globals.output,
+                            "%s grpcomm:group \"%s\" learning that its round is %u",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID,
+                            (unsigned) gen);
+        coll->sig->generation = gen;
+    }
+    return coll;
 }
 
 static void find_delete_tracker(prte_grpcomm_group_signature_t *sig)
 {
     prte_grpcomm_group_t *coll;
 
-    group_op_remember(sig);
+    /* Note the round we are retiring before the tracker goes, so a
+     * contribution that outlived it can be recognized as stale. This runs on
+     * every daemon the release reaches, tracker or not: one that merely
+     * relayed for a subtree this time may relay for it again next time, and
+     * needs the count to tell the two apart. */
+    prte_grpcomm_group_gen_record(sig, sig->generation);
 
     PMIX_LIST_FOREACH(coll, &prte_grpcomm_globals.group_ops, prte_grpcomm_group_t) {
-        // must match both groupID and operation - the same key get_tracker
-        // uses. A groupID alone does not identify a tracker: a construct and
-        // a destruct of the same group are distinct operations, and matching
-        // on the name alone lets one operation's release delete the other's
-        // tracker.
+        // must match groupID, operation AND generation - the same key
+        // get_tracker uses. A groupID alone does not identify a tracker: a
+        // construct and a destruct of the same group are distinct
+        // operations, and matching on the name alone lets one operation's
+        // release delete the other's tracker. The generation is here for the
+        // same reason one round of a reused name must not be mistaken for
+        // the next; the caller has already adopted a real number onto an
+        // UNKNOWN tracker by the time we run, so there is exactly one
+        // tracker this can match.
         if (0 == strcmp(sig->groupID, coll->sig->groupID) &&
-            sig->op == coll->sig->op) {
+            sig->op == coll->sig->op &&
+            sig->generation == coll->sig->generation) {
             pmix_list_remove_item(&prte_grpcomm_globals.group_ops, &coll->super);
             PMIX_RELEASE(coll);
             return;
@@ -1766,9 +2030,88 @@ static void find_delete_tracker(prte_grpcomm_group_signature_t *sig)
     }
 }
 
+static void grp_release_process(pmix_data_buffer_t *buffer);
+
+/* Fault injection: carry a release across the delay timer. The buffer is a
+ * copy - the one the RML handed us goes back when that callback returns. */
+typedef struct {
+    prte_event_t ev;
+    pmix_data_buffer_t *buf;
+} group_release_delay_caddy_t;
+
+static void group_release_delay_fire(int sd, short args, void *cbdata)
+{
+    group_release_delay_caddy_t *dc = (group_release_delay_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:group processing the held-back release",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    grp_release_process(dc->buf);
+    PMIX_DATA_BUFFER_RELEASE(dc->buf);
+    free(dc);
+}
+
+static bool group_release_should_delay(void)
+{
+    if (0 >= prte_grpcomm_globals.group_release_delay_ms) {
+        return false;
+    }
+    if (0 > prte_grpcomm_globals.group_release_delay_vpid) {
+        return true;
+    }
+    return ((pmix_rank_t) prte_grpcomm_globals.group_release_delay_vpid
+            == PRTE_PROC_MY_NAME->rank);
+}
+
 void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
                                      pmix_data_buffer_t *buffer,
                                      prte_rml_tag_t tag, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    if (group_release_should_delay()) {
+        /* Hold our own processing back while our children get theirs on time
+         * - xcast forwarded to them before handing this up, so they are
+         * already going. Their clients will start the next operation of this
+         * group ID and their contributions will arrive here while this
+         * daemon still has the previous one open. That is the window the
+         * boolean memo answered "already released" to, and it is otherwise
+         * microseconds wide. */
+        group_release_delay_caddy_t *dc;
+        struct timeval tv;
+        pmix_status_t prc;
+
+        dc = (group_release_delay_caddy_t *) calloc(1, sizeof(*dc));
+        if (NULL == dc) {
+            grp_release_process(buffer);
+            return;
+        }
+        PMIX_DATA_BUFFER_CREATE(dc->buf);
+        prc = PMIx_Data_copy_payload(dc->buf, buffer);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_RELEASE(dc->buf);
+            free(dc);
+            grp_release_process(buffer);
+            return;
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:group holding its release back %d ms",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             prte_grpcomm_globals.group_release_delay_ms));
+        tv.tv_sec = prte_grpcomm_globals.group_release_delay_ms / 1000;
+        tv.tv_usec = (prte_grpcomm_globals.group_release_delay_ms % 1000) * 1000;
+        prte_event_evtimer_set(prte_event_base, &dc->ev,
+                               group_release_delay_fire, dc);
+        PMIX_POST_OBJECT(dc);
+        prte_event_evtimer_add(&dc->ev, &tv);
+        return;
+    }
+    grp_release_process(buffer);
+}
+
+static void grp_release_process(pmix_data_buffer_t *buffer)
 {
     prte_grpcomm_group_t *coll;
     prte_grpcomm_grp_pending_t *pnd, *pnext;
@@ -1780,7 +2123,6 @@ void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
     pmix_data_array_t darray;
     prte_pmix_server_pset_t *pset;
     void *ilist;
-    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s group release recvd",
@@ -1806,7 +2148,7 @@ void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
     if (PMIX_GROUP_DESTRUCT == sig->op) {
         /* check for the tracker - okay if not found, it just
          * means that we had no local participants */
-        coll = get_tracker(sig, false);
+        coll = find_released_tracker(sig);
         /* find this group ID on our list of groups */
         PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
         {
@@ -2143,7 +2485,7 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
      * serviced and there is nothing left here to do.  It is equally fine
      * for it to have never existed, which simply means we had no local
      * participants. */
-    coll = get_tracker(cd->sig, false);
+    coll = find_released_tracker(cd->sig);
 
     // regardless of prior error, we MUST notify any pending clients
     // so they don't hang
@@ -2237,9 +2579,16 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_group_signature_t *sig,
      * default to using the groupID if one is given, otherwise we fallback
      * to the array of participating procs */
     PMIX_LIST_FOREACH(coll, &prte_grpcomm_globals.group_ops, prte_grpcomm_group_t) {
-        // must match groupID's and ops
+        /* must match groupID, op AND generation. The generation is compared
+         * exactly, including when it is UNKNOWN: a daemon that has not
+         * learned this name's numbering keeps its work on an UNKNOWN tracker
+         * and adopts a real number when a release tells it one - see
+         * prte_grpcomm_grp_release(). Without it, a straggler from round k
+         * would be absorbed into round k+1's tracker, inheriting its counts
+         * and its payload. */
         if (0 == strcmp(sig->groupID, coll->sig->groupID) &&
-            sig->op == coll->sig->op) {
+            sig->op == coll->sig->op &&
+            sig->generation == coll->sig->generation) {
             pmix_output_verbose(1, prte_grpcomm_globals.output,
                                  "%s grpcomm:group:returning existing collective %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -2414,6 +2763,10 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_group_signature_t *sig,
     coll->sig->op = sig->op;
     coll->sig->groupID = strdup(sig->groupID);
     coll->sig->assignID = sig->assignID;
+    /* the round we were asked for - the caller resolved it, because only the
+     * caller knows whether it is opening one of its own or joining one
+     * somebody else named */
+    coll->sig->generation = sig->generation;
     // save the participating procs
     coll->sig->nmembers = sig->nmembers;
     if (0 < sig->nmembers) {
@@ -2704,6 +3057,15 @@ static int pack_signature(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
 
+    /* pack the round this operation is. Part of the identity, so it travels
+     * beside the name it qualifies - up the rollup and back down the
+     * release. */
+    rc = PMIx_Data_pack(NULL, bkt, &sig->generation, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
     // pack the flag to assign context ID
     rc = PMIx_Data_pack(NULL, bkt, &sig->assignID, 1, PMIX_BOOL);
     if (PMIX_SUCCESS != rc) {
@@ -2814,6 +3176,15 @@ static int unpack_signature(pmix_data_buffer_t *buffer,
     // unpack the groupID
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &s->groupID, &cnt, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+
+    // unpack the round it belongs to
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->generation, &cnt, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(s);
