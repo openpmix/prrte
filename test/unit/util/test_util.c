@@ -90,6 +90,7 @@
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_json_scan.h"
+#include "src/util/prte_json_window.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/proc_info.h"
 #include "src/util/sys_limits.h"
@@ -1565,6 +1566,324 @@ static int test_json_scan_resumes(void)
     return failures;
 }
 
+/* ------------------------------------------------------------------ */
+
+/* The window reads a document that arrives in parts.  It holds no more of the
+ * document than the one value that a caller asks for.  These tests supply the
+ * document from memory, so they can make the buffer small. */
+
+typedef struct {
+    const char *doc;
+    size_t len;
+    size_t pos;
+    size_t chunk;       /* bytes handed over per read, as a pipe would */
+} window_source_t;
+
+static size_t window_source_read(char *dest, size_t len, void *cbdata)
+{
+    window_source_t *src = (window_source_t *) cbdata;
+    size_t take = src->len - src->pos;
+
+    if (take > len) {
+        take = len;
+    }
+
+    if (take > src->chunk) {
+        take = src->chunk;
+    }
+
+    memcpy(dest, src->doc + src->pos, take);
+    src->pos += take;
+    return take;
+}
+
+/* A walk makes a text record of itself, so a test compares one string. */
+typedef struct {
+    char text[512];
+    size_t used;
+} window_trace_t;
+
+static void window_trace_put(window_trace_t *trace, const char *text, size_t len)
+{
+    if (trace->used + len < sizeof(trace->text)) {
+        memcpy(trace->text + trace->used, text, len);
+        trace->used += len;
+    }
+
+    trace->text[trace->used] = '\0';
+}
+
+/* This function writes the name of the member, then '=', then the bytes of
+ * the value as the document writes them, then a separator.  It writes the
+ * name before it takes the value, because the call that takes the value lets
+ * the window use the space of the name again. */
+static int window_trace_member(prte_json_window_t *win, const char *key, void *cbdata)
+{
+    window_trace_t *trace = (window_trace_t *) cbdata;
+    const char *bytes = NULL;
+    size_t len = 0;
+    int err;
+
+    window_trace_put(trace, key, strlen(key));
+    window_trace_put(trace, "=", 1);
+    err = prte_json_window_take(win, &bytes, &len);
+
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    window_trace_put(trace, bytes, len);
+    window_trace_put(trace, ";", 1);
+    return PRTE_SUCCESS;
+}
+
+static int window_nest_member(prte_json_window_t *win, const char *key, void *cbdata);
+
+static int window_nest_element(prte_json_window_t *win, size_t index, void *cbdata)
+{
+    window_trace_t *trace = (window_trace_t *) cbdata;
+    const char *bytes = NULL;
+    size_t len = 0;
+    char label[24];
+    int err = prte_json_window_take(win, &bytes, &len);
+
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    snprintf(label, sizeof(label), "[%zu]=", index);
+    window_trace_put(trace, label, strlen(label));
+    window_trace_put(trace, bytes, len);
+    window_trace_put(trace, ";", 1);
+    return PRTE_SUCCESS;
+}
+
+/* This function reads the first element and refuses a second one.  A reader
+ * that expects one job in an array does the same. */
+static int window_only_element(prte_json_window_t *win, size_t index, void *cbdata)
+{
+    if (0 != index) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    return prte_json_window_walk_object(win, window_nest_member, cbdata);
+}
+
+/* This function reads into a member with the name obj.  It reads an array in
+ * a member with the name arr.  It expects one object in a member with the
+ * name one.  It discards a member with the name skip.  It records every other
+ * member complete. */
+static int window_nest_member(prte_json_window_t *win, const char *key, void *cbdata)
+{
+    if (0 == strcmp(key, "skip")) {
+        return prte_json_window_skip(win);
+    }
+
+    if (0 == strcmp(key, "obj")) {
+        return prte_json_window_walk_object(win, window_nest_member, cbdata);
+    }
+
+    if (0 == strcmp(key, "arr")) {
+        return prte_json_window_walk_array(win, window_nest_element, cbdata);
+    }
+
+    if (0 == strcmp(key, "one")) {
+        return prte_json_window_walk_array(win, window_only_element, cbdata);
+    }
+
+    return window_trace_member(win, key, cbdata);
+}
+
+static int window_walk(const char *document, size_t cap, size_t chunk, window_trace_t *trace)
+{
+    window_source_t src;
+    prte_json_window_t win;
+    char buf[256];
+
+    src.doc = document;
+    src.len = strlen(document);
+    src.pos = 0;
+    src.chunk = chunk;
+
+    trace->used = 0;
+    trace->text[0] = '\0';
+
+    prte_json_window_init(&win, window_source_read, &src, buf,
+                          (cap < sizeof(buf)) ? cap : sizeof(buf));
+    return prte_json_window_walk_object(&win, window_nest_member, trace);
+}
+
+/*
+ * What a walk reports.
+ *
+ * Each case gives a document and a text record of the walk.  The record has
+ * one entry for each member.  The walk reads into the members with the names
+ * obj, arr and one, so the record holds their contents in place of them.
+ */
+static int test_json_window_reports(void)
+{
+    static const struct {
+        const char *document;
+        const char *trace;
+    } cases[] = {
+        /* values come back exactly as the document spells them */
+        {"{\"a\":1,\"b\":\"two\",\"c\":null}",   "a=1;b=\"two\";c=null;"},
+        /* whitespace around the punctuation belongs to nobody */
+        {"{ \"a\" : 1 , \"b\" : 2 }",            "a=1;b=2;"},
+        /* a member's value can be an object, taken whole */
+        {"{\"a\":{\"in\":[1,2]}}",               "a={\"in\":[1,2]};"},
+        /* braces and quotes inside a string are not punctuation */
+        {"{\"a\":\"}{\\\"\",\"b\":2}",           "a=\"}{\\\"\";b=2;"},
+        /* an empty object and an empty array end where they start */
+        {"{\"a\":{},\"b\":[]}",                  "a={};b=[];"},
+        /* descending reaches members of a nested object */
+        {"{\"obj\":{\"a\":1},\"b\":2}",          "a=1;b=2;"},
+        /* an array reports its elements in order, by position */
+        {"{\"arr\":[1,\"x\",{\"k\":0}]}",        "[0]=1;[1]=\"x\";[2]={\"k\":0};"},
+        /* an empty array leaves nothing behind */
+        {"{\"arr\":[]}",                         ""},
+        /* the shape the Slurm reader walks: one object inside one array */
+        {"{\"one\":[{\"a\":1}],\"b\":2}",        "a=1;b=2;"},
+    };
+
+    int failures = 0;
+    size_t i;
+
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        window_trace_t trace;
+        int err = window_walk(cases[i].document, 128, 128, &trace);
+
+        if (PRTE_SUCCESS != err || 0 != strcmp(trace.text, cases[i].trace)) {
+            fprintf(stderr, "FAIL [window]: %s gave rc %d and \"%s\", expected \"%s\"\n",
+                    cases[i].document, err, trace.text, cases[i].trace);
+            failures++;
+        }
+    }
+
+    return failures;
+}
+
+/* What a walk refuses, and why. */
+static int test_json_window_refuses(void)
+{
+    static const struct {
+        const char *document;
+        const char *why;
+    } cases[] = {
+        {"[1,2]",                   "the document is not an object"},
+        {"{\"a\" 1}",               "a member without its colon"},
+        {"{\"a\":1 \"b\":2}",       "two members without a comma"},
+        {"{\"a\":1",                "the document ends inside the object"},
+        {"{\"arr\":[1 2]}",         "two elements without a comma"},
+        {"{\"one\":[{},{}]}",       "a second element where one was expected"},
+        {"{1:2}",                   "a member name that is not a string"},
+        {"{\"a\":1,}",              "a trailing comma in an object"},
+        {"{\"arr\":[1,]}",          "a trailing comma in an array"},
+    };
+
+    int failures = 0;
+    size_t i;
+
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        window_trace_t trace;
+        int err = window_walk(cases[i].document, 128, 128, &trace);
+
+        if (PRTE_SUCCESS == err) {
+            fprintf(stderr, "FAIL [window]: %s was accepted; %s\n",
+                    cases[i].document, cases[i].why);
+            failures++;
+        }
+    }
+
+    return failures;
+}
+
+/*
+ * A buffer that is smaller than the value that the caller wants.
+ *
+ * The document can be of any length, and the cost to read it is the size of
+ * the buffer.  A value that the window gives to a caller must fit in the
+ * buffer complete.
+ */
+static int test_json_window_bounds(void)
+{
+    static const char skipped[] = "{\"skip\":\"0123456789012345678901234567890123456789\","
+                                  "\"a\":1}";
+    static const char taken[] = "{\"pad\":\"0123456789012345678901234567890123456789\"}";
+
+    window_trace_t trace;
+    int failures = 0;
+
+    CHECK("window: a value far longer than the window is walked past",
+          PRTE_SUCCESS == window_walk(skipped, 16, 4, &trace));
+    CHECK("window: and the members after it are still reported",
+          0 == strcmp(trace.text, "a=1;"));
+    CHECK("window: a value the caller wants and cannot fit is refused",
+          PRTE_ERR_MEM_LIMIT_EXCEEDED == window_walk(taken, 16, 4, &trace));
+
+    /* A member name must also be in the buffer complete, and the window
+     * holds it there while a handler reads the value.  Thus the buffer can
+     * become full because of the name and not because of the value.  Read the
+     * same document with each buffer size near the length of its name.  Each
+     * walk must report the name or refuse for lack of space.  No walk can
+     * read the document incorrectly, and no walk can fail to return. */
+    {
+        static const char named[] = "{\"0123456789abcdef0123456789\":1}";
+        size_t cap;
+
+        for (cap = 8; cap <= 40; cap++) {
+            int err = window_walk(named, cap, 3, &trace);
+
+            CHECK("window: a long member name is reported or refused, never misread",
+                  (PRTE_SUCCESS == err
+                   && 0 == strcmp(trace.text, "0123456789abcdef0123456789=1;"))
+                      || PRTE_ERR_MEM_LIMIT_EXCEEDED == err);
+        }
+    }
+
+    return failures;
+}
+
+/*
+ * The same document with a different buffer.
+ *
+ * Read one document with each buffer size and each read size, and compare the
+ * reports.  All of them must be the same.  The window discards the bytes that
+ * it no longer needs, so both sizes change where those discards occur.  A
+ * window that loses its position between two reads reports the wrong end for
+ * a value.  The walk then reads a member name from the middle of a value.
+ */
+static int test_json_window_resizes(void)
+{
+    static const char document[] = "{\"obj\":{\"s\":\"a}b\\\"c\",\"n\":-1.5e-3},"
+                                   "\"arr\":[{},[1,[2]],true],\"one\":[{\"z\":null}]}";
+    static const char expected[] = "s=\"a}b\\\"c\";n=-1.5e-3;[0]={};[1]=[1,[2]];[2]=true;"
+                                   "z=null;";
+
+    int failures = 0;
+    size_t cap;
+
+    /* The longest value a caller takes here is 10 bytes, so a window under
+     * that cannot hold one and has nothing to say about agreement. */
+    for (cap = 12; cap <= 64 && 5 > failures; cap++) {
+        size_t chunk;
+
+        for (chunk = 1; chunk <= 16 && 5 > failures; chunk++) {
+            window_trace_t trace;
+            int err = window_walk(document, cap, chunk, &trace);
+
+            if (PRTE_SUCCESS != err || 0 != strcmp(trace.text, expected)) {
+                fprintf(stderr, "FAIL [window]: a %zu-byte window read %zu bytes at a time"
+                                " gave rc %d and \"%s\"\n",
+                        cap, chunk, err, trace.text);
+                failures++;
+            }
+        }
+    }
+
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1583,6 +1902,10 @@ int main(void)
     failures += test_json_scan_extent();
     failures += test_json_scan_refuses();
     failures += test_json_scan_resumes();
+    failures += test_json_window_reports();
+    failures += test_json_window_refuses();
+    failures += test_json_window_bounds();
+    failures += test_json_window_resizes();
     failures += test_compare_name_fields();
     failures += test_name_printing();
     failures += test_error_strings();
