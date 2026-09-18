@@ -1365,7 +1365,7 @@ commands rather than replacing them:
   to the real command.
 
 What is left here is the **compile** coverage: `build.sh` still passes
-`--with-jansson`, so `ras_slurm_jansson.c` (the ~1000-line parser) is
+`--with-jansson`, so the `ras_slurm_jansson*.c` parser files are
 compiled by the harness that gets built on every change, rather than only by
 the slower sibling. Nothing in this suite runs it.
 

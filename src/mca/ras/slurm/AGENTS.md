@@ -25,7 +25,10 @@ Files:
 | `ras_slurm_modify_release.c` | `PMIX_ALLOC_RELEASE`: `scontrol update job` to shrink; remove nodes by count. |
 | `ras_slurm_modify_cancel.c` | `PMIX_ALLOC_REQ_CANCEL`: track and cancel pending extend requests. |
 | `ras_slurm_modify_common.c` | Shared helpers: `kill_job`, control-char checks, command-output draining. |
-| `ras_slurm_jansson.c` | JSON path: `scontrol show job <id> --json`, extract job fields, add/detach modified resources. |
+| `ras_slurm_jansson.c` | JSON path: reads a record through a fixed window; knows nothing of its shape past `jobs[0]`. |
+| `ras_slurm_jansson_nodes.c` | Walks `job_resources.nodes.allocation`, with the two readers that consume it. |
+| `ras_slurm_jansson_fields.c` | Reads the top-level fields, the job state and the job's times. |
+| `ras_slurm_jansson.h` | What those three share. |
 | `ras_slurm_jansson_stub.c` | No-Jansson stubs so the component builds without the JSON parser. |
 | `ras_slurm.h` | Component struct, constants, field enums, the session-stack item type. |
 
@@ -226,7 +229,7 @@ the in-flight extend registries; `finalize` tears them down. A successful
 atomic modify returns `PMIX_OPERATION_SUCCEEDED` so the base completes the
 request.
 
-The JSON helpers (`ras_slurm_jansson.c`) are compiled only when the
+The JSON helpers (the three `ras_slurm_jansson*.c` files) are compiled only when the
 **extensions** are built — jansson available *and* a new enough SLURM, see
 the build gate below; otherwise `ras_slurm_jansson_stub.c` provides
 `prte_ras_slurm_have_jansson()==false` and no-op stubs. All three `modify`
@@ -270,7 +273,7 @@ coverage follows that seam.
 | Half | Covered by |
 |------|------------|
 | `query` + `allocate` (nodelist expansion, taint refusal, `PRTE_EXISTS` on re-discovery) | `test/unit/ras/test_ras.c` — no scheduler needed, since both read only the environment |
-| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is one of the two automated builds that configure `--with-jansson`, so `ras_slurm_jansson.c` is compiled nowhere else |
+| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is one of the two automated builds that configure `--with-jansson`, so the `ras_slurm_jansson*.c` files are compiled nowhere else |
 | the same surface against a scheduler that can refuse it | [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) — ten containers running a real SLURM, so `salloc` really allocates, `scontrol update ... ReqNodeList=` really has to be a resize SLURM accepts on a RUNNING job, and the JSON is SLURM's own |
 
 ### A job record is streamed, never held
@@ -308,7 +311,7 @@ window, which is reported by name and maps to `PMIX_ERR_OUT_OF_RESOURCE`.
 
 ### The extensions are a separate build gate: SLURM 24.05 or newer
 
-The reader reads
+`ras_slurm_jansson_nodes.c` reads
 `job_resources.nodes.{count,list,allocation}`, which is the shape SLURM
 adopted in data parser **v0.0.41**. Through 23.11 the same query answers with
 `job_resources.nodes` as a plain *string* alongside a flat `allocated_nodes`
@@ -326,7 +329,7 @@ builds SLURM from source rather than taking the distribution package.
 |----------|-----|
 | `PRTE_HAVE_SLURM_EXTENSIONS` (0/1) | the C gate — test with `#if`, never `#ifdef` |
 | `PRTE_SLURM_VERSION_STRING`, `PRTE_SLURM_MIN_EXT_VERSION` | what the run-time diagnostic names |
-| `PRTE_WANT_SLURM_EXTENSIONS` (automake) | the **build** gate: `Makefile.am` compiles `ras_slurm_jansson.c` or `ras_slurm_jansson_stub.c`, and configure drops the jansson flags entirely when off |
+| `PRTE_WANT_SLURM_EXTENSIONS` (automake) | the **build** gate: `Makefile.am` compiles the three `ras_slurm_jansson*.c` files or `ras_slurm_jansson_stub.c`, and configure drops the jansson flags entirely when off |
 | `--enable`/`--disable-slurm-extensions` | the override, in both directions. A feature switch, not a package location: the component links no SLURM library, so there is nothing to point a `--with-` at |
 
 Three things about that decision are deliberate:

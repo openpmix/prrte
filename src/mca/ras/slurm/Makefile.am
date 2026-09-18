@@ -41,7 +41,7 @@ sources = \
 # The build gate for the elastic extensions.  PRTE_WANT_SLURM_EXTENSIONS is
 # true when jansson was found (or --enable-testbuild-launchers was given, in
 # which case the real parser compiles against the declarations in
-# base/testbuild_jansson.h so this ~1000 line file is at least syntax-checked
+# base/testbuild_jansson.h so these files are at least syntax-checked
 # on machines with no jansson -- such a build must not be run, see
 # src/mca/ras/AGENTS.md) AND the Slurm this tree was configured against is new
 # enough to emit the JSON the parser reads.  See configure.m4.
@@ -52,7 +52,10 @@ sources = \
 # extensions are not built, so there is no stub surface to keep in step here.
 if PRTE_WANT_SLURM_EXTENSIONS
 sources += \
-        ras_slurm_jansson.c
+        ras_slurm_jansson.c \
+        ras_slurm_jansson.h \
+        ras_slurm_jansson_fields.c \
+        ras_slurm_jansson_nodes.c
 else
 sources += \
         ras_slurm_jansson_stub.c

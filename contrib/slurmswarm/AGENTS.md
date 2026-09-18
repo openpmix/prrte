@@ -529,7 +529,7 @@ that schema a job's resources are:
 "job_resources": { "nodes": "node[1-3]", "allocated_nodes": [ ... ] }
 ```
 
-`ras_slurm_jansson.c` reads the shape SLURM adopted in data parser **v0.0.41**,
+`ras_slurm_jansson_nodes.c` reads the shape SLURM adopted in data parser **v0.0.41**,
 which ships in SLURM **24.05** and is the default output from 24.05 onward:
 
 ```json
@@ -551,7 +551,7 @@ It says so now, at configure time.
 [`src/mca/ras/slurm/configure.m4`](../../src/mca/ras/slurm/configure.m4) asks
 the SLURM client tools their version and folds the answer, together with
 jansson availability, into `PRTE_HAVE_SLURM_EXTENSIONS` — which gates *which
-sources compile* (`ras_slurm_jansson.c` versus its stub) and what the run-time
+sources compile* (the `ras_slurm_jansson*.c` files versus the stub) and what the run-time
 refusal says. `--enable`/`--disable-slurm-extensions` overrides it in either direction.
 A machine with no SLURM to interrogate — a build node, or this harness's
 sibling — defaults to **enabled**, so nothing that worked before stops
