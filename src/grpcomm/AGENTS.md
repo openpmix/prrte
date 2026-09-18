@@ -149,7 +149,7 @@ always one thing.
 | `xcast_ops` | In-flight broadcasts, the `pending_completions` FIFO, and the three op-id sequence counters. |
 | `fence_ops` | List of `prte_grpcomm_fence_t`. A tracker is found here by its signature alone, so it must come **off** this list before its result is delivered — see *Retire before you deliver* below. |
 | `group_ops` | List of `prte_grpcomm_group_t`. |
-| `completed_group_ops` | Bounded memo of already-released group ops (see below). |
+| `completed_group_ops` | Bounded per-`(groupID, op)` count of released group ops — the next operation's generation (see below). |
 | `recovery_epoch` | The collective recovery epoch, shared by fence and group: one failure, one restart, one epoch. Issued by the master, absolute on the wire, adopted by highest value seen — see "The epoch" below. |
 
 Note the verbosity variable that backs the MCA parameter is at **file
@@ -785,15 +785,26 @@ tracker for it, and the next fence over those same participants *finds* that
 tracker, inherits its `nreported` and its bucket, and converges early
 carrying the previous round's data.
 
-**It is a counter, not a memo, and that is why `completed_group_ops` could
-not be copied.**  The group memo works because a group is keyed by `groupID`
-+ operation and `group()` drops the entry when a local client starts one.  A
-daemon relaying a fence for its subtree has no local client and would never
-drop it, so the next fence's legitimate contribution would be discarded — a
-hang, worse than the wrong answer it was meant to prevent.  What works is a
-per-signature *release count*: `prte_grpcomm_globals.fence_generations` holds
-one `prte_grpcomm_fence_memo_t` per signature giving the number of the **next**
+**It is a counter, not a memo.**  A daemon relaying a fence for its subtree
+has no local client, so a boolean "already released" memo would never be
+dropped there and the next fence's legitimate contribution would be
+discarded — a hang, worse than the wrong answer it was meant to prevent.
+What works is a per-signature *release count*:
+`prte_grpcomm_globals.fence_generations` holds one
+`prte_grpcomm_fence_memo_t` per signature giving the number of the **next**
 fence over it, one past the last released here.
+
+> This passage used to add that `completed_group_ops` "could not be copied"
+> here because the group memo worked — a group being keyed by `groupID` +
+> operation, with `group()` dropping the entry when a local client starts
+> one.  **That was wrong, and the group collective had the same bug.**  A
+> group rollup also passes through daemons that host no member and so never
+> call `group()`: `get_tracker()` says as much in its own comment on testing
+> whether this daemon is among the participants, and `check_complete()`'s
+> restart path speaks of "relaying for our subtree".  On such a daemon the
+> entry was never dropped, so every contribution to the *next* operation of
+> a reused group ID was discarded.  `completed_group_ops` is now the same
+> kind of release counter; see the group section below.
 
 The rules, and each earns its place:
 
@@ -1198,11 +1209,55 @@ Two supporting pieces: `nreported` is backed by `reported_slots`, a bitmap
 keyed on `prte_rml_get_subtree_index()` of the sender, so a replayed
 contribution is idempotent rather than double-counted (the info-list
 accumulation appends with no key matching, so a double-count is also a
-duplicated payload). And `completed_group_ops` is a bounded memo of
-already-released operations, consulted by `grp_recv` so a straggler cannot
-build a tracker nothing will ever complete or delete; `group()` clears the
-matching entry, because a local client starting an operation is proof the
-previous one of that name is over.
+duplicated payload). And `completed_group_ops` is a bounded
+memo holding, per `(groupID, op)`, the number of the **next** operation of
+that name — one past the last generation released here.  `grp_recv` consults
+it so a straggler cannot build a tracker nothing will ever complete or
+delete, and `find_delete_tracker()` records the retired round on every daemon
+a release reaches, tracker or not.
+
+The generation rides the wire *inside* the signature
+(`prte_grpcomm_group_signature_t.generation`), unlike the fence's, which sits
+beside it: every hop already packs and unpacks the group signature, so it
+propagates up the rollup, back down the release and through
+`abort_group_op()` with no site having to carry it.  It is also part of the
+tracker's identity in `get_tracker()` and `find_delete_tracker()`.
+
+This replaced a boolean "already released" memo that `group()` dropped when a
+local client started another operation of the same name.  That assumption
+holds for the *existence* of an entry and not for its *ordering*, and it
+fails outright on a daemon that relays for its subtree without hosting a
+member — it never calls `group()`, so the entry stayed and the next
+operation of that name had its contributions discarded.  Reuse of a group ID
+is legal and reachable from the top: `MPI_Comm_create_from_group()`'s
+`stringtag` becomes the group ID verbatim.
+
+**Reproducing it.**  `grpcomm_group_delay_ms` (with
+`grpcomm_group_delay_vpid`) holds one daemon's own contribution back, which
+paired with a `PMIX_TIMEOUT` puts a contribution on the wire for an operation
+`abort_group_op()` has already ended — the straggler the count has to keep
+recognizing.  `grpcomm_group_release_delay_ms` (with
+`grpcomm_group_release_delay_vpid`) holds one daemon's own *processing* of a
+release back while the forward to its children goes on time, so a
+contribution to the next operation of a reused ID arrives while that daemon
+still has the previous one open.  Both are the group twins of
+`grpcomm_fence_delay_ms` / `grpcomm_release_delay_ms`, separate from them so
+a test can hold a group construct back without stalling every fence those
+daemons are running, and **compiled in always** for the same reason.  Drive
+the release delay at `rml_base_radix 1` so the tree is a chain and the
+delayed daemon is genuinely interior.
+
+The generation is visible at `grpcomm_base_verbose 1` on the controller's
+"HNP reports complete for `<id>` gen `<n>`" line and at verbosity 2 on each
+arriving contribution, which is how you tell which round a hang is stuck in.
+
+> **Not yet watched failing.**  The single-node case cannot show the bug: the
+> HNP hosts every proc, so `group()` runs there and the old memo was always
+> dropped.  Reuse across a persistent DVM has been confirmed to advance the
+> count (`gen 0 → 1 → 2` over three `prun`s of the same group ID), but the
+> multi-daemon relay case this fixes needs `contrib/dockerswarm`.  Per the
+> rule above — a regression test for a race that has never been red proves
+> nothing — that case still owes its red run.
 
 ---
 
