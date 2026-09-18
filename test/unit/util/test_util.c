@@ -89,6 +89,7 @@
 #include "src/util/error_strings.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
+#include "src/util/prte_json_scan.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/proc_info.h"
 #include "src/util/sys_limits.h"
@@ -1304,6 +1305,266 @@ static int test_sys_limits(void)
 
 /* ------------------------------------------------------------------ */
 
+/* The scanner measures one JSON value in bytes and does not parse it.  A
+ * caller supplies the bytes in parts, so the scanner must keep its position
+ * between the parts and must stop at the exact end of the value. */
+
+/* Measure a value in one buffer.  A number, and each of the words true, false
+ * and null, that continues to the end of the buffer is complete only after
+ * the caller reports the end of the document.  prte_json_scan_finish() does
+ * that. */
+static prte_json_scan_status_t scan_value(const char *buf, size_t len, size_t *extent)
+{
+    prte_json_scan_t scan;
+    prte_json_scan_status_t status;
+    size_t used;
+
+    prte_json_scan_init(&scan);
+    status = prte_json_scan_feed(&scan, buf, len, &used);
+
+    if (PRTE_JSON_SCAN_NEED_MORE == status) {
+        status = prte_json_scan_finish(&scan);
+    }
+
+    *extent = scan.extent;
+    return status;
+}
+
+/* The same, fed in fixed-size pieces instead of all at once. */
+static prte_json_scan_status_t scan_value_in_pieces(const char *buf, size_t len, size_t piece,
+                                                    size_t *extent)
+{
+    prte_json_scan_t scan;
+    prte_json_scan_status_t status = PRTE_JSON_SCAN_NEED_MORE;
+    size_t offset = 0;
+    size_t used;
+
+    prte_json_scan_init(&scan);
+
+    while (offset < len) {
+        size_t take = (len - offset < piece) ? (len - offset) : piece;
+
+        status = prte_json_scan_feed(&scan, buf + offset, take, &used);
+        offset += used;
+
+        if (PRTE_JSON_SCAN_DONE == status || PRTE_JSON_SCAN_MALFORMED == status) {
+            break;
+        }
+    }
+
+    if (PRTE_JSON_SCAN_NEED_MORE == status) {
+        status = prte_json_scan_finish(&scan);
+    }
+
+    *extent = scan.extent;
+    return status;
+}
+
+/*
+ * What the scanner counts as one value.
+ *
+ * Each case gives a buffer and, spelled out rather than counted, the piece of
+ * it the scanner should measure.  Whatever follows that piece belongs to the
+ * caller, not to this value.
+ */
+static int test_json_scan_extent(void)
+{
+    static const struct {
+        const char *buffer;
+        const char *value;
+    } cases[] = {
+        /* an object ends at its closing brace, whatever comes after it */
+        {"{\"a\":1},\"next\"",     "{\"a\":1}"},
+        {"[1,2,3] trailing",       "[1,2,3]"},
+
+        /* a quote closes a string only when it is not escaped */
+        {"\"a\\\"b\" rest",        "\"a\\\"b\""},
+        {"\"a\\\\\" rest",         "\"a\\\\\""},
+
+        /* brackets inside a string are text, not structure */
+        {"{\"k\":\"v}\"} rest",    "{\"k\":\"v}\"}"},
+
+        /* whitespace before the value is part of it */
+        {"   {\"a\":1}",           "   {\"a\":1}"},
+
+        /* a number or literal ends AT its delimiter without consuming it */
+        {"-1.5e-3,next",           "-1.5e-3"},
+        {"true}",                  "true"},
+        {"null ",                  "null"},
+
+        /* ...or at the end of the stream, where there is no delimiter */
+        {"42",                     "42"},
+    };
+
+    int failures = 0;
+    size_t i;
+
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        size_t extent = 0;
+        prte_json_scan_status_t status = scan_value(cases[i].buffer, strlen(cases[i].buffer),
+                                                    &extent);
+
+        if (PRTE_JSON_SCAN_DONE != status) {
+            fprintf(stderr, "FAIL [scan %s]: not measured, status %d\n",
+                    cases[i].buffer, (int) status);
+            failures++;
+            continue;
+        }
+
+        if (extent != strlen(cases[i].value)) {
+            fprintf(stderr, "FAIL [scan %s]: measured %.*s, expected %s\n",
+                    cases[i].buffer, (int) extent, cases[i].buffer, cases[i].value);
+            failures++;
+        }
+    }
+
+    return failures;
+}
+
+/*
+ * What the scanner refuses.
+ *
+ * The scanner finds the end of a value.  It does not check that the JSON in
+ * the value is valid.  These documents have no end for it to find.
+ */
+static int test_json_scan_refuses(void)
+{
+    static const struct {
+        const char *buffer;
+        const char *why;
+    } cases[] = {
+        {"{\"a\":[}", "a brace closed by a bracket"},
+        {"[}",        "a bracket closed by a brace"},
+        {"\"abc",     "a string with no closing quote"},
+        {"\"a\\",     "a string ending inside an escape"},
+        {"{\"a\":",   "an object that stops mid-member"},
+        {"   ",       "whitespace where a value should start"},
+        {",1",        "a delimiter where a value should start"},
+        {"}",         "a close with nothing open"},
+    };
+
+    char too_deep[PRTE_JSON_SCAN_MAX_DEPTH + 1];
+    int failures = 0;
+    size_t extent = 0;
+    size_t i;
+
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        prte_json_scan_status_t status = scan_value(cases[i].buffer, strlen(cases[i].buffer),
+                                                    &extent);
+
+        if (PRTE_JSON_SCAN_MALFORMED != status) {
+            fprintf(stderr, "FAIL [scan]: accepted %s (%s)\n", cases[i].buffer, cases[i].why);
+            failures++;
+        }
+    }
+
+    /* The scanner limits the depth, so a malformed document cannot increase
+     * it with no end.  The scanner refuses one bracket more than the limit.
+     * The limit itself must still work. */
+    memset(too_deep, '[', sizeof(too_deep));
+    CHECK("scan: one level past the depth bound is refused",
+          PRTE_JSON_SCAN_MALFORMED == scan_value(too_deep, sizeof(too_deep), &extent));
+
+    {
+        char at_bound[2 * PRTE_JSON_SCAN_MAX_DEPTH];
+
+        memset(at_bound, '[', PRTE_JSON_SCAN_MAX_DEPTH);
+        memset(at_bound + PRTE_JSON_SCAN_MAX_DEPTH, ']', PRTE_JSON_SCAN_MAX_DEPTH);
+        CHECK("scan: the depth bound itself is usable",
+              PRTE_JSON_SCAN_DONE == scan_value(at_bound, sizeof(at_bound), &extent));
+        CHECK("scan: a value at the depth bound measures whole",
+              sizeof(at_bound) == extent);
+    }
+
+    return failures;
+}
+
+/* Measure one buffer in one part, then in parts of each size.  Report any
+ * difference. */
+static int one_value_survives_splitting(const char *buffer, size_t len)
+{
+    size_t whole_extent = 0;
+    prte_json_scan_status_t whole = scan_value(buffer, len, &whole_extent);
+    size_t piece;
+
+    for (piece = 1; piece <= len && piece < 64; piece++) {
+        size_t extent = 0;
+        prte_json_scan_status_t status = scan_value_in_pieces(buffer, len, piece, &extent);
+
+        if (status != whole || extent != whole_extent) {
+            fprintf(stderr, "FAIL [scan]: in %zu-byte pieces gave status %d extent %zu,"
+                            " whole gave status %d extent %zu, for: %.*s\n",
+                    piece, (int) status, extent, (int) whole, whole_extent, (int) len, buffer);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int test_json_scan_resumes(void)
+{
+    static const char *const cases[] = {
+        "{\"a\":1},\"next\"",       /* splits at the closing brace          */
+        "\"a\\\"b\"",               /* splits between a backslash and quote */
+        "-1.5e-3,",                 /* splits before a number's delimiter   */
+        "true",                     /* splits before the end of the stream  */
+        "{\"k\":\"v}\"}",           /* splits inside a quoted bracket       */
+        "   {\"a\":[1,[2],{}]}",    /* splits anywhere in a nested value    */
+        "{\"a\":[}",                /* a refusal must also be reproducible  */
+    };
+
+    int failures = 0;
+    size_t i;
+
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        failures += one_value_survives_splitting(cases[i], strlen(cases[i]));
+    }
+
+    /* Ask the scanner the same question two times and compare the two
+     * answers.  Make every short string from the characters that can confuse
+     * a scanner.  For each string ask where the value ends.  Ask first with
+     * all of the bytes in one part, then with the bytes in many parts.  The
+     * two answers must be the same.
+     *
+     * A real reader gets its bytes from a pipe, so a value can arrive in
+     * parts that divide it at any byte.  A scanner that loses its position
+     * between two parts reports the wrong end for the value.  The reader then
+     * reads a member name from the middle of a value. */
+    {
+        static const char symbols[] = "{}[]\"\\1,";
+        const size_t nsymbols = sizeof(symbols) - 1;
+        char buffer[5];
+        size_t len;
+
+        for (len = 1; len <= sizeof(buffer) && failures < 5; len++) {
+            size_t combinations = 1;
+            size_t n;
+
+            for (n = 0; n < len; n++) {
+                combinations *= nsymbols;
+            }
+
+            /* Count from 0 to combinations-1 in base nsymbols.  Each digit
+             * selects one symbol, so each string of this length occurs one
+             * time. */
+            for (n = 0; n < combinations && failures < 5; n++) {
+                size_t remaining = n;
+                size_t digit;
+
+                for (digit = 0; digit < len; digit++) {
+                    buffer[digit] = symbols[remaining % nsymbols];
+                    remaining /= nsymbols;
+                }
+
+                failures += one_value_survives_splitting(buffer, len);
+            }
+        }
+    }
+
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1319,6 +1580,9 @@ int main(void)
     prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(prte_node_pool, 8, INT_MAX, 8);
 
+    failures += test_json_scan_extent();
+    failures += test_json_scan_refuses();
+    failures += test_json_scan_resumes();
     failures += test_compare_name_fields();
     failures += test_name_printing();
     failures += test_error_strings();
