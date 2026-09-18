@@ -1141,6 +1141,160 @@ static int test_fence_generation(void)
     return failures;
 }
 
+#if PRTE_TEST_GRPCOMM_INTERNALS
+static void grp_gen_sig(prte_grpcomm_group_signature_t *sig, const char *grpid,
+                        pmix_group_operation_t op)
+{
+    PMIX_CONSTRUCT(sig, prte_grpcomm_group_signature_t);
+    sig->groupID = strdup(grpid);
+    sig->op = op;
+}
+#endif
+
+/*
+ * Telling one group operation over a (groupID, op) from the next.
+ *
+ * A group ID is the application's to choose and legal to reuse once the
+ * operation that used it is over - MPI_Comm_create_from_group's stringtag
+ * becomes one verbatim - so a contribution says nothing about WHICH
+ * operation of that name it belongs to. This used to be a boolean memo of
+ * released operations, forgotten again when a local client started another
+ * of the same name; that could not work on a daemon relaying for its subtree
+ * with no local client of its own to do the forgetting, and a group rollup
+ * routinely has those. On one, every contribution to the second operation of
+ * a reused name was discarded, hanging it.
+ *
+ * So it counts releases, and the number rides the wire. These are the
+ * decisions that mechanism turns on; the DVM-level races are the
+ * dockerswarm harness's job.
+ */
+static int test_group_generation(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_grpcomm_group_signature_t a, b, d;
+    size_t i;
+
+    /* Construct, do not destruct first: grpcomm's init has not run in this
+     * binary, so the list has no object magic yet and destructing it would
+     * assert. The fence twin does the same. */
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
+
+    grp_gen_sig(&a, "gen-group-a", PMIX_GROUP_CONSTRUCT);
+    grp_gen_sig(&b, "gen-group-b", PMIX_GROUP_CONSTRUCT);
+    /* same NAME as a, different operation - the memo is keyed on both */
+    grp_gen_sig(&d, "gen-group-a", PMIX_GROUP_DESTRUCT);
+
+    /* Nothing released yet, on a daemon that has been here since the start.
+     * The answer is round 0, and that is what bootstraps the counter: if an
+     * unseen name answered "no claim" instead, no first round would ever be
+     * established, every contribution would be stamped UNKNOWN for ever, and
+     * the whole mechanism would be inert. */
+    prte_grpcomm_fence_note_join(false);
+    CHECK("grp gen: an original daemon starts an unseen name at 0",
+          0 == prte_grpcomm_group_gen_next(&a));
+    CHECK("grp gen: round 0 is not stale before it has been released",
+          !prte_grpcomm_group_gen_is_stale(&a, 0));
+    CHECK("grp gen: ...nor is a later one",
+          !prte_grpcomm_group_gen_is_stale(&a, 7));
+
+    /* ...and the same question on a daemon a grow added answers differently.
+     * It cannot claim 0 - every daemon that has been present is past it and
+     * would drop a 0 as ancient, hanging the operation - so it says it does
+     * not know, which a receiver takes into whatever round is current. */
+    prte_grpcomm_globals.joined_late_known = false;
+    prte_grpcomm_fence_note_join(true);
+    CHECK("grp gen: a daemon that joined late answers UNKNOWN instead",
+          PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == prte_grpcomm_group_gen_baseline());
+    CHECK("grp gen: ...and that is what an unseen name gives it",
+          PRTE_GRPCOMM_GROUP_GEN_UNKNOWN == prte_grpcomm_group_gen_next(&b));
+
+    /* back to an original daemon for the rest */
+    prte_grpcomm_globals.joined_late_known = false;
+    prte_grpcomm_fence_note_join(false);
+
+    /* An UNKNOWN stamp is silence, never staleness. This is what a
+     * newly-grown daemon sends, and dropping it would hang the operation it
+     * is legitimately joining. */
+    prte_grpcomm_group_gen_record(&a, 4);
+    CHECK("grp gen: an UNKNOWN stamp is never stale",
+          !prte_grpcomm_group_gen_is_stale(&a, PRTE_GRPCOMM_GROUP_GEN_UNKNOWN));
+
+    /* Recording a release moves us to the next round. */
+    CHECK("grp gen: releasing 4 puts the next operation at 5",
+          5 == prte_grpcomm_group_gen_next(&a));
+    CHECK("grp gen: round 4 is now stale",
+          prte_grpcomm_group_gen_is_stale(&a, 4));
+    CHECK("grp gen: as is anything below it",
+          prte_grpcomm_group_gen_is_stale(&a, 0));
+    CHECK("grp gen: but the round we are on is not",
+          !prte_grpcomm_group_gen_is_stale(&a, 5));
+    CHECK("grp gen: nor is one ahead of us",
+          !prte_grpcomm_group_gen_is_stale(&a, 6));
+
+    /* THE BUG THIS REPLACED. The boolean memo answered "already released"
+     * to every later contribution to a reused name, which is what hung the
+     * second operation. A round at or above where we are must be accepted. */
+    CHECK("grp gen: the operation after a release is NOT treated as a "
+          "straggler",
+          !prte_grpcomm_group_gen_is_stale(&a, prte_grpcomm_group_gen_next(&a)));
+
+    /* Adopt, do not increment. A daemon that missed rounds must be able to
+     * jump straight to the true number rather than count from its arrival. */
+    prte_grpcomm_group_gen_record(&a, 20);
+    CHECK("grp gen: a release adopts its generation rather than incrementing",
+          21 == prte_grpcomm_group_gen_next(&a));
+
+    /* ...and a release that arrives out of order cannot walk it backwards,
+     * which would un-stale contributions already correctly dropped. */
+    prte_grpcomm_group_gen_record(&a, 6);
+    CHECK("grp gen: an out-of-order release does not move it back",
+          21 == prte_grpcomm_group_gen_next(&a));
+
+    /* A different name is another operation entirely and must not inherit
+     * this one's count. */
+    CHECK("grp gen: a different group ID is untouched",
+          0 == prte_grpcomm_group_gen_next(&b));
+
+    /* ...and neither is the same name under the other operation. A construct
+     * and a destruct of one group are distinct collectives; sharing a
+     * counter would have one's release stale the other's contributions. */
+    CHECK("grp gen: the same name under a different op is untouched",
+          0 == prte_grpcomm_group_gen_next(&d));
+    prte_grpcomm_group_gen_record(&d, 0);
+    CHECK("grp gen: ...and recording against it leaves the construct alone",
+          21 == prte_grpcomm_group_gen_next(&a));
+    CHECK("grp gen: ...while the destruct advances on its own",
+          1 == prte_grpcomm_group_gen_next(&d));
+
+    /* The memo is bounded. Eviction is a graceful loss - that name returns
+     * to the old behaviour - but the list must not grow without end on a
+     * long-lived DVM that runs many differently-named group operations. */
+    for (i = 0; i < PRTE_GRPCOMM_GROUP_MEMO_MAX + 8; i++) {
+        prte_grpcomm_group_signature_t t;
+        char id[64];
+        snprintf(id, sizeof(id), "gen-grp-fill-%zu", i);
+        grp_gen_sig(&t, id, PMIX_GROUP_CONSTRUCT);
+        prte_grpcomm_group_gen_record(&t, 0);
+        PMIX_DESTRUCT(&t);
+    }
+    CHECK("grp gen: the memo stays bounded",
+          PRTE_GRPCOMM_GROUP_MEMO_MAX >=
+              pmix_list_get_size(&prte_grpcomm_globals.completed_group_ops));
+
+    PMIX_DESTRUCT(&a);
+    PMIX_DESTRUCT(&b);
+    PMIX_DESTRUCT(&d);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_group_generation\n");
+    }
+    return failures;
+}
+
 /*
  * The release tree: the second topology, derived rather than agreed.
  *
@@ -1667,6 +1821,7 @@ int main(void)
     failures += test_group_directives();
     failures += test_fence_operation();
     failures += test_fence_generation();
+    failures += test_group_generation();
     failures += test_release_tree();
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
