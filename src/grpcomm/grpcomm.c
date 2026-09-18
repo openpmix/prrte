@@ -96,6 +96,10 @@ void prte_grpcomm_register(void)
      * Compiled in always, on purpose.  See src/grpcomm/AGENTS.md. */
     prte_grpcomm_globals.release_delay_ms = 0;
     prte_grpcomm_globals.release_delay_vpid = -1;
+    prte_grpcomm_globals.group_delay_ms = 0;
+    prte_grpcomm_globals.group_delay_vpid = -1;
+    prte_grpcomm_globals.group_release_delay_ms = 0;
+    prte_grpcomm_globals.group_release_delay_vpid = -1;
     prte_grpcomm_globals.joined_late = false;
     prte_grpcomm_globals.joined_late_known = false;
 
@@ -139,6 +143,46 @@ void prte_grpcomm_register(void)
                                "every daemon that reads the parameter.",
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_grpcomm_globals.fence_delay_vpid);
+
+    /* The same pair for the group collective.  Separate from the fence's so a
+     * test can hold a group construct back without stalling every fence those
+     * daemons are running at the same time. */
+    prte_grpcomm_globals.group_delay_ms = 0;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "group_delay_ms",
+                               "Hold this daemon's own group contribution back "
+                               "by this many milliseconds before sending it. "
+                               "Fault injection for the group's round handling; "
+                               "0 (the default) sends immediately.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.group_delay_ms);
+
+    prte_grpcomm_globals.group_delay_vpid = -1;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "group_delay_vpid",
+                               "Restrict grpcomm_group_delay_ms to the daemon "
+                               "with this vpid. -1 (the default) delays on "
+                               "every daemon that reads the parameter.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.group_delay_vpid);
+
+    /* The early-arrival half: a contribution to the next operation of a
+     * reused group ID landing on a daemon that has not finished the previous
+     * one.  That is the window the boolean memo got wrong. */
+    prte_grpcomm_globals.group_release_delay_ms = 0;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "group_release_delay_ms",
+                               "Hold this daemon's own processing of a group "
+                               "release back by this many milliseconds. The "
+                               "forward to its children is not delayed. Fault "
+                               "injection; 0 (the default) processes at once.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.group_release_delay_ms);
+
+    prte_grpcomm_globals.group_release_delay_vpid = -1;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "group_release_delay_vpid",
+                               "Restrict grpcomm_group_release_delay_ms to the "
+                               "daemon with this vpid. -1 (the default) delays "
+                               "on every daemon that reads the parameter.",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_grpcomm_globals.group_release_delay_vpid);
 
     /* And the third: hold the forward itself back, so an operation is still
      * travelling its tree when a daemon is killed underneath it.  Its two
