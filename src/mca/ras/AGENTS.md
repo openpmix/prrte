@@ -753,7 +753,7 @@ Several ras components are gated on third-party headers that most
 machines do not have, so they are silently skipped by nearly every
 developer build and every CI job — which is exactly where an edit can sit
 broken indefinitely. `ras/flux` needs Flux *and* jansson; `ras/slurm`
-compiles a ~1000-line `scontrol --json` parser only when jansson is
+compiles a `scontrol --json` parser only when jansson is
 found, and **jansson defaults to `--with-jansson=no`**, so the stub is
 what almost everyone builds.
 
@@ -762,7 +762,7 @@ declaration-only stand-ins:
 
 | Header | Stands in for | Used by |
 |--------|---------------|---------|
-| [`base/testbuild_jansson.h`](base/testbuild_jansson.h) | `<jansson.h>` | `ras/slurm` (`ras_slurm_jansson.c`), `ras/flux` |
+| [`base/testbuild_jansson.h`](base/testbuild_jansson.h) | `<jansson.h>` | `ras/slurm` (the `ras_slurm_jansson*.c` files), `ras/flux` |
 | [`flux/testbuild_flux.h`](flux/testbuild_flux.h) | `<flux/core.h>`, `<flux/hostlist.h>`, `<flux/idset.h>` | `ras/flux` |
 | [`lsf/testbuild_lsf.h`](lsf/testbuild_lsf.h) | `<lsf/lsbatch.h>` | `ras/lsf` |
 
@@ -809,7 +809,7 @@ depends on that, since every build job configures
 `--enable-testbuild-launchers` and then runs `make check`, `make install`
 and a live `prterun`. What it cannot do is any actual work: nothing is
 parsed and no broker is contacted, so re-check such a tree after touching
-`ras/flux`, `ras/lsf` or `ras_slurm_jansson.c` (a normal build will not
+`ras/flux`, `ras/lsf` or the `ras_slurm_jansson*.c` files (a normal build will not
 tell you that you broke them), and do not install one over a good
 installation.
 
@@ -838,7 +838,7 @@ at configure time (`PRTE_HAVE_SLURM_EXTENSIONS`, see
 [`slurm/AGENTS.md`](slurm/AGENTS.md)). A `make check` build, which by
 default has no jansson, cannot reach a line of it. Both container
 harnesses pass `--with-jansson` deliberately and are the only automated
-builds anywhere that even compile `ras_slurm_jansson.c` — but only
+builds anywhere that even compile the `ras_slurm_jansson*.c` files — but only
 [`contrib/slurmswarm`](../../../contrib/slurmswarm/) *runs* it, against ten
 containers holding a real `slurmctld`. `validate_hostname`,
 `prte_ras_slurm_drain_cmd_output` and the JSON parser live on that path only
