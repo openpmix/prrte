@@ -276,6 +276,28 @@ pipe.  Because the answer differs between the two files and changes how
 every PRRTE tool takes a signal, it is recorded here rather than done
 alongside an unrelated fix.
 
+**A daemon's relayed help message is not suppressed while the DVM starts.**
+``prte_show_help()`` ships a ``prted``'s rendered text to the master, which
+delivers it — and PMIx keys duplicate suppression in ``plog``
+(``pmix_help_check_dups``), which sits *downstream* of the delivery.  On the
+two paths where PRRTE has concluded the message is its to show and nobody
+else's — a ``prted`` with no master to relay to, and a persistent DVM that
+has not finished starting — ``deliver_locally()`` writes ``stderr`` itself,
+because PMIx routes a server peer's log through IOF and IOF honors
+``PMIX_IOF_LOCAL_OUTPUT``, which PRRTE sets false for both.  That direct
+write bypasses the suppression: while a persistent DVM is starting, one
+message relayed by N daemons prints N times rather than once with a count,
+which is the storm the aggregation exists to prevent, at the scale it
+exists for.
+
+The fix is not in PRRTE.  ``pmix_help_check_dups()`` cannot be called from
+here — its list is process-global, carries no lock, and must be called on
+the **PMIx** progress thread, which is not the thread any of these callers
+runs on.  What is missing is a PMIx entry point meaning "write this to my
+own stderr, with suppression", beside ``pmix_show_help_norender()``.
+Growing a second suppression table in PRRTE would be the wrong shape.  See
+``src/util/AGENTS.md``.
+
 **Two resource-usage queries are recognized and answer nothing.**
 ``PMIX_QUERY_PROC_RESOURCE_USAGE`` and ``PMIX_QUERY_NODE_RESOURCE_USAGE``
 have arms of their own in ``_query()``
@@ -323,6 +345,17 @@ PBS, LSF, gridengine, Flux and PALS are compile-only in CI
 headers, against declaration-only stubs).  A build proves they still compile;
 only a real allocation on such a system proves anything else.  SLURM is the
 exception — ``contrib/slurmswarm`` runs a real one.
+
+**``prtereachable/netlink`` is compiled by nothing.**  It is the component
+that wins reachability scoring on every Linux machine that has
+libnl-route-3, and no build in the project's reach has libnl: the
+``contrib/dockerswarm`` image does not install it, so the swarm builds and
+runs ``weighted`` instead, and macOS drops the component at configure time
+for want of ``linux/netlink.h``.  A review of it therefore had to build it
+in a throwaway container with ``libnl-route-3-dev`` added by hand.  Adding
+that package to the swarm image would make the harness compile and exercise
+the component PRRTE actually uses in production, which is the cheapest fix
+available; until then nothing here can fail.
 
 **macOS.**  ``contrib/dockerswarm/run-tests.sh macos`` is a single-host
 subset by construction.  Everything multi-node on that platform is untested.
@@ -436,156 +469,148 @@ longer uses flex.)
 Review status
 -------------
 
-PRRTE's source has been going through a file-by-file review pass: read the
-code, verify each finding adversarially, fix what survives, and write what
-the review established into the directory's ``AGENTS.md``.  This section
-records where that pass has reached, because "has anyone actually looked at
-this?" should be a question with an answer, and because a review is only as
-good as the code it was a review *of* — several subsystems have been rebuilt
-since theirs.
+PRRTE's source has been going through a review pass: read the code, verify
+each finding adversarially, fix what survives, and write what the review
+established into the directory's ``AGENTS.md``.  This section records where
+that pass has reached, because "has anyone actually looked at this?" should
+be a question with an answer, and because a review is only as good as the
+code it was a review *of* — several subsystems have been rebuilt since
+theirs.
 
-The churn figures are commits and diff lines touching the subsystem's
-sources since its own review commits, measured on **2026-08-17**.  They age;
-regenerate them with ``git log --since=<date> -- <dir>`` rather than trusting
-them a month from now.  ``AGENTS.md`` and ``CLAUDE.md`` are excluded from the
-counts, since a review's own write-up would otherwise count as change since
-the review.
+Assessed on **2026-09-18** from the commit history.  Move a directory out of
+"Not yet reviewed" as its review lands, and refresh an entry below when a
+re-review closes one.  The churn figures are commits and diff lines since the
+review, counted by **author** date (work lands by rebase, which restamps
+every commit with the day it merged) from the end of the review's own day,
+excluding ``AGENTS.md``, ``CLAUDE.md`` and the 2026-09-17 release-version
+stamp — that one replaced a single token in all thirty-nine components and
+would otherwise put a commit against every entry while saying nothing about
+any of them.
 
-Reviewed, and stable since
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. note:: **An** ``AGENTS.md`` **is not evidence of a review, and neither is
+          the review tooling's ledger.**  Every directory has a guide; most
+          were written in one orientation sweep before any review started.
+          And the per-file ledger the ``/deep-review`` skill keeps lives in
+          one clone's ``.git`` and does not travel — reviews run from another
+          clone, or another machine, leave no trace in it.  Reviews are
+          deliberately run in parallel across clones, so the repository's own
+          history is the only record all of them share.  What marks a
+          reviewed file is a run of repair commits, usually closed by a
+          ``Tidy what the <name> review left behind``, and a commit that
+          records the result in the guide; ``git log --grep='review left
+          behind'`` finds most of them and the merged pull request list finds
+          the rest.  Trusting the ledger instead is how
+          ``plm_base_launch_support.c`` (#2799), ``pmix_server_queries.c``
+          (#2798) and all of ``data_type_support/`` (#2797) were once listed
+          here as unread after they had been reviewed and merged.
 
-What each of these directories' ``AGENTS.md`` says is still what the code
-does.
+Reviewed and current
+~~~~~~~~~~~~~~~~~~~~
 
-.. list-table::
-   :header-rows: 1
-   :widths: 26 24 50
+``src/event``, ``src/include``, ``src/pmix``, ``src/tools``,
+``src/mca/common``, ``src/mca/ess``, ``src/mca/iof``, ``src/mca/ras/base``,
+``src/mca/ras/hosts``, ``src/mca/ras/pmix``,
+``src/mca/prtereachable/netlink``, ``src/util/hostfile`` and
+``src/util/rankfile``.
 
-   * - subsystem
-     - last reviewed
-     - since
-   * - ``src/grpcomm``
-     - 2026-08-25 (round 4)
-     - nothing
-   * - ``src/prted/pmix``
-     - 2026-08-25
-     - nothing
-   * - ``src/prted`` (excluding ``pmix/``)
-     - 2026-08-25
-     - nothing.  All four of ``prte.c``, ``prted_comm.c``,
-       ``prte_app_parse.c`` and ``prun_common.c``; with the row above it,
-       the directory is now reviewed end to end.
-   * - ``src/mca/ras/base``
-     - 2026-08-26
-     - nothing.  The framework's own four files only — the driver, the
-       node insert, the framework hooks and the selector.  The ``ras``
-       *components* are not covered by this and stay in the table below.
-   * - ``src/mca/ras/pmix``
-     - 2026-08-26
-     - nothing.  Both files.  Note that nothing automated exercises this
-       component's one real path: there is no PMIx scheduler in any
-       harness, so the review is a reading plus what ``make check`` can
-       reach through the module vtable.
-   * - ``src/event``
-     - 2026-07-31
-     - nothing
-   * - ``src/include``
-     - 2026-08-02 (round 2)
-     - nothing
-   * - ``src/pmix``
-     - 2026-07-30
-     - 6 commits, ~110 lines
-   * - ``src/mca/filem``
-     - 2026-08-03 (round 2)
-     - 3 commits, ~30 lines
-   * - ``src/mca/ess``
-     - 2026-08-03 (round 2)
-     - 4 commits, ~120 lines
-   * - ``src/mca/iof``
-     - 2026-08-04 (round 2)
-     - 6 commits, ~150 lines
-   * - ``src/tools``
-     - 2026-07-29
-     - 11 commits, ~120 lines
+``src/prted`` outside ``pmix/`` is current as well — ``prte.c``,
+``prted_comm.c``, ``prte_app_parse.c`` and ``prun_common.c``, all four of it;
+``src/prted/pmix`` has moved since and is below.  Individual files inside the
+directories listed below are current too, wherever those entries name them.
 
-Reviewed, but changed materially since
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-These carry a review, and then the ground moved.  The review's findings are
-still worth reading — they say what the invariants are — but nothing here has
-been re-verified against the code as it now stands, and the top of the list
-is not a marginal case.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 20 58
-
-   * - subsystem
-     - last reviewed
-     - since
-   * - ``src/mca/ras`` (components only; see ``base/`` above)
-     - 2026-07-26
-     - 44 commits, +2,093/-494.  Elastic extend/release, the SLURM
-       ``--json`` parser and its version gate, node reservation.
-   * - ``src/mca/rmaps``
-     - 2026-07-28
-     - 28 commits, +2,408/-480.  Per-device mapping is nearly all of it,
-       including a new enumerator vtable in the base.
-   * - ``src/runtime``
-     - 2026-07-29
-     - 30 commits, +1,792/-635.  Placement packed as maps, the cpuset
-       scatter, the mode byte at the head of the job buffer, and the data
-       server's move onto a PMIx tool connection.
-   * - ``src/mca/schizo``
-     - 2026-07-28
-     - 30 commits, +1,535/-522.  Device-mapping qualifiers and the
-       debugger options.
-   * - ``src/rml``
-     - 2026-07-29
-     - 20 commits, +1,522/-190.  The OOB wire header lost its namespaces,
-       per-peer worker bases arrived, and RELM gained demotion handling
-       (RELM was reviewed as part of this pass, not separately).
-   * - ``src/util``
-     - 2026-07-29
-     - 22 commits, +889/-96
-   * - ``src/mca/odls``
-     - 2026-08-04 (round 2)
-     - 8 commits, +543/-289.  The receiving half of the cpuset scatter.
-   * - ``src/hwloc``
-     - 2026-08-01 (round 3)
-     - 11 commits, +536/-437.  Device enumeration and the UUID plumbing.
-   * - ``src/mca/state``
-     - 2026-07-29
-     - 17 commits, +424/-120
-   * - ``src/mca/errmgr``
-     - 2026-08-02 (round 2)
-     - 15 commits, +301/-217
-   * - ``src/mca/plm``
-     - 2026-08-04 (round 2)
-     - 13 commits, +279/-147
+``src/mca/filem``, ``src/hwloc`` and ``src/mca/errmgr`` were reviewed too and
+have current guides, with only modest churn since (+338/-50, +221/-96 and
++213/-56 respectively).
 
 Not yet reviewed
 ~~~~~~~~~~~~~~~~
 
-Every directory below has an ``AGENTS.md`` — the orientation guides were
-written across the tree in one pass — but an orientation guide is a
-description, not a review.  Nobody has read these for defects.
+Each of these has an orientation guide and nothing else: no findings were
+ever recorded in it, and only drive-by fixes have landed.  Ordered by size,
+which is a rough proxy for how much there is to find.
 
-**``src/mca/common``** (with ``common/slurm``).  Written 2026-08-06 and
-untouched by any review.  It is now the single place every SLURM component
-asks "is this really SLURM", so a wrong answer there is wrong in ``ras``,
-``plm`` and ``ess`` at once.
+* ``src/mca/prteinstalldirs`` (570 lines), ``src/mca/prtebacktrace`` (467).
+  Small and quiet, which is the argument both for leaving them and for the
+  fact that a defect in them would have gone unnoticed.
+* ``src/mca/prtereachable/weighted`` (403) and ``src/mca/prtereachable/base``
+  (207) — the portable scoring component and the framework's selector.
+  ``netlink`` wins wherever it is built, and has been reviewed; ``weighted``
+  is what every machine without libnl actually runs, and has not.
 
-**``src/mca/prtereachable``**, **``src/mca/prtebacktrace``**,
-**``src/mca/prteinstalldirs``**.  Nothing but a header-installation fix and
-the framework-version stamp has touched these since the pass began.  They are
-small and quiet, which is the argument both for leaving them and for the fact
-that a defect in them would have gone unnoticed.
+Outside ``src/``, nothing has been reviewed: ``test/unit`` (29,752 lines) and
+the harness scripts under ``contrib/`` (21,972).  Both were read informally
+as they were written, never subjected to the pass.  This is worth saying out
+loud, because the harness is what decides whether everything else passes.
 
-**``test/unit`` and the harness scripts under ``contrib/``.**  Reviewed
-informally as they were written; never subjected to the pass.  This is worth
-saying out loud, because the harness is what decides whether everything else
-passes.
+Reviewed, but changed materially since
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Ordered by how much of the directory the review no longer covers.  Where a
+file has since had a review of its own it is named, and its churn is left out
+of the figure — reviews are done file by file now, so a directory is usually
+part read, and counting the whole of it would say most of these are two to
+four times worse than they are.
+
+#. **``src/rml``** — reviewed 2026-07-29.  49 commits and +2,493/-1,636
+   since, none of it re-read: the OOB wire header lost its namespaces
+   (``oob_tcp.c``, ``oob_tcp_sendrecv.c``), a daemon that has died is no
+   longer reported as a firewall problem, per-peer worker bases arrived and
+   were then folded into the shared worker pool, a peer's queued sends
+   complete when the connection is given up, ``rml.c``/``rml.h`` describe a
+   second derived radix tree, and RELM's UID counter steps over its
+   sentinels.  Four files are current, reviewed 2026-09-14 (#2782):
+   ``oob/oob_tcp_connection.c``, ``rml_fault_handler.c``, ``routed_radix.c``
+   and ``relm/state_updates.c``.
+#. **``src/mca/rmaps``** — reviewed 2026-07-28.  +1,514/-1,016 unread across
+   45 commits: the ``-host`` slot cap, ``:SPAN``, node ranks allocated
+   instead of counted, and the rankfile reader moved out to
+   ``src/util/rankfile``.  Four files are current and account for 2,700 of
+   the 4,200 lines this directory has changed: ``base/rmaps_base_devices.c``
+   and ``round_robin/rmaps_rr_mappers.c`` (2026-09-15, #2785), and
+   ``base/rmaps_base_map_job.c`` and ``base/rmaps_base_frame.c``
+   (2026-09-17, #2801).
+#. **``src/mca/ras``** (components other than ``base``, ``hosts`` and
+   ``pmix``, which are current) — reviewed 2026-07-26, the oldest review in
+   the tree.  33 commits and +1,803/-467 since, none of it re-read, and
+   nearly all ``ras/slurm``: elastic extend and release
+   (``ras_slurm_modify_extend.c`` alone is 1,200 changed lines), the
+   ``--json`` parser and its version gate, ``PMIX_ALLOC_NEW``, a grow that
+   names its nodes, and release matching the HNP's node by locality.
+#. **``src/runtime``** — reviewed 2026-07-29.  +1,039/-468 unread across 45
+   commits: allocation state behind accessors, node matching through
+   aliases, and a job no longer freed while its session lists it.  Four
+   fifths of what the directory changed is current: all of ``data_server/``
+   (2026-09-15, #2786 and #2787), all of ``data_type_support/`` — the
+   placement maps and the cpuset scatter — (2026-09-17, #2797), and
+   ``prte_worker_pool.c`` (2026-09-17, #2803).
+#. **``src/util``** — reviewed 2026-07-29.  +1,184/-240 unread across 45
+   commits: ``nidmap.c`` took the cpuset scatter, and the stack trace printer
+   was corrected twice.  Current: ``hostfile/`` and ``rankfile/``
+   (2026-09-13, #2781), both rewritten line-at-a-time two days before their
+   review so the review is of the current design, and ``textfile.c`` and
+   ``prte_show_help.c`` (2026-09-17, #2803), which were new since the
+   directory's review and have now had one of their own.
+#. **``src/mca/schizo``** — reviewed 2026-07-28.  +889/-294 unread across 29
+   commits, in the personalities and the rest of the base.
+   ``base/schizo_base_frame.c`` is current (2026-09-16, #2793 and #2794) and
+   is half of what the directory changed: the device-mapping qualifiers and
+   the debugger options.
+#. **``src/prted/pmix``** — reviewed 2026-08-25.  +697/-305 unread across 20
+   commits: register-a-namespace-once and failing the launch when
+   registration fails (``pmix_server_register_fns.c``), the refusal of a
+   remote proc's device distances, and terminating every job connected to a
+   failure.  ``pmix_server_queries.c`` is current (2026-09-17, #2798) and is
+   half of what the directory changed.
+
+Lower priority, with current guides and a file at the heart of each already
+re-read: ``src/grpcomm`` (+641/-139 unread, with ``grpcomm_fence.c`` and
+``grpcomm_xcast.c`` current as of #2783 and #2792), ``src/mca/state``
+(+417/-288, with ``base/state_base_fns.c``, ``base/state_base_log.c`` and
+``dvm/state_dvm.c`` current as of #2793 and #2794), ``src/mca/odls``
+(+445/-249, with ``base/odls_base_default_fns.c`` current as of #2789), and
+``src/mca/plm`` (+487/-191, with ``base/plm_base_launch_support.c`` current
+as of #2799).
+
 
 Performance work: what the measurements settled
 -----------------------------------------------
