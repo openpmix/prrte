@@ -40,8 +40,6 @@ EXTRA_DIST = \
         distscript.sh \
         prte_get_version.m4sh \
         prte_get_version.sh \
-        ltmain_nag_pthread.diff \
-        ltmain_pgi_tp.diff \
         find_common_syms \
         getdate.sh \
         from-savannah/upstream-config.guess \
