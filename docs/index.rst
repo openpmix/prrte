@@ -43,6 +43,7 @@ Table of contents
    contributing
    todo
    code-of-conduct
+   security
    license
    man/index
    versions
