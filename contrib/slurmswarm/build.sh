@@ -199,6 +199,10 @@ prep_srcdir() {
         [ "$root/configure.ac" -nt "$root/configure" ] && return 0
         [ -n "$(find "$root/config" -name '*.m4' -newer "$root/configure" \
                      -print -quit 2>/dev/null)" ] && return 0
+        # A Makefile.am too: the container's source mount is read-only, so
+        # maintainer mode cannot regenerate its Makefile.in there.
+        [ -n "$(find "$root" -name 'Makefile.am' -newer "$root/configure" \
+                     -print -quit 2>/dev/null)" ] && return 0
         return 1
     }
 
