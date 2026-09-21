@@ -44,6 +44,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_if.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_environ.h"
 
@@ -243,7 +244,8 @@ int prte_ess_base_prted_setup(void)
                  prte_process_info.nodename);
         log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
 
-        fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
+        /* not thru a symlink at the name */
+        fd = pmix_os_dirpath_open_file(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
         free(log_path);
         log_path = NULL;
         if (fd < 0) {

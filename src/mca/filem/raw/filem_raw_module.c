@@ -1759,9 +1759,15 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: opening target file %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), incoming->fullpath));
-        /* create the path to the target, if not already existing */
-        tmp = pmix_dirname(incoming->fullpath);
-        rc = pmix_os_dirpath_create(tmp, S_IRWXU);
+        /* create the path to the target, if not already existing. The
+         * session dir is ours; everything under it is composed from the
+         * name we were sent, so walk it without following a symlink */
+        tmp = pmix_dirname(file);
+        if (NULL != tmp && 0 != strcmp(tmp, ".") && 0 != strcmp(tmp, "/")) {
+            rc = pmix_os_dirpath_create_under(session_dir, tmp, S_IRWXU);
+        } else {
+            rc = PMIX_SUCCESS;
+        }
         if (PMIX_SUCCESS != rc && PMIX_ERR_EXISTS != rc) {
             PMIX_ERROR_LOG(rc);
             send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
@@ -1775,8 +1781,9 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
             return;
         }
         /* open the file descriptor for writing */
-        incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC,
-                            (mode_t) incoming->mode);
+        incoming->fd = pmix_os_dirpath_open_file_under(session_dir, file,
+                                                       O_RDWR | O_CREAT | O_TRUNC,
+                                                       (mode_t) incoming->mode);
         if (0 > incoming->fd) {
             pmix_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         incoming->fullpath);
