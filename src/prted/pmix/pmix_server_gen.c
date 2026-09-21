@@ -55,6 +55,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
 
+#include "src/prted/prted.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 
 static void pmix_server_stdin_push(int sd, short args, void *cbdata);
@@ -92,13 +93,27 @@ static void _client_conn(int sd, short args, void *cbdata)
         rc = PMIX_ERR_NOT_SUPPORTED;
         goto complete;
     }
-    /* if p is NULL and we were launched by a singleton,
-     * then this is our singleton connecting to us */
+    /* A singleton is the one client we did not fork, so it is the one
+     * whose pid we cannot know until it tells us here - prep_singleton()
+     * built its proc object before the process existed.  Recognize it by
+     * identity rather than by how we came to hold its proc object: PMIx
+     * hands us the server_object for it now that it adopts our
+     * registration of a proc that had already connected, so "we were
+     * passed no object" no longer means "this is the singleton". */
+    if (NULL != prte_pmix_server_globals.singleton) {
+        pmix_nspace_t sgltn;
+        pmix_rank_t sgrank;
+
+        if (PRTE_SUCCESS == prte_parse_singleton_id(prte_pmix_server_globals.singleton,
+                                                    sgltn, &sgrank)
+            && PMIX_CHECK_NSPACE(sgltn, cd->proc.nspace) && sgrank == cd->proc.rank) {
+            singleton = true;
+        }
+    }
     if (NULL == p) {
-        if (NULL != prte_pmix_server_globals.singleton) {
+        if (singleton) {
             // use the retrieved proc object
             p = p2;
-            singleton = true;
         } else {
             rc = PMIX_ERR_NOT_SUPPORTED;
             goto complete;
