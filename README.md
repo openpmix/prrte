@@ -22,3 +22,11 @@ HTML documentation and man pages by default; it must be built.
 Instructions for how to build the PRRTE documentation can be found
 here:
 https://docs.prrte.org/en/latest/developers/sphinx.html
+
+## Security policy
+
+The PRRTE security policy is in [SECURITY.md](SECURITY.md), and is rendered
+online at https://docs.prrte.org/en/latest/security.html.
+
+NOTE: any potential security issue should be reported privately, using GitHub's
+"Report a vulnerability" form: https://github.com/openpmix/prrte/security/advisories/new
