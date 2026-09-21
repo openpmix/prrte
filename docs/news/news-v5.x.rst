@@ -61,6 +61,21 @@ New capabilities
   read as no Slurm at all, so a DVM started inside a live allocation fell
   back to ssh and one node without a word.
 
+  A job record from ``scontrol show job --json`` is no longer parsed
+  whole. It is walked through a fixed-size window, keeping only the
+  members PRRTE reads and discarding the rest as they arrive, and a
+  job's node allocation is taken one node at a time. A large job's
+  record -- which grows with every socket and core of every node, and
+  runs to hundreds of megabytes of JSON -- therefore costs the HNP the
+  same as a small one, where it used to cost that much again several
+  times over as a parsed document, and the 1MB ceiling on the record
+  read by a shrink is gone. A record whose node list disagrees with the
+  count Slurm prints ahead of it is refused rather than acted on, a
+  record refused part way through adds none of its nodes, and a member
+  too large for the window is refused by name. A read refused for
+  exceeding its limit now reaches the requester as
+  ``PMIX_ERR_OUT_OF_RESOURCE`` rather than a bare ``PMIX_ERROR``.
+
 * **Node reservation and session targeting.** A job may name the
   allocation onto which it is to be mapped. An allocation has exactly
   one owner, access to it is decided by permissions, and its properties
@@ -275,6 +290,13 @@ starting up -- that table being the only signal PRRTE offers for "has
 this proc gone away". A daemon that has never heard of a job at all now
 defers to the master instead of reporting the job as not found.
 
+A singleton is recognized by its identity rather than by PMIx having
+handed it no server object. A PMIx that adopts a registration for a
+client that connected ahead of it (openpmix/openpmix#4279) hands the
+singleton its object like any other client, and with
+``pmix_require_pid_match`` set the old inference refused the singleton's
+connection.
+
 Every ``show_help`` message now names the job it is about. PMIx keys
 duplicate suppression on the job, and a DVM runs many jobs over its
 lifetime: without the job, the first job to trip a diagnostic got the
@@ -303,7 +325,9 @@ PRRTE had no automated tests at v4.0.0. It now ships five harnesses:
 * ``contrib/slurmswarm`` is the same harness with a real ``slurmctld``
   and ten ``slurmd``\ s, and is the only place ``plm/slurm`` and the
   ``scontrol show job --json`` parser are exercised against a scheduler
-  that can say no.
+  that can say no. It can grow a job record past anything the DVM
+  holds, and checks that the HNP's peak memory does not move when it
+  does.
 
 * ``contrib/scaling`` measures collective performance on a real
   allocation.
@@ -317,7 +341,9 @@ prerequisites and troubleshooting; a "how things work" section
 describing the state machine, the RML transport and reliable messaging,
 file preloading, and publish/lookup; design records for the major
 features under ``docs/plans``; per-directory ``AGENTS.md`` orientation
-guides for contributors; and a community Code of Conduct.
+guides for contributors; a community Code of Conduct; and a security
+policy (``SECURITY.md``, rendered into the documentation) describing how
+to report a vulnerability privately and what is supported.
 
 Requirement changes and removals
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -349,3 +375,8 @@ Requirement changes and removals
   written against the first then printed the second's text formatted
   with the first's arguments. A job attribute that is written but never
   read, or read but never written, fails the build too.
+
+* ``autogen.pl`` no longer applies four Libtool patches that matched
+  nothing in any supported Libtool, fixes the macOS Big Sur patch that
+  had never matched at all, and now reports any remaining patch that
+  matched nothing rather than announcing it as applied.
