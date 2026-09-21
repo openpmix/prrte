@@ -152,7 +152,8 @@ void prte_state_base_log_open(void)
 {
     char *dir = NULL;
     char tsbuf[64];
-    int rc;
+    struct stat buf;
+    int rc, fd;
 
     if (!prte_state_base.log_jobstate && !prte_state_base.log_procstate) {
         return;
@@ -189,10 +190,28 @@ void prte_state_base_log_open(void)
     /* append rather than truncate: the file is named for the node and the
      * role, so a second DVM - or a restart of this one - would otherwise
      * erase the record of the first.  The banner below separates the runs. */
-    prte_state_base.log_fp = fopen(prte_state_base.log_file, "a");
+    /* The default location is the temporary directory itself, which
+     * anyone may write to - so do not follow a symlink at the name, and
+     * append only to a regular file of our own with no other links */
+    fd = pmix_os_dirpath_open_file(prte_state_base.log_file, O_WRONLY | O_APPEND | O_CREAT, 0666);
+    if (0 > fd) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,
+                       prte_process_info.nodename, prte_state_base.log_file, strerror(errno));
+        goto disable;
+    }
+    if (0 != fstat(fd, &buf) || !S_ISREG(buf.st_mode) ||
+        geteuid() != buf.st_uid || 1 != buf.st_nlink) {
+        close(fd);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,
+                       prte_process_info.nodename, prte_state_base.log_file,
+                       "not a regular file owned by this user");
+        goto disable;
+    }
+    prte_state_base.log_fp = fdopen(fd, "a");
     if (NULL == prte_state_base.log_fp) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,
                        prte_process_info.nodename, prte_state_base.log_file, strerror(errno));
+        close(fd);
         goto disable;
     }
     /* one write per record (each ends in a newline), so a record is on disk
