@@ -258,6 +258,7 @@ docs/_templates
 
 # Generated RST files
 docs/code-of-conduct.rst
+docs/security.rst
 src/docs/_build
 src/docs/mca/mca.rst
 src/docs/mca/help*rst
