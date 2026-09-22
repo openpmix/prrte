@@ -77,10 +77,12 @@ Keyed on `caddy->name` / `caddy->proc_state`. Per incoming proc state:
 - **`REGISTERED`** — bump `num_reported`; when all local procs have
   registered, pack `PRTE_PLM_REGISTERED_CMD` + local vpids and send to
   the HNP.
-- **`IOF_COMPLETE` / `WAITPID_FIRED`** — set the corresponding proc flag;
-  when *both* have fired (and the proc isn't already recorded), activate
+- **`IOF_COMPLETE` / `WAITPID_FIRED`** — hand the half that fired to
+  `prte_state_base_join()`, which records it and, when *both* have fired
+  and the proc is not already recorded, activates
   `PRTE_PROC_STATE_TERMINATED`. (These two events race, so termination is
-  gated on the pair.)
+  gated on the pair; both arms of both components share the one helper so
+  that the gate cannot drift between them.)
 - **`READY_FOR_DEBUG`** — count local procs ready; when all are, activate
   `PRTE_JOB_STATE_READY_FOR_DEBUG` to tell the HNP.
 - **`TERMINATED`** — mark recorded, bump `num_terminated`; if the daemon
