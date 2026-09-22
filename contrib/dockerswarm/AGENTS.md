@@ -102,6 +102,14 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
   `groupinv` and `fencer` that were PMIx bugs openpmix had fixed three days
   earlier — the harness was simply running a PMIx older than the fixes, and
   nothing in the output said so.
+- **Built the way containers always build PRRTE.** The Linux build configures
+  with `--enable-prte-prefix-by-default`, so a remote daemon is launched by
+  its full path. A non-interactive ssh shell never sources `env.sh`, and the
+  tests run a bare `prterun` off `PATH`, which passes no prefix of its own;
+  without the flag the remote shell finds `prted` only through the
+  `/usr/local/bin` links the node entrypoint makes when a container *starts*.
+  A swarm brought up before the volume held an install has none of those
+  links, and every multi-node case fails with "Daemon exit status: 127".
 
 ### When a distclean is actually needed
 
