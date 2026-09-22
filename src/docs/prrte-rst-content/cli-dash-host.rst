@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -28,3 +28,20 @@ assigned to that node are summed together.
    can launch a process. Thus, the number of slots equates to the
    maximum number of processes PRRTE may start on that node without
    oversubscribing it.
+
+Given to a job, ``--host`` *selects* from the hosts already available
+to the DVM |mdash| those a resource manager allocated, or those the DVM
+was started with. It does not add any: naming a host that is not among
+them is an error. Use ``--add-host`` or ``--add-hostfile`` to bring a
+new host into a running DVM, or ``--activate`` to start a daemon on a
+host the allocation already contains.
+
+The ``:N`` count applies to *placement*, and not merely to the size of
+the job: it is the number of processes that may be placed on that host,
+whatever mapping policy is in effect. Asking for more slots on a host
+than it has is an error under a resource manager, which decided how big
+the host is. Without one, the larger count is taken as the size of the
+host for that job only; the allocation itself is unchanged.
+
+See the "Host specification" documentation for details about the
+format and content of hostfiles.

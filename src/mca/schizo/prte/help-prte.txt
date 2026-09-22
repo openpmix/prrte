@@ -167,31 +167,38 @@ option to the help request as "--help <option>".
 
 Pass a PRRTE MCA parameter.
 
-Syntax: "--prtemca <key> <value>", where "key" is the parameter name
-and "value" is the parameter value.
+Syntax: "--prtemca <key> <value>", where "key" is the parameter name and
+"value" is the parameter value.
 #
 [pmixmca]
 
 Pass a PMIx MCA parameter
 
-Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
-and "value" is the parameter value.
+Syntax: "--pmixmca <key> <value>", where "key" is the parameter name and
+"value" is the parameter value.
 #
 [tune]
 
-Comma-delimited list of one or more files containing PRRTE and PMIx
-MCA params for tuning DVM and/or application operations. Parameters in
-the file will be treated as *generic* parameters and subject to the
-translation rules/uncertainties.  See "--help mca" for more
-information.
+Comma-delimited list of one or more files containing MCA parameters for
+tuning DVM and/or application operations. The option may be given more
+than once. A file named by a relative path is looked for first in the
+current directory and then among the parameter sets installed with
+PRRTE.
 
 Syntax in the file is:
 
    param = value
 
-with one parameter and its associated value per line. Empty lines and
-lines beginning with the "#" character are ignored, as is any
-whitespace around the "=" character.
+with one parameter per line. Empty lines and lines beginning with the
+"#" character are ignored, as is any whitespace around the "="
+character. Quotes around the value are removed.
+
+Each parameter is a *generic* MCA parameter, so it is treated exactly
+like "--mca param value": it is applied to PRRTE if it belongs to a
+PRRTE framework, and otherwise to PMIx. A parameter that belongs to
+neither is an error, as is a parameter given twice with different
+values. A parameter given explicitly on the command line ("--prtemca",
+"--pmixmca") overrides the same parameter in a tune file.
 #
 [exec-agent]
 
@@ -205,10 +212,16 @@ returns the job to the system default agent.
 #
 [uniform-nodes]
 
-The allocation contains only one topology, so optimize the launch for
-that scenario. This includes ensuring that all CPU allocations are the
-same on each node, that each node contains the same number of devices
-and topological layers, etc.
+The "uniform-nodes" command line directive is used to indicate that the
+allocated nodes should be treated as having only one topology, so
+optimize the launch for that scenario. This includes ensuring that all
+CPU allocations are the same on each node, that each node contains the
+same number of devices and topological layers, etc.
+
+Note:
+
+  The runtime does not currently support mixes of chips with different
+  endianness.
 #
 [no-ready-msg]
 
@@ -230,13 +243,14 @@ session
 #
 [report-pid]
 
-Printout DVM controller's PID on stdout [-], stderr [+], or a file
-(passed as anything else)
+Print the PID of this process: on stdout if the argument is "-", on
+stderr if it is "+", into the already-open file descriptor it names if
+it is a non-negative integer, and otherwise into the file it names.
 #
 [report-uri]
 
-Printout DVM controller's URI on stdout [-], stderr [+], or a file
-(passed as anything else)
+Print the PMIx contact URI of this process: on stdout if the argument is
+"-", on stderr if it is "+", and otherwise into the file it names.
 #
 [default-hostfile]
 
@@ -277,8 +291,8 @@ redirected into files with names of the form:
 
    output-prted-<daemon-nspace>-<nodename>.log
 
-These names avoid conflict on shared file systems. The files are
-located in the top-level session directory assigned to the DVM.
+These names avoid conflict on shared file systems. The files are located
+in the top-level session directory assigned to the DVM.
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
@@ -294,61 +308,63 @@ see any daemon-generated error messages. Otherwise, the daemon will
 [prefix]
 
 Prefix to be used to look for PRRTE executables. PRRTE automatically
-sets the prefix for remote daemons if it was either configured with
-the "--enable-prte-prefix-by-default" option OR prte itself was
-executed with an absolute path to the prte command. This option
-overrides those settings, if present, and forces use of the provided
-path.
+sets the prefix for remote daemons if it was either configured with the
+"--enable-prte-prefix-by-default" option OR prte itself was executed
+with an absolute path to the prte command. This option overrides those
+settings, if present, and forces use of the provided path.
 #
 [noprefix]
 
 Disable automatic "--prefix" behavior. PRRTE automatically sets the
-prefix for remote daemons if it was either configured with the "--
-enable-prte-prefix-by-default" option OR prte itself was executed with
-an absolute path to the "prte" command. This option disables that
+prefix for remote daemons if it was either configured with the
+"--enable-prte-prefix-by-default" option OR prte itself was executed
+with an absolute path to the "prte" command. This option disables that
 behavior.
 #
 [pmix-prefix]
 
-Prefix to be used by a PRRTE executable to look for its PMIx installation
-on remote nodes. This is the location of the top-level directory for the
-installation. If the installation has not been moved, it would be the
-value given to "--prefix" when the installation was configured.
+Prefix to be used by a PRRTE executable to look for its PMIx
+installation on remote nodes. This is the location of the top-level
+directory for the installation. If the installation has not been moved,
+it would be the value given to "--prefix" when the installation was
+configured.
 
-Note that PRRTE cannot determine the exact name of the library subdirectory
-under this location. For example, some systems will call it "lib" while others
-call it "lib64". Accordingly, PRRTE will use the library subdirectory name
-of the PMIx installation used to build PRRTE.
+Note that PRRTE cannot determine the exact name of the library
+subdirectory under this location. For example, some systems will call it
+"lib" while others call it "lib64". Accordingly, PRRTE will use the
+library subdirectory name of the PMIx installation used to build PRRTE.
 #
 [forward-signals]
 
 Comma-delimited list of the signals (names or integers) to be forwarded
-to application processes ("none" = forward nothing). The list replaces
-the default set, which is SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM,
-and SIGCONT.
+to application processes ("none" = forward nothing).
+
+The list *replaces* the default set rather than adding to it, so it
+names every signal that is to be forwarded. The default set, used when
+this option is not given, is SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
+SIGALRM, and SIGCONT.
 #
 [allow-run-as-root]
 
 Allow execution as root **(STRONGLY DISCOURAGED)**.
 
-Running as root exposes the user to potentially catastrophic file
-system corruption and damage — e.g., if the user accidentally points
-the root of the session directory to a system required point, this
-directory and all underlying elements will be deleted upon job
-completion, thereby rendering the system inoperable.
+Running as root exposes the user to potentially catastrophic file system
+corruption and damage — e.g., if the user accidentally points the root
+of the session directory to a system required point, this directory and
+all underlying elements will be deleted upon job completion, thereby
+rendering the system inoperable.
 
 It is recognized that some environments (e.g., containers) may require
 operation as root, and that the user accepts the risks in those
-scenarios. Accordingly, one can override PRRTE's run-as-root
-protection by providing one of the following:
+scenarios. Accordingly, one can override PRRTE's run-as-root protection
+by providing one of the following:
 
 * The "--allow-run-as-root" command line directive
 
 * Adding **BOTH** of the following environmental parameters:
 
-     * "PRTE_ALLOW_RUN_AS_ROOT=1"
-
-     * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
+    * "PRTE_ALLOW_RUN_AS_ROOT=1"
+    * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
 
 Again, we recommend this only be done if absolutely necessary.
 #
@@ -375,15 +391,15 @@ example:
 * "-x foo" exports the environment variable "foo" and takes its value
   from the current environment.
 
-* "-x foo=bar" exports the environment variable name "foo" and sets
-  its value to "bar" in the started processes.
+* "-x foo=bar" exports the environment variable name "foo" and sets its
+  value to "bar" in the started processes.
 
 * "-x foo*" exports all current environmental variables starting with
   "foo".
 #
 [hostfile]
 
-#include#help-hostfile.txt#hostfile
+#include#help-hostfile.txt#dvm-hostfile
 
 #
 [machinefile]

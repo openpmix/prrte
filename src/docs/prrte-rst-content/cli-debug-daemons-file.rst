@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026  Nanook Consulting.  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -21,3 +21,6 @@ redirected into files with names of the form:
 
 These names avoid conflict on shared file systems. The files are
 located in the top-level session directory assigned to the DVM.
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.

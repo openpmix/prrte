@@ -29,27 +29,30 @@ These deprecated options will be removed in a future release.
      - ``--bindto core``
      - Bind processes to cores
 
-
-   * - ``--bind-to-socket``
-     - ``--bindto package``
-     - Bind processes to processor sockets
-
    * - ``--bycore``
      - ``--mapby core``
      - Map processes by core
 
    * - ``--bynode``
      - ``--mapby node``
-     - Launch processes one per node, cycling by node in a round-robin
-       fashion. This spreads processes evenly among nodes and assigns
-       ranks in a round-robin, "by node" manner.
+     - Launch processes one per node, cycling by node in a round-
+       robin fashion. This spreads processes evenly among nodes and
+       assigns ranks in a round-robin, "by node" manner.
 
    * - ``--byslot``
      - ``--mapby slot``
      - Map and rank processes round-robin by slot
 
+   * - ``--cpu-list <list>``
+     - ``--mapby pe-list=<list>``
+     - Use the specified list of CPUs for this job
+
+   * - ``--cpu-set <list>``
+     - ``--mapby pe-list=<list>``
+     - Synonym for ``--cpu-list``
+
    * - ``--cpus-per-proc <#perproc>``
-     - `--mapby <obj>:PE=<#perproc>``
+     - ``--mapby <obj>:PE=<#perproc>``
      - Bind each process to the specified number of CPUs
 
    * - ``--cpus-per-rank <#perrank>``
@@ -57,13 +60,18 @@ These deprecated options will be removed in a future release.
      - Alias for ``--cpus-per-proc``
 
    * - ``--display-allocation``
-     - ``--display ALLOC``
+     - ``--display ALLOCATION``
      - Display the detected resource allocation
 
-   * - ``-display-devel-map``
+   * - ``--display-devel-allocation``
+     - ``--display ALLOCATION``
+     - Display the detected resource allocation (there is no separate
+       developer-level allocation display)
+
+   * - ``--display-devel-map``
      - ``--display MAP-DEVEL``
-     - Display a detailed process map (mostly intended for developers)
-       just before launch.
+     - Display a detailed process map (mostly intended for
+       developers) just before launch.
 
    * - ``--display-map``
      - ``--display MAP``
@@ -76,19 +84,17 @@ These deprecated options will be removed in a future release.
        intended for developers) just before launch.
 
    * - ``--do-not-launch``
-     - ``--mapby :DONOTLAUNCH``
+     - ``--rtos DONOTLAUNCH``
      - Perform all necessary operations to prepare to launch the
        application, but do not actually launch it (usually used to
        test mapping patterns).
 
-   * - ``--do-not-resolve``
-     - ``--mapby :DONOTRESOLVE``
-     - Do not attempt to resolve interfaces |mdash| usually used to
-       determine proposed process placement/binding prior to obtaining
-       an allocation.
+   * - ``--merge-stderr-to-stdout``
+     - ``--output MERGE-STDERR-TO-STDOUT``
+     - Merge stderr into stdout
 
    * - ``-N <num>``
-     - ``--mapby prr:<num>:node``
+     - ``--mapby ppr:<num>:node``
      - Launch ``num`` processes per node on all allocated nodes
 
    * - ``--nolocal``
@@ -102,19 +108,30 @@ These deprecated options will be removed in a future release.
      - ``--mapby :NOOVERSUBSCRIBE``
      - Do not oversubscribe any nodes; error (without starting any
        processes) if the requested number of processes would cause
-       oversubscription. This option implicitly sets "max_slots" equal
-       to the "slots" value for each node. (Enabled by default).
+       oversubscription. This option implicitly sets ``max_slots``
+       equal to the ``slots`` value for each node. (Enabled by
+       default).
 
    * - ``--npernode <#pernode>``
      - ``--mapby ppr:<#pernode>:node``
      - On each node, launch this many processes
 
    * - ``--npersocket <#persocket>``
-     - ``--mapby ppr:<#perpackage>:package``
+     - ``--mapby ppr:<#persocket>:package``
      - On each node, launch this many processes times the number of
-       processor sockets on the node. The ``--npersocket`` option also
-       turns on the ``--bind-to socket`` option. The term ``socket``
-       has been globally replaced with ``package``.
+       processor sockets on the node. As with any ``ppr`` mapping by
+       package, each process is bound to its package by default. The
+       term ``socket`` has been globally replaced with ``package``.
+
+   * - ``--output-directory <dir>``
+     - ``--output DIR=<dir>``
+     - Redirect output from application processes into files under
+       the given directory
+
+   * - ``--output-filename <name>``
+     - ``--output FILE=<name>``
+     - Redirect output from application processes into files with the
+       given name
 
    * - ``--oversubscribe``
      - ``--mapby :OVERSUBSCRIBE``
@@ -125,10 +142,10 @@ These deprecated options will be removed in a future release.
      - ``--mapby ppr:1:node``
      - On each node, launch one process
 
-   * - ``--ppr``
-     - `--mapby ppr:<list>``
-     - Comma-separated list of number of processes on a given resource type
-       [default: ``none``].
+   * - ``--ppr <#>:<resource>``
+     - ``--mapby ppr:<#>:<resource>``
+     - Launch the given number of processes on each instance of the
+       resource type. The complete pattern must be given.
 
    * - ``--rankfile <FILENAME>``
      - ``--mapby rankfile:FILE=<FILENAME>``

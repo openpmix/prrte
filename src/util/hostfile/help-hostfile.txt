@@ -38,6 +38,18 @@ manager (RM):
 |         |            | final set of nodes to be used for the job     |
 +---------+------------+-----------------------------------------------+
 
+#include#help-hostfile.txt#hostfile-format
+
+Relative host indexing
+----------------------
+
+#include#help-hostfile.txt#relative-indexing
+
+See the "Host specification" documentation for details about the
+format and content of hostfiles.
+#
+[hostfile-format]
+
 Hostfiles (sometimes called "machine files") are a combination of two
 things:
 
@@ -65,8 +77,24 @@ node, written in front of it and separated by a single "@":
 
    user01@node01  slots=4
 
-An entry may contain at most one "@"; a second one is reported as a
-parse error naming the hostfile and the line it is on.
+An entry may contain at most one "@", and both the account and the
+node name must be given: a second "@", or an "@" with nothing on one
+side of it, is reported as a parse error naming the hostfile and the
+line it is on.
+
+A node name written with a leading "^" is excluded rather than used.
+The "^" goes in front of the whole entry, account included:
+
+   node01  slots=4
+   node02  slots=4
+   node03  slots=4
+   ^user01@node02
+
+Where the hostfile also names nodes, an exclusion takes a node back out
+of what it named — the file above names "node01" and "node03".  A
+hostfile given to a job in a running DVM may consist of nothing but
+exclusions, and then it selects every node of the allocation except the
+ones it excludes.
 
 A "slot" is the PRRTE term for an allocatable unit where we can launch
 a process.  See the section on definition of the term "slot" for a
@@ -81,9 +109,15 @@ Important:
   If using a resource manager, the user-specified number of slots is
   capped by the RM-assigned value.
 
-
-Relative host indexing
-----------------------
+A hostfile given to a job that is being submitted to an already-running
+DVM "selects within" the DVM's allocation: it names the subset of nodes
+that job may use, and a "slots" count smaller than the node's own is the
+number of slots that job may take there.  It says nothing about how big
+the node is, so it applies to that job alone — the node is back to its
+allocated size for the next job, which may be someone else's.  Changing
+the allocation is what "--add-hostfile" is for.
+#
+[relative-indexing]
 
 Hostfile and "--host" specifications can also be made using relative
 indexing. This allows a user to stipulate which hosts are to be used
@@ -102,14 +136,18 @@ would require hand-manipulation for every invocation.
 A simpler method is to utilize PRRTE's relative indexing capability to
 specify the desired layout. In this case, a command line containing:
 
-   --host +n1,+n2 ./app1 : --host +n3,+n4 ./app2
+   --host +n0,+n1 ./app1 : --host +n2,+n3 ./app2
 
 would provide the desired pattern. The "+" syntax indicates that the
 information is being provided as a relative index into the existing
 allocation. Two methods of relative indexing are supported:
 
-* "+n#": A relative index into the allocation referencing the "#"
-  node. PRRTE will substitute the "#" node in the allocation
+* "+n#": A relative index into the allocation, counted from zero —
+  "+n0" is the first node of the allocation, "+n1" the second, and so
+  on. PRRTE will substitute that node of the allocation. Note that the
+  index counts nodes the job was actually given: if the node you
+  launched from is not part of the allocation, it does not occupy an
+  index. An index past the end of the allocation is an error.
 
 * "+e[:#]": A request for "#" empty nodes — i.e., PRRTE is to
   substitute this reference with nodes that have not yet been used by
@@ -121,8 +159,8 @@ allocation. Two methods of relative indexing are supported:
   more empty nodes than are available will generate an error.
 
 Relative indexing can be combined with absolute naming of hosts in any
-arbitrary manner, and can be used in hostfiles as well as with the "--
-host" command line option. In addition, any slot specification
+arbitrary manner, and can be used in hostfiles as well as with the
+"--host" command line option. In addition, any slot specification
 provided in hostfiles will be respected — thus, a user can specify
 that only a certain number of slots from a relative indexed host are
 to be used for a given app context.
@@ -136,12 +174,13 @@ where the user has a hostfile containing:
    dummy4 slots=4
    dummy5 slots=4
 
-This may, for example, be a hostfile that describes a set of commonly-
-used resources that the user wishes to execute applications against.
-For this particular application, the user plans to map byslot, and
-wants the first two ranks to be on the second node of any allocation,
+This may, for example, be a hostfile that describes a set of
+commonly-used resources that the user wishes to execute applications
+against. For this particular application, the user plans to map byslot,
+and
+wants the first two ranks to be on the third node of any allocation,
 the next ranks to land on an empty node, have one rank specifically on
-"dummy4", the next rank to be on the second node of the allocation
+"dummy4", the next rank to be on the third node of the allocation
 again, and finally any remaining ranks to be on whatever empty nodes
 are left. To accomplish this, the user provides a hostfile of:
 
@@ -154,7 +193,7 @@ are left. To accomplish this, the user provides a hostfile of:
 The user can now use this information in combination with PRRTE's
 sequential mapper to obtain their specific layout:
 
-   <launcher> --hostfile dummyhosts --hostfile mylayout --map-by seq ./my_app
+   <launcher> --hostfile dummyhosts --hostfile mylayout --mapby seq ./my_app
 
 which will result in:
 
@@ -189,9 +228,64 @@ Thus, the use of relative indexing can allow for complex mappings to
 be ported across allocations, including those obtained from automated
 resource managers, without the need for manual manipulation of scripts
 and/or command lines.
+#
+[dvm-hostfile]
 
-See the "Host specification" HTML documentation for details about the
-format and content of hostfiles.
+PRRTE supports several levels of user-specified host lists based on an
+established precedence order. Users can specify a default hostfile that
+contains a list of nodes to be used by the DVM. Only one default
+hostfile can be provided for a given DVM. In addition, users can specify
+a hostfile that contains a list of nodes to be used for a DVM, or can
+provide a comma-delimited list of nodes to be used for that DVM via the
+"--host" command line option.
+
+The precedence order applied to these various options depends to some
+extent on the local environment. The following table illustrates how
+host and hostfile directives work together to define the set of hosts
+upon which a DVM will execute in the absence of a resource manager (RM):
+
++-----------+-------+----------+---------------------------------------+
+| Default   | host  | hostfile | Result                                |
+| hostfile  |       |          |                                       |
+|===========|=======|==========|=======================================|
+| unset     | unset | unset    | The DVM will consist solely of the    |
+|           |       |          | local host where the DVM was started. |
++-----------+-------+----------+---------------------------------------+
+| unset     | set   | unset    | Host option defines resource list for |
+|           |       |          | the DVM.                              |
++-----------+-------+----------+---------------------------------------+
+| unset     | unset | set      | Hostfile option defines resource list |
+|           |       |          | for the DVM.                          |
++-----------+-------+----------+---------------------------------------+
+| unset     | set   | set      | Hostfile option defines resource list |
+|           |       |          | for the DVM, then host filters the    |
+|           |       |          | list to define the final set of nodes |
+|           |       |          | to be used by the DVM                 |
++-----------+-------+----------+---------------------------------------+
+| set       | unset | unset    | Default hostfile defines resource     |
+|           |       |          | list for the DVM                      |
++-----------+-------+----------+---------------------------------------+
+| set       | set   | unset    | Default hostfile defines resource     |
+|           |       |          | list for the DVM, then host filters   |
+|           |       |          | the list to define the final set of   |
+|           |       |          | nodes to be used by the DVM           |
++-----------+-------+----------+---------------------------------------+
+| set       | set   | set      | Default hostfile defines resource     |
+|           |       |          | list for the DVM, then hostfile       |
+|           |       |          | filters the list, and then host       |
+|           |       |          | filters the list to define the final  |
+|           |       |          | set of nodes to be used by the DVM    |
++-----------+-------+----------+---------------------------------------+
+
+This changes somewhat in the presence of an RM as that entity specifies
+the initial allocation of nodes. In this case, the default hostfile,
+hostfile and host directives are all used to filter the RM's
+specification so that a user can utilize different portions of the
+allocation for different DVMs. This is done according to the same
+precedence order as in the prior table, with the RM providing the
+initial pool of nodes.
+
+#include#help-hostfile.txt#hostfile-format
 #
 [machinefile]
 
@@ -218,6 +312,23 @@ Note:
   launch a process. Thus, the number of slots equates to the maximum
   number of processes PRRTE may start on that node without
   oversubscribing it.
+
+Given to a job, "--host" selects from the hosts already available to
+the DVM — those a resource manager allocated, or those the DVM was
+started with. It does not add any: naming a host that is not among them
+is an error. Use "--add-host" or "--add-hostfile" to bring a new host
+into a running DVM, or "--activate" to start a daemon on a host the
+allocation already contains.
+
+The ":N" count applies to placement, and not merely to the size of the
+job: it is the number of processes that may be placed on that host,
+whatever mapping policy is in effect. Asking for more slots on a host
+than it has is an error under a resource manager, which decided how big
+the host is. Without one, the larger count is taken as the size of the
+host for that job only; the allocation itself is unchanged.
+
+See the "Host specification" documentation for details about the
+format and content of hostfiles.
 #
 [add-hostfile]
 
