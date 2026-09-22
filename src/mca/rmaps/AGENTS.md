@@ -383,6 +383,32 @@ cases apart — the same flag that decides whether `--add-host` may grow the
 pool, and for the same reason: both ask whether the node counts are ours to
 change. See [`src/mca/ras/AGENTS.md`](../ras/AGENTS.md).
 
+**A job that counts hwthreads as its cpus re-counts the node through the
+same record.** A node nobody gave a slot count is sized once, when it joins
+the DVM, by `prte_plm_base_set_slots()` counting its cores (the default
+`prte_set_default_slots` policy), which marks it
+`PRTE_NODE_FLAG_SLOTS_FROM_CORES`. For an app that asks for hwthreads
+(`PRTE_APP_HWT_CPUS`, else the job's `PRTE_JOB_HWT_CPUS` — which is what
+`--mapby :hwtcpus` and the deprecated `--use-hwthread-cpus` set),
+`count_slots_for_app()` in `get_target_nodes` resizes such a node to its PU
+count via `record_resize`, before anything judges how full the node is, and
+`restore_resized` puts the core count back at `cleanup`. It is re-derived per
+app, so a core-counting app later in the same map sees the cores again. Only
+a count that is still the core count is touched: one stated by a hostfile,
+`--host` or a resource manager never carries the flag, and one re-described
+since no longer equals the core count. Before this, the conversion of
+`--use-hwthread-cpus` set the global `prte_set_slots` instead — which in
+`prterun` resized every node for the DVM's lifetime (spawned children
+included) and in `prun` did nothing, leaving a hwthread job half the procs
+by default and unbound at the full count. The option is still accepted; it
+just no longer touches the global.
+
+The default binding follows the same setting: a job or app that counts
+hwthreads and maps by core (or `ppr:N:core`) binds each proc to its hwthread,
+in both `prte_hwloc_base_set_default_binding()` and the per-app
+`prte_rmaps_base_derive_binding()` — binding to the core would stack procs
+on cpus the job was told were separate slots.
+
 ### Who owns what in `options`
 
 `node->available` and `options->job_cpuset` are **never NULL**. The mappers
@@ -635,6 +661,7 @@ without a node pool, a topology, or a DVM:
 | `test_resolve_options.c` | `resolve_app_options` and the rank/bind default derivations |
 | `test_ranking.c` | `compute_vpids`: by-slot/by-node traversal, the per-app cursor, by-user pass-through, and that a cycling scheme terminates |
 | `test_check_avail.c` | `check_avail`: the map-add-once rule, `max_slots`, and the node-removal contract above |
+| `test_hwt_slots.c` | `get_target_nodes` on a real SMT topology: a hwthread job sees the PU count, the next job the core count, apps of one map each see their own, stated counts are left alone |
 | `test_resize.c` | `record_resize`/`restore_resized`: a node re-sized for one map goes back — the count and the SLOTS_GIVEN flag — and the hostfile `slots=` cap that rides the same list |
 | `test_dispatch.c`, `test_<component>.c` | each mapper's accept/defer gate |
 

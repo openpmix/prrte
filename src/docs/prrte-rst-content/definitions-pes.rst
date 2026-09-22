@@ -16,6 +16,8 @@ Definition of "processor element"
 =================================
 
 By default, PRRTE defines that a "processing element" is a processor
-core.  However, if ``--use-hwthread-cpus`` is specified on the command
-line, then a "processing element" is a hardware thread.
+core.  However, for a job that asks for hardware threads as its CPUs
+|mdash| the ``HWTCPUS`` qualifier to ``--mapby``, or the deprecated
+``--use-hwthread-cpus`` |mdash| a "processing element" is a hardware
+thread.
 

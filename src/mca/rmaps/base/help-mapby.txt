@@ -212,7 +212,11 @@ the "--mapby" option (except where noted):
   qualifier may be applied per app context in an MPMD job - see
   "Per-app-context mapping" below.
 
-* "HWTCPUS" use hardware threads as CPU slots
+* "HWTCPUS" use hardware threads as CPUs. The processes are bound to
+  hardware threads by default, and a node whose slot count PRRTE
+  determined by counting its cores offers this job one slot per
+  hardware thread instead — for this job only (see the definition of
+  "slot")
 
 * "CORECPUS" use cores as CPU slots (default)
 

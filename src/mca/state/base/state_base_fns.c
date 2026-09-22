@@ -991,6 +991,40 @@ void prte_state_base_check_fds(prte_job_t *jdata)
     free(r2);
 }
 
+void prte_state_base_cpu_release_policy(prte_job_t *jdata, prte_app_context_t *app,
+                                        hwloc_obj_type_t *type, bool *takeall)
+{
+    bool hwt;
+    uint16_t mapping, *mptr = &mapping;
+
+    hwt = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS);
+    *takeall = prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16);
+    mapping = (NULL == jdata->map) ? 0 : PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
+
+    if (NULL != app) {
+        /* an app that counts its cpus differently from the job was bound in
+         * its own terms - a hwthread each, or a core each - and has to be
+         * released in them, or the release looks for an object that is not
+         * inside the binding and gives nothing back */
+        if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_HWT_CPUS)) {
+            hwt = true;
+        } else if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_CORE_CPUS)) {
+            hwt = false;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PES_PER_PROC, NULL, PMIX_UINT16)) {
+            *takeall = true;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_MAPBY,
+                               (void **) &mptr, PMIX_UINT16)) {
+            mapping = PRTE_GET_MAPPING_POLICY(mapping);
+        }
+    }
+    if (PRTE_MAPPING_BYUSER == mapping || PRTE_MAPPING_SEQ == mapping) {
+        *takeall = true;
+    }
+    *type = hwt ? HWLOC_OBJ_PU : HWLOC_OBJ_CORE;
+}
+
 void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
 {
     prte_node_t *node, *nptr;
@@ -1065,18 +1099,11 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
         }
     }
 
-    // determine how cpus were handled
-    takeall = false;
-    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
-        type = HWLOC_OBJ_PU;
-    } else {
-        type = HWLOC_OBJ_CORE;
-    }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16) ||
-        PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(map->mapping) ||
-        PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(map->mapping)) {
-        takeall = true;
-    }
+    // determine how cpus were handled - in this proc's app's terms
+    prte_state_base_cpu_release_policy(jdata,
+                                       (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps,
+                                                                                          pptr->app_idx),
+                                       &type, &takeall);
 
     boundcpus = hwloc_bitmap_alloc();
     /* release the resources held by the proc - only the first

@@ -132,6 +132,14 @@ PRTE_EXPORT void prte_state_base_orphaned_proc(pmix_proc_t *proc, prte_proc_stat
 // resource recovery
 PRTE_EXPORT void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr);
 
+/* How the cpus of a proc of the given app were consumed when it was bound,
+ * so they can be given back the same way: the object type one binding took
+ * (a core, or a hwthread for procs whose cpus are hwthreads), or - when
+ * *takeall is true - every cpu of the binding.  The app's own directives
+ * win over the job's, since apps of one job may differ; app may be NULL. */
+PRTE_EXPORT void prte_state_base_cpu_release_policy(prte_job_t *jdata, prte_app_context_t *app,
+                                                    hwloc_obj_type_t *type, bool *takeall);
+
 END_C_DECLS
 
 #endif
