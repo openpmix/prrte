@@ -2426,13 +2426,6 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         pmix_argv_append(argc, argv, "1");
     }
 
-    /* if --xterm was specified, pass that along */
-    if (NULL != prte_xterm) {
-        pmix_argv_append(argc, argv, "--prtemca");
-        pmix_argv_append(argc, argv, "prte_xterm");
-        pmix_argv_append(argc, argv, prte_xterm);
-    }
-
     /* look for any envars that relate to us and pass
      * them along on the cmd line - unless we were told not to */
     offset = strlen("PRTE_MCA_");

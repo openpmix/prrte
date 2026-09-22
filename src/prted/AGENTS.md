@@ -259,12 +259,18 @@ relative to `prte_init()`.
   failed. Three failure paths did this. Pass the failure you actually
   detected, and if you have nothing better, `PRTE_ERR_FATAL`.
 
-- **`prte_parse_appfile()` is the `--app` reader**, extracted so it can be
-  unit-tested. `PMIx_Argv_split` returns **NULL**, not an empty array, for
-  a string that yields no tokens, so a blank line in an appfile — entirely
+- **`prte_load_appfile()` (in `src/util/prte_cmd_line.c`) is the `--app`
+  reader**, shared with `prun` and unit-tested from both. `prte.c` used to
+  carry its own, `prte_parse_appfile()`; the two drifted — this one
+  skipped `#` comment lines and prun's did not, so a comment in a `prun`
+  appfile became an app context named `#`. Do not grow a second one.
+  `PMIx_Argv_split` returns **NULL**, not an empty array, for a string
+  that yields no tokens, so a blank line in an appfile — entirely
   ordinary — segfaulted the tool on `split[0]`. Such a line is skipped
   whole rather than merely contributing no words: emitting the `:`
-  delimiter for it would hand the parser an empty app context.
+  delimiter for it would hand the parser an empty app context. The file
+  is appended with no leading `:`, so its first line joins the command
+  line's own last app segment (see `src/tools/prun/AGENTS.md`).
 
 - **`prep_singleton()` builds a job by hand.** It fabricates a
   `prte_job_t`/`prte_app_context_t`/`prte_proc_t` and registers the
@@ -360,7 +366,7 @@ command line whose *final* segment fails to parse leaked it —
 `--display map --display cpus` is enough, because a repeated option is
 refused right there. (There used to be an `env` array here too, threaded
 through `create_app()` as the "base environment" an appfile's recursive
-parse would need. There is no recursion — `prte_parse_appfile()` folds an
+parse would need. There is no recursion — `prte_load_appfile()` folds an
 appfile into the command line before any of this runs — and `create_app()`
 had long since stopped writing through the parameter, so it was always
 NULL. It is gone.)
@@ -507,7 +513,7 @@ correctly. Do not move the close back out to `prun.c`/`prte.c`.
 
 **Unit — `test/unit/prted/` (`make check`).** Everything in here that can
 be exercised without a DVM: the `--prefix` normalizer, the `--singleton`
-identifier parser, the `--app` appfile reader (including the blank lines
+identifier parser, the `--app` appfile reader (including the blank and comment lines
 that used to crash it), `prte_pmix_xfer_job_info()`'s directive handling
 (including its conflict rejection and its cache-the-unknown default),
 `prte_pmix_xfer_app()`'s translation and — importantly — its ownership

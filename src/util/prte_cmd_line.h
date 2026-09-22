@@ -38,6 +38,8 @@
 #    include <sys/stat.h>
 #endif
 #include <ctype.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <getopt.h>
@@ -338,7 +340,10 @@ PRTE_EXPORT int prte_parse_pid_option(const char *value, pid_t *pid,
 
 /**
  * Append the contents of an appfile to an argument vector, one app
- * context per line, ':'-delimited as if they had been typed.
+ * context per line, ':'-delimited as if they had been typed.  Each line
+ * is split on spaces; blank lines and comment lines (first non-blank
+ * character '#') are skipped.  This is the one "--app" reader, shared by
+ * prun and prterun.
  *
  * @param filename  the appfile
  * @param argv      argv to append to - may already hold the tool's own
@@ -348,6 +353,22 @@ PRTE_EXPORT int prte_parse_pid_option(const char *value, pid_t *pid,
  * @retval PRTE_ERR_FILE_OPEN_FAILURE
  */
 PRTE_EXPORT int prte_load_appfile(const char *filename, char ***argv);
+
+/**
+ * Check that a command line carrying "--app <file>" names no application
+ * of its own.
+ *
+ * The appfile is appended to the command line with no ':' in front of it,
+ * so an executable (or a ':'-separated app segment) already on the command
+ * line would swallow the file's first line as its own arguments.
+ *
+ * @param tail  the parser's command tail - everything from the first
+ *              non-option token on (NULL when there is none)
+ *
+ * @retval PRTE_SUCCESS        the command line names no application
+ * @retval PRTE_ERR_BAD_PARAM  it does
+ */
+PRTE_EXPORT int prte_check_appfile_tail(char **tail);
 
 /**
  * Interpret an octal umask string, as handed to a daemon in
@@ -381,6 +402,42 @@ PRTE_EXPORT bool prte_parse_umask(const char *value, mode_t *mask);
  */
 PRTE_EXPORT int prte_parse_uint_option(const char *value, unsigned long limit,
                                        unsigned long *result);
+
+/* One inclusive run of ranks named by "--xterm" */
+typedef struct {
+    uint32_t lo;
+    uint32_t hi;
+} prte_rank_range_t;
+
+/**
+ * Interpret the value of "--xterm".
+ *
+ * The value is either "all" (case-insensitive; "-1" is still accepted as
+ * the old spelling of it) or a comma-delimited list of ranks and inclusive
+ * rank ranges - e.g. "1,3-6,9". A trailing "!" asks that each window be
+ * kept open after its process exits (xterm -hold).
+ *
+ * @param value    the option's value
+ * @param ranges   on success, a malloc'd array of the ranges named - NULL
+ *                 when @c all is set. Caller frees.
+ * @param nranges  number of entries in @c ranges
+ * @param all      set if every rank of the job is named
+ * @param hold     set if the "!" suffix was given
+ * @param badrank  set to the offending value on PRTE_ERR_VALUE_OUT_OF_BOUNDS
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_BAD_PARAM            not in the syntax above
+ * @retval PRTE_ERR_VALUE_OUT_OF_BOUNDS  a negative rank was named
+ */
+PRTE_EXPORT int prte_parse_xterm_option(const char *value, prte_rank_range_t **ranges,
+                                        size_t *nranges, bool *all, bool *hold,
+                                        long *badrank);
+
+/**
+ * Does a parsed "--xterm" list name a given rank?
+ */
+PRTE_EXPORT bool prte_xterm_names_rank(const prte_rank_range_t *ranges, size_t nranges,
+                                       bool all, uint32_t rank);
 
 END_C_DECLS
 

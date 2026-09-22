@@ -46,15 +46,31 @@ prefix does.
 - **`acted` decides whether the default report is printed.** Every
   branch that produces output must set it, or the tool prints its
   selective answer and then the whole default report as well.
-- **`--version <framework>[:<component>]` is currently unreachable.**
-  PMIx's `pmix_cmd_line_parse()` intercepts `-V`/`--version` itself and
-  returns `PMIX_OPERATION_SUCCEEDED`, so the option never reaches the
-  `PMIX_CLI_INFO_VERSION` handling in this file and `prte_info --version
-  rmaps` just prints the tool's own version banner. Per-component
-  versions are still reachable through the default and `--all` reports.
-  Fixing this means changing where PMIx decides to intercept — do not
-  work around it here by pre-scanning argv (see the "generic CLI code
-  lives in PMIx" rule in the top-level [`AGENTS.md`](../../../AGENTS.md)).
+- **The project name passed to the component-map lookups is a key, not
+  a label.** `pmix_info_register_project_frameworks()` records PRRTE's
+  components under `"prte"` (`PRTE_INFO_PROJECT`), and
+  `pmix_info_show_component_version()` skips every map entry whose
+  project does not match. These calls used to say `"PRRTE"`, so no
+  report — default, `--all`, `--show-version`, `--param` — listed a
+  single PRRTE component. `pmix_info_show_version()`'s first argument,
+  by contrast, *is* a display label; `"PRRTE"` is right there.
+- **`--param`/`--params` go through the local `do_params()`, not
+  straight to `pmix_info_do_params()`.** The value is one token,
+  `<framework>[:<comp>[,<comp>...]]` (getopt gives a required argument
+  exactly one), whereas PMIx's selective path wants framework and
+  component as two separate values; and the call used to pass
+  `want_all = true` unconditionally, so every `--param` printed
+  everything. `do_params()` also keeps each framework in its own half of
+  an `--include-pmix` report — the parameter lookup underneath is by
+  framework name alone.
+- **`--show-version` is `PMIX_ARG_OPTIONAL`, and must stay so.** PMIx's
+  parser special-cases it to claim up to two trailing tokens (what, and
+  which part of the version) on the assumption that getopt claimed none.
+  Declared `REQD`, getopt took the first token as `optarg`, the parser
+  then stored the *second* one in its place, and
+  `--show-version rmaps:ppr minor` asked about a framework named
+  `minor`. It is distinct from `-V`/`--version`, which PMIx intercepts
+  and answers with the tool's own banner.
 - **This tool must never need a DVM**, must never open a socket, and must
   keep working in a tree that was configured with
   `--enable-testbuild-launchers` (where some components cannot `dlopen`).

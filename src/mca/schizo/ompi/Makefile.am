@@ -2,7 +2,7 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -13,9 +13,6 @@
 
 EXTRA_DIST = \
         help-schizo-ompi.txt
-
-AM_CFLAGS = \
-            -DDEFAULT_PARAM_FILE_PATH="\"@AMCA_PARAM_SETS_DIR@\""
 
 # We install the "source" RST file so that Open MPI can find it and
 # use it when building against an external PRTE installation.

@@ -525,6 +525,11 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, PRTE_ATTR_GLOBAL,
                                info->value.data.string, PMIX_STRING);
 
+            /*** XTERM ***/
+        } else if (PMIX_CHECK_KEY(info, PRTE_XTERM_RANKS)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_XTERM, PRTE_ATTR_GLOBAL,
+                               info->value.data.string, PMIX_STRING);
+
             /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
             prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL, true);

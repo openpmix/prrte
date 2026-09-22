@@ -56,8 +56,11 @@ The query decides *which agent* to use and offers the module at priority
 If the user named an agent that cannot be found, it is a hard error
 (`agent-not-found`, activates `NEVER_LAUNCHED`); if only the default
 couldn't be found, the component simply declines (returns a module of
-NULL). When an `ssh` agent is chosen it auto-adds `-X` (if `--xterm`) or
-`-x` (disable X11 forwarding, unless debugging).
+NULL). When an `ssh` agent is chosen it auto-adds `-x` (disable X11
+forwarding) unless debugging or the agent already says `-x`/`-X`. It no
+longer adds `-X` for `--xterm`: that is a per-job directive that arrives
+long after a persistent DVM's daemons were launched, so a DVM meant to
+host remote xterms is started with `ssh -X` as its agent.
 
 `daemon_nodes_assigned_at_launch` is **`true`** for ssh: because we
 `ssh` to a specific host, each daemon vpid's node is known at launch.

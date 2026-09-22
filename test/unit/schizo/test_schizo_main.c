@@ -50,6 +50,7 @@ int main(void)
     failures += test_sanity();
     failures += test_output();
     failures += test_personality();
+    failures += test_tune();
 
     (void) pmix_mca_base_framework_close(&prte_schizo_base_framework);
     prte_finalize();

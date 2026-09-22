@@ -189,13 +189,17 @@ static int test_singleton_id(void)
 }
 
 /*
- * prte_parse_appfile() -- the "--app <file>" reader.
+ * prte_load_appfile() -- the "--app <file>" reader, as prterun uses it
+ * (prun shares the same reader; test/unit/tools covers it from there).
  *
  * Each line of the file becomes one app context, and the lines are joined
  * with the ":" delimiter the command-line parser expects.  A blank line
  * splits to no tokens at all, which PMIx_Argv_split reports by returning
  * NULL rather than an empty array; indexing that unconditionally segfaulted
- * the tool, and a blank line in an appfile is entirely ordinary.
+ * the tool, and a blank line in an appfile is entirely ordinary.  A comment
+ * line - first non-blank character '#' - contributes nothing either: prun
+ * used to have a reader of its own that split it into an app context whose
+ * "executable" was the '#'.
  */
 static int write_appfile(const char *path, const char *contents)
 {
@@ -214,7 +218,6 @@ static int test_appfile(void)
     int failures = 0;
     char path[PRTE_PATH_MAX];
     char **argv;
-    int argc;
 
     snprintf(path, sizeof(path), "%s/prte_test_appfile.%lu",
              pmix_tmp_directory(), (unsigned long) getpid());
@@ -225,10 +228,8 @@ static int test_appfile(void)
         return 1;
     }
     argv = NULL;
-    argc = 0;
-    CHECK("appfile/rc", PRTE_SUCCESS == prte_parse_appfile(path, &argv, &argc));
-    CHECK("appfile/count", 7 == argc);
-    CHECK("appfile/count-matches", argc == (int) PMIx_Argv_count(argv));
+    CHECK("appfile/rc", PRTE_SUCCESS == prte_load_appfile(path, &argv));
+    CHECK("appfile/count", 7 == PMIx_Argv_count(argv));
     CHECK("appfile/first", NULL != argv && 0 == strcmp(argv[0], "-n"));
     CHECK("appfile/exec1", NULL != argv && 0 == strcmp(argv[2], "./alpha"));
     CHECK("appfile/delim", NULL != argv && 0 == strcmp(argv[3], ":"));
@@ -243,23 +244,33 @@ static int test_appfile(void)
         return 1;
     }
     argv = NULL;
-    argc = 0;
-    CHECK("appfile/blank-rc", PRTE_SUCCESS == prte_parse_appfile(path, &argv, &argc));
-    CHECK("appfile/blank-count", 7 == argc);
+    CHECK("appfile/blank-rc", PRTE_SUCCESS == prte_load_appfile(path, &argv));
+    CHECK("appfile/blank-count", 7 == PMIx_Argv_count(argv));
     CHECK("appfile/blank-exec1", NULL != argv && 0 == strcmp(argv[2], "./alpha"));
     CHECK("appfile/blank-delim", NULL != argv && 0 == strcmp(argv[3], ":"));
     CHECK("appfile/blank-exec2", NULL != argv && 0 == strcmp(argv[6], "./beta"));
     PMIx_Argv_free(argv);
 
-    /* a file of nothing but blank lines yields nothing at all */
-    if (0 != write_appfile(path, "\n\n  \n\n")) {
+    /* comment lines, indented or not, are skipped the same way */
+    if (0 != write_appfile(path, "# two apps\n-n 2 ./alpha\n\t  # the second\n-n 4 ./beta\n#\n")) {
         fprintf(stderr, "appfile: could not write %s\n", path);
         return 1;
     }
     argv = NULL;
-    argc = 0;
-    CHECK("appfile/allblank-rc", PRTE_SUCCESS == prte_parse_appfile(path, &argv, &argc));
-    CHECK("appfile/allblank-count", 0 == argc);
+    CHECK("appfile/comment-rc", PRTE_SUCCESS == prte_load_appfile(path, &argv));
+    CHECK("appfile/comment-count", 7 == PMIx_Argv_count(argv));
+    CHECK("appfile/comment-exec1", NULL != argv && 0 == strcmp(argv[2], "./alpha"));
+    CHECK("appfile/comment-delim", NULL != argv && 0 == strcmp(argv[3], ":"));
+    CHECK("appfile/comment-exec2", NULL != argv && 0 == strcmp(argv[6], "./beta"));
+    PMIx_Argv_free(argv);
+
+    /* a file of nothing but blank and comment lines yields nothing at all */
+    if (0 != write_appfile(path, "\n\n  \n# nothing here\n\n")) {
+        fprintf(stderr, "appfile: could not write %s\n", path);
+        return 1;
+    }
+    argv = NULL;
+    CHECK("appfile/allblank-rc", PRTE_SUCCESS == prte_load_appfile(path, &argv));
     CHECK("appfile/allblank-argv", NULL == argv);
 
     /* the caller's existing argv is appended to, not replaced */
@@ -268,11 +279,9 @@ static int test_appfile(void)
         return 1;
     }
     argv = NULL;
-    argc = 0;
     PMIx_Argv_append_nosize(&argv, "prterun");
-    argc = 1;
-    CHECK("appfile/append-rc", PRTE_SUCCESS == prte_parse_appfile(path, &argv, &argc));
-    CHECK("appfile/append-count", 2 == argc);
+    CHECK("appfile/append-rc", PRTE_SUCCESS == prte_load_appfile(path, &argv));
+    CHECK("appfile/append-count", 2 == PMIx_Argv_count(argv));
     CHECK("appfile/append-kept", NULL != argv && 0 == strcmp(argv[0], "prterun"));
     CHECK("appfile/append-added", NULL != argv && 0 == strcmp(argv[1], "./gamma"));
     PMIx_Argv_free(argv);
@@ -281,15 +290,12 @@ static int test_appfile(void)
 
     /* degenerate inputs */
     argv = NULL;
-    argc = 0;
     CHECK("appfile/missing",
-          PRTE_SUCCESS != prte_parse_appfile(path, &argv, &argc));
+          PRTE_SUCCESS != prte_load_appfile(path, &argv));
     CHECK("appfile/null-path",
-          PRTE_SUCCESS != prte_parse_appfile(NULL, &argv, &argc));
+          PRTE_SUCCESS != prte_load_appfile(NULL, &argv));
     CHECK("appfile/null-argv",
-          PRTE_SUCCESS != prte_parse_appfile("/dev/null", NULL, &argc));
-    CHECK("appfile/null-argc",
-          PRTE_SUCCESS != prte_parse_appfile("/dev/null", &argv, NULL));
+          PRTE_SUCCESS != prte_load_appfile("/dev/null", NULL));
 
     return failures;
 }

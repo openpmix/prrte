@@ -364,8 +364,6 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                 PMIX_RELEASE(node);
                 continue;
             }
-            /* cache the available CPUs for later */
-            hwloc_bitmap_copy(node->jobcache, node->available);
         }
     } else {
         num_slots = 0;
@@ -474,8 +472,6 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                                      "%s node %s has %d slots available",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, s));
                 num_slots += s;
-                /* cache the available CPUs for later */
-                hwloc_bitmap_copy(node->jobcache, node->available);
                 continue;
             }
             if (!(PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(policy))) {
@@ -492,8 +488,6 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                  * count from a node that had room, against a node that has
                  * none. */
                 node->slots_available = 0;
-                /* cache the available CPUs for later */
-                hwloc_bitmap_copy(node->jobcache, node->available);
             } else if (!keepall) {
                 PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s is fully used and not available for oversubscription: SLOTS %d INUSE %d",

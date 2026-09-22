@@ -149,9 +149,15 @@ message construction, parsing, wireup, environment assembly, threading,
 
 `prte_odls_globals` (`prte_odls_globals_t` in `base.h`) holds:
 
-- **`xterm_ranks` / `xtermcmd`** — support for `--xterm`: a list of ranks
-  whose output should be shown in separate `xterm` windows, parsed at
-  framework open from the `prte_xterm` global.
+- **No xterm state.** `--xterm` is a directive of a *job*, and a
+  persistent DVM's daemons open this framework long before any job asks
+  for it, so nothing about it can live here. It arrives as the
+  `PRTE_JOB_XTERM` job attribute (set by `pmix_server_dyn.c` from the
+  `PRTE_XTERM_RANKS` spawn key `prun_common.c` adds), and
+  `xterm_select()` settles, per child and on the progress thread, whether
+  that child runs under `xterm -T "Rank N" [-hold] -e`. It was once a
+  DVM-wide `prte_xterm` global read here at open; when its MCA param was
+  removed nothing replaced it, and `--xterm` parsed and did nothing.
 - **`signal_direct_children_only`** — MCA flag controlling whether signals
   go to the child only or its whole process group.
 - **`exec_agent`** — an optional wrapper command to exec instead of the app.
@@ -180,7 +186,7 @@ below can be reproduced deterministically from a single `prterun`. It is
 **not** restricted to a debug build, on purpose: an optimized build is a
 different race, so a hook that exists only in a debug one cannot say
 anything about the build that ships. Framework open also **unblocks `SIGCHLD`**
-(odls must see child deaths) and builds the xterm command vector. Framework
+(odls must see child deaths). Framework
 close releases the global `prte_local_children` array.
 
 This file also defines the two caddy classes (below) via
@@ -462,7 +468,8 @@ component's raw fork:
 - Honors `PRTE_JOB_DO_NOT_SPAWN` (mapping-only "donotlaunch" jobs): just
   mark the child `TERMINATED` and return.
 - Calls `PMIx_server_setup_fork()` to inject the PMIx client environment.
-- Resolves the actual command/argv: normal app, or `--xterm` wrapper, or a
+- Resolves the actual command/argv: normal app, or the `--xterm` wrapper
+  `xterm_select()` put on the caddy (`cd->xterm_argv`), or a
   per-job `PRTE_JOB_EXEC_AGENT`, or the global `exec_agent`; optionally
   index-suffixes `argv[0]` with the rank (`PRTE_JOB_INDEX_ARGV`).
 - Calls the component's **`cd->fork_local(cd)`** — the actual `fork`/`execve`.
@@ -617,7 +624,7 @@ computed proc state.
 | Type | Where | Purpose |
 |------|-------|---------|
 | `prte_odls_base_module_t` | `odls.h` | The 5-pointer vtable; the selected one lives in the global `prte_odls`. |
-| `prte_odls_globals_t` / `prte_odls_globals` | `base.h` / `frame.c` | Framework-wide state: xterm ranks, exec agent, signal policy, the cpuset-slice rendezvous list, the fork-publish fault injection. |
+| `prte_odls_globals_t` / `prte_odls_globals` | `base.h` / `frame.c` | Framework-wide state: exec agent, signal policy, the cpuset-slice rendezvous list, the fork-publish fault injection. |
 | `prte_local_children` | `src/runtime/prte_globals` (a `pmix_pointer_array_t`) | The daemon's authoritative list of the procs it launched — every base fn iterates it. Allocated at framework open, released at close. |
 | `prte_odls_spawn_caddy_t` | `base.h` | Per-child fork caddy: `cmd`, `wdir`, `argv`, `env`, `jdata`, `app`, `child`, IOF `opts`, and the `fork_local` fn ptr. Carries `ev` for thread-shifting. Heap-allocated, released after spawn. |
 | `prte_odls_launch_local_t` | `base.h` | Per-node "start launching job J" caddy carried by `PRTE_ACTIVATE_LOCAL_LAUNCH`; holds `job`, `fork_local`, and a `retries` counter for the sys-limit backoff. |
@@ -819,7 +826,7 @@ prte --prtemca odls_base_verbose 5 ...     # trace child-list build, dispatch, w
 prte --prtemca odls_base_verbose 10 ...    # + sys-limit checks, per-thread dispatch
 prte --prtemca odls_base_verbose 20 ...    # >15 dumps the exact argv/env being exec'd
 prte --prtemca state_base_verbose 5 ...    # see LAUNCH_APPS / RUNNING transitions odls drives
-prun --xterm 0,1 ...                        # route ranks 0,1 to xterm windows (see frame.c)
+prun --xterm 0,1 ...                        # route ranks 0,1 to xterm windows (see xterm_select)
 prun --report-bindings ...                  # print each child's applied binding (odls_base_bind.c)
 ```
 

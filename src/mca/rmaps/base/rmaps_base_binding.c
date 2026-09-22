@@ -84,9 +84,10 @@ static void set_proc_cpuset(prte_proc_t *proc, prte_node_t *node,
     }
     if (hwloc_bitmap_iszero(prte_rmaps_base.baseset)) {
         /* Should be unreachable - this object was chosen precisely because it
-         * had free cpus in this intersection. Bind to the object rather than
-         * to nothing: the paths that do not run through get_target_nodes
-         * (colocation) never populate jobcache. */
+         * had free cpus in this intersection, and prte_rmaps_base_map_job()
+         * populates jobcache for every node before anything is placed. Bind
+         * to the object rather than to nothing should a caller ever bind
+         * without going through it. */
         hwloc_bitmap_copy(prte_rmaps_base.baseset, obj->cpuset);
     }
     hwloc_bitmap_list_asprintf(&proc->cpuset, prte_rmaps_base.baseset);

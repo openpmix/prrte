@@ -1618,6 +1618,24 @@ ranking:
         }
     }
 
+    /* Record every node's cpu availability as this job finds it, once, before
+     * anything is placed. Binding to an object binds to the whole object
+     * within this set (set_proc_cpuset), and an overloaded node restarts from
+     * it - so it has to be the JOB's view. It used to be refreshed from
+     * node->available by get_target_nodes(), which runs once per app, by
+     * which time the job's own earlier apps had already consumed cpus: with
+     * "--bindto numa" on one 8-core NUMA domain, "-n 3 app" bound all three
+     * procs to cores 0-7, while "-n 2 app : -n 1 app" bound the third to 2-7.
+     * Taking it here also covers colocation, which never reaches
+     * get_target_nodes(). */
+    for (n = 0; n < prte_node_pool->size; n++) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
+        if (NULL == node || NULL == node->available || NULL == node->jobcache) {
+            continue;
+        }
+        hwloc_bitmap_copy(node->jobcache, node->available);
+    }
+
     if (colocate_daemons || colocate) {
         /* This is a colocation request, so we don't run any mapping modules */
         if (0 == procs_per_target) {
