@@ -49,6 +49,7 @@ RST_SOURCE_FILES = \
         $(srcdir)/*.rst \
         $(srcdir)/prrte-rst-content/*.rst \
         $(srcdir)/placement/*.rst \
+        $(srcdir)/testing/*.rst \
         $(srcdir)/hosts/*.rst \
         $(srcdir)/launching-apps/*.rst \
         $(srcdir)/how-things-work/*.rst \
