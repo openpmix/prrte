@@ -29,10 +29,17 @@ that node in one of two ways:
    number of processor cores on the node, and use that as the number
    of slots available.
 
-#. When ``--use-hwthread-cpus`` is used: If ``--use-hwthread-cpus`` is
-   specified on the command line, then PRRTE will attempt to discover
-   the number of hardware threads on the node, and use that as the
-   number of slots available.
+#. When hardware threads are the CPUs: If a job asks for hardware
+   threads as its CPUs |mdash| the ``HWTCPUS`` qualifier to
+   ``--mapby`` (e.g., ``--mapby core:hwtcpus``), or the deprecated
+   ``--use-hwthread-cpus`` |mdash| then PRRTE counts the hardware
+   threads on the node instead, and uses that as the number of slots
+   available to that job. The count applies to that job alone: the
+   next job that does not ask for hardware threads sees the number of
+   cores again. It also applies only to a count PRRTE determined by
+   counting cores; a slot count given in a hostfile, by ``--host`` or
+   by a resource manager, or set by the ``prte_set_default_slots`` MCA
+   parameter to something other than cores, is not changed.
 
 This default behavior also occurs when specifying the ``--host``
 option with a single host.  Thus, the command:
@@ -46,7 +53,7 @@ launches a number of processes equal to the number of cores on node
 
 .. code:: sh
 
-   shell$ prun --host node1 --use-hwthread-cpus ./a.out
+   shell$ prun --host node1 --mapby core:hwtcpus ./a.out
 
 launches a number of processes equal to the number of hardware
 threads on ``node1``.

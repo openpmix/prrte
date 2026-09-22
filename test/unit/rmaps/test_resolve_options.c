@@ -88,7 +88,10 @@ int test_resolve_options(void)
         CHECK("derive_bind package", PRTE_BIND_TO_PACKAGE == DB(PRTE_MAPPING_BYPACKAGE, false, 1));
         CHECK("derive_bind numa", PRTE_BIND_TO_NUMA == DB(PRTE_MAPPING_BYNUMA, false, 1));
         CHECK("derive_bind core", PRTE_BIND_TO_CORE == DB(PRTE_MAPPING_BYCORE, false, 1));
-        CHECK("derive_bind core+hwt", PRTE_BIND_TO_CORE == DB(PRTE_MAPPING_BYCORE, true, 1));
+        /* an app that counts hwthreads as its cpus binds each proc to its
+         * hwthread, not the whole core - it was given the node's hwthreads
+         * as its slots, so a core binding would stack two procs */
+        CHECK("derive_bind core+hwt", PRTE_BIND_TO_HWTHREAD == DB(PRTE_MAPPING_BYCORE, true, 1));
         CHECK("derive_bind hwthread", PRTE_BIND_TO_HWTHREAD == DB(PRTE_MAPPING_BYHWTHREAD, false, 1));
         CHECK("derive_bind node->core", PRTE_BIND_TO_CORE == DB(PRTE_MAPPING_BYNODE, false, 1));
         CHECK("derive_bind node+hwt", PRTE_BIND_TO_HWTHREAD == DB(PRTE_MAPPING_BYNODE, true, 1));

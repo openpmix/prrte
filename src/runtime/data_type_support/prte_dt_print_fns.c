@@ -326,11 +326,26 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     /* set default result */
     *output = NULL;
 
-    /* check for type of cpu being used */
+    /* check for type of cpu being used - the proc's own app says, if it
+     * said anything, since an app may count hwthreads while the job does
+     * not; reporting its binding in core terms would show a single hwthread
+     * as the whole core it sits in */
     if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
+    }
+    {
+        prte_app_context_t *papp;
+
+        papp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, src->app_idx);
+        if (NULL != papp) {
+            if (PRTE_ATTR_IS_TRUE(&papp->attributes, PRTE_APP_HWT_CPUS)) {
+                use_hwthread_cpus = true;
+            } else if (PRTE_ATTR_IS_TRUE(&papp->attributes, PRTE_APP_CORE_CPUS)) {
+                use_hwthread_cpus = false;
+            }
+        }
     }
 
     physical = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS);
