@@ -51,6 +51,22 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT int prte_session_dir(pmix_proc_t *proc);
 
+/**
+ * Create a directory PRRTE names for itself under a shared temporary
+ * directory, applying the session-directory rule: one already there -
+ * the name is predictable, so it need not be one we made - is used only
+ * if it is ours and no one else can write to it. A refusal is reported
+ * here.
+ *
+ * @param directory The directory.
+ * @param created   If not NULL, set true only if this call made it, so
+ *                  the caller knows it is the one to remove it.
+ * @retval PRTE_SUCCESS    It is ours to use.
+ * @retval PRTE_ERR_SILENT It is not, or could not be opened; the reason
+ *                         has already been shown.
+ */
+PRTE_EXPORT int prte_session_dir_create(const char *directory, bool *created);
+
 /** The session_dir_finalize functions perform a cleanup of the
  * relevant session directory tree.
  */
