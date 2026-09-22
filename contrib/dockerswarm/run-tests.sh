@@ -1551,6 +1551,41 @@ test_state() {
         ok "no state log appeared when none was requested"
     fi
     cleanup_swarm
+
+    banner "state: the state log is not written thru a symlink at its name"
+    # The log sits at a fixed name in a directory other users may write to --
+    # by default the tmpdir itself -- and used to be opened with fopen("a"),
+    # which follows a symlink there and appends to its target. Plant one at
+    # the controller's name on node1 and at the prted's name on node2: both
+    # processes must decline, leave the targets alone, and still run the job.
+    cleanup_swarm
+    for n in 1 2; do
+        ON $n 'rm -rf /tmp/statelog /tmp/statelog-victim; mkdir -p /tmp/statelog
+               echo original > /tmp/statelog-victim' >/dev/null 2>&1
+    done
+    RUN 'ln -s /tmp/statelog-victim /tmp/statelog/prtectrlr-$(hostname)-log' >/dev/null 2>&1
+    ON 2 'ln -s /tmp/statelog-victim /tmp/statelog/prted-$(hostname)-log' >/dev/null 2>&1
+    out=$(RUN 'timeout 90 prterun --prtemca state_base_log_jobstate 1 \
+                   --prtemca state_base_log_procstate 1 \
+                   --prtemca state_base_log_path /tmp/statelog \
+                   --host node2:2 -n 2 hostname' 2>&1)
+    n=$(echo "$out" | grep -c '^node2$')
+    [ "$n" = 2 ] && ok "the job ran with the state log declined" \
+                 || bad "the job did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    for h in 1 2; do
+        c=$(ON $h 'cat /tmp/statelog-victim' 2>/dev/null)
+        [ "$c" = original ] \
+            && ok "node$h: the symlink's target was left alone" \
+            || bad "node$h: the state log was written thru the symlink ($(echo "$c" | wc -l | tr -d ' ') lines)"
+        # were the links at the names the processes use? A regular log file
+        # beside the link would mean they were not, and the check above
+        # proved nothing
+        ON $h 'find /tmp/statelog -type f -name "*-log" | grep -q .' \
+            && bad "node$h: a log was written under another name -- the planted link missed" \
+            || ok "node$h: no log was written under any other name"
+    done
+    for n in 1 2; do ON $n 'rm -rf /tmp/statelog /tmp/statelog-victim' >/dev/null 2>&1; done
+    cleanup_swarm
 }
 
 ########################################################################
@@ -4220,6 +4255,76 @@ test_util() {
     n=$(echo "$out" | grep -cE '^node[23]$')
     [ "$n" = 2 ] && ok "a valid system limit is applied and the launch proceeds" \
                  || bad "a valid system limit broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+
+    banner "util: a session directory owned by another user is refused"
+    # The top session directory has a predictable name, <tmpdir>/prtrn.<pid>
+    # for prterun, and one already there used to be adopted whoever owned it.
+    # exec keeps the pid, so the shell can make the directory prterun will
+    # look for before prterun exists. It must be ours.
+    cleanup_swarm
+    if bounded 90 RUN 'd=/tmp/prtrn.$$; mkdir $d && chmod 777 $d && chown 65534 $d &&
+                       exec prterun -n 1 hostname'; then
+        bad "prterun used a session directory owned by uid 65534"
+    elif grep -q 'belongs to another user' "$BOUT"; then
+        ok "prterun refused a session directory owned by another user"
+    else
+        bad "prterun failed, but not over the directory's owner: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+    fi
+    rm -f "$BOUT"
+    RUN 'find /tmp -maxdepth 1 -name "prtrn.*" -uid 65534 -exec sh -c "ls -A {} | grep -q ." \; -print' \
+        | grep -q . \
+        && bad "something was written into the other user's session directory" \
+        || ok "nothing was written into the other user's session directory"
+    cleanup_swarm
+    # ...while one of our own, left over from an earlier run, is still used
+    if bounded 90 RUN 'mkdir /tmp/prtrn.$$ && exec prterun -n 1 hostname' &&
+       grep -q '^node1$' "$BOUT"; then
+        ok "prterun used a pre-existing session directory of its own"
+    else
+        bad "prterun refused its own pre-existing session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+    fi
+    rm -f "$BOUT"
+    cleanup_swarm
+
+    banner "util: prun refuses a session directory owned by another user"
+    # prun hands PMIx <tmpdir>/prun.session.<node>.<euid>.<pid> as its server
+    # tmpdir, and PMIx trusts a directory it is given - so prun has to create
+    # it, and refuse one already there that is not ours, before handing it
+    # over. A DVM on node1 alone is enough: the directory is prun's own.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --report-uri /tmp/sessdir-dvm.uri >/tmp/prte.out 2>&1 & sleep 5' >/dev/null
+    if ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start a DVM for the prun session-directory test"
+    else
+        if bounded 90 RUN 'd=/tmp/prun.session.$(hostname).$(id -u).$$
+                           mkdir $d && chmod 777 $d && chown 65534 $d &&
+                           exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname'; then
+            bad "prun used a session directory owned by uid 65534"
+        elif grep -q 'belongs to another user' "$BOUT"; then
+            ok "prun refused a session directory owned by another user"
+        else
+            bad "prun failed, but not over the directory's owner: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+        fi
+        rm -f "$BOUT"
+        RUN 'rm -rf /tmp/prun.session.*' >/dev/null 2>&1
+        if bounded 90 RUN 'mkdir /tmp/prun.session.$(hostname).$(id -u).$$ &&
+                           exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' &&
+           grep -q '^node1$' "$BOUT"; then
+            ok "prun used a pre-existing session directory of its own"
+        else
+            bad "prun refused its own pre-existing session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+        fi
+        rm -f "$BOUT"
+        RUN 'rm -rf /tmp/prun.session.*' >/dev/null 2>&1
+        # ...and one it made itself, it removes again
+        RUN 'timeout 60 prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' >/dev/null 2>&1
+        RUN 'ls -d /tmp/prun.session.* >/dev/null 2>&1' \
+            && bad "prun left its session directory behind" \
+            || ok "prun removed the session directory it made"
+        RUN 'timeout -k 5 30 pterm --dvm-uri file:/tmp/sessdir-dvm.uri' >/dev/null 2>&1
+    fi
+    RUN 'rm -f /tmp/sessdir-dvm.uri' >/dev/null 2>&1
     cleanup_swarm
 }
 
