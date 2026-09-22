@@ -590,6 +590,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "REPORT-CHILD-JOBS-SEPARATELY";
         case PRTE_JOB_NO_IOF_INHERIT:
             return "JOB-DOES-NOT-INHERIT-OUTPUT-FORWARDING";
+        case PRTE_JOB_XTERM:
+            return "XTERM";
         case PRTE_JOB_COLOCATE_PROCS:
             return "COLOCATE PROCS";
         case PRTE_JOB_COLOCATE_NPERPROC:

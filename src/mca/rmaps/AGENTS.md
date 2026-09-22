@@ -387,7 +387,7 @@ change. See [`src/mca/ras/AGENTS.md`](../ras/AGENTS.md).
 
 `node->available` and `options->job_cpuset` are **never NULL**. The mappers
 copy and intersect both without checking (`hwloc_bitmap_copy(node->jobcache,
-node->available)` in `get_target_nodes()` is the first one), so a NULL is a
+node->available)` in `prte_rmaps_base_map_job()` is the first one), so a NULL is a
 segfault in the HNP inside hwloc. When a `--cpu-set` cannot be resolved
 against a node's topology, `prte_hwloc_base_filter_cpus()` and
 `prte_rmaps_base_get_cpuset()` hand back an **empty** set — the node then
@@ -463,10 +463,18 @@ separately out of `options->job_cpuset`. Handing back `obj->cpuset` raw —
 which is what this used to do — meant a cpu-set was honored by `--bind-to
 core` (where the object sits inside the set anyway) and silently discarded
 by `--bind-to package` or `numa`: the rank came back owning every core of
-the object. Note that `prte_node_construct()` leaves `jobcache` allocated
-but **empty**, and the colocation path reaches binding without going
-through `get_target_nodes`, so the intersection falls back to the bare
-object when it would otherwise come up empty.
+the object.
+
+**`jobcache` is taken once per job, not per app.** `prte_rmaps_base_map_job()`
+copies every pool node's `available` into it before any mapper or the
+colocation path runs. It used to be refreshed by `get_target_nodes()`,
+which runs once per *app* — after the job's own earlier apps had already
+consumed cpus — so a later app's object binding came back short by exactly
+those cpus: on one 8-core NUMA domain, `--bindto numa -n 3 a` bound all
+three procs to cores 0-7, but `-n 2 a : -n 1 b` bound the third to 2-7. Do
+not reintroduce a per-app refresh. `prte_node_construct()` leaves
+`jobcache` allocated but **empty**, so `set_proc_cpuset()` still falls back
+to the bare object should a caller ever bind without the snapshot.
 
 **`--bind-to` is parsed in two places and gated in a third.** Per-app by
 `prte_rmaps_base_set_app_binding_policy()` here, job-level by

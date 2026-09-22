@@ -1096,3 +1096,23 @@ found or could not be opened:
    file: %s
 
 Please correct the option and try again.
+#
+[appfile-with-app]
+
+The --app <arg> option was provided together with an application on
+the command line:
+
+   file:        %s
+   application: %s
+
+An appfile supplies every application context of the job, so the
+command line may not name one as well - the file's first line would
+otherwise be appended to the command-line application's own arguments.
+Options may still be given alongside --app: they are applied as if
+written in front of the file's first line, so a job-level option (for
+example, "--mapby") describes the whole job, while an option the
+file's first line also gives (for example, "-n") is refused as a
+duplicate.
+
+Please move the application into the appfile, or drop --app, and try
+again.

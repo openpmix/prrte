@@ -231,6 +231,8 @@ int test_output(void)
     char *dvals2[] = {"map", "bind", NULL};
     char *dvals3[] = {"map:parseable", NULL};
     char *dvals4[] = {"topo=node1;node2", NULL};
+    char *dvals4b[] = {"topo", NULL};
+    char *dvals4c[] = {"topo=", NULL};
     char *dvals5[] = {"map:bogus", NULL};
     char *evals1[] = {"bogus", NULL};
     char *evals2[] = {"bogus", NULL};
@@ -343,6 +345,22 @@ int test_output(void)
           0 == strcmp(key_string(iptr, ninfo, PMIX_DISPLAY_TOPOLOGY),
                       "node1;node2"));
     PMIX_INFO_FREE(iptr, ninfo);
+
+    /*** bare "topo" means every node - what the deprecated
+     * --display-topo converts to.  It must be accepted and must still
+     * request the display, with no node list attached ***/
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dvals4b,
+                    &iptr, &ninfo);
+    CHECK("display:topo-bare-rc", PRTE_SUCCESS == rc);
+    CHECK("display:topo-bare-key", has_key(iptr, ninfo, PMIX_DISPLAY_TOPOLOGY));
+    CHECK("display:topo-bare-all", NULL == key_string(iptr, ninfo, PMIX_DISPLAY_TOPOLOGY));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    /*** ...whereas "topo=" names an empty list, which is refused ***/
+    fprintf(stderr, "--- expected error output follows (empty topo list) ---\n");
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dvals4c,
+                    &iptr, &ninfo);
+    CHECK("display:topo-empty", PRTE_SUCCESS != rc);
 
     /*** an unknown display qualifier is an error ***/
     fprintf(stderr, "--- expected error output follows (bad display qualifier) ---\n");

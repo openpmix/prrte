@@ -58,16 +58,14 @@ option to the help request as "--help <option>".
 | "--internal"         | Show internal MCA parameters (not meant to be |
 |                      | modified by users)                            |
 +----------------------+-----------------------------------------------+
-| "--param <framework  | Show MCA parameters.  The first parameter is  |
-| >:<component1>,<com  | the framework (or the keyword "all"); the     |
-| ponent2>"            | second parameter is a comma-delimited list of |
-|                      | specific component names (if only             |
-|                      | "<framework>" is given, then all components   |
-|                      | will be reported).                            |
+| "--param <framework  | Show MCA parameters of a framework, or of     |
+| >[:<component1>,<co  | only the listed components of it (a comma-    |
+| mponent2>]"          | delimited list after the colon). The keyword  |
+|                      | "all" shows every parameter. May be repeated. |
 +----------------------+-----------------------------------------------+
 | "--params <framework | Synonym for "--param"                         |
-| >:<component1>,<com  |                                               |
-| ponent2>"            |                                               |
+| >[:<component1>,<co  |                                               |
+| mponent2>]"          |                                               |
 +----------------------+-----------------------------------------------+
 | "-t" | "--type       | Show MCA parameters of the specified type.    |
 | <type>"              | Accepts the following parameters:             |
@@ -76,18 +74,20 @@ option to the help request as "--help <option>".
 |                      | "version_string", "bool", and "double".       |
 +----------------------+-----------------------------------------------+
 | "--path <type>"      | Show paths with which PRRTE was configured.   |
-|                      | Accepts the following parameters: "prefix",   |
-|                      | "bindir", "libdir", "incdir", "mandir",       |
-|                      | "pkglibdir", "sysconfdir".                    |
+|                      | Accepts "all" or one of the installation      |
+|                      | directories, e.g., "prefix", "bindir",        |
+|                      | "libdir", "incdir", "mandir", "pkglibdir",    |
+|                      | "sysconfdir" (see "--help path" for the full  |
+|                      | list). May be repeated.                       |
 +----------------------+-----------------------------------------------+
-| "--show-version      | Show version of PRRTE or a component.  The    |
-| <type>:<part>"       | first parameter can be the keywords "prte",   |
-|                      | "all", or a framework name (indicating all    |
-|                      | components in a framework), or a              |
-|                      | "framework:component" string (indicating a    |
-|                      | specific component).  The second parameter    |
-|                      | can be one of: "full", "major", "minor",      |
-|                      | "release", "greek", "git".                    |
+| "--show-version      | Show version of PRRTE or of components. The   |
+| [<what> [<part>]]"   | first argument is "prte", "all", a framework  |
+|                      | name (all components in that framework), or   |
+|                      | "framework:component". The optional second    |
+|                      | argument selects the part of the version:     |
+|                      | "full" (default), "major", "minor",           |
+|                      | "release", "greek", "repo". With no argument, |
+|                      | show PRRTE's version and every component's.   |
 +----------------------+-----------------------------------------------+
 | "--include-pmix"     | Include PMIx params and build info in output  |
 +----------------------+-----------------------------------------------+
@@ -129,17 +129,62 @@ and "value" is the parameter value.
 #
 [param]
 
-Syntax: "--param <arg0> <arg1>"
+Syntax: "--param <framework>[:<component>[,<component>...]]"
 
-Show MCA parameters.  The first parameter is the framework (or the
-keyword "all"); the second parameter is the specific component name
-(or the keyword "all").
+Show the MCA parameters of a framework. Given only a framework name
+(e.g., "--param rmaps"), every parameter of the framework and of all
+its components is shown; a comma-delimited list of component names
+after a colon (e.g., "--param rmaps:ppr,round_robin") restricts the
+output to those components. The keyword "all", given either as
+"--param all" or as the component list, selects everything.
+
+The framework and its components are one argument: "--param rmaps ppr"
+is refused, because "ppr" is taken as a stray argument. The option may
+be repeated to show several frameworks.
 #
 [params]
 
-Syntax: "--params <arg0> <arg1>"
+Syntax: "--params <framework>[:<component>[,<component>...]]"
 
 Synonym for "--param".
+#
+[show-version]
+
+Syntax: "--show-version [<what> [<part>]]"
+
+Show the version of PRRTE or of some of its components. "<what>" is
+one of:
+
+* "prte" or "all": PRRTE's own version plus that of every component
+
+* "<framework>": the version of every component in that framework
+
+* "<framework>:<component>": the version of that one component
+
+The optional "<part>" selects which part of the version to show:
+"full" (the default), "major", "minor", "release", "greek", or
+"repo". Given with no argument, the option shows PRRTE's version and
+every component's.
+
+Note that this is distinct from "-V"/"--version", which only prints the
+version of the prte_info tool itself.
+#
+[bad-param-value]
+
+The "--%s" option was given a value it cannot interpret:
+
+   Value: %s
+
+The expected form is "<framework>[:<component>[,<component>...]]"
+(e.g., "rmaps" or "rmaps:ppr,round_robin"), or the keyword "all".
+#
+[unknown-framework]
+
+There is no framework or parameter type named "%s" in this
+installation, so there are no parameters to show for it.
+
+Run "%s --all" for the list of components and the frameworks they
+belong to.
 #
 [type]
 
@@ -201,9 +246,12 @@ modified by users)
 
 Syntax: "--path <arg0>"
 
-Show the paths with which PRRTE was configured.  Accepts the following
-parameters: "prefix", "bindir", "libdir", "incdir", "mandir",
-"pkglibdir", "sysconfdir".
+Show the paths with which PRRTE was configured.  Accepts "all" or any
+of: "prefix", "exec_prefix", "bindir", "sbindir", "libdir", "incdir",
+"mandir", "pkglibdir", "libexecdir", "datarootdir", "datadir",
+"sysconfdir", "sharedstatedir", "localstatedir", "infodir",
+"pkgdatadir", "pkgincludedir". The option may be repeated to show
+several paths.
 #
 [arch]
 

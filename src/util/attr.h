@@ -313,6 +313,11 @@ typedef uint16_t prte_job_flags_t;
                                                                        // a non-inheriting child silently refuse to pass mapping,
                                                                        // ranking and binding on to a grandchild
 
+#define PRTE_JOB_XTERM                      (PRTE_JOB_START_KEY + 135) // char* - "--xterm" value: the ranks whose output is to be shown
+                                                                       // in their own xterm window, in prte_parse_xterm_option() syntax.
+                                                                       // A job attribute - not a DVM-wide setting - because a persistent
+                                                                       // DVM's daemons were started long before the job that asks for it
+
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
 /*** PROC FLAGS - never sent anywhere ***/

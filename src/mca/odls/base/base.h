@@ -52,10 +52,6 @@ BEGIN_C_DECLS
 typedef struct {
     /** Verbose/debug output stream */
     int output;
-    /* list of ranks to be displayed on separate xterms */
-    pmix_list_t xterm_ranks;
-    /* the xterm cmd to be used */
-    char **xtermcmd;
     bool signal_direct_children_only;
     char *exec_agent;
     /* send each daemon its own procs' bindings instead of broadcasting
@@ -151,6 +147,11 @@ typedef struct {
     bool hwt_cpus;
     bool report_physical_cpus;
     char *exec_agent;
+    /* the job's "--xterm" value (PRTE_JOB_XTERM), and - when it names
+     * this caddy's child - the xterm command to run the child under,
+     * both settled on the progress thread before dispatch */
+    char *xterm_spec;
+    char **xterm_argv;
     prte_iof_base_io_conf_t opts;
     prte_odls_base_fork_local_proc_fn_t fork_local;
     /* CPU/memory binding computed by the parent
