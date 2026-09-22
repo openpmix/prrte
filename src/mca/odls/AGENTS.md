@@ -690,6 +690,18 @@ computed proc state.
   (`LOCAL`, `ALIVE`, `WAITPID`, `IOF_COMPLETE`, `REG`), gate the whole
   lifecycle. A child is only fully released once **both** `WAITPID` and
   `IOF_COMPLETE` are set.
+- **This framework reports that the waitpid half is done; it does not set
+  the flag and it does not decide the proc is finished.** Wherever the odls
+  knows a child will produce no further `SIGCHLD` — the reaper, and both
+  arms of the kill path — it activates `PRTE_PROC_STATE_WAITPID_FIRED`, and
+  `prte_state_base_join()` is the only thing that sets
+  `PRTE_PROC_FLAG_WAITPID` and the only thing that joins the two halves. A
+  diagnosis is a *separate* activation, made first and only by whoever
+  actually diagnosed the proc; the kill path in particular must not
+  re-activate a diagnosis some other code made. Setting the flag by hand
+  and re-activating the proc's existing state instead is what left an
+  aborting rank unretired, its daemon's batched `UPDATE_PROC_STATE`
+  unsent, and `prterun` hung with every daemon alive.
 - **Failure means activating a state, not returning.** On the daemon side
   the launch is asynchronous; report errors with
   `PRTE_ACTIVATE_PROC_STATE(FAILED_TO_LAUNCH/FAILED_TO_START)` or
