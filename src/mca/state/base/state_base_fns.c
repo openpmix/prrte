@@ -671,6 +671,23 @@ void prte_state_base_orphaned_proc(pmix_proc_t *proc, prte_proc_state_t state)
     prte_plm.terminate_orteds();
 }
 
+void prte_state_base_join(prte_proc_t *pdata, pmix_proc_t *proc, prte_proc_flags_t half)
+{
+    PRTE_FLAG_SET(pdata, half);
+
+    /* the RECORDED test is what makes the activation happen once per proc.
+     * Without it a proc that gets a duplicate report of either half - which
+     * the master does get, see the long comment in the TERMINATED arm - is
+     * counted twice, num_terminated reaches num_procs while a survivor is
+     * still running, and the DVM is torn down under it.
+     */
+    if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_IOF_COMPLETE)
+        && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_WAITPID)
+        && !PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
+        PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
+    }
+}
+
 void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -759,19 +776,13 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         if (NULL != prte_iof.close) {
             prte_iof.close(proc, PRTE_IOF_STDALL);
         }
-        PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_IOF_COMPLETE);
-        if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_WAITPID)) {
-            PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
-        }
+        prte_state_base_join(pdata, proc, PRTE_PROC_FLAG_IOF_COMPLETE);
     } else if (PRTE_PROC_STATE_WAITPID_FIRED == state) {
         /* update the proc state */
         if (pdata->state < PRTE_PROC_STATE_TERMINATED) {
             pdata->state = state;
         }
-        PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_WAITPID);
-        if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_IOF_COMPLETE)) {
-            PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
-        }
+        prte_state_base_join(pdata, proc, PRTE_PROC_FLAG_WAITPID);
     } else if (PRTE_PROC_STATE_TERMINATED == state) {
         /* Have we already counted this proc?  Ask the flag, not the state
          * word.  Testing "pdata->state == state" looks equivalent and is not,

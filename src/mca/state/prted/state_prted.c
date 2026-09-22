@@ -481,31 +481,23 @@ static void track_procs(int fd, short argc, void *cbdata)
          * while we are still trying to notify the HNP of
          * successful launch for short-lived procs
          */
-        PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_IOF_COMPLETE);
         /* Release the stdin IOF file descriptor for this child, if one
          * was defined. File descriptors for the other IOF channels - stdout,
          * stderr, and stddiag - were released when their associated pipes
          * were cleared and closed due to termination of the process
-         * Do this after we handle termination in case the IOF needs
+         * Do this before we handle termination in case the IOF needs
          * to check to see if all procs from the job are actually terminated
          */
         if (NULL != prte_iof.close) {
             prte_iof.close(proc, PRTE_IOF_STDALL);
         }
-        if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_WAITPID)
-            && !PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
-            PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
-        }
+        prte_state_base_join(pdata, proc, PRTE_PROC_FLAG_IOF_COMPLETE);
     } else if (PRTE_PROC_STATE_WAITPID_FIRED == state) {
         /* do NOT update the proc state as this can hit
          * while we are still trying to notify the HNP of
          * successful launch for short-lived procs
          */
-        PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_WAITPID);
-        if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_IOF_COMPLETE)
-            && !PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
-            PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
-        }
+        prte_state_base_join(pdata, proc, PRTE_PROC_FLAG_WAITPID);
     } else if (PRTE_PROC_STATE_TERMINATED == state) {
         /* if this proc has not already recorded as terminated, then
          * update the accounting here */
