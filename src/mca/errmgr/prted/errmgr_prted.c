@@ -644,12 +644,6 @@ static void proc_errors(int fd, short args, void *cbdata)
                 prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, true);
             }
         }
-        /* if the proc has terminated, notify the state machine */
-        if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE)
-            && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID)
-            && !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_RECORDED)) {
-            PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
-        }
         goto cleanup;
     }
 
@@ -775,12 +769,6 @@ static void proc_errors(int fd, short args, void *cbdata)
             if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE)) {
                 prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, true);
             }
-        }
-        /* if the proc has terminated, notify the state machine */
-        if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE) &&
-            PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID) &&
-            !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_RECORDED)) {
-            PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
         }
         goto cleanup;
     }
