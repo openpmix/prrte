@@ -21,6 +21,7 @@ test_rmaps_SOURCES = \
     test_check_avail.c     \
     test_node_rank.c       \
     test_resize.c          \
+    test_hwt_slots.c       \
     test_dispatch.c        \
     test_round_robin.c     \
     test_ppr.c             \

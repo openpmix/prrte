@@ -606,6 +606,10 @@ class Case:
     # baseline. A case that wants oversubscription to come from the DVM
     # default rather than from the command line sets ":oversubscribe" here.
     default_map_policy: str = ""
+    # every proc (of the listed apps, or of the job when None) must be bound
+    # to exactly one hwthread, and no two to the same one
+    expect_single_pu: bool = False
+    single_pu_apps: tuple = None
 
 
 def _expect_for(map_by, rank_by, bind_to):
@@ -1030,6 +1034,39 @@ def perapp_cases(topo):
                expect="map")
 
 
+def hwtcpus_cases(topo):
+    """A job that counts hwthreads as its cpus binds each proc to a cpu - its
+    hwthread - by default, not to the whole core: it is owed the node's
+    hwthreads as its slots, so a core binding would stack procs on the same
+    cpus.  Only an SMT topology can tell the two bindings apart."""
+    if topo.hwthread_eq_core:
+        return
+    hostspec, pool = LAYOUTS["even"]   # node0:8,node1:8,node2:8
+
+    # job-level hwtcpus, mapped by core, no binding given
+    yield Case("hwtcpus.%s.core" % topo.name, "hwtcpus", topo, "even",
+               hostspec, pool, map_by="core:hwtcpus", n=12,
+               expect="map", expect_single_pu=True)
+
+    # ppr by core is the same question asked through the ppr mapper.  A ppr
+    # pattern must fit a node whole, so give the one node room for it: one
+    # proc per hwthread of every core
+    npu = topo.count("PU")
+    yield Case("hwtcpus.%s.ppr-core" % topo.name, "hwtcpus", topo, "ppr",
+               "node0:%d" % npu, [("node0", npu)],
+               map_by="ppr:%d:core:hwtcpus" % topo.pus_per_core, n=npu,
+               expect="map", expect_single_pu=True)
+
+    # per-app: only the app that asked for hwthreads binds to one; the app
+    # that counts cores keeps its core binding (checked by golden-free
+    # construction: its procs are simply not held to the one-PU rule)
+    yield Case("hwtcpus.%s.perapp" % topo.name, "hwtcpus", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(4, map_by="core:hwtcpus"),
+                     AppSpec(2, map_by="core")],
+               expect="map", expect_single_pu=True, single_pu_apps=(0,))
+
+
 def generate_cases(topos, layouts, ns, full):
     cases = []
     for topo in topos:
@@ -1039,6 +1076,7 @@ def generate_cases(topos, layouts, ns, full):
         cases.extend(hostcap_cases(topo))
         cases.extend(device_cases(topo))
         cases.extend(perapp_cases(topo))
+        cases.extend(hwtcpus_cases(topo))
     return cases
 
 
@@ -1315,6 +1353,31 @@ def check_perapp_binding(case, pmap):
     return v
 
 
+def check_single_pu(case, pmap):
+    v = []
+    if not case.expect_single_pu:
+        return v
+    seen = {}
+    for node, p in _flat_procs(pmap):
+        if case.single_pu_apps is not None and p.app not in case.single_pu_apps:
+            continue
+        b = p.bound
+        if b is None:
+            v.append(("B-hwt", "rank %d unbound" % p.rank))
+            break
+        if b.child_level not in ("hwt", "pu") or b.lo != b.hi:
+            v.append(("B-hwt", "rank %d bound to %s:L%d-%d, not one hwthread"
+                      % (p.rank, b.child_level, b.lo, b.hi)))
+            break
+        key = (node.name, b.lo)
+        if key in seen:
+            v.append(("B-hwt", "ranks %d and %d share hwthread %d on %s"
+                      % (seen[key], p.rank, b.lo, node.name)))
+            break
+        seen[key] = p.rank
+    return v
+
+
 def check_case(case, pmap):
     violations = []
     violations += check_universal(case, pmap)
@@ -1322,6 +1385,7 @@ def check_case(case, pmap):
     violations += check_ranking(case, pmap)
     violations += check_binding(case, pmap)
     violations += check_perapp_binding(case, pmap)
+    violations += check_single_pu(case, pmap)
     return violations
 
 

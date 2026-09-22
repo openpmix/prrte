@@ -177,6 +177,90 @@ void prte_rmaps_base_restore_resized(void)
     }
 }
 
+/* The slot count a node had before this map re-sized it, or its current
+ * count if this map has not touched it. */
+static int32_t original_slots(prte_node_t *node)
+{
+    prte_rmaps_base_resize_t *rsz;
+
+    PMIX_LIST_FOREACH(rsz, &prte_rmaps_base.resized_nodes, prte_rmaps_base_resize_t) {
+        if (rsz->node == node) {
+            return rsz->slots;
+        }
+    }
+    return node->slots;
+}
+
+/* Whether this app counts hwthreads, rather than cores, as its cpus: the
+ * app's own directive if it gave one, otherwise the job's. */
+static bool app_uses_hwthreads(prte_job_t *jdata, prte_app_context_t *app)
+{
+    if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_HWT_CPUS)) {
+        return true;
+    }
+    if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_CORE_CPUS)) {
+        return false;
+    }
+    return PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS);
+}
+
+/*
+ * Count a node's slots in the cpus this app asked for.
+ *
+ * A node whose slot count nobody stated gets one from its topology when it
+ * joins the DVM - its cores, by default - and that count is fixed for the
+ * life of the DVM. A job that asks for hwthreads as its cpus ("--mapby
+ * :hwtcpus", or the deprecated --use-hwthread-cpus) is owed the node's
+ * hwthreads, but only for its own map: the next job that asks for nothing
+ * gets the cores back. So the node is re-sized through the same record the
+ * "-host node:N" growth uses, which prte_rmaps_base_map_job() empties at
+ * the end of every map, success or failure.
+ *
+ * The count is re-derived for every app, not once per job, because apps of
+ * one job may disagree: an app that counts cores must not map against the
+ * hwthread count an earlier app of the same job set.
+ *
+ * Only a count that really came from counting cores is re-counted. A count
+ * stated by a hostfile, a -host, or a resource manager is what the node
+ * offers whatever the job counts, and a DVM told to count packages or NUMA
+ * domains made that choice for every job. The equality test guards the
+ * flag: anything that later re-describes the node's slots leaves a count
+ * that is no longer the core count, and then it is not ours to change.
+ */
+static void count_slots_for_app(prte_node_t *node, bool hwt)
+{
+    int32_t base, ncores, want;
+
+    if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_FROM_CORES) ||
+        NULL == node->topology || NULL == node->topology->topo) {
+        return;
+    }
+    base = original_slots(node);
+    ncores = (int32_t) prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                          HWLOC_OBJ_CORE);
+    if (base != ncores) {
+        return;
+    }
+    if (hwt) {
+        want = (int32_t) prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                            HWLOC_OBJ_PU);
+        if (want < base) {
+            want = base;
+        }
+    } else {
+        want = base;
+    }
+    if (want == node->slots) {
+        return;
+    }
+    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                         "%s node %s counted as %d slots (%s) for this map",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, (int) want,
+                         hwt ? "hwthreads" : "cores"));
+    prte_rmaps_base_record_resize(node, node->slots);
+    node->slots = want;
+}
+
 int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                                      int32_t *total_num_slots,
                                      prte_job_t *jdata, prte_app_context_t *app,
@@ -366,6 +450,8 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
             }
         }
     } else {
+        bool hwt = app_uses_hwthreads(jdata, app);
+
         num_slots = 0;
         PMIX_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
         {
@@ -378,6 +464,8 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                 PMIX_RELEASE(node);
                 continue;
             }
+            /* before anything below judges how full the node is */
+            count_slots_for_app(node, hwt);
             /* if the hnp was not allocated, or flagged not to be used,
              * then remove it here */
             if (!prte_hnp_is_allocated ||

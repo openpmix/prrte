@@ -680,10 +680,12 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_HWTCPUS,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
-            if (NULL != prte_set_slots) {
-                free(prte_set_slots);
-            }
-            prte_set_slots = strdup("hwthreads");
+            /* the qualifier alone is enough: the mapper counts a node's
+             * hwthreads as its slots for a job that asks for them, and only
+             * for that job. This used to set prte_set_slots as well, which
+             * resized every node for the life of whatever DVM this process
+             * started (so prterun's spawned children inherited it) and did
+             * nothing at all in prun, whose DVM was already sized. */
         }
 
         /* --cpu-set and --cpu-list -> --map-by pe-list:X

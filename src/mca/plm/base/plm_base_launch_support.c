@@ -86,10 +86,18 @@
 
 void prte_plm_base_set_slots(prte_node_t *node)
 {
+    /* Say whether the count below comes from counting cores. It is the only
+     * basis a job may re-count: a job asking for hwthreads as its cpus is
+     * owed the node's hwthreads for its own map (see
+     * prte_rmaps_base_get_target_nodes), whereas a count of packages or
+     * NUMA domains, or a plain number, is a policy the DVM was told to
+     * apply and no job may second-guess it. */
+    PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_FROM_CORES);
     if (0 == strncmp(prte_set_slots, "cores", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
             node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_CORE);
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_FROM_CORES);
         }
         /* "packages" is hwloc's own name for the object, and the name
          * prte_set_default_slots is documented as taking; "sockets" is what
@@ -142,6 +150,7 @@ void prte_plm_base_set_slots(prte_node_t *node)
             if (NULL != node->topology && NULL != node->topology->topo) {
                 node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                  HWLOC_OBJ_CORE);
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_FROM_CORES);
             }
         } else {
             if (0 > sl) {

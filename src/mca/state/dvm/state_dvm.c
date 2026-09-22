@@ -965,17 +965,6 @@ release:
     }
     if (NULL != jdata->map) {
         map = jdata->map;
-        takeall = false;
-        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_HWT_CPUS)) {
-            type = HWLOC_OBJ_PU;
-        } else {
-            type = HWLOC_OBJ_CORE;
-        }
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16) ||
-            PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(map->mapping) ||
-            PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(map->mapping)) {
-            takeall = true;
-        }
         boundcpus = hwloc_bitmap_alloc();
         for (index = 0; index < map->nodes->size; index++) {
             node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, index);
@@ -995,6 +984,9 @@ release:
                     continue;
                 }
                 app = (prte_app_context_t*) pmix_pointer_array_get_item(jdata->apps, proc->app_idx);
+                /* the proc was bound in its own app's terms, which need not
+                 * be the job's - release it in them */
+                prte_state_base_cpu_release_policy(jdata, app, &type, &takeall);
                 if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
                     !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;

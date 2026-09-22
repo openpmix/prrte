@@ -352,9 +352,20 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
                                 "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
         } else if (PRTE_MAPPING_BYCORE == mpol) {
-            pmix_output_verbose(options->verbosity, options->stream,
-                                "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
-            PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+            /* a job that counts hwthreads as its cpus binds each proc to a
+             * cpu - its hwthread - not to the whole core: the node was
+             * counted as that many slots for this job, so binding to the
+             * core would put two procs on the same set of cpus */
+            if (options->use_hwthreads) {
+                pmix_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byhwthread (hwtcpus)",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
+            } else {
+                pmix_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+            }
         } else if (PRTE_MAPPING_BYL1CACHE == mpol) {
             pmix_output_verbose(options->verbosity, options->stream,
                                 "setdefaultbinding[%d] binding not given - using byL1", __LINE__);
@@ -424,7 +435,10 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
             } else if (HWLOC_OBJ_L3CACHE == options->maptype) {
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
             } else if (HWLOC_OBJ_CORE == options->maptype) {
-                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+                /* as for mapping by core: hwthread cpus bind to a hwthread */
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                options->use_hwthreads ? PRTE_BIND_TO_HWTHREAD
+                                                                       : PRTE_BIND_TO_CORE);
             } else if (HWLOC_OBJ_PU == options->maptype) {
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
             }
