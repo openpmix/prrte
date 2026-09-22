@@ -148,9 +148,7 @@ Then, per specific application-proc state:
   `PRTE_JOB_FAIL_NOTIFIED`, pack just this proc and reliable-send to the
   HNP, then set the dedup flag (skipped for recoverable jobs).
 - **not local** → ignore (only the owning daemon reports a proc).
-- **`TERM_NON_ZERO`** → same report-once-to-HNP dance; afterward, if the
-  proc is fully done (`IOF_COMPLETE && WAITPID && !RECORDED`), activate
-  `PRTE_PROC_STATE_TERMINATED`.
+- **`TERM_NON_ZERO`** → same report-once-to-HNP dance.
 - **`FAILED_TO_START` / `FAILED_TO_LAUNCH`** → set state, bump
   `jdata->num_terminated`, and **defer to the state machine**: only when
   `num_local_procs == num_terminated` (all local procs have attempted
@@ -162,9 +160,8 @@ Then, per specific application-proc state:
   leaving); if a sibling is still alive, fall through to `keep_going:`
   **with `child` still pointing at the proc that failed** (see the gotcha
   below). Otherwise (`keep_going:`) report the abnormal termination to
-  the HNP once, set `PRTE_PROC_FLAG_TERM_REPORTED` and the
-  `PRTE_JOB_FAIL_NOTIFIED` dedup flag, and activate `TERMINATED` if the
-  proc is fully done.
+  the HNP once and set `PRTE_PROC_FLAG_TERM_REPORTED` and the
+  `PRTE_JOB_FAIL_NOTIFIED` dedup flag.
 - **plain `TERMINATED`** → cannot reach this handler at all, and no
   longer has code here. The state machine only falls back on the `ERROR`
   registration for states *above* `PRTE_PROC_STATE_ERROR` (50), all of
@@ -176,10 +173,21 @@ Then, per specific application-proc state:
   of that, dedup and IOF missing and a bare `PMIX_RELEASE(jdata)`
   included; it is gone.
 
-Note the `WAITPID`/`IOF_COMPLETE`/`RECORDED` flag triad gates the final
-`PRTE_PROC_STATE_TERMINATED` activation — a proc is only "done" once both
-its waitpid has fired and its I/O forwarding has drained, and it must not
-be recorded twice.
+**This component does not retire a proc, and must not start doing so
+again.** Its business is diagnosing and reporting; deciding that a proc is
+finished belongs to the state machine, which does it in one place —
+`prte_state_base_join()`, gated on the `WAITPID`/`IOF_COMPLETE`/`RECORDED`
+triad. Three branches here used to carry their own copy of that gate, and
+they did not agree: two had it, `CALLED_ABORT` did not, and the proc that
+took the third was never retired at all. Its daemon's `num_terminated`
+then stayed one short of `num_local_procs`, the batched
+`UPDATE_PROC_STATE` gated on their equality was never sent, and the master
+believed that rank was still alive forever — the job never completed and
+`prterun` hung with every daemon up. If you find yourself wanting to
+activate `TERMINATED` from here, the missing report is somewhere on the
+producer side instead: the odls now always activates
+`PRTE_PROC_STATE_WAITPID_FIRED` for a proc whose waitpid half is done,
+whatever its diagnosis.
 
 ---
 
@@ -262,9 +270,11 @@ daemon must die but a bare `exit()` would give the user no message. It:
   Every "alert the HNP" branch checks the flag and sets it afterward —
   *except* for `PRTE_JOB_RECOVERABLE` jobs, which must keep receiving
   notifications so the set is deliberately skipped. Preserve both halves.
-- **The `WAITPID`/`IOF_COMPLETE`/`RECORDED` flag triad** is what
-  prevents premature or double `TERMINATED` activation and double-counted
-  `num_terminated`. Don't collapse or reorder these checks.
+- **Do not retire a proc from here.** See the note above `prted_abort`:
+  the `WAITPID`/`IOF_COMPLETE`/`RECORDED` gate lives in
+  `prte_state_base_join()`, and a copy of it in this file is how the
+  CALLED_ABORT teardown hang happened. The `RECORDED` tests that remain
+  here are counting a termination, not deciding one.
 - **`COMM_FAILED` to a non-daemon is re-routed as a waitpid**, not
   handled inline, to avoid duplicating the odls termination path — keep
   the `prte_wait_tracker_t` + `prte_odls_base_default_wait_local_proc`
