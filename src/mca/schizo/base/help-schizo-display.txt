@@ -34,8 +34,9 @@ Supported values include:
   assigned to processes in this job that includes local and node
   ranks, assigned bindings, and other data
 
-* "TOPO=LIST" displays the topology of each node in the semicolon-
-  delimited list that is allocated to the job
+* "TOPO[=LIST]" displays the topology of each node in the provided
+  semicolon-delimited list of nodes allocated to the job (defaults to
+  all nodes). An empty list ("TOPO=") is refused.
 
 * "CPUS[=LIST]" displays the available CPUs on the provided semicolon-
   delimited list of nodes (defaults to all nodes)
@@ -52,7 +53,7 @@ colon (":") and any combination of one or more of the following
   using physical (instead of logical) CPU IDs.
 
 Provided qualifiers will apply to *all* of the display directives unless
-noted. Note that directives and qualifiers are case-insensitive
+noted. Note that directives and qualifiers are case-insensitive.
 
 Every directive and qualifier above that asks a yes-or-no question -
 everything except "TOPO" and "CPUS", which name a list of nodes - may also
@@ -70,6 +71,8 @@ A value that is neither true nor false is refused rather than guessed at:
 the truth test underneath reads anything it does not recognize as "false",
 so "map=maybe" would otherwise quietly turn the display off.
 
-"--display" describes the job, so on an MPMD command line it may be written
-in any app context and applies to all of them. Two app contexts that ask
-for opposite things are refused - there is no way to honor both.
+"--display" describes the job as a whole: there is no such thing as one
+app context of an MPMD command line being displayed. It may therefore be
+written in any app context and applies to all of them. Two app contexts
+that ask for opposite things are refused, since there is no way to honor
+both.

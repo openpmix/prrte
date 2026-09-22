@@ -27,13 +27,16 @@ the "ERROR-NONZERO-STATUS" option to "true" by specifying it as
 a non-zero integer, the single letter "T" or "Y", or the whole word
 "TRUE", "YES" or "ENABLE"; and to "false" using zero, the single
 letter "F" or "N", or the whole word "FALSE", "NO" or "DISABLE". All
-of these are case-insensitive. Note that these are the whole words -
-"TR" is not an abbreviation of "TRUE", and a value that is neither
-true nor false is refused rather than guessed at.
+of these are case-insensitive. Note that these are the whole words —
+"TR" is not an abbreviation of "TRUE" — and that a value which is
+neither true nor false is refused rather than guessed at.
 
 Note that a boolean option will default to "true" if provided without
-a value. Thus, "--runtime-options error-nonzero" is sufficient to set
-the "ERROR-NONZERO-STATUS" option to "true".
+a value. Thus, "--rtos error-nonzero" is sufficient to set the
+"ERROR-NONZERO-STATUS" option to "true".
+
+The "--runtime-options" command line directive is accepted as a synonym
+for "--rtos".
 
 Supported values include:
 
@@ -50,6 +53,12 @@ Supported values include:
   placement patterns before actually starting execution. No value need
   be passed as this is not an option that can be set by default in
   PRRTE.
+
+* "DONOTSPAWN": directs the runtime to carry out the entire launch
+  procedure — including starting any daemons it needs and delivering
+  the job to them — but to not actually start the application
+  processes, which are instead marked as having terminated. This is
+  provided to help exercise the launch procedure itself.
 
 * "SHOW-PROGRESS[=(bool)]": requests that the runtime provide progress
   reports on its startup procedure — i.e., the launch of its daemons
@@ -102,7 +111,7 @@ Supported values include:
   as this is not an option that can be set by default in PRRTE.
 
 * "OUTPUT-PROCTABLE[(=channel)]": directs the runtime to report the
-  convential debugger process table (includes PID and host location of
+  conventional debugger process table (includes PID and host location of
   each process in the application). Output is directed to stdout if
   the channel is "-", stderr if "+", or into the specified file
   otherwise. If no channel is specified, output will be directed to
@@ -181,73 +190,46 @@ A value that is neither true nor false is refused rather than guessed at:
 the truth test underneath reads anything it does not recognize as "false",
 so "donotlaunch=maybe" would otherwise quietly launch.
 
-"--rtos" describes the job, so on an MPMD command line it may be written in
-any app context and applies to all of them - there is no such thing as one
-app of a job not launching. Two app contexts that ask for opposite things
-are refused, since there is no way to honor both.
+"--rtos" describes the job as a whole — there is no such thing as one
+app context of an MPMD command line not launching — so it may be written
+in any app context and applies to all of them. Two app contexts that ask
+for opposite things are refused, since there is no way to honor both.
 #
 [notifications]
 
-PMIx provides a number of event codes relevant to fault tolerance. These
-can be captured by a process using the PMIx_Register_event_handler API.
-Process-oriented events include:
+A job that is not simply terminated when one of its processes fails -
+one given the "RECOVERABLE" or "CONTINUOUS" runtime option - can ask to
+be told about such failures with the "NOTIFYERRORS" runtime option.
+PRRTE then delivers a PMIx event to each remaining process in the job
+whenever one of its processes fails. The event identifies the failed
+process in the "PMIX_EVENT_AFFECTED_PROC" attribute and, where the
+process reported one, its exit status in the "PMIX_EXIT_CODE" attribute.
+A process captures these events using the "PMIx_Register_event_handler"
+API. The event codes are:
 
-* PMIX_ERR_PROC_RESTART - one or more processes have restarted. The IDs of
-  the processes will be included in the provided info array
+* "PMIX_ERR_PROC_KILLED_BY_CMD" - the process was ordered to die
 
-* PMIX_ERR_PROC_CHECKPOINT - please checkpoint the process
+* "PMIX_ERR_PROC_ABORTED_BY_SIG" - the process was terminated by a
+  signal
 
-* PMIX_ERR_PROC_MIGRATE - one or more processes have migrated to a new
-  location. The IDs of the processes will be included in the provided
-  info array
+* "PMIX_ERR_PROC_TERM_WO_SYNC" - the process called "PMIx_Init" and
+  then terminated without calling "PMIx_Finalize"
 
-* PMIX_JCTRL_PREEMPT_ALERT - the resource manager will be preempting the
-  process. Additional info (e.g., delay before preemption) may be included
-  in the provided info array
+* "PMIX_ERR_PROC_REQUESTED_ABORT" - the process called "abort"
 
-* PMIX_ERR_PROC_REQUESTED_ABORT - one or more processes have called
-  "abort". The IDs of the processes will be included in the provided info
-  array
+* "PMIX_ERR_PROC_KILLED_BY_RELEASE" - the process was killed because
+  the node it was running on was released from the DVM
 
-* PMIX_ERR_PROC_TERM_WO_SYNC - one or more processes have terminated without
-  calling PMIx_Finalize. The IDs of the processes will be included in the
-  provided info array
+* "PMIX_ERR_EXIT_NONZERO_TERM" - the process exited with a non-zero
+  status. This is only reported when the "ERROR-NONZERO-STATUS" runtime
+  option is also set, since otherwise such an exit is not an error.
 
-* PMIX_EVENT_PROC_TERMINATED - one or more processes have normally terminated.
-  The IDs of the processes will be included in the provided info array
+Tools that start jobs can also register for job-level events, among
+them "PMIX_EVENT_JOB_START", "PMIX_LAUNCH_COMPLETE",
+"PMIX_READY_FOR_DEBUG" and "PMIX_EVENT_JOB_END".
 
-* PMIX_ERR_PROC_KILLED_BY_CMD - one or more processes were ordered to die. The
-  IDs of the processes will be included in the provided info array
-
-* PMIX_ERR_PROC_FAILED_TO_START - one or more processes failed to start. The IDs
-  of the processes will be included in the provided info array
-
-* PMIX_ERR_PROC_ABORTED_BY_SIG - one or more processes were terminated by signal.
-  The IDs of the processes will be included in the provided info array
-
-* PMIX_ERR_PROC_SENSOR_BOUND_EXCEEDED - one or more processes exceeded their sensor
-  limits (e.g., consumed too much memory) and have been terminated. The IDs of the
-  processes will be included in the provided info array
-
-* PMIX_ERR_EXIT_NONZERO_TERM - one or more processes have terminated with a non-zero
-  exit status. The IDs of the processes will be included in the provided info array
-
-Job-oriented events include:
-
-* PMIX_EVENT_JOB_START - a new namespace has started. The namespace will be
-  included in the provided info array.
-
-* PMIX_EVENT_JOB_END - a namesdpace has terminated. The namespace will be
-  included in the provided info array.
-
-
-Session-oriented events include:
-
-* PMIX_EVENT_SESSION_START - a new session has started. The session ID will be
-  included in the provided info array.
-
-* PMIX_EVENT_SESSION_END - a session has ended. The session ID will be
-  included in the provided info array.
+See the "Notifications" documentation for a full description of the
+events PRRTE generates.
 
 #
 [runtime-options]

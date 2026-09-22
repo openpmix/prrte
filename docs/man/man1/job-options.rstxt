@@ -1,0 +1,238 @@
+.. Job options shared by prun(1) and prterun(1): everything that
+   describes the job to be launched, as opposed to how the tool reaches
+   (or builds) the DVM that runs it.
+
+.. rubric:: Launch options
+
+``--personality <name>``
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-personality.rst
+
+``-n`` | ``-c`` | ``--np <num>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-np.rst
+
+``-N <num>``
+^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-npernode.rst
+
+``--app <filename>``
+^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-app.rst
+
+``-H`` | ``--host <hosts>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-dash-host.rst
+
+``--hostfile <filename>``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-launcher-hostfile.rst
+
+``--machinefile <filename>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Synonym for ``--hostfile``.
+
+``--add-host <hosts>``
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-add-host.rst
+
+``--add-hostfile <filename>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-add-hostfile.rst
+
+``--activate <hosts>``
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-activate.rst
+
+``--alloc-id <id>``
+^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-alloc-id.rst
+
+``--alloc-refid <id>``
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-alloc-refid.rst
+
+``--session-id <id>``
+^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-session-id.rst
+
+``--path <dir>``
+^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-path.rst
+
+``--wdir <dir>``
+^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-wdir.rst
+
+``--wd <dir>``
+^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-wd.rst
+
+``--set-cwd-to-session-dir``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-set-cwd-to-session-dir.rst
+
+``--pset <name>``
+^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-pset.rst
+
+``--preload-files <files>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-preload-files.rst
+
+``-s`` | ``--preload-binary``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-preload-binary.rst
+
+``--app-pmix-prefix <dir>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-app-prefix.rst
+
+``--no-app-prefix``
+^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-no-app-prefix.rst
+
+``--gpu-support <bool>``
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-gpu-support.rst
+
+``--memory-alloc-kinds <kinds>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-memory-alloc-kinds.rst
+
+``--rtos <directives>`` | ``--runtime-options <directives>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-runtime-options.rst
+
+.. rubric:: Environment options
+
+``-x <name>[=<value>]``
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-x.rst
+
+``--set-env <name>=<value>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-set-env.rst
+
+``--unset-env <name>``
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-unset-env.rst
+
+``--append-env <name>[<c>] <value>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-append-env.rst
+
+``--prepend-env <name>[<c>] <value>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-prepend-env.rst
+
+.. rubric:: Placement options
+
+``--mapby <directive>``
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-map-by.rst
+
+``--rankby <directive>``
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-rank-by.rst
+
+``--bindto <directive>``
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-bind-to.rst
+
+.. rubric:: Input and output options
+
+``--output <directives>``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-output.rst
+
+``--stdin <rank>``
+^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-stdin.rst
+
+``--xterm <ranks>``
+^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-xterm.rst
+
+.. rubric:: Debug options
+
+``--display <directives>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-display.rst
+
+``--timeout <seconds>``
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-timeout.rst
+
+``--spawn-timeout <seconds>``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-spawn-timeout.rst
+
+``--report-state-on-timeout``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-report-state-on-timeout.rst
+
+``--get-stack-traces``
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-get-stack-traces.rst
+
+``--stop-on-exec``
+^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-stop-on-exec.rst
+
+``--stop-in-init``
+^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-stop-in-init.rst
+
+``--stop-in-app[=<breakpoint>]``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-stop-in-app.rst
+
+``--no-aggregate-help``
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-no-aggregate-help.rst

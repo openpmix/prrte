@@ -38,7 +38,7 @@ upon which a DVM will execute in the absence of a resource manager
    * - unset
      - unset
      - unset
-     - | The DVN will consist solely of the
+     - | The DVM will consist solely of the
        | local host where the DVM
        | was started.
 

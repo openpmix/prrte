@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2023 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 #
-# Copyright (c) 2023-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2023-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -59,6 +59,7 @@ RST_SOURCE_FILES = \
         $(srcdir)/plans/*/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \
+        $(srcdir)/man/man1/*.rstxt \
         $(srcdir)/man/man5/*.rst \
         $(srcdir)/news/*.rst
 

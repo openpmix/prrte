@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -12,8 +12,8 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-The ``--runtime-options`` command line directive must be accompanied
-by a comma-delimited list of case-insensitive options that control the
+The ``--rtos`` command line directive must be accompanied by a
+comma-delimited list of case-insensitive options that control the
 runtime behavior of the job. The full directive need not be provided
 |mdash| only enough characters are required to uniquely identify the
 directive.
@@ -23,8 +23,8 @@ not a requirement on developers. Since the value of each option may
 need to be set (e.g., to override a default set by MCA parameter), the
 syntax of the command line directive includes the use of an ``=``
 character to allow inclusion of a value for the option. For example,
-one can set the ``ABORT-NONZERO-STATUS`` option to ``true`` by
-specifying it as ``ABORT-NONZERO-STATUS=1``. A boolean option can be
+one can set the ``ERROR-NONZERO-STATUS`` option to ``true`` by
+specifying it as ``ERROR-NONZERO-STATUS=1``. A boolean option can be
 set to ``true`` using a non-zero integer, the single letter ``T`` or
 ``Y``, or the whole word ``TRUE``, ``YES`` or ``ENABLE``; and to
 ``false`` using zero, the single letter ``F`` or ``N``, or the whole
@@ -34,8 +34,11 @@ is not an abbreviation of ``TRUE`` |mdash| and that a value which is
 neither true nor false is refused rather than guessed at.
 
 Note that a boolean option will default to ``true`` if provided
-without a value. Thus, ``--runtime-options abort-nonzero`` is
-sufficient to set the ``ABORT-NONZERO-STATUS`` option to ``true``.
+without a value. Thus, ``--rtos error-nonzero`` is sufficient to
+set the ``ERROR-NONZERO-STATUS`` option to ``true``.
+
+The ``--runtime-options`` command line directive is accepted as a
+synonym for ``--rtos``.
 
 Supported values include:
 
@@ -52,6 +55,13 @@ Supported values include:
   placement patterns before actually starting execution. No value need
   be passed as this is not an option that can be set by default in
   PRRTE.
+
+* ``DONOTSPAWN``: directs the runtime to carry out the entire launch
+  procedure |mdash| including starting any daemons it needs and
+  delivering the job to them |mdash| but to not actually start the
+  application processes, which are instead marked as having
+  terminated. This is provided to help exercise the launch procedure
+  itself.
 
 * ``SHOW-PROGRESS[=(bool)]``: requests that the runtime provide
   progress reports on its startup procedure |mdash| i.e., the launch
@@ -106,7 +116,7 @@ Supported values include:
   passed as this is not an option that can be set by default in PRRTE.
 
 * ``OUTPUT-PROCTABLE[(=channel)]``: directs the runtime to report the
-  convential debugger process table (includes PID and host location of
+  conventional debugger process table (includes PID and host location of
   each process in the application). Output is directed to stdout if
   the channel is ``-``, stderr if ``+``, or into the specified file
   otherwise. If no channel is specified, output will be directed to
@@ -174,7 +184,7 @@ Supported values include:
   entire local environment in support of the application. This option
   defaults to a true value if the option is given without a value.
 
-The ``--runtime-options`` command line option has no qualifiers.
+The ``--rtos`` command line option has no qualifiers.
 
 .. note:: Directives are case-insensitive.  ``FWD-ENVIRONMENT`` is the
           same as ``fwd-environment``.
@@ -183,8 +193,8 @@ A value that is neither true nor false is refused rather than guessed at:
 the truth test underneath reads anything it does not recognize as
 ``false``, so ``donotlaunch=maybe`` would otherwise quietly launch.
 
-``--runtime-options`` describes the job as a whole |mdash| there is no such
-thing as one app context of an MPMD command line not launching |mdash| so
-it may be written in *any* app context and applies to all of them. Two app
+``--rtos`` describes the job as a whole |mdash| there is no such thing as
+one app context of an MPMD command line not launching |mdash| so it may be
+written in *any* app context and applies to all of them. Two app
 contexts that ask for opposite things are refused, since there is no way to
 honor both.
