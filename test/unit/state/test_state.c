@@ -50,6 +50,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
+#include "src/util/attr.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/state/base/base.h"
@@ -959,6 +960,68 @@ static int test_recover_resources(void)
     return failures;
 }
 
+/*
+ * prte_state_base_cpu_release_policy() - how a proc's cpus are handed back
+ * when it goes away.  A proc was bound in its own app's terms - a hwthread
+ * each for an app that counts hwthreads as its cpus, a core each otherwise -
+ * and must be released in them.  Both release paths used to read the job's
+ * setting alone, so in a job whose apps differed the release looked for an
+ * object that was not inside the binding ("COULD NOT GET BOUND CPU FOR
+ * RESOURCE RELEASE") and the DVM lost those cpus for good: the next job on
+ * the node could not bind.
+ */
+static int test_cpu_release_policy(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_app_context_t *hwtapp, *coreapp, *plain;
+    hwloc_obj_type_t type;
+    bool takeall;
+    uint16_t pes = 2;
+
+    jdata = PMIX_NEW(prte_job_t);
+    hwtapp = PMIX_NEW(prte_app_context_t);
+    coreapp = PMIX_NEW(prte_app_context_t);
+    plain = PMIX_NEW(prte_app_context_t);
+    prte_set_bool_attribute(&hwtapp->attributes, PRTE_APP_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
+    prte_set_bool_attribute(&coreapp->attributes, PRTE_APP_CORE_CPUS, PRTE_ATTR_GLOBAL, true);
+
+    /* a job that says nothing releases a core per proc */
+    prte_state_base_cpu_release_policy(jdata, plain, &type, &takeall);
+    CHECK("release:default-core", HWLOC_OBJ_CORE == type && !takeall);
+    prte_state_base_cpu_release_policy(jdata, NULL, &type, &takeall);
+    CHECK("release:no-app-core", HWLOC_OBJ_CORE == type);
+
+    /* an app counting hwthreads in a job that does not */
+    prte_state_base_cpu_release_policy(jdata, hwtapp, &type, &takeall);
+    CHECK("release:app-hwt-in-core-job", HWLOC_OBJ_PU == type);
+
+    /* ...and the reverse: a core app in a job that counts hwthreads */
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, true);
+    prte_state_base_cpu_release_policy(jdata, coreapp, &type, &takeall);
+    CHECK("release:app-core-in-hwt-job", HWLOC_OBJ_CORE == type);
+    prte_state_base_cpu_release_policy(jdata, plain, &type, &takeall);
+    CHECK("release:plain-app-follows-job", HWLOC_OBJ_PU == type);
+
+    /* an app given several cpus per proc took all of them */
+    prte_set_attribute(&plain->attributes, PRTE_APP_PES_PER_PROC, PRTE_ATTR_GLOBAL,
+                       &pes, PMIX_UINT16);
+    prte_state_base_cpu_release_policy(jdata, plain, &type, &takeall);
+    CHECK("release:app-pes-takes-all", takeall);
+    prte_state_base_cpu_release_policy(jdata, hwtapp, &type, &takeall);
+    CHECK("release:other-app-not-takeall", !takeall);
+
+    PMIX_RELEASE(plain);
+    PMIX_RELEASE(coreapp);
+    PMIX_RELEASE(hwtapp);
+    PMIX_RELEASE(jdata);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_cpu_release_policy\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1012,6 +1075,7 @@ int main(void)
     failures += test_component_selection();
     failures += test_state_log();
     failures += test_recover_resources();
+    failures += test_cpu_release_policy();
 
     /* the framework close frees log_file, so take a copy to clean up with */
     logfile = (NULL == prte_state_base.log_file) ? NULL : strdup(prte_state_base.log_file);

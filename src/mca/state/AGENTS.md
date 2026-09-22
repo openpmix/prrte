@@ -262,6 +262,18 @@ These live in `state_base_fns.c` and are wired into components' tables
 | `prte_state_base_purge_proc` / `_purge_app` / `_purge_nspace` / `_purge_session` | Tell the data store a lifetime ended, so it drops the published data that was not to outlive it. Each purges **this process's own** store with a direct call — no message, and nothing at all when nothing was ever published, which is what makes the per-process one affordable. The master additionally relays to an *external* data server where one is configured, since that store lives in another DVM behind a PMIx tool connection only the master holds. Which one a caller reaches for is which lifetime it can observe: a daemon sees its own child exit and is told when a namespace is over; it does **not** see an application end DVM-wide, and its own share of a job finishing is not a lifetime at all. Sending the DVM-wide purge from there used to let the first node to finish purge the whole namespace out of the master's store mid-job. |
 | `prte_state_base_recover_resources` | Idempotently returns one proc's slot/cpu resources to its node and drops the node from the map when empty — used on daemon-loss / partial-failure recovery paths. Written to tolerate being called twice for the same proc, **and to tolerate having neither a node nor a map to work on** (see below). |
 
+### A proc's cpus go back in its own app's terms
+
+Both release paths — `prte_state_base_recover_resources()` and state/dvm's
+job cleanup — give back "the first object of the binding's type" from each
+proc's cpuset, and `prte_state_base_cpu_release_policy()` decides that type
+(and whether the whole binding is returned) **per proc, from its app**, the
+app's directives winning over the job's. Both used to read the job alone, so
+in a job whose apps counted cpus differently a hwthread-bound proc was
+released as a core: no core lies inside one hwthread, the lookup printed
+"COULD NOT GET BOUND CPU FOR RESOURCE RELEASE", and the cpu was never
+returned — the DVM shrank until later jobs could not bind.
+
 ### A proc outlives its node, and a job outlives its map
 
 `prte_state_base_recover_resources()` reaches through `pptr->node` and

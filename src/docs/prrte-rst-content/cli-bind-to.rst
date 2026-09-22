@@ -18,7 +18,8 @@
 
 By default, processes are bound to individual CPUs (either COREs or
 HWTHREADs, as defined by default or by user specification for the
-job). On nodes that are OVERSUBSCRIBEd (i.e., where the number of
+job |mdash| a job or app mapped with the ``HWTCPUS`` qualifier binds
+each process to a hardware thread). On nodes that are OVERSUBSCRIBEd (i.e., where the number of
 procs exceeds the number of assigned slots), the default is to not
 bind the processes.
 

@@ -186,7 +186,8 @@ prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mappi
 
 /* Derive the default binding policy for an app from its resolved mapping,
  * faithfully mirroring prte_hwloc_base_set_default_binding(): an app mapped by
- * a topology object binds to that object; pe-list and pes-per-proc bind to a
+ * a topology object binds to that object - except that an app counting
+ * hwthreads as its cpus and mapped by core binds to its hwthread; pe-list and pes-per-proc bind to a
  * cpu; ppr binds to its pattern object; and every non-object mapping (by-node,
  * by-slot, dist, seq, ppr-by-node, ...) binds to a cpu for small jobs and to
  * numa for larger ones.  Reads opts->map/maptype/nprocs/cpus_per_rank/
@@ -204,7 +205,8 @@ prte_binding_policy_t prte_rmaps_base_derive_binding(prte_rmaps_options_t *opts)
         case PRTE_MAPPING_BYHWTHREAD:
             return PRTE_BIND_TO_HWTHREAD;
         case PRTE_MAPPING_BYCORE:
-            return PRTE_BIND_TO_CORE;
+            /* an app counting hwthreads as its cpus binds to its hwthread */
+            return opts->use_hwthreads ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
         case PRTE_MAPPING_BYL1CACHE:
             return PRTE_BIND_TO_L1CACHE;
         case PRTE_MAPPING_BYL2CACHE:
@@ -225,7 +227,8 @@ prte_binding_policy_t prte_rmaps_base_derive_binding(prte_rmaps_options_t *opts)
                 case HWLOC_OBJ_L1CACHE:  return PRTE_BIND_TO_L1CACHE;
                 case HWLOC_OBJ_L2CACHE:  return PRTE_BIND_TO_L2CACHE;
                 case HWLOC_OBJ_L3CACHE:  return PRTE_BIND_TO_L3CACHE;
-                case HWLOC_OBJ_CORE:     return PRTE_BIND_TO_CORE;
+                case HWLOC_OBJ_CORE:
+                    return opts->use_hwthreads ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
                 case HWLOC_OBJ_PU:       return PRTE_BIND_TO_HWTHREAD;
                 default:
                     /* ppr by node/machine: fall through to the nprocs rule */
