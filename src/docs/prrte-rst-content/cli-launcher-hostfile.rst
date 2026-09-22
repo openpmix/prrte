@@ -53,4 +53,9 @@ manager (RM):
 
 .. include:: /prrte-rst-content/detail-hostfiles.rst
 
+.. rubric:: Relative host indexing
+
 .. include:: /prrte-rst-content/detail-hosts-relative-indexing.rst
+
+See the "Host specification" documentation for details about the
+format and content of hostfiles.

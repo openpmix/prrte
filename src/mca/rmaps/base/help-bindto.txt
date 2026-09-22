@@ -60,9 +60,9 @@ Supported binding directives include:
 
 * "NONE" does not bind the processes
 
-* "HWTHREAD" binds each process to a single hardware thread/ This
+* "HWTHREAD" binds each process to a single hardware thread. This
   requires that hwthreads be treated as independent CPUs (i.e., that
-  either the "HWTCPUS" qualifier be provided to the "map-by" option or
+  either the "HWTCPUS" qualifier be provided to the "--mapby" option or
   that "hwthreads" be designated as CPUs by default).
 
 * "CORE" binds each process to a single core. This can be done whether
@@ -111,17 +111,20 @@ Note:
   same as "overload".
 
 
-Per-App-Context Binding (MPMD Jobs)
--------------------------------------
+Per-app-context binding (MPMD jobs)
+-----------------------------------
 
 In a multi-program multiple-data (MPMD) job, each application context
-may carry its own "--bindto" directive that overrides the job-level
-binding policy for that app only. Apps that carry no per-app directive
-inherit the job-level binding policy unchanged.
+may carry its own "--bindto" directive, placed ahead of that app's
+executable. The rule is the one described for "--mapby": a directive
+written on the first app segment and nowhere else describes the whole
+job; otherwise each app that carries a directive is bound by its own,
+and apps that carry none take the default binding policy - they do
+not inherit another app's directive.
 
 Example:
 
-  prun -n 4 app1 --bindto core : -n 2 app2 --bindto none
+   prun --bindto core -n 4 app1 : --bindto none -n 2 app2
 
 Here "app1" processes are bound to individual cores while "app2"
 processes are left unbound, all within the same job.

@@ -1,0 +1,81 @@
+.. Deprecated command line options shared by prun(1) and prterun(1).
+   Each entry states what convert_deprecated_cli() in
+   src/mca/schizo/prte/schizo_prte.c turns the option into, so keep
+   the two in step.
+
+The following options are still accepted, but are converted to their
+modern equivalent and a warning is printed. They will be removed in a
+future release; use the replacement shown.
+
+``--map-by``, ``--rank-by``, ``--bind-to``, ``--runtime-options``
+   Hyphenated spellings of ``--mapby``, ``--rankby``, ``--bindto`` and
+   ``--rtos``. These are converted silently.
+
+``--mca <key> <value>``
+   .. include:: /prrte-rst-content/deprecated-mca.rst
+
+``--rankfile <filename>``
+   Replaced by ``--mapby rankfile:file=<filename>``.
+
+``--nolocal``
+   Replaced by the ``nolocal`` qualifier to ``--mapby``.
+
+``--oversubscribe``, ``--nooversubscribe``
+   Replaced by the ``oversubscribe`` and ``nooversubscribe`` qualifiers
+   to ``--mapby``.
+
+``--use-hwthread-cpus``
+   Replaced by the ``hwtcpus`` qualifier to ``--mapby``.
+
+``--cpu-set <list>``, ``--cpu-list <list>``
+   Replaced by ``--mapby pe-list=<list>``.
+
+``--cpus-per-proc <n>``, ``--cpus-per-rank <n>``
+   Replaced by the ``pe=<n>`` qualifier to ``--mapby``.
+
+``--bind-to-core``
+   Replaced by ``--bindto core``.
+
+``--bynode``, ``--bycore``, ``--byslot``
+   Replaced by ``--mapby node``, ``--mapby core`` and ``--mapby slot``
+   respectively.
+
+``--npernode <n>``, ``--pernode``
+   Replaced by ``--mapby ppr:<n>:node`` and ``--mapby ppr:1:node``
+   respectively.
+
+``--npersocket <n>``
+   Replaced by ``--mapby ppr:<n>:package``.
+
+``--ppr <n>:<resource>``
+   Replaced by ``--mapby ppr:<n>:<resource>``.
+
+``--tag-output``, ``--timestamp-output``, ``--xml``, ``--merge-stderr-to-stdout``
+   Replaced by ``--output tag``, ``--output timestamp``, ``--output
+   xml`` and ``--output merge-stderr-to-stdout`` respectively.
+
+``--output-directory <dir>``, ``--output-filename <file>``
+   Replaced by ``--output dir=<dir>`` and ``--output file=<file>``
+   respectively.
+
+``--display-map``, ``--display-devel-map``, ``--display-allocation``, ``--display-devel-allocation``, ``--report-bindings``
+   Replaced by ``--display map``, ``--display map-devel``, ``--display
+   allocation`` (for both allocation options) and ``--display bind``
+   respectively.
+
+``--display-topo``
+   Replaced by the ``topo`` directive to ``--display``.
+
+``--do-not-launch``
+   Replaced by ``--rtos donotlaunch``.
+
+``--show-progress``, ``--report-child-jobs-separately``, ``--fwd-environment``
+   Replaced by the ``show-progress``, ``report-child-jobs-separately``
+   and ``fwd-environment`` runtime options (``--rtos``).
+
+``--output-proctable[=<channel>]``
+   Replaced by ``--rtos output-proctable[=<channel>]``.
+
+``--debug``
+   Has no effect; it is accepted, with a warning, so that old command
+   lines still parse.

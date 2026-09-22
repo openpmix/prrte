@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -11,9 +11,6 @@
 
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
-
-Relative host indexing
-======================
 
 Hostfile and ``--host`` specifications can also be made using relative
 indexing. This allows a user to stipulate which hosts are to be used
@@ -98,7 +95,7 @@ sequential mapper to obtain their specific layout:
 
 .. code::
 
-   <launcher> --hostfile dummyhosts --hostfile mylayout --prtemca rmaps seq ./my_app
+   <launcher> --hostfile dummyhosts --hostfile mylayout --mapby seq ./my_app
 
 which will result in:
 

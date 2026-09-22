@@ -1,0 +1,16 @@
+.. -*- rst -*-
+
+   Copyright (c) 2026      Nanook Consulting  All rights reserved.
+
+   $COPYRIGHT$
+
+   Additional copyrights may follow
+
+   $HEADER$
+
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+User-specified name assigned to the processes in their given
+application context. The processes are told it as the name of the PMIx
+process set (``PMIX_PSET_NAME``) they belong to.

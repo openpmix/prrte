@@ -63,7 +63,7 @@ Process Mapping / Ranking / Binding Options
             does not imply that the processes will be bound to the
             package.
 
-* ``--map-by <object>``: Map to the specified object. Supported
+* ``--mapby <object>``: Map to the specified object. Supported
   objects include:
 
   * ``slot``
@@ -79,17 +79,16 @@ Process Mapping / Ranking / Binding Options
   * ``ppr``
   * ``rankfile``
   * ``pe-list``
+  * ``device=<class|name>``
 
   Any object can include qualifiers by adding a colon (``:``) and any
   colon-delimited combination of one or more of the following to the
-  ``--map-by`` options:
+  ``--mapby`` options:
 
   * ``PE=n`` bind ``n`` processing elements to each process (can not
-    be used in combination with rankfile or pe-list directives)
-
-    .. error:: JMS Several of the options below refer to ``pe-list``.
-               Is this option supposed to be ``PE-LIST=n``, not
-               ``PE=n``?
+    be used in combination with rankfile or pe-list directives). Note
+    that this qualifier is distinct from the ``pe-list=a,b`` mapping
+    directive, which names the CPUs to be used.
 
   * ``SPAN`` load balance the processes across the allocation (cannot
     be used in combination with ``slot``, ``node``, ``seq``, ``ppr``,
@@ -115,13 +114,27 @@ Process Mapping / Ranking / Binding Options
   * ``FILE=<path>`` (path to file containing sequential or rankfile
     entries).
 
+  * ``INTERLEAVE[=<level>]`` only applies to the ``device`` directive;
+    reorders the device list so consecutive procs land on different
+    objects of the given level (default ``package``)
+
+  * ``SHARED[=true|false]`` only applies to the ``device`` directive;
+    permits several procs to be assigned the same device (default
+    ``false``)
+
+  * ``NDEV=<n>`` only applies to the ``device`` directive; assigns ``n``
+    devices to each proc rather than one. The proc is then local to
+    whatever contains all of them |mdash| two GPUs on different NUMA
+    domains make their package the locality |mdash| so a binding
+    refused with one device per proc may be legitimate with several
+
   * ``ORDERED`` only applies to the PE-LIST option to indicate that
     procs are to be bound to each of the specified CPUs in the order
     in which they are assigned (i.e., the first proc on a node shall
     be bound to the first CPU in the list, the second proc shall be
     bound to the second CPU, etc.)
 
-  ``ppr`` policy example: ``--map-by ppr:N:<object>`` will launch
+  ``ppr`` policy example: ``--mapby ppr:N:<object>`` will launch
   ``N`` times the number of objects of the specified type on each
   node.
 
@@ -130,16 +143,16 @@ Process Mapping / Ranking / Binding Options
             identify them. Thus, ``L1CACHE`` can be given as
             ``l1cache`` or simply as ``L1``.
 
-* ``--rank-by <object>``: This assigns ranks in round-robin fashion
+* ``--rankby <object>``: This assigns ranks in round-robin fashion
   according to the specified object. The default follows the mapping
-  pattern. Supported rank-by objects include:
+  pattern. Supported rankby objects include:
 
   * ``slot``
   * ``node``
   * ``fill``
   * ``span``
 
-  There are no qualifiers for the ``--rank-by`` directive.
+  There are no qualifiers for the ``--rankby`` directive.
 
 * ``--bindto <object>``: This binds processes to the specified
   object. See defaults in Quick Summary.  Supported bindto objects
@@ -208,7 +221,7 @@ the number of processor sockets.
 
 If the hostfile does not provide slots information, the PRRTE DVM will
 attempt to discover the number of cores (or hwthreads, if the
-``:HWTCPUS`` qualifier to the ``--map-by`` option is set) and set the
+``:HWTCPUS`` qualifier to the ``--mapby`` option is set) and set the
 number of slots to that value.
 
 Examples using the hostfile above with and without the ``--host``
@@ -260,23 +273,23 @@ For example:
 
 .. code::
 
-   prun --hostfile myhostfile --map-by ppr:2:package ./a.out
+   prun --hostfile myhostfile --mapby ppr:2:package ./a.out
 
 This launches processes 0-3 on node ``aa`` and process 4-7 on node
 ``bb``, where ``aa`` and ``bb`` are both dual-package nodes. The
-``--map-by ppr:2:package`` option also turns on the ``--bindto
+``--mapby ppr:2:package`` option also turns on the ``--bindto
 package`` option, which is discussed in a later section.
 
 .. code::
 
-   prun --hostfile myhostfile --map-by ppr:2:node ./a.out
+   prun --hostfile myhostfile --mapby ppr:2:node ./a.out
 
 This launches processes 0-1 on node ``aa`` and processes 2-3 on node
 ``bb``.
 
 .. code::
 
-   prun --hostfile myhostfile --map-by ppr:1:node ./a.out
+   prun --hostfile myhostfile --mapby ppr:1:node ./a.out
 
 This launches one process per host node.
 
@@ -298,7 +311,7 @@ With this hostfile:
 
 This will launch processes 0-3 on node ``aa`` and processes 4-5 on
 node ``bb``.  The remaining slots in the hostfile will not be used
-since the ``-np`` option indicated that only 6 processes should be
+since the ``--np`` option indicated that only 6 processes should be
 launched.
 
 
@@ -375,6 +388,108 @@ Because the devices are handed out in groups taken in order from the device
 list, ``interleave`` composes with ``ndev``: the interleaving decides the
 order, and the grouping then takes contiguous runs of it.
 
+Mapping by a GPU requires one thing of the machine that the other
+device classes do not: that the GPUs can be named to the vendor's
+runtime. hwloc learns a GPU's vendor identity --- an NVIDIA
+``GPU-<uuid>`` and its AMD and Intel equivalents --- only from that
+vendor's backend (NVML, RSMI, Level Zero), which has to be enabled when
+hwloc is built. Without it, the GPUs are still discovered and processes
+are still placed correctly beside them, but no process can be told
+which GPU it was given in terms the library it links will accept. PRRTE
+refuses the request in that case. Mapping and then quietly telling the
+process nothing looks identical to a working job --- the map is right,
+and the only symptom is that every process on the node uses the same
+GPU.
+
+The hwloc that decides this is the one PRRTE was built against, since
+each daemon discovers its own node; installing another hwloc alongside
+does not change it. Network, fabric and block devices are unaffected,
+being named by identifiers hwloc always has.
+
+Where the identity is available, each process is also handed its GPUs
+in the environment variable its vendor's runtime reads:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Variable
+     - Vendor
+
+   * - ``CUDA_VISIBLE_DEVICES``
+     - NVIDIA
+
+   * - ``ROCR_VISIBLE_DEVICES``
+     - AMD
+
+   * - ``ZE_AFFINITY_MASK``
+     - Intel
+
+named, for NVIDIA and AMD, by the vendor's own identifier rather than
+by an index; Intel is the exception, and is described below. Only
+processes actually mapped against a device are given one, and a value
+already in the environment is replaced --- ``--mapby device=`` is the
+more specific request, and because the identifiers name devices
+absolutely they compose correctly with a set a resource manager has
+already narrowed.
+
+PRRTE never sets the vendor's device *ordering* variable
+(``CUDA_DEVICE_ORDER`` and its equivalents). The identifiers do not
+depend on it, which is precisely why they are used, and changing it
+would renumber every device for the rest of the process's life.
+
+Intel is the exception to "identity rather than index".
+``ZE_AFFINITY_MASK`` has no identifier form --- it takes Level Zero
+device ordinals --- but the ordinals are not guessed. hwloc's Level
+Zero backend records the driver and device index that ``zeDeviceGet``
+returned for each device, so the value is read from that enumeration
+rather than predicted, and it is read on the node that will run the
+process.
+
+An ordinal is not a complete statement on its own: a Level Zero driver
+reads ``ZE_FLAT_DEVICE_HIERARCHY`` first and then interprets the mask
+against the devices that model exposes, so the same ordinals name a
+card under ``COMPOSITE`` and a tile under ``FLAT``. The model is
+therefore stated alongside the mask whenever the process's environment
+does not already name one. If it does name one and it disagrees,
+nothing is set and a message says so --- overriding a deliberate
+choice would change how many devices the program sees, and writing a
+mask that will be read under a different model would silently hand it
+half the hardware it was assigned.
+
+A process mapped against a network device is handed it the same way,
+in the environment variables the fabric libraries read:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Variable
+     - Adapters
+
+   * - ``NCCL_IB_HCA``
+     - Mellanox / NVIDIA InfiniBand adapters
+
+   * - ``UCX_NET_DEVICES``
+     - Mellanox / NVIDIA InfiniBand adapters
+
+   * - ``PSM3_NIC``
+     - Intel Omni-Path adapters
+
+named as those libraries name the device --- ``mlx5_0`` --- which is
+the name hwloc gave it. Unlike a GPU's vendor identity that name is
+always there, so the identity check above does not apply to this class.
+
+No variable that names an adapter by its unit *number* is set ---
+``HFI_UNIT`` and ``FI_OPX_HFI_SELECT`` among them. A unit number is
+meaningful only against the enumeration it came from, which is the
+driver's rather than one PRRTE performed, and a wrong number in these
+variables does not fail --- it quietly puts the process on a different
+adapter. Nothing is set at all for an adapter whose fabric has no
+support behind it, rather than guessing at a variable it might read.
+
+The assignment can also be read directly, whether or not a device
+variable was set, from the process's own job data under
+``PMIX_DEVICE_ID``.
+
 The reverse ratio --- several processes on each device rather than several
 devices for each process --- is a ``ppr`` pattern, spelled the same way as
 every other:
@@ -431,21 +546,21 @@ Consider the hostfile above, with ``--np 6``:
      - 4 5
      -
 
-   * - ``prun --map-by node``
+   * - ``prun --mapby node``
      - 0 3
      - 1 4
      - 2 5
 
-   * - ``prun --map-by node:NOLOCAL``
+   * - ``prun --mapby node:NOLOCAL``
      -
      - 0 2 4
      - 1 3 5
 
-The ``--map-by node`` option will load balance the processes across
+The ``--mapby node`` option will load balance the processes across
 the available nodes, numbering each process by node in a round-robin
 fashion.
 
-The ``:NOLOCAL`` qualifier to ``--map-by`` prevents any processes from
+The ``:NOLOCAL`` qualifier to ``--mapby`` prevents any processes from
 being mapped onto the local host (in this case node ``aa``). While
 ``prun`` typically consumes few system resources, the ``:NOLOCAL``
 qualifier can be helpful for launching very large jobs where ``prun``
@@ -460,14 +575,14 @@ can also oversubscribe the slots. For example, with the same hostfile:
    prun --hostfile myhostfile --np 14 ./a.out
 
 This will produce an error since the default ``:NOOVERSUBSCRIBE``
-qualifier to ``--map-by`` prevents oversubscription.
+qualifier to ``--mapby`` prevents oversubscription.
 
 To oversubscribe the nodes you can use the ``:OVERSUBSCRIBE``
-qualifier to ``--map-by``:
+qualifier to ``--mapby``:
 
 .. code::
 
-   prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out
+   prun --hostfile myhostfile --np 14 --mapby :OVERSUBSCRIBE ./a.out
 
 This will launch processes 0-5 on node ``aa``, 6-9 on ``bb``, and
 10-13 on ``cc``.
@@ -487,14 +602,14 @@ The ``max_slots`` field specifies such a limit. When it does, the
 
 .. code::
 
-   prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out
+   prun --hostfile myhostfile --np 14 --mapby :OVERSUBSCRIBE ./a.out
 
 This causes the first 12 processes to be launched as before, but the
 remaining two processes will be forced onto node cc. The other two
 nodes are protected by the hostfile against oversubscription by this
 job.
 
-Using the ``:NOOVERSUBSCRIBE`` qualifier to ``--map-by`` option can be
+Using the ``:NOOVERSUBSCRIBE`` qualifier to ``--mapby`` option can be
 helpful since the PRTE DVM currently does not get ``max_slots`` values
 from the resource manager.
 
@@ -506,11 +621,11 @@ example,
    prun --host aa,bb --np 8 ./a.out
 
 This will produce an error since the default ``:NOOVERSUBSCRIBE``
-qualifier to ``--map-by`` prevents oversubscription.
+qualifier to ``--mapby`` prevents oversubscription.
 
 .. code::
 
-   prun --host aa,bb --np 8 --map-by :OVERSUBSCRIBE ./a.out
+   prun --host aa,bb --np 8 --mapby :OVERSUBSCRIBE ./a.out
 
 This launches 8 processes. Since only two hosts are specified, after
 the first two processes are mapped, one to ``aa`` and one to ``bb``,
@@ -532,3 +647,65 @@ And here is a MIMD example:
 This will launch process 0 running ``hostname`` on node ``aa`` and
 processes 1 and 2 each running ``uptime`` on nodes ``bb`` and ``cc``,
 respectively.
+
+
+Per-App-Context Mapping Example
+-------------------------------
+
+In an MPMD job, each application context separated by ``:`` may carry
+its own ``--mapby``, ``--rankby``, and ``--bindto`` directives, given
+ahead of that app's executable. Using the same hostfile:
+
+.. code::
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+   prun --hostfile myhostfile \
+       --mapby core --bindto core -n 6 app1 \
+       : \
+       --mapby node --rankby fill --bindto none -n 2 app2
+
+This will:
+
+* Map ``app1``'s 6 processes by core, binding each to its own core
+  (processes 0-5).
+
+* Map ``app2``'s 2 processes by node in round-robin fashion, leaving
+  them unbound (processes 6-7).
+
+Note that process ranks are globally contiguous across both apps:
+``app1`` receives ranks 0-5 and ``app2`` receives ranks 6-7. That holds
+for the mappers that number their own processes too: a ``rankfile`` or
+``seq`` file given to an app numbers *that* app's ranks, and PRRTE
+offsets them into the job's numbering.
+
+A directive is per-app only when it is written on an app other than the
+first. Written on the first app and nowhere else it describes the whole
+job, however many apps follow:
+
+.. code::
+
+   prun --hostfile myhostfile --mapby core -n 6 app1 : -n 2 app2
+
+maps both apps by core, while
+
+.. code::
+
+   prun --hostfile myhostfile -n 6 app1 : --mapby core -n 2 app2
+
+maps only ``app2`` by core and leaves ``app1`` to the default rules.
+
+The ``:NOLOCAL`` qualifier may also be applied per app context:
+
+.. code::
+
+   prun --hostfile myhostfile \
+       --mapby slot:nolocal -n 6 app1 \
+       : \
+       --mapby slot -n 1 app2
+
+Here ``app1`` avoids the head node (whichever node ``prun`` is running
+on) while ``app2`` may run on any node including the head node.

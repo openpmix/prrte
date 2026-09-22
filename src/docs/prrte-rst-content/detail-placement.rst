@@ -15,10 +15,11 @@
 Overview
 ========
 
-.. note:: PRRTE accepts both the new "--mapby", "--rankby", and "--bindto"
-          cmd line options, and the older deprecated "--map-by", "--rank-by", and
-          "--bind-to" versions. For simplicity, the following description will
-          refer to the new forms.
+.. note:: PRRTE accepts both the new ``--mapby``, ``--rankby``, and
+          ``--bindto`` cmd line options, and the older deprecated
+          ``--map-by``, ``--rank-by``, and ``--bind-to`` versions. For
+          simplicity, the following description will refer to the new
+          forms.
 
 PRRTE provides a set of three controls for assigning process
 locations and ranks:
@@ -27,8 +28,15 @@ locations and ranks:
 #. Ranking: Assigns a unique integer rank value to each process
 #. Binding: Constrains each process to run on specific processors
 
+These three controls can be specified at the job level (applying to
+all application contexts in the job) or, in a multi-program
+multiple-data (MPMD) job, independently for each application context
+separated by ``:`` on the ``prun`` command line. See the
+"Per-app-context mapping" discussion in the ``fundamentals`` section
+for details.
+
 This section provides an overview of these three controls.  Unless
-otherwise this behavior is shared by ``prun(1)`` (working with a PRRTE
+otherwise noted, this behavior is shared by ``prun(1)`` (working with a PRRTE
 DVM), and ``prterun(1)``. More detail about PRRTE process placement is
 available in the following sections (using ``--help
 placement-<section>``):
@@ -53,7 +61,7 @@ placement-<section>``):
   equivalents.
 
 * ``all``: outputs all the placement help except for the
-  ``deprecated`` section.
+  ``deprecated`` and ``rankfiles`` sections.
 
 
 Quick Summary
@@ -62,7 +70,7 @@ Quick Summary
 The two binaries that most influence process layout are ``prte(1)``
 and ``prun(1)``.  The ``prte(1)`` process discovers the allocation,
 establishes a Distributed Virtual Machine by starting a ``prted(1)``
-daemon on each node of the allocation, and defines the efault
+daemon on each node of the allocation, and defines the default
 mapping/ranking/binding policies for all jobs.  The ``prun(1)`` process
 defines the specific mapping/ranking/binding for a specific job. Most
 of the command line controls are targeted to ``prun(1)`` since each job

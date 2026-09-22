@@ -68,7 +68,7 @@ specified as "relative," meaning that they are specified in relation
 to an externally-specified list of hostnames (e.g., by ``prun``'s
 ``--host`` argument, a hostfile, or a job scheduler).
 
-The "relative" specification is of the form "``+n<X>``", where ``X``
+The "relative" specification is of the form ``+n<X>``, where ``X``
 is an integer specifying the Xth hostname in the set of all available
 hostnames, indexed from 0. For example:
 
