@@ -241,7 +241,13 @@ behind it; and a colocation request, the one mapper input that comes
 straight off a tool's ``PMIx_Spawn``, was read past the end of what the
 tool sent. The session directory is refused if another user owns it or if
 it is writable by group or other, closing a predictable name planted
-under a world-writable ``/tmp``. A query's qualifiers are screened rather
+under a world-writable ``/tmp``; ``prun`` now creates its own session
+directory under that same check before handing it to PMIx, which would
+otherwise have adopted whatever already sat at the predictable name. The
+DVM state log, the ``prted`` debug log, and the files ``filem/raw``
+stages into the session directory are created without following a
+symbolic link at their names, so a link planted there is not written
+through. A query's qualifiers are screened rather
 than read out of whichever union member was asked for, so a spawning
 process can no longer fault the daemon answering it.
 
@@ -252,7 +258,10 @@ launch report could write ``RUNNING`` over a job already ``TERMINATED``
 and keep ``prterun`` alive for ever; a daemon that failed to start while
 the DVM was still forming left the launch waiting instead of ending it;
 RELM dropped the very message it exists to deliver when the daemon
-holding it died; and a job held by the elastic launch fence was caught up
+holding it died; a rank that aborted -- the ordinary ``MPI_Abort`` case
+-- could, depending on whether its output drained before or after it
+was killed, never be retired by its daemon, so the master believed it
+alive for ever and ``prterun`` hung with every daemon still up; and a job held by the elastic launch fence was caught up
 to newly grown daemons as though it were already running, so its own
 launch message reached them as a duplicate and forked nothing.
 
@@ -267,6 +276,16 @@ binds to its list rather than to an empty cpuset. A ``nolocal`` written
 on one app of an MPMD job is hoisted to the job, where it can be read at
 all -- it travels in the mapping policy word, which the mapper is handed
 one of per job, so before this the app simply ran on the head node.
+A job that asks for hwthreads (``--map-by :hwtcpus`` or
+``--use-hwthread-cpus``) is now given each node's hwthread count as its
+slots, for that job only, and binds to hwthreads by default, where it
+used to see the core count, get half the processes, and be left unbound
+if it asked for more; the deprecated option no longer resizes every
+node of the DVM for every later job. Releasing the cpus of such a job's
+procs no longer leaks them, which had left the DVM unable to bind later
+jobs. The free-cpu snapshot that limits an object binding is taken once
+per job rather than per app, so each later app of an MPMD job is no
+longer bound short by the cpus its predecessors took.
 ``--uniform-nodes`` asserts that every node is
 identical and stops PRRTE asking, so a node that then reports a different
 topology now fails the launch and is named, instead of being described to
@@ -296,6 +315,21 @@ client that connected ahead of it (openpmix/openpmix#4279) hands the
 singleton its object like any other client, and with
 ``pmix_require_pid_match`` set the old inference refused the singleton's
 connection.
+
+Checking each option against the code that consumes it, to write the
+man pages, found several that were accepted and then ignored or
+mistranslated. ``--tune`` is now honored under the native personality
+rather than only under ``ompi``, and malformed or unknown entries in the
+file are refused. ``--xterm`` works again, carried per job so it is
+meaningful on a persistent DVM. ``prte_info`` shows component versions,
+which it never had, and answers ``--param`` with the documented
+``<framework>[:<component>,...]`` syntax. ``prun`` and ``prterun`` now
+share one appfile reader, so a ``#`` line in a ``prun`` appfile is a
+comment rather than an app context, and an executable given alongside
+``--app`` is refused rather than silently handed the file's first line
+as its arguments. ``--display-topo`` and ``--rankfile`` are converted to
+directives the parser accepts, ``-N`` no longer warns as deprecated, and
+an empty ``--report-pid`` no longer closes ``prun``'s own stdin.
 
 Every ``show_help`` message now names the job it is about. PMIx keys
 duplicate suppression on the job, and a DVM runs many jobs over its
@@ -335,7 +369,12 @@ PRRTE had no automated tests at v4.0.0. It now ships five harnesses:
 Documentation
 ^^^^^^^^^^^^^
 
-New sections covering how to launch applications under each supported
+Full man pages for ``prte``, ``prterun``, ``prun``, ``pterm``, and
+``prted``, which were stubs pointing at ``--help``. They are built from
+the same RST snippets as the HTML documentation and the ``--help``
+output, after reconciling a help text and documentation that had been
+maintained apart for years and disagreed in places, so all three now
+say the same thing. New sections covering how to launch applications under each supported
 resource manager (Slurm, LSF, TM, Grid Engine, ssh, localhost) with
 prerequisites and troubleshooting; a "how things work" section
 describing the state machine, the RML transport and reliable messaging,
