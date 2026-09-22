@@ -25,9 +25,9 @@
 #
 [map-by]
 
-NOTE: PRRTE accepts both the new "--mapby" and the older
-deprecated "--map-by" cmd line options. For simplicity, the
-following description will refer to the new "--mapby" form.
+NOTE: PRRTE accepts both the new "--mapby" and the older deprecated
+"--map-by" cmd line options. For simplicity, the following description
+will refer to the new "--mapby" form.
 
 Processes are mapped based on one of the following directives as
 applied at the job level:
@@ -39,9 +39,9 @@ applied at the job level:
   round-robin manner up to the number of available slots on that node
   before moving to the next node in the allocation
 
-* "CORE" (default) assigns a proc to each core on a node in a round-
-  robin manner up to the number of available slots on that node before
-  moving to the next node in the allocation
+* "CORE" (default) assigns a proc to each core on a node in a
+  round-robin manner up to the number of available slots on that node
+  before moving to the next node in the allocation
 
 * "L1CACHE" assigns a proc to each L1 cache on a node in a round-robin
   manner up to the number of available slots on that node before
@@ -75,77 +75,113 @@ applied at the job level:
 * "PPR:N":resource maps N procs to each instance of the specified
   resource type in the allocation. The resource may be an hwloc object
   ("ppr:2:package") or a class of device ("ppr:2:device=gpu"), which
-  places N procs on each such device.
+  places N procs on each such device
 
 * "RANKFILE" (often accompanied by the file=<path> qualifier) assigns
   one process to the node/resource specified in each entry of the
   file, one per line of the file.
 
-* "DEVICE=<class|name>" assigns one proc to each device in the node's
-  topology, in PCI bus order, placing it on the CPUs local to that
-  device. The value is either a class of device - "gpu", "network", or
-  "block" - or the name or UUID of one particular device, such as
-  "mlx5_0", in which case every proc is placed near that one device.
-  "nic", "fabric" and "openfabrics" are accepted as spellings of
-  "network" and mean exactly the same set: one entry per card, whether
-  the node presents it as an OpenFabrics device (mlx5_0), a network
-  interface (ib0), or both.
-  Note there is no bare "--mapby gpu": the class is the value of the
-  "device" directive, which is what allows other classes of device to
-  be supported later without adding a directive for each.
-  A device is assigned to a process rather than subdivided between
-  them, so each device takes one process and asking for more processes
-  than there are devices is an error unless the "SHARED" qualifier is
-  given.
-  Binding descends from the device's locality - the nearest object in
-  the topology that both contains the device and has CPUs. Asking to
-  bind to something larger than that locality is an error rather than a
-  silent widening, because a binding that covers more than the device's
-  locality is not "near the device" at all. On a machine where every
-  device is equally close to every CPU, the job still runs and each
-  proc is still assigned its own device, but a warning is printed
-  because the binding cannot be made any more specific than it would
-  have been without the directive.
-  Mapping by a GPU also requires that the GPUs can be named to the
-  vendor's runtime. hwloc records a GPU's vendor identity - an NVIDIA
-  "GPU-<uuid>" and its AMD and Intel equivalents - only when built with
-  that vendor's backend (NVML, RSMI, Level Zero). Without it the GPUs
-  are still found and still placed against, but no process can be told
-  which one it got in terms its GPU library will accept, so the request
-  is refused rather than silently doing nothing useful. The deciding
-  hwloc is the one PRRTE was built against. Other device classes are
-  unaffected: a network or fabric device is named by its own GUIDs.
-  Given that identity, each process is handed its GPUs in the variable
-  its vendor's runtime reads - CUDA_VISIBLE_DEVICES for NVIDIA,
-  ROCR_VISIBLE_DEVICES for AMD - named by the vendor's own identifier.
-  Only processes mapped against a device get it, and an existing value
-  is replaced. PRRTE never sets the vendor's device ORDERING variable.
-  Intel GPUs get ZE_AFFINITY_MASK, which has no identifier form and takes
-  Level Zero device ordinals - read from the enumeration hwloc's Level
-  Zero backend recorded, not guessed. ZE_FLAT_DEVICE_HIERARCHY is stated
-  alongside it, since a driver interprets the mask against whichever
-  model that names; if the process already names a different model,
-  nothing is set and a message says so.
-  A process mapped against a network device is handed it the same way,
-  in the variables the fabric libraries read - NCCL_IB_HCA and
-  UCX_NET_DEVICES for a Mellanox/NVIDIA adapter, PSM3_NIC for an Intel
-  Omni-Path one - named as those libraries name it ("mlx5_0"). No
-  variable that takes a unit NUMBER is set (HFI_UNIT, FI_OPX_HFI_SELECT):
-  a wrong unit number does not fail, it silently selects another adapter.
-
 * "PE-LIST=a,b" assigns procs to each node in the allocation based on
   the ORDERED qualifier. The list is comprised of comma-delimited
   ranges of CPUs to use for this job. If the ORDERED qualifier is not
   provided, then each node will be assigned procs up to the number of
-  available slots, capped by the total number of specified processes and
-  availability of the specified CPUs (i.e. the number of procs cannot exceed
-  the number of specified CPUs), with each proc bound to all the
-  specified CPUs.
-  If ORDERED is given, then one proc will be assigned to each of the
-  specified CPUs, if available, capped by the number of slots on each
-  node and the total number of specified processes. Providing the
-  OVERLOAD qualifier to the "bind-to" option removes the check on
-  availability of the CPU in both cases.
+  available slots, capped by the total number of specified processes
+  and the availability of the specified CPUs (i.e., the number of procs
+  cannot exceed the number of specified CPUs), with each proc bound to
+  all the specified CPUs. If ORDERED is given, then one proc will be
+  assigned to each of the specified CPUs, if available, capped by the
+  number of slots on each node and the total number of specified
+  processes. Providing the OVERLOAD qualifier to the "--bindto" option
+  removes the check on availability of the CPU in both cases.
+
+* "DEVICE=<class|name>" assigns one proc to each device in the node's
+  topology, in PCI bus order, placing it on the CPUs local to that
+  device. The value is either a class of device - "gpu", "network", or
+  "block" - or the name or UUID of one particular device such as
+  "mlx5_0", in which case every proc is placed near that one device.
+  "nic", "fabric" and "openfabrics" are accepted as spellings of
+  "network" and mean exactly the same set: one entry per card, whether
+  the node presents it as an OpenFabrics device ("mlx5_0"), a network
+  interface ("ib0"), or both.
+
+  Note there is no bare "--mapby gpu": the class is the *value* of the
+  "device" directive, which is what allows other classes of device to
+  be supported later without adding a directive for each.
+
+  A device is assigned to a process rather than subdivided between
+  them, so each device takes one process and asking for more processes
+  than there are devices is an error unless "SHARED" is given.
+
+  Binding descends from the device's *locality*: the nearest object in
+  the topology that both contains the device and has CPUs. Asking to
+  bind to an object larger than that locality is an error rather than a
+  silent widening, since such a binding is not "near the device" at
+  all. Whether a given "--bindto" is legal therefore depends on the
+  machine, not on the command line alone. Where every device on a node
+  is equally close to every CPU, the job runs and each proc is still
+  assigned its own device, but a warning reports that the binding could
+  not be made any more specific.
+
+  Mapping by a **GPU** additionally requires that the GPUs can be named
+  to the vendor's runtime. hwloc records a GPU's vendor identity - an
+  NVIDIA "GPU-<uuid>" and its AMD and Intel equivalents - only when it
+  is built with that vendor's backend (NVML, RSMI, or Level Zero).
+  Built without them, hwloc still reports the GPUs and PRRTE can still
+  place processes next to them, but no process can be told which GPU it
+  got in terms the library it links will accept. PRRTE refuses the
+  request in that case rather than mapping and saying nothing, because
+  the two are indistinguishable while the job runs: the placement looks
+  correct and the only symptom is that every process on the node ends
+  up using the same GPU.
+
+  The hwloc that decides this is the one **PRRTE was built against**,
+  since each daemon discovers its own node - not whatever hwloc happens
+  to be installed alongside it. The other device classes are
+  unaffected: a network or fabric device is named by its own GUIDs or
+  MAC address, which hwloc always has.
+
+  Given that identity, each process is also handed its GPUs in the
+  variable its vendor's runtime reads - "CUDA_VISIBLE_DEVICES" for
+  NVIDIA, "ROCR_VISIBLE_DEVICES" for AMD - naming them by the vendor's
+  own identifier. Only processes actually mapped against a device get
+  this, and a variable already set in the environment is replaced,
+  since "--mapby device=" is the more specific request. PRRTE never
+  sets the vendor's device *ordering* variable ("CUDA_DEVICE_ORDER" and
+  its equivalents): the identifiers do not depend on the ordering,
+  which is the reason for using them, and changing it would renumber
+  devices for the rest of the process's life.
+
+  Intel is the exception to "named by identity rather than by index".
+  "ZE_AFFINITY_MASK" has no identifier form - it takes Level Zero device
+  ordinals - but the ordinals are not guessed: hwloc's Level Zero
+  backend records the driver and device index "zeDeviceGet" returned for
+  each device, so the value is *read* from that enumeration rather than
+  predicted, on the node that will run the process. Because a Level Zero
+  driver reads "ZE_FLAT_DEVICE_HIERARCHY" first and interprets the mask
+  against the devices that model exposes - the same ordinals name a card
+  under "COMPOSITE" and a tile under "FLAT" - the model is stated
+  alongside the mask whenever the process's environment does not already
+  name one. If it names one and it disagrees, nothing is set and a
+  message says so: overriding a deliberate choice would change how many
+  devices the program sees, and writing a mask that will be read under a
+  different model would silently hand it half the hardware it was
+  assigned.
+
+  A process mapped against a **network** device is handed it the same
+  way, in the variables the fabric libraries read: "NCCL_IB_HCA" and
+  "UCX_NET_DEVICES" for a Mellanox or NVIDIA InfiniBand adapter, and
+  "PSM3_NIC" for an Intel Omni-Path adapter. The device is named by the
+  name those libraries accept - "mlx5_0" - which is the name hwloc gave
+  it, so unlike the GPU case there is no identity that can be missing.
+  Nothing is set for an adapter whose fabric has no component behind
+  it, and no variable that takes a device *unit number* is set at all
+  ("HFI_UNIT", "FI_OPX_HFI_SELECT"): a unit number is meaningful only
+  against the enumeration it came from, and a wrong one there does not
+  fail, it quietly puts the process on another adapter.
+
+  The assignment is also readable directly, whether or not a device
+  variable was set, as the "PMIX_DEVICE_ID" key of the process's own
+  job data.
 
 Any directive can include qualifiers by adding a colon (":") and any
 combination of one or more of the following (delimited by colons) to
@@ -156,20 +192,25 @@ the "--mapby" option (except where noted):
 
 * "SPAN" load balance the processes across the allocation by treating
   the allocation as a single "super-node" (can not be used in
-  combination with "slot", "node", "seq", "ppr", "rankfile", or "pe-
-  list" directives)
+  combination with "slot", "node", "seq", "ppr", "rankfile", or
+  "pe-list" directives). One process is placed on each object in turn,
+  cycling across the nodes, so a job that does not fill the allocation
+  spreads over all of it instead of filling the first nodes. On three
+  4-slot nodes, "-n 8 --mapby core:SPAN" places 3, 3 and 2 processes,
+  where "--mapby core" alone places 4 and 4 and leaves the third node
+  empty.
 
 * "OVERSUBSCRIBE" allow more processes on a node than processing
-  elements. NOTE: this describes the whole job. It may be written in a
-  per-app "--mapby" string, where it is taken to describe the job (see
-  "Per-App-Context Mapping" below).
+  elements. Note that this describes the whole job. It may be written
+  in a per-app "--mapby" string, where it is taken to describe the job
+  (see "Per-app-context mapping" below).
 
-* "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE". NOTE: describes the whole
-  job (see above).
+* "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE". Note that this describes
+  the whole job (see above).
 
 * "NOLOCAL" do not launch processes on the same node as "prun". This
-  qualifier may be applied per app context in an MPMD job — see
-  "Per-App-Context Mapping" below.
+  qualifier may be applied per app context in an MPMD job - see
+  "Per-app-context mapping" below.
 
 * "HWTCPUS" use hardware threads as CPU slots
 
@@ -177,11 +218,11 @@ the "--mapby" option (except where noted):
 
 * "INHERIT" indicates that a child job (i.e., one spawned from within
   an application) shall inherit the placement policies of the parent
-  job that spawned it. NOTE: this describes the whole job; written in a
-  per-app "--mapby" string it is taken to describe the job.
+  job that spawned it. Note that this describes the whole job; written
+  in a per-app "--mapby" string it is taken to describe the job.
 
-* "NOINHERIT" means "!INHERIT". NOTE: describes the whole job (see
-  above).
+* "NOINHERIT" means "!INHERIT". Note that this describes the whole job
+  (see above).
 
 * "FILE=<path>" (path to file containing sequential or rankfile
   entries).
@@ -190,34 +231,37 @@ the "--mapby" option (except where noted):
   reorders the device list so that consecutive processes land on
   different objects of the given level - "package" (the default),
   "numa", "l3cache", "l2cache" or "l1cache". On a node with two GPUs
-  per socket, "device=gpu:interleave" places the first two processes on
-  different sockets rather than filling the first socket. Note that
-  "node" is not an accepted level: interleaving across nodes is what
-  the "SPAN" qualifier already expresses. A level that does not divide
-  the devices into groups leaves the order unchanged, so the qualifier
-  is safe to leave in a default mapping policy.
+  per socket, "device=gpu:interleave" places the first two processes
+  on different sockets rather than filling the first. "node" is not an
+  accepted level: interleaving across nodes is what "SPAN" already
+  expresses. A level that does not divide the devices into groups
+  leaves the order unchanged, so the qualifier is safe to leave in a
+  default mapping policy.
 
 * "SHARED[=true|false]" only applies to the "DEVICE" directive. It
-  permits several processes to be assigned the same device. The default
-  is false: a device is assigned to a process rather than subdivided
-  between them, so a job asking for more processes than there are
-  devices is an error unless this is given. Note this is a separate
-  question from the "overload-allowed" qualifier to "--bindto", which
-  concerns running more processes than there are CPUs.
+  permits several processes to be assigned the same device. The
+  default is "false": a device is assigned to a process rather than
+  subdivided between them, so a job asking for more processes than
+  there are devices is an error unless this is given. This is a
+  separate question from the "overload-allowed" qualifier to
+  "--bindto", which concerns running more processes than there are
+  CPUs.
 
-* "NDEV=<n>" only applies to the "DEVICE" directive. It assigns n
+* "NDEV=<n>" only applies to the "DEVICE" directive. It assigns *n*
   devices to each process rather than one.
+
   This changes what a process is placed against, and that is worth
   understanding. A process holding two GPUs attached to different NUMA
   domains is local to neither of them alone - it is local to whatever
-  contains them both. So the locality of a process becomes the common
-  ancestor of its devices' localities, and binding descends from there.
-  On a node with two GPUs per socket, "ndev=2" therefore makes each
-  process package-local, which means "--bindto package" is legitimate in
-  that case and remains an error without "ndev".
-  Devices are handed out in groups taken in order from the device list,
-  so a group is a contiguous run of that order and the "INTERLEAVE"
-  qualifier composes with this one.
+  contains them both. So the locality of a process becomes the
+  **common ancestor** of its devices' localities, and binding descends
+  from there. On a node with two GPUs per socket, "ndev=2" therefore
+  makes each process package-local, which means "--bindto package" is
+  legitimate in that case and remains an error without "ndev".
+
+  Devices are handed out in groups taken in order from the device
+  list, so a group is a contiguous run of that order and the
+  "INTERLEAVE" qualifier composes with this one.
 
 * "ORDERED" only applies to the "PE-LIST" option to indicate that
   procs are to be bound to each of the specified CPUs in the order in
@@ -237,28 +281,29 @@ determined as follows:
 * by user directive on the command line via the HWTCPUS qualifier to
   the "--mapby" directive
 
-* by setting the "rmaps_default_mapping_policy" MCA parameter to
-  include the "HWTCPUS" qualifier. This parameter sets the default
-  value for a PRRTE DVM — qualifiers are carried across to DVM jobs
-  started via "prun" unless overridden by the user's command line
+* by setting the "mapby" MCA parameter to include the "HWTCPUS"
+  qualifier (e.g., "--prtemca mapby :HWTCPUS" when starting the DVM).
+  This parameter sets the default value for a PRRTE DVM - qualifiers
+  are carried across to DVM jobs started via "prun" unless overridden
+  by the user's command line
 
 * defaults to CORE in topologies where core CPUs are defined, and to
   hwthreads otherwise.
 
 If your application uses threads, then you probably want to ensure
-that you are either not bound at all (by specifying "--bind-to none"),
+that you are either not bound at all (by specifying "--bindto none"),
 or bound to multiple cores using an appropriate binding level or
 specific number of processing elements per application process via the
 "PE=#" qualifier to the "--mapby" command line directive.
 
-Per-App-Context Mapping (MPMD Jobs)
-------------------------------------
+Per-app-context mapping (MPMD jobs)
+-----------------------------------
 
 In a multi-program multiple-data (MPMD) job, each application context
 separated by ":" on the "prun" command line may carry its own
 "--mapby", "--rankby", and "--bindto" directives.
 
-Which app such a directive describes follows one rule: the FIRST app
+Which app such a directive describes follows one rule: the *first* app
 segment is where the command line speaks for the job. A directive
 written there and nowhere else applies to the whole job, however many
 apps follow. A directive written on any later app describes that app
@@ -267,21 +312,22 @@ app that says nothing is not agreeing with one that did.
 
 Examples:
 
-  prun --mapby core -n 4 app1 : -n 2 app2
+   prun --mapby core -n 4 app1 : -n 2 app2
 
 Both apps are mapped by core: the only directive is on the first app,
 so it describes the job.
 
-  prun --mapby core -n 4 app1 : --mapby node --rankby fill -n 2 app2
+   prun --mapby core -n 4 app1 : --mapby node --rankby fill -n 2 app2
 
 Here "app1" is mapped by core and "app2" is mapped by node with fill
-ranking. The binding policy defaults to the job-level value for both.
+ranking. No binding directive was given, so both apps take the default
+binding policy.
 
-  prun -n 4 app1 : --mapby node -n 2 app2
+   prun -n 4 app1 : --mapby node -n 2 app2
 
 Only "app2" is mapped by node; "app1" takes the default mapping.
 
-  prun --mapby slot:nolocal -n 8 app1 : --mapby slot -n 1 app2
+   prun --mapby slot:nolocal -n 8 app1 : --mapby slot -n 1 app2
 
 Here "app1" is excluded from the head node while "app2" may run
 anywhere, including the head node.
@@ -289,7 +335,7 @@ anywhere, including the head node.
 Every mapping policy may be given per app - "seq", "rankfile",
 "ppr:N:obj" and "pe-list=..." included, each with the file or pattern
 it needs - so two apps of one job may be placed by two different
-mapping components. "--display devel-map" names the component that
+mapping components. "--display map-devel" names the component that
 placed each app.
 
 Qualifiers that describe the whole job:
@@ -297,19 +343,20 @@ Qualifiers that describe the whole job:
 * "OVERSUBSCRIBE" / "NOOVERSUBSCRIBE" and "INHERIT" / "NOINHERIT"
   describe the job, not an app, so wherever they are written they are
   applied to the job. Apps that say nothing about them are silent, not
-  dissenting; only apps that answer the same question in OPPOSITE ways
-  are refused, and that aborts the job with an error.
+  dissenting; only apps that answer the same question in *opposite*
+  ways are refused, and that aborts the job with an error.
 
-* "NOLOCAL" MAY be applied per app. It prevents that specific app's
-  processes from running on the head node without affecting other apps.
+* "NOLOCAL" *may* be applied per app. It prevents that specific app's
+  processes from running on the head node without affecting other
+  apps.
 
 Per-app directives can also be supplied via the "PMIx_Spawn" API by
 placing "PMIX_MAPBY", "PMIX_RANKBY", "PMIX_BINDTO" and "PMIX_PPR" keys
-in the per-app "info[]" array on the corresponding "pmix_app_t". On that
-path there is no "first app" rule: the array a key was written in says
-what it describes.
+in the per-app "info[]" array on the corresponding "pmix_app_t". On
+that path there is no "first app" rule: the array a key was written in
+says what it describes.
 
-Note that "PMIX_MAPPER" is NOT supported, per job or per app, and a
+Note that "PMIX_MAPPER" is *not* supported, per job or per app, and a
 spawn request carrying it is refused. Naming a mapping component says
 nothing that "PMIX_MAPBY" has not already said - the mapping policy is
 what selects the component - and the two can contradict each other.

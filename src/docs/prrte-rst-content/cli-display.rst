@@ -36,8 +36,9 @@ Supported values include:
   assigned to processes in this job that includes local and node
   ranks, assigned bindings, and other data
 
-* ``TOPO=LIST`` displays the topology of each node in the
-  semicolon-delimited list that is allocated to the job
+* ``TOPO[=LIST]`` displays the topology of each node in the provided
+  semicolon-delimited list of nodes allocated to the job (defaults to
+  all nodes). An empty list (``TOPO=``) is refused.
 
 * ``CPUS[=LIST]`` displays the available CPUs on the provided
   semicolon-delimited list of nodes (defaults to all nodes)
@@ -54,7 +55,7 @@ colon (``:``) and any combination of one or more of the following
   using physical (instead of logical) CPU IDs.
 
 Provided qualifiers will apply to *all* of the display directives unless
-noted.
+noted. Note that directives and qualifiers are case-insensitive.
 
 Every directive and qualifier above that asks a yes-or-no question
 |mdash| everything except ``TOPO`` and ``CPUS``, which name a list of

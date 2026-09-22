@@ -12,9 +12,9 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-.. note:: PRRTE accepts both the new "--bindto" and the older
-          deprecated "--bind-to" cmd line options. For simplicity, the
-          following description will refer to the new "--bindto" form.
+.. note:: PRRTE accepts both the new ``--bindto`` and the older
+          deprecated ``--bind-to`` cmd line options. For simplicity, the
+          following description will refer to the new ``--bindto`` form.
 
 By default, processes are bound to individual CPUs (either COREs or
 HWTHREADs, as defined by default or by user specification for the
@@ -48,9 +48,9 @@ Supported binding directives include:
 * ``NONE`` does not bind the processes
 
 * ``HWTHREAD`` binds each process to a single hardware
-  thread/ This requires that hwthreads be treated
+  thread. This requires that hwthreads be treated
   as independent CPUs (i.e., that either the ``HWTCPUS``
-  qualifier be provided to the ``mapby`` option or
+  qualifier be provided to the ``--mapby`` option or
   that ``hwthreads`` be designated as CPUs by default).
 
 * ``CORE`` binds each process to a single core. This
@@ -102,3 +102,30 @@ option:
 
 .. note:: Directives and qualifiers are case-insensitive.
           ``OVERLOAD`` is the same as ``overload``.
+
+.. rubric:: Per-app-context binding (MPMD jobs)
+
+In a multi-program multiple-data (MPMD) job, each application context
+may carry its own ``--bindto`` directive, placed ahead of that app's
+executable. The rule is the one described for ``--mapby``: a directive
+written on the first app segment and nowhere else describes the whole
+job; otherwise each app that carries a directive is bound by its own,
+and apps that carry none take the default binding policy |mdash| they
+do not inherit another app's directive.
+
+Example:
+
+.. code::
+
+   prun --bindto core -n 4 app1 : --bindto none -n 2 app2
+
+Here ``app1`` processes are bound to individual cores while ``app2``
+processes are left unbound, all within the same job.
+
+Per-app binding is derived from the mapping options resolved for each
+app context. It therefore follows the same constraints as job-level
+binding: binding can only be done to the mapped object or to a
+resource located beneath it.
+
+A more detailed description of the mapping, ranking, and binding
+procedure can be obtained via the ``--help placement`` option.

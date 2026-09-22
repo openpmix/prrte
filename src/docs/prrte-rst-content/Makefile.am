@@ -26,37 +26,73 @@ dist_rst_DATA = \
     cli-alloc-refid.rst \
     cli-allow-run-as-root.rst \
     cli-app-prefix.rst \
+    cli-app.rst \
     cli-append-env.rst \
     cli-bind-to.rst \
+    cli-continuous.rst \
     cli-dash-host.rst \
     cli-debug-daemons-file.rst \
     cli-debug-daemons.rst \
     cli-display.rst \
+    cli-do-not-connect.rst \
     cli-dvm-hostfile.rst \
+    cli-dvm-uri.rst \
     cli-dvm.rst \
+    cli-enable-recovery.rst \
     cli-forward-signals.rst \
     cli-general.rst \
+    cli-get-stack-traces.rst \
+    cli-gpu-support.rst \
     cli-homo-nodes.rst \
     cli-launcher-hostfile.rst \
     cli-leave-session-attached.rst \
     cli-map-by.rst \
+    cli-max-restarts.rst \
+    cli-memory-alloc-kinds.rst \
+    cli-namespace.rst \
+    cli-no-aggregate-help.rst \
+    cli-no-app-prefix.rst \
     cli-noprefix.rst \
+    cli-notifications.rst \
+    cli-np.rst \
+    cli-npernode.rst \
+    cli-num-connect-retries.rst \
     cli-output.rst \
+    cli-path.rst \
     cli-personality.rst \
-    cli-pmixmca.rst \
+    cli-pid.rst \
     cli-pmix-prefix.rst \
+    cli-pmixmca.rst \
     cli-prefix.rst \
+    cli-preload-binary.rst \
+    cli-preload-files.rst \
     cli-prepend-env.rst \
     cli-prtemca.rst \
-    cli-no-app-prefix.rst \
+    cli-pset.rst \
     cli-rank-by.rst \
+    cli-report-pid.rst \
+    cli-report-state-on-timeout.rst \
+    cli-report-uri.rst \
     cli-runtime-options.rst \
     cli-session-id.rst \
+    cli-set-cwd-to-session-dir.rst \
     cli-set-env.rst \
+    cli-spawn-timeout.rst \
+    cli-stdin.rst \
+    cli-stop-in-app.rst \
+    cli-stop-in-init.rst \
+    cli-stop-on-exec.rst \
     cli-stream-buffering.rst \
+    cli-system-server-first.rst \
+    cli-system-server-only.rst \
+    cli-timeout.rst \
     cli-tune.rst \
     cli-unset-env.rst \
+    cli-wait-to-connect.rst \
+    cli-wd.rst \
+    cli-wdir.rst \
     cli-x.rst \
+    cli-xterm.rst \
     definitions-pes.rst \
     definitions-slots.rst \
     deprecated-bind-to-core.rst \
