@@ -630,12 +630,16 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
-        /* -N ->   map-by ppr:N:node */
+        /* -N ->   map-by ppr:N:node
+         *
+         * -N is a current mpirun option, not a deprecated one - it is
+         * merely implemented as a mapping directive - so it converts
+         * without the deprecation warning */
         else if (0 == strcmp(option, "N")) {
             pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                warn);
+                                                false);
             free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -1217,32 +1221,16 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
      * a given param appears more than once with different values */
 
     for (i = 0; NULL != tmp[i]; i++) {
-        fp = fopen(tmp[i], "r");
+        /* the base finds the file - in the cwd or among the installed
+         * parameter sets - and reports it if it can't */
+        fp = prte_schizo_base_open_tune_file(tmp[i]);
         if (NULL == fp) {
-            /* if the file given wasn't absolute, check in the default location */
-            if (!pmix_path_is_absolute(tmp[i])) {
-                p1 = pmix_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
-                fp = fopen(p1, "r");
-                if (NULL == fp) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
-                    PMIx_Argv_free(tmp);
-                    PMIx_Argv_free(cache);
-                    PMIx_Argv_free(cachevals);
-                    PMIx_Argv_free(xparams);
-                    PMIx_Argv_free(xvals);
-                    free(p1);
-                    return PRTE_ERR_NOT_FOUND;
-                }
-                free(p1);
-            } else {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
-                PMIx_Argv_free(tmp);
-                PMIx_Argv_free(cache);
-                PMIx_Argv_free(cachevals);
-                PMIx_Argv_free(xparams);
-                PMIx_Argv_free(xvals);
-                return PRTE_ERR_NOT_FOUND;
-            }
+            PMIx_Argv_free(tmp);
+            PMIx_Argv_free(cache);
+            PMIx_Argv_free(cachevals);
+            PMIx_Argv_free(xparams);
+            PMIx_Argv_free(xvals);
+            return PRTE_ERR_NOT_FOUND;
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
             if ('\0' == line[0]) {

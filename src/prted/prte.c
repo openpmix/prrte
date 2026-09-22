@@ -331,63 +331,6 @@ int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace, pmix_rank_t 
     return PRTE_SUCCESS;
 }
 
-/* Read an appfile and append its contents to a command line.  Each line of
- * the file is one app context, so the lines are joined with the ":"
- * delimiter the parser expects.
- *
- * A blank line - or one holding nothing but spaces - splits to no tokens at
- * all, and PMIx_Argv_split reports that by returning NULL rather than an
- * empty array, so the result must be checked before it is indexed: a single
- * empty line in an appfile used to segfault the tool right here.  Such a
- * line is skipped entirely rather than merely contributing no words,
- * because emitting the delimiter for it would hand the parser an empty app
- * context.
- */
-int prte_parse_appfile(const char *path, char ***pargv, int *pargc)
-{
-    FILE *fp;
-    char *line, *p, **split;
-    size_t n;
-    bool first = true;
-
-    if (NULL == path || NULL == pargv || NULL == pargc) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-    fp = fopen(path, "r");
-    if (NULL == fp) {
-        return PRTE_ERR_FILE_OPEN_FAILURE;
-    }
-    while (NULL != (line = pmix_getline(fp))) {
-        /* skip blank lines and comments (a line whose first non-whitespace
-         * character is '#'), per the documented appfile format - neither
-         * should contribute any tokens to the resulting argv */
-        for (p = line; ' ' == *p || '\t' == *p; p++) {
-        }
-        if ('\0' == *p || '#' == *p) {
-            free(line);
-            continue;
-        }
-        split = PMIx_Argv_split(line, ' ');
-        free(line);
-        if (NULL == split) {
-            continue;
-        }
-        if (!first) {
-            // add a colon delimiter
-            PMIx_Argv_append_nosize(pargv, ":");
-            ++(*pargc);
-        }
-        for (n = 0; NULL != split[n]; n++) {
-            PMIx_Argv_append_nosize(pargv, split[n]);
-            ++(*pargc);
-        }
-        PMIx_Argv_free(split);
-        first = false;
-    }
-    fclose(fp);
-    return PRTE_SUCCESS;
-}
-
 PRTE_EXPORT int prte(int argc, char *argv[])
 {
     int rc = 1, i;
@@ -454,7 +397,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
 
     /* because we have to use the schizo framework and init our hostname
      * prior to parsing the incoming argv for cmd line options, do a hacky
-     * search to support passing of impacted options (e.g., verbosity for schizo) */
+     * search to support passing of impacted options (e.g., verbosity for schizo).
+     * The --tune files go first, so a param given explicitly on the
+     * cmd line overrides the one in a file */
+    rc = prte_schizo_base_parse_tune(pargc, 0, pargv);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
     rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
         return rc;
@@ -623,12 +573,21 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     // check for an appfile
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
     if (NULL != opt) {
+        // the file supplies every app - refuse one named here as well
+        if (PRTE_SUCCESS != prte_check_appfile_tail(results.tail)) {
+            param = PMIx_Argv_join(results.tail, ' ');
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "appfile-with-app", true,
+                           opt->values[0], (NULL == param) ? "" : param);
+            free(param);
+            return 1;
+        }
         // parse the file and add its context to the argv array
-        rc = prte_parse_appfile(opt->values[0], &pargv, &pargc);
+        rc = prte_load_appfile(opt->values[0], &pargv);
         if (PRTE_SUCCESS != rc) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "appfile-failure", true, opt->values[0]);
             return 1;
         }
+        pargc = PMIx_Argv_count(pargv);
     }
 
     /* decide if we are to use a persistent DVM, or act alone */

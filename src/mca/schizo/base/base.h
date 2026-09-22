@@ -22,6 +22,8 @@
 #include "prte_config.h"
 #include "types.h"
 
+#include <stdio.h>
+
 #include "src/class/pmix_list.h"
 #include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/mca.h"
@@ -96,6 +98,18 @@ PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
 PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);
 PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target);
 PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target);
+/* Open a --tune file as named, or - for a relative name not found in the
+ * cwd - in the directory of parameter sets installed with PRRTE. Reports
+ * the failure itself and returns NULL if neither exists. */
+PRTE_EXPORT FILE *prte_schizo_base_open_tune_file(const char *name);
+/* Pre-scan an argv for --tune files and push their "param = value"
+ * entries into the environment as generic MCA params - the same
+ * treatment "--mca param value" gets. Must run before the MCA params
+ * are registered, alongside prte_schizo_base_parse_prte/_pmix. */
+PRTE_EXPORT int prte_schizo_base_parse_tune(int argc, int start, char **argv);
+/* Validate the --tune files of a parsed command line strictly: every
+ * entry must be "param = value" naming a PRRTE or PMIx parameter */
+PRTE_EXPORT int prte_schizo_base_check_tune(pmix_cli_result_t *results);
 PRTE_EXPORT int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line);
 PRTE_EXPORT bool prte_schizo_base_check_directives(char *directive,
                                                    char **valid,

@@ -1256,6 +1256,34 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_EXEC_AGENT, opt->values[0], PMIX_STRING);
     }
 
+    /* check for ranks to be displayed in xterm windows.  Refuse a value
+     * we cannot read here, on the user's terminal: the daemons are the
+     * ones who act on it, and by then all they can do is fail the launch */
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_XTERM);
+    if (NULL != opt) {
+        prte_rank_range_t *xranges = NULL;
+        size_t nxranges;
+        bool xall, xhold;
+        long badrank = 0;
+
+        ret = prte_parse_xterm_option(opt->values[0], &xranges, &nxranges,
+                                      &xall, &xhold, &badrank);
+        free(xranges);
+        if (PRTE_ERR_VALUE_OUT_OF_BOUNDS == ret) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-base.txt",
+                           "prte-odls-base:xterm-neg-rank", true, (int) badrank);
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            return PRTE_ERR_BAD_PARAM;
+        } else if (PRTE_SUCCESS != ret) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true,
+                           prte_tool_basename, "--" PRTE_CLI_XTERM, opt->values[0],
+                           "\"all\" or a comma-delimited list of ranks and rank ranges");
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            return PRTE_ERR_BAD_PARAM;
+        }
+        PMIX_INFO_LIST_ADD(ret, jinfo, PRTE_XTERM_RANKS, opt->values[0], PMIX_STRING);
+    }
+
     /* mark if recovery was enabled on the cmd line */
     if (pmix_cmd_line_is_taken(results, PRTE_CLI_ENABLE_RECOVERY)) {
         flag = true;

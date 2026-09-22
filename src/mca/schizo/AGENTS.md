@@ -383,6 +383,24 @@ table.
   `prtereachable`/`preachable`, `plm_rsh`→`plm_ssh`, and — on the PMIx
   side only — `dl`→`pdl`), and either push them into the environment
   (`target == NULL`) or append them to a target argv.
+- **`prte_schizo_base_parse_tune` / `_check_tune` /
+  `_open_tune_file`** — `--tune` files. Their `param = value` entries
+  are *generic* MCA params, so the pre-scan hands each to `_parse_prte`
+  and `_parse_pmix` as a synthetic `--mca name value` and they are
+  routed exactly as that would be. It has to be a pre-scan, run by
+  `prte.c` and `prun.c` just ahead of `_parse_prte` (so an explicit
+  `--prtemca` still wins): an MCA variable reads its environment only
+  when first registered, and `parse_cli` runs after that. Until this
+  existed, only the ompi personality read `--tune` at all — prte,
+  prterun and prun accepted it and dropped it. The pre-scan cannot know
+  the personality, and ompi reads the same files with a richer grammar
+  (`-x`, `--mca`), so it passes silently over lines it does not
+  understand; the prte personality's `parse_cli` then runs `_check_tune`
+  to refuse them. **The pre-scan must print nothing**: it runs before
+  `prte_init_minimum()` registers the show_help content, so any message
+  it emits comes out as "couldn't find that help reference".
+  `_open_tune_file` (cwd, else the installed `amca-param-sets`
+  directory) is shared with ompi's own tune reader.
 - **`prte_schizo_base_add_directive` / `_add_qualifier`** — the
   option→attribute plumbing used by deprecated-option conversion. They
   merge a directive/qualifier into an existing `pmix_cli_item_t` value
@@ -519,6 +537,7 @@ run the base helpers and each personality's `parse_cli` over them.
 | `test_sanity.c` | `prte_schizo_base_sanity`: duplicates, `check_ndirs`, synonyms, bad directives, the PE/bind-to conflict |
 | `test_output.c` | `parse_output`/`parse_display` — asserts on the resulting `PMIX_INFO` array, which is the only way to see a directive that was silently dropped |
 | `test_personality.c` | `detect_proxy` election (incl. an unknown personality returning NULL) and both personalities' deprecated-option conversions |
+| `test_tune.c` | `--tune`: the pre-scan's routing of each entry to `PRTE_MCA_`/`PMIX_MCA_` (and to neither), both option spellings, its silence over foreign/bad/missing input, and the strict check refusing each of those |
 
 Reach a personality through the framework (`schizo_test_module()`), not
 by naming its module symbol — the module belongs to its component, which

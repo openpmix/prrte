@@ -33,9 +33,17 @@
  *    PRTE_DAEMON_UMASK_VALUE= in the environment made the daemon call
  *    umask(0) and every file it created world-writable.
  *
- *  - prte_load_appfile(), the "--app <file>" expander from prun (prte.c
- *    has the same feature).  One app context per line, ':'-delimited as
- *    if the lines had been typed on the command line.
+ *  - prte_load_appfile(), the "--app <file>" expander shared by prun and
+ *    prterun.  One app context per line, ':'-delimited as if the lines
+ *    had been typed on the command line; blank and '#' comment lines are
+ *    skipped.  prun used to have a reader of its own that turned a
+ *    comment line into an app context whose "executable" was the '#'.
+ *
+ *  - prte_parse_xterm_option(), the "--xterm <ranks>" reader.  prun checks
+ *    the value with it and the daemons apply it with it, so the two cannot
+ *    disagree about which ranks were named.  The PMIx range parser it
+ *    replaces printed a parse error and carried on, so a mistyped entry
+ *    was simply dropped from the list.
  *
  * These need no DVM, no frameworks, and no event base -- just
  * prte_init_minimum() for the install dirs the error paths reference.
@@ -349,6 +357,38 @@ static int test_appfile(void)
         argv = NULL;
     }
 
+    /* comment lines - first non-blank character '#' - are skipped like
+     * blank ones: no tokens, and no delimiter */
+    path = scratch_file("appfile.comment",
+                        "# header\nhostname\n  # indented\n\t#tabbed\nuptime\n#\n");
+    if (NULL != path) {
+        rc = prte_load_appfile(path, &argv);
+        CHECK("appfile with comments loaded", PRTE_SUCCESS == rc);
+        n = PMIx_Argv_count(argv);
+        CHECK("comment lines contribute nothing", 3 == n);
+        if (3 == n) {
+            CHECK("comment appfile order",
+                  0 == strcmp(argv[0], "hostname") && 0 == strcmp(argv[1], ":")
+                      && 0 == strcmp(argv[2], "uptime"));
+        }
+        PMIx_Argv_free(argv);
+        argv = NULL;
+    }
+
+    /* "--app" with an application also on the command line is refused:
+     * the file's first line would otherwise become that application's
+     * arguments.  No tail - options only - is fine. */
+    {
+        char *exe[] = {"echo", "X", NULL};
+        char *seg[] = {":", "-n", "1", "hostname", NULL};
+        char *none[] = {NULL};
+
+        CHECK("appfile/no tail accepted", PRTE_SUCCESS == prte_check_appfile_tail(NULL));
+        CHECK("appfile/empty tail accepted", PRTE_SUCCESS == prte_check_appfile_tail(none));
+        CHECK("appfile/executable refused", PRTE_SUCCESS != prte_check_appfile_tail(exe));
+        CHECK("appfile/app segment refused", PRTE_SUCCESS != prte_check_appfile_tail(seg));
+    }
+
     /* an empty appfile is not an error, it just contributes nothing */
     path = scratch_file("appfile.empty", "");
     if (NULL != path) {
@@ -362,6 +402,74 @@ static int test_appfile(void)
     CHECK("missing appfile reported",
           PRTE_ERR_FILE_OPEN_FAILURE == prte_load_appfile("/nonexistent/prte/appfile", &argv));
     CHECK("NULL argv rejected", PRTE_SUCCESS != prte_load_appfile(path, NULL));
+
+    return failures;
+}
+
+static int test_xterm_option(void)
+{
+    int failures = 0;
+    prte_rank_range_t *r = NULL;
+    size_t n = 0;
+    bool all, hold;
+    long bad = 0;
+    int rc;
+
+    rc = prte_parse_xterm_option("all", &r, &n, &all, &hold, &bad);
+    CHECK("xterm all accepted", PRTE_SUCCESS == rc && all && !hold && NULL == r);
+    rc = prte_parse_xterm_option("ALL!", &r, &n, &all, &hold, &bad);
+    CHECK("xterm ALL! accepted with hold", PRTE_SUCCESS == rc && all && hold);
+    rc = prte_parse_xterm_option("-1", &r, &n, &all, &hold, &bad);
+    CHECK("xterm legacy -1 means all", PRTE_SUCCESS == rc && all);
+
+    rc = prte_parse_xterm_option("1,3-6,9", &r, &n, &all, &hold, &bad);
+    CHECK("xterm list accepted", PRTE_SUCCESS == rc && !all && 3 == n);
+    if (PRTE_SUCCESS == rc && 3 == n) {
+        CHECK("xterm list ranges",
+              1 == r[0].lo && 1 == r[0].hi && 3 == r[1].lo && 6 == r[1].hi &&
+              9 == r[2].lo && 9 == r[2].hi);
+        CHECK("xterm names 0? no", !prte_xterm_names_rank(r, n, all, 0));
+        CHECK("xterm names 1", prte_xterm_names_rank(r, n, all, 1));
+        CHECK("xterm names 2? no", !prte_xterm_names_rank(r, n, all, 2));
+        CHECK("xterm names 5", prte_xterm_names_rank(r, n, all, 5));
+        CHECK("xterm names 9", prte_xterm_names_rank(r, n, all, 9));
+        CHECK("xterm names 10? no", !prte_xterm_names_rank(r, n, all, 10));
+    }
+    free(r);
+    r = NULL;
+    CHECK("xterm all names anything", prte_xterm_names_rank(NULL, 0, true, 12345));
+
+    rc = prte_parse_xterm_option("0,2!", &r, &n, &all, &hold, &bad);
+    CHECK("xterm list with hold", PRTE_SUCCESS == rc && hold && 2 == n);
+    free(r);
+    r = NULL;
+
+    /* a negative rank is reported with its value */
+    rc = prte_parse_xterm_option("1,-3", &r, &n, &all, &hold, &bad);
+    CHECK("xterm negative rank refused", PRTE_ERR_VALUE_OUT_OF_BOUNDS == rc && -3 == bad);
+    CHECK("xterm negative leaves nothing", NULL == r);
+
+    /* everything else that is not the syntax is refused, not skipped */
+    CHECK("xterm empty refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("", &r, &n, &all, &hold, &bad));
+    CHECK("xterm bare bang refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("!", &r, &n, &all, &hold, &bad));
+    CHECK("xterm word refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("some", &r, &n, &all, &hold, &bad));
+    CHECK("xterm trailing garbage refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("1,2x", &r, &n, &all, &hold, &bad));
+    CHECK("xterm empty entry refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("1,,2", &r, &n, &all, &hold, &bad));
+    CHECK("xterm trailing comma refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("1,", &r, &n, &all, &hold, &bad));
+    CHECK("xterm open range refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("3-", &r, &n, &all, &hold, &bad));
+    CHECK("xterm reversed range refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("6-3", &r, &n, &all, &hold, &bad));
+    CHECK("xterm huge rank refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option("99999999999", &r, &n, &all, &hold, &bad));
+    CHECK("xterm NULL refused",
+          PRTE_ERR_BAD_PARAM == prte_parse_xterm_option(NULL, &r, &n, &all, &hold, &bad));
 
     return failures;
 }
@@ -389,6 +497,7 @@ int main(int argc, char *argv[])
     failures += test_umask();
     failures += test_appfile();
     failures += test_bool_value();
+    failures += test_xterm_option();
 
     snprintf(cmd, sizeof(cmd), "rm -rf %s", scratch);
     rc = system(cmd);
