@@ -165,14 +165,6 @@ directives that were given are:
 
 Please resolve the conflict and try again.
 #
-[missing-values]
-The provided command line option requires passing two
-values:
-
-  Option:  %s <MCA param name> <param value>
-
-Please provide the missing values and try again.
-#
 [alloc-target-conflict]
 The allocation upon which a job is to be executed can be named in
 only one way. The following options are alternative spellings of
@@ -234,4 +226,19 @@ The following command line option was given without a directive:
 
 This option requires at least one directive. Please provide one and
 try again - "--help %s" lists the directives it accepts.
+#
+[unknown-tune-param]
+A file given to the "--tune" option names a parameter that belongs to
+neither PRRTE nor PMIx:
+
+  File:       %s
+  Parameter:  %s
+  Value:      %s
+
+An entry in a tune file is a generic MCA parameter - it names no
+project - so it is matched against the frameworks PRRTE and PMIx
+provide, just as a "--mca" option on the command line is. This one
+matched neither, so there is nothing it could be applied to.
+
+Please check the spelling of the parameter, or remove it from the file.
 #

@@ -161,6 +161,11 @@ PRTE_EXPORT extern int prte_exit_status;
  * --host syntax. */
 #define PRTE_ACTIVATE_HOSTS "prte.activate.hosts"
 
+/* Spawn directive carrying the "--xterm" value: the ranks whose output is to
+ * be displayed in their own xterm window.  PMIx has no attribute for this.
+ * The value is a string in prte_parse_xterm_option() syntax. */
+#define PRTE_XTERM_RANKS "prte.xterm.ranks"
+
 /* State Machine lists */
 PRTE_EXPORT extern pmix_list_t prte_job_states;
 PRTE_EXPORT extern pmix_list_t prte_proc_states;
@@ -927,10 +932,6 @@ PRTE_EXPORT extern pmix_pointer_array_t *prte_local_children;
 PRTE_EXPORT extern pmix_rank_t prte_total_procs;
 PRTE_EXPORT extern char *prte_base_compute_node_sig;
 PRTE_EXPORT extern bool prte_homo_nodes;
-
-/* IOF controls */
-/* generate new xterm windows to display output from specified ranks */
-PRTE_EXPORT extern char *prte_xterm;
 
 /* whether or not to report launch progress */
 PRTE_EXPORT extern bool prte_report_launch_progress;

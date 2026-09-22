@@ -315,7 +315,7 @@ done:
  * There used to be a "char ***app_env" parameter here, described as the
  * base environment to carry across the recursive create_app() calls that an
  * appfile produced.  There is no recursion any more - an appfile is read
- * into the command line up front, by prte_parse_appfile() in prte.c, before
+ * into the command line up front, by prte_load_appfile(), before
  * any of this runs - and this function had long since stopped writing
  * through the parameter, so the caller's variable was always NULL and
  * everything it was plumbed through was a no-op.  It is gone rather than

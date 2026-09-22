@@ -141,7 +141,7 @@ int prte_parse_pid_option(const char *value, pid_t *pid, const char **filename)
 int prte_load_appfile(const char *filename, char ***argv)
 {
     FILE *fp;
-    char *line, **split;
+    char *line, *p, **split;
     bool first = true;
     int n;
 
@@ -155,10 +155,21 @@ int prte_load_appfile(const char *filename, char ***argv)
     }
 
     while (NULL != (line = pmix_getline(fp))) {
+        /* a comment - a line whose first non-blank character is '#' -
+         * contributes nothing.  Splitting it instead would hand the parser
+         * an app context whose "executable" is the '#' */
+        for (p = line; ' ' == *p || '\t' == *p; p++) {
+        }
+        if ('#' == *p) {
+            free(line);
+            continue;
+        }
         split = PMIx_Argv_split(line, ' ');
         free(line);
         if (NULL == split) {
-            /* a blank line separates nothing from nothing */
+            /* a blank line separates nothing from nothing - and emitting
+             * the delimiter for it would hand the parser an empty app
+             * context */
             continue;
         }
         if (!first) {
@@ -174,6 +185,14 @@ int prte_load_appfile(const char *filename, char ***argv)
     fclose(fp);
 
     return PRTE_SUCCESS;
+}
+
+int prte_check_appfile_tail(char **tail)
+{
+    if (NULL == tail || NULL == tail[0]) {
+        return PRTE_SUCCESS;
+    }
+    return PRTE_ERR_BAD_PARAM;
 }
 
 bool prte_parse_umask(const char *value, mode_t *mask)
@@ -237,4 +256,130 @@ int prte_parse_uint_option(const char *value, unsigned long limit,
     }
     *result = ul;
     return PRTE_SUCCESS;
+}
+
+/* read one non-negative rank that has to fill the whole token */
+static int xterm_rank(const char *str, uint32_t *rank, long *badrank)
+{
+    char *endptr;
+    long val;
+
+    if ('-' == str[0] && isdigit((unsigned char) str[1])) {
+        errno = 0;
+        val = strtol(str, &endptr, 10);
+        if (0 == errno && '\0' == *endptr) {
+            *badrank = val;
+            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        }
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (!isdigit((unsigned char) str[0])) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    errno = 0;
+    val = strtol(str, &endptr, 10);
+    if (0 != errno || '\0' != *endptr || val >= (long) UINT32_MAX) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *rank = (uint32_t) val;
+    return PRTE_SUCCESS;
+}
+
+int prte_parse_xterm_option(const char *value, prte_rank_range_t **ranges,
+                            size_t *nranges, bool *all, bool *hold,
+                            long *badrank)
+{
+    char *input, *dash, **tokens = NULL;
+    prte_rank_range_t *out = NULL;
+    size_t len, n, cnt;
+    int rc = PRTE_SUCCESS;
+
+    if (NULL == value || NULL == ranges || NULL == nranges ||
+        NULL == all || NULL == hold || NULL == badrank) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *ranges = NULL;
+    *nranges = 0;
+    *all = false;
+    *hold = false;
+
+    input = strdup(value);
+    if (NULL == input) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    len = strlen(input);
+    if (0 < len && '!' == input[len - 1]) {
+        *hold = true;
+        input[len - 1] = '\0';
+    }
+    if ('\0' == input[0]) {
+        free(input);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (0 == strcasecmp(input, "all") || 0 == strcmp(input, "-1")) {
+        *all = true;
+        free(input);
+        return PRTE_SUCCESS;
+    }
+
+    /* PMIx_Argv_split drops empty tokens, which would let "1,,2" or a
+     * trailing comma through - refuse those explicitly */
+    if (',' == input[0] || ',' == input[strlen(input) - 1] || NULL != strstr(input, ",,")) {
+        free(input);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    tokens = PMIx_Argv_split(input, ',');
+    cnt = PMIx_Argv_count(tokens);
+    out = (prte_rank_range_t *) calloc(cnt, sizeof(prte_rank_range_t));
+    if (NULL == out) {
+        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        goto done;
+    }
+    for (n = 0; n < cnt; n++) {
+        /* a leading '-' is a sign, not a range separator */
+        dash = strchr(tokens[n] + 1, '-');
+        if (NULL == dash) {
+            rc = xterm_rank(tokens[n], &out[n].lo, badrank);
+            out[n].hi = out[n].lo;
+        } else {
+            *dash = '\0';
+            rc = xterm_rank(tokens[n], &out[n].lo, badrank);
+            if (PRTE_SUCCESS == rc) {
+                rc = xterm_rank(dash + 1, &out[n].hi, badrank);
+            }
+            if (PRTE_SUCCESS == rc && out[n].hi < out[n].lo) {
+                rc = PRTE_ERR_BAD_PARAM;
+            }
+        }
+        if (PRTE_SUCCESS != rc) {
+            goto done;
+        }
+    }
+
+done:
+    PMIx_Argv_free(tokens);
+    free(input);
+    if (PRTE_SUCCESS != rc) {
+        free(out);
+        return rc;
+    }
+    *ranges = out;
+    *nranges = cnt;
+    return PRTE_SUCCESS;
+}
+
+bool prte_xterm_names_rank(const prte_rank_range_t *ranges, size_t nranges,
+                           bool all, uint32_t rank)
+{
+    size_t n;
+
+    if (all) {
+        return true;
+    }
+    for (n = 0; n < nranges; n++) {
+        if (ranges[n].lo <= rank && rank <= ranges[n].hi) {
+            return true;
+        }
+    }
+    return false;
 }

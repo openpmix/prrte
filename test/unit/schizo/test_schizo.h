@@ -36,6 +36,7 @@ extern int test_directives(void);
 extern int test_sanity(void);
 extern int test_output(void);
 extern int test_personality(void);
+extern int test_tune(void);
 
 /* shared helpers (test_helpers.c) */
 

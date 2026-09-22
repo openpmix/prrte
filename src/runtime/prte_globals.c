@@ -197,10 +197,6 @@ pmix_rank_t prte_total_procs = 0;
 char *prte_base_compute_node_sig = NULL;
 bool prte_homo_nodes = false;
 
-/* IOF controls */
-/* generate new xterm windows to display output from specified ranks */
-char *prte_xterm = NULL;
-
 /* report launch progress */
 bool prte_report_launch_progress = false;
 

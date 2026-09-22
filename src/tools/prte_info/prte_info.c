@@ -61,9 +61,21 @@
 #include "src/util/prte_show_help.h"
 
 #include "constants.h"
+#include "src/include/pmix_frameworks.h"
 #include "src/include/prte_frameworks.h"
 #include "src/include/version.h"
 #include "src/runtime/prte_locks.h"
+
+/* The project name the component map records PRRTE's components under,
+ * and so the name every lookup in that map must use. It is a key, not a
+ * label: pmix_info_show_component_version() skips every map entry whose
+ * project does not match, so asking for "PRRTE" here found nothing and
+ * no report ever listed a single PRRTE component. */
+#define PRTE_INFO_PROJECT "prte"
+/* ...and the same for the PMIx half of an --include-pmix report */
+#define PRTE_INFO_PMIX_PROJECT "pmix"
+
+extern const char *prte_info_type_all;
 
 static int register_framework_params(pmix_pointer_array_t *component_map)
 {
@@ -82,7 +94,113 @@ static int register_framework_params(pmix_pointer_array_t *component_map)
         return rc;
     }
 
-    return pmix_info_register_project_frameworks("prte", prte_frameworks, component_map);
+    return pmix_info_register_project_frameworks(PRTE_INFO_PROJECT, prte_frameworks, component_map);
+}
+
+static bool is_pmix_framework(const char *name)
+{
+    int i;
+
+    for (i = 0; NULL != pmix_frameworks[i]; i++) {
+        if (0 == strcmp(name, pmix_frameworks[i]->framework_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool is_mca_type(pmix_pointer_array_t *mca_types, const char *name)
+{
+    char *type;
+    int i;
+
+    for (i = 0; i < mca_types->size; i++) {
+        type = (char *) pmix_pointer_array_get_item(mca_types, i);
+        if (NULL != type && 0 == strcmp(type, name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Show the MCA parameters selected by --param/--params.
+ *
+ * Each value is "<framework>[:<component>[,<component>...]]", or the
+ * keyword "all"; the option may be repeated. getopt hands us exactly one
+ * token per occurrence, so the framework and its components have to
+ * travel in that one token - which is why this cannot simply be
+ * pmix_info_do_params(), whose selective path expects the framework and
+ * the component as two separate values.
+ *
+ * The same request is answered twice when --include-pmix is given, once
+ * per project, and a framework belongs to exactly one of them: the
+ * parameter lookup underneath is by framework name alone, so without
+ * this filter the PMIx half would print PRRTE's parameters again. */
+static void do_params(const char *project, bool pmix_half, bool want_all,
+                      bool want_internal, pmix_pointer_array_t *mca_types,
+                      pmix_pointer_array_t *component_map,
+                      pmix_cli_result_t *results)
+{
+    const char *names[] = {PMIX_CLI_INFO_PARAM, PMIX_CLI_INFO_PARAMS, NULL};
+    pmix_cli_item_t *opt;
+    char **fw, **comps;
+    int n, i, j;
+
+    for (n = 0; !want_all && NULL != names[n]; n++) {
+        opt = pmix_cmd_line_get_param(results, names[n]);
+        if (NULL == opt || NULL == opt->values) {
+            continue;
+        }
+        for (i = 0; NULL != opt->values[i]; i++) {
+            if (0 == strcasecmp(opt->values[i], prte_info_type_all)) {
+                want_all = true;
+                break;
+            }
+        }
+    }
+    if (want_all) {
+        pmix_info_do_params(project, true, want_internal, mca_types, component_map, results);
+        return;
+    }
+
+    for (n = 0; NULL != names[n]; n++) {
+        opt = pmix_cmd_line_get_param(results, names[n]);
+        if (NULL == opt || NULL == opt->values) {
+            continue;
+        }
+        for (i = 0; NULL != opt->values[i]; i++) {
+            fw = PMIx_Argv_split(opt->values[i], ':');
+            if (NULL == fw || NULL == fw[0] || '\0' == fw[0][0] ||
+                (NULL != fw[1] && NULL != fw[2])) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-info.txt",
+                               "bad-param-value", true, names[n], opt->values[i]);
+                exit(1);
+            }
+            if (!is_mca_type(mca_types, fw[0])) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-info.txt",
+                               "unknown-framework", true, fw[0], prte_tool_basename);
+                exit(1);
+            }
+            if (pmix_half != is_pmix_framework(fw[0])) {
+                // belongs to the other half of the report
+                PMIx_Argv_free(fw);
+                continue;
+            }
+            if (NULL == fw[1] || '\0' == fw[1][0]) {
+                comps = PMIx_Argv_split(pmix_info_component_all, ',');
+            } else {
+                comps = PMIx_Argv_split(fw[1], ',');
+            }
+            for (j = 0; NULL != comps && NULL != comps[j]; j++) {
+                pmix_info_show_component_version(project, mca_types, component_map,
+                                                 fw[0], comps[j], pmix_info_ver_full,
+                                                 pmix_info_ver_all);
+                pmix_info_show_mca_params(fw[0], comps[j], want_internal);
+            }
+            PMIx_Argv_free(comps);
+            PMIx_Argv_free(fw);
+        }
+    }
 }
 
 /*
@@ -284,7 +402,7 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS != (ret = register_framework_params(&prte_component_map))) {
         if (PMIX_ERR_BAD_PARAM == ret) {
             /* output what we got */
-            pmix_info_do_params("PRRTE", true, pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
+            pmix_info_do_params(PRTE_INFO_PROJECT, true, pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
                                 &mca_types, &prte_component_map, NULL);
         }
         exit(1);
@@ -302,7 +420,7 @@ int main(int argc, char *argv[])
         if (PMIX_SUCCESS != (ret = pmix_info_register_framework_params(&prte_component_map))) {
             if (PMIX_ERR_BAD_PARAM == ret) {
                 /* output what we got */
-                pmix_info_do_params("PMIx", true, pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
+                pmix_info_do_params(PRTE_INFO_PMIX_PROJECT, true, pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
                                     &mca_types, &prte_component_map, NULL);
             }
             exit(1);
@@ -319,7 +437,7 @@ int main(int argc, char *argv[])
             pmix_info_show_version("PRRTE", pmix_info_ver_full, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                    PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, PRTE_REPO_REV,
                                    PRTE_RELEASE_DATE);
-            pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, pmix_info_type_all,
+            pmix_info_show_component_version(PRTE_INFO_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
                                              pmix_info_component_all, pmix_info_ver_full,
                                              pmix_info_ver_all);
 
@@ -328,19 +446,21 @@ int main(int argc, char *argv[])
             pmix_info_show_version("PRRTE", pmix_info_ver_full, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                     PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, PRTE_REPO_REV,
                                     PRTE_RELEASE_DATE);
-            pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, pmix_info_type_all,
+            pmix_info_show_component_version(PRTE_INFO_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
                                              pmix_info_component_all, pmix_info_ver_full,
                                              pmix_info_ver_all);
 
         } else {
             if (0 == strcasecmp(opt->values[0], "prte") ||
                 0 == strcasecmp(opt->values[0], "all")) {
+                // an optional second argument selects the part of the version
+                const char *modifier = (NULL != opt->values[1]) ? opt->values[1] : pmix_info_ver_full;
                 pmix_info_show_package(PRTE_PACKAGE_STRING);
-                pmix_info_show_version("PRRTE", pmix_info_ver_full, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                pmix_info_show_version("PRRTE", modifier, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                        PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, PRTE_REPO_REV,
                                        PRTE_RELEASE_DATE);
-                pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, pmix_info_type_all,
-                                                 pmix_info_component_all, pmix_info_ver_full,
+                pmix_info_show_component_version(PRTE_INFO_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
+                                                 pmix_info_component_all, modifier,
                                                  pmix_info_ver_all);
 
             } else {
@@ -354,7 +474,7 @@ int main(int argc, char *argv[])
                 if (NULL != opt->values[1]) {
                     modifier = opt->values[1];
                 }
-                pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, tmp[0],
+                pmix_info_show_component_version(PRTE_INFO_PROJECT, &mca_types, &prte_component_map, tmp[0],
                                                  component, modifier,
                                                  pmix_info_ver_all);
                 PMIx_Argv_free(tmp);
@@ -391,8 +511,11 @@ int main(int argc, char *argv[])
 
     if (want_all || pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_PARAM) ||
         pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_PARAMS)) {
-        pmix_info_do_params("PRRTE", true, pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
-                            &mca_types, &prte_component_map, &results);
+        /* passing want_all through, rather than "true", is what lets
+         * "--param rmaps:ppr" show rmaps:ppr instead of everything */
+        do_params(PRTE_INFO_PROJECT, false, want_all,
+                  pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
+                  &mca_types, &prte_component_map, &results);
         acted = true;
     }
 
@@ -416,7 +539,7 @@ int main(int argc, char *argv[])
                             PLATFORM_STRINGIFY(PLATFORM_COMPILER_VERSION_STR), PRTE_BUILD_CFLAGS, PRTE_BUILD_LDFLAGS,
                             PRTE_BUILD_LIBS, PRTE_ENABLE_DEBUG, PMIX_HAVE_PDL_SUPPORT,
                             PRTE_C_HAVE_VISIBILITY);
-        pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, pmix_info_type_all,
+        pmix_info_show_component_version(PRTE_INFO_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
                                          pmix_info_component_all, pmix_info_ver_full,
                                          pmix_info_ver_all);
     }
@@ -430,7 +553,7 @@ int main(int argc, char *argv[])
             if (NULL == opt) {
                 pmix_info_show_pmix_package();
                 pmix_info_show_pmix_version();
-                pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, pmix_info_type_all,
+                pmix_info_show_component_version(PRTE_INFO_PMIX_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
                                                  pmix_info_component_all, pmix_info_ver_full,
                                                  pmix_info_ver_all);
 
@@ -439,7 +562,7 @@ int main(int argc, char *argv[])
                 pmix_info_show_pmix_version();
                 /* we are under the "PMIx CONFIGURATION" banner - showing
                  * the PRRTE components here again was a copy/paste slip */
-                pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, pmix_info_type_all,
+                pmix_info_show_component_version(PRTE_INFO_PMIX_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
                                                  pmix_info_component_all, pmix_info_ver_full,
                                                  pmix_info_ver_all);
 
@@ -448,8 +571,9 @@ int main(int argc, char *argv[])
                     0 == strcasecmp(opt->values[0], "all")) {
                     pmix_info_show_pmix_package();
                     pmix_info_show_pmix_version();
-                    pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, pmix_info_type_all,
-                                                     pmix_info_component_all, pmix_info_ver_full,
+                    pmix_info_show_component_version(PRTE_INFO_PMIX_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
+                                                     pmix_info_component_all,
+                                                     (NULL != opt->values[1]) ? opt->values[1] : pmix_info_ver_full,
                                                      pmix_info_ver_all);
 
                 } else {
@@ -463,7 +587,7 @@ int main(int argc, char *argv[])
                     if (NULL != opt->values[1]) {
                         modifier = opt->values[1];
                     }
-                    pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, tmp[0],
+                    pmix_info_show_component_version(PRTE_INFO_PMIX_PROJECT, &mca_types, &prte_component_map, tmp[0],
                                                      component, modifier,
                                                      pmix_info_ver_all);
 
@@ -496,8 +620,9 @@ int main(int argc, char *argv[])
 
         if (want_all || pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_PARAM) ||
             pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_PARAMS)) {
-             pmix_info_do_params("PMIx", true, pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
-                                &mca_types, &prte_component_map, &results);
+            do_params(PRTE_INFO_PMIX_PROJECT, true, want_all,
+                      pmix_cmd_line_is_taken(&results, PMIX_CLI_INFO_INTERNAL),
+                      &mca_types, &prte_component_map, &results);
             acted = true;
         }
 
@@ -514,7 +639,7 @@ int main(int argc, char *argv[])
             pmix_info_show_path(pmix_info_path_prefix, prte_install_dirs.prefix);
             pmix_info_do_arch();
             pmix_info_do_pmix_config(want_all);
-            pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, pmix_info_type_all,
+            pmix_info_show_component_version(PRTE_INFO_PMIX_PROJECT, &mca_types, &prte_component_map, pmix_info_type_all,
                                              pmix_info_component_all, pmix_info_ver_full,
                                              pmix_info_ver_all);
         }

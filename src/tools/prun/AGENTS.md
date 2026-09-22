@@ -50,9 +50,28 @@ must also be safe by its absence.
 run.** Each line of the appfile becomes one app context, `:`-delimited,
 and `prte_parse_locals()` (in
 [`src/prted/prte_app_parse.c`](../../prted/prte_app_parse.c)) splits them
-apart later. The reader is `prte_load_appfile()` in
-[`../../util/prte_cmd_line.c`](../../util/prte_cmd_line.c) — shared with
-`prte.c`, which has the same option, and unit tested. Note that
+apart later. Blank lines and `#` comment lines contribute nothing. The
+reader is `prte_load_appfile()` in
+[`../../util/prte_cmd_line.c`](../../util/prte_cmd_line.c) — the **one**
+appfile reader, shared with `prterun` (`prte.c`) and unit tested from
+both sides. There used to be two: `prte.c` had its own that skipped
+comments, and this one did not, so a `# comment` line in a `prun`
+appfile became an app context whose "executable" was the `#`. Keep it
+to one.
+
+The file's contents are **appended** to the command line — no `:` is
+emitted before its first line — so the first line joins whatever app
+segment the command line itself ended in. Options given alongside
+`--app` therefore behave as options of the file's first app context:
+job-level ones (`--mapby`, `--display`, …) apply to the job exactly as
+if written before the first app, and a per-app option the first line
+also gives (`-n` on both) is refused as a duplicate. An application
+on the command line as well (an executable, or a `:` segment) is
+refused with `appfile-with-app`, via `prte_check_appfile_tail()` on the
+parser's command tail: appended with no delimiter, the file's first line
+would silently have become that executable's arguments (`prun --app f
+-n 1 echo X` ran `echo X <line 1 words>`). `prterun` makes the same
+check. Note that
 `pargc` is recomputed but never used: `prun_common()` hides it with
 `PRTE_HIDE_UNUSED_PARAMS` and works from the NULL-terminated `pargv`.
 

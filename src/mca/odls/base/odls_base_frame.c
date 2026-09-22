@@ -69,8 +69,6 @@ prte_odls_base_module_t prte_odls = {0};
  */
 prte_odls_globals_t prte_odls_globals = {
     .output = 0,
-    .xterm_ranks = PMIX_LIST_STATIC_INIT(prte_odls_globals.xterm_ranks),
-    .xtermcmd = NULL,
     .signal_direct_children_only = false,
     .exec_agent = NULL,
     .scatter_cpusets = true,
@@ -132,13 +130,6 @@ static int prte_odls_base_close(void)
 {
     int i;
     prte_proc_t *proc;
-    pmix_list_item_t *item;
-
-    /* cleanup ODLS globals */
-    while (NULL != (item = pmix_list_remove_first(&prte_odls_globals.xterm_ranks))) {
-        PMIX_RELEASE(item);
-    }
-    PMIX_DESTRUCT(&prte_odls_globals.xterm_ranks);
 
     /* anything still here is a launch that never completed, or a slice for
      * one - PMIX_DESTRUCT would leave the items themselves behind */
@@ -161,10 +152,7 @@ static int prte_odls_base_close(void)
  */
 static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
 {
-    char **ranks = NULL, *tmp;
-    int rc, i, rank;
-    prte_namelist_t *nm;
-    bool xterm_hold;
+    int rc;
     sigset_t unblock;
 
     /* initialize the global array of local children */
@@ -176,9 +164,7 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
     }
 
     /* initialize ODLS globals */
-    PMIX_CONSTRUCT(&prte_odls_globals.xterm_ranks, pmix_list_t);
     PMIX_CONSTRUCT(&prte_odls_globals.pending_slices, pmix_list_t);
-    prte_odls_globals.xtermcmd = NULL;
 
     /* ensure that SIGCHLD is unblocked as we need to capture it */
     sigemptyset(&unblock);
@@ -186,58 +172,6 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
 
     if (0 != sigprocmask(SIG_UNBLOCK, &unblock, NULL)) {
         return PRTE_ERR_NOT_SUPPORTED;
-    }
-
-    /* check if the user requested that we display output in xterms */
-    if (NULL != prte_xterm) {
-        /* construct a list of ranks to be displayed */
-        xterm_hold = false;
-        pmix_util_parse_range_options(prte_xterm, &ranks);
-        for (i = 0; i < PMIx_Argv_count(ranks); i++) {
-            if (0 == strcmp(ranks[i], "BANG")) {
-                xterm_hold = true;
-                continue;
-            }
-            nm = PMIX_NEW(prte_namelist_t);
-            rank = strtol(ranks[i], NULL, 10);
-            if (-1 == rank) {
-                /* wildcard */
-                nm->name.rank = PMIX_RANK_WILDCARD;
-            } else if (rank < 0) {
-                /* error out on bozo case */
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
-                               rank);
-                /* nm was never put on the list, and we still own the parsed
-                 * range - do not walk out holding either */
-                PMIX_RELEASE(nm);
-                PMIx_Argv_free(ranks);
-                return PRTE_ERROR;
-            } else {
-                /* we can't check here if the rank is out of
-                 * range as we don't yet know how many ranks
-                 * will be in the job - we'll check later
-                 */
-                nm->name.rank = rank;
-            }
-            pmix_list_append(&prte_odls_globals.xterm_ranks, &nm->super);
-        }
-        PMIx_Argv_free(ranks);
-        /* construct the xtermcmd */
-        prte_odls_globals.xtermcmd = NULL;
-        tmp = pmix_find_absolute_path("xterm");
-        if (NULL == tmp) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-odls-base.txt", "prte-odls-base:xterm-not-found", true,
-                           prte_process_info.nodename);
-            return PRTE_ERROR;
-        }
-        PMIx_Argv_append_nosize(&prte_odls_globals.xtermcmd, tmp);
-        free(tmp);
-        PMIx_Argv_append_nosize(&prte_odls_globals.xtermcmd, "-T");
-        PMIx_Argv_append_nosize(&prte_odls_globals.xtermcmd, "save");
-        if (xterm_hold) {
-            PMIx_Argv_append_nosize(&prte_odls_globals.xtermcmd, "-hold");
-        }
-        PMIx_Argv_append_nosize(&prte_odls_globals.xtermcmd, "-e");
     }
 
     /* Open up all available components */
@@ -278,6 +212,8 @@ static void sccon(prte_odls_spawn_caddy_t *p)
     p->hwt_cpus = false;
     p->report_physical_cpus = false;
     p->exec_agent = NULL;
+    p->xterm_spec = NULL;
+    p->xterm_argv = NULL;
     p->bind_cpuset = NULL;
     p->bind_fatal = false;
     p->do_membind = false;
@@ -306,6 +242,12 @@ static void scdes(prte_odls_spawn_caddy_t *p)
     }
     if (NULL != p->exec_agent) {
         free(p->exec_agent);
+    }
+    if (NULL != p->xterm_spec) {
+        free(p->xterm_spec);
+    }
+    if (NULL != p->xterm_argv) {
+        PMIx_Argv_free(p->xterm_argv);
     }
     if (NULL != p->bind_cpuset) {
         hwloc_bitmap_free(p->bind_cpuset);

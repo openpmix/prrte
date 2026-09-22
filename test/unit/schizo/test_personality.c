@@ -78,6 +78,31 @@ static int test_prte_personality(prte_schizo_base_module_t *mod)
           NULL != v && 0 == strcmp(v, PRTE_CLI_ALLOC));
     free(v);
 
+    /* --display-topo takes no argument and means every node, which is the
+     * bare "topo" directive.  It used to become "topo=" - an empty node
+     * list that parse_display refuses, so the option could never work */
+    v = parse_and_get(mod, PRTE_CLI_DISPLAY, &rc, "prterun",
+                      "--display-topo", "hostname", NULL);
+    CHECK("prte:display-topo-rc", PRTE_SUCCESS == rc);
+    CHECK("prte:display-topo-value", NULL != v && 0 == strcmp(v, "topo"));
+    free(v);
+
+    /* --rankfile names the rankfile MAPPER; "file=X" alone is a qualifier
+     * with no directive, which the sanity checker refuses */
+    v = parse_and_get(mod, PRTE_CLI_MAPBY, &rc, "prterun",
+                      "--rankfile", "myrf", "hostname", NULL);
+    CHECK("prte:rankfile-rc", PRTE_SUCCESS == rc);
+    CHECK("prte:rankfile-value",
+          NULL != v && 0 == strcmp(v, "rankfile:file=myrf"));
+    free(v);
+
+    /* -N is a current option implemented as a mapping directive */
+    v = parse_and_get(mod, PRTE_CLI_MAPBY, &rc, "prterun",
+                      "-N", "3", "hostname", NULL);
+    CHECK("prte:N-rc", PRTE_SUCCESS == rc);
+    CHECK("prte:N-value", NULL != v && 0 == strcmp(v, "ppr:3:node"));
+    free(v);
+
     /* the classic ORTE-era spellings still land on the modern directives */
     v = parse_and_get(mod, PRTE_CLI_MAPBY, &rc, "prterun",
                       "--npernode", "2", "hostname", NULL);

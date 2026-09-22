@@ -130,7 +130,14 @@ int prun(int argc, char *argv[])
      * prte_register_params() runs, and an MCA variable evaluates its
      * environment only on its first registration - so a "--prtemca" value
      * pushed into the environment after it has run is simply never seen.
-     * prte and prted order it this way for the same reason. */
+     * prte and prted order it this way for the same reason.
+     *
+     * The --tune files go first, so a param given explicitly on the
+     * cmd line overrides the one in a file. */
+    rc = prte_schizo_base_parse_tune(pargc, 0, pargv);
+    if (PRTE_SUCCESS != rc) {
+        return 1;
+    }
     rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
         return 1;
@@ -247,10 +254,15 @@ int prun(int argc, char *argv[])
         } else {
             char *leftover;
             int outpipe;
-            /* see if it is an integer pipe */
+            /* See if it is an integer pipe.  It has to start with a digit
+             * to be one: strtol accepts leading whitespace and a sign and
+             * returns 0 for a string with no digits at all, so an empty
+             * --report-pid value would write our pid onto file descriptor
+             * 0 and then close our own stdin. */
             leftover = NULL;
             outpipe = strtol(opt->values[0], &leftover, 10);
-            if (NULL == leftover || 0 == strlen(leftover)) {
+            if (isdigit((unsigned char) opt->values[0][0]) &&
+                (NULL == leftover || 0 == strlen(leftover))) {
                 /* stitch together the var names and URI */
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
@@ -282,6 +294,15 @@ int prun(int argc, char *argv[])
     // check for an appfile
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
     if (NULL != opt) {
+        // the file supplies every app - refuse one named here as well
+        if (PRTE_SUCCESS != prte_check_appfile_tail(results.tail)) {
+            char *app = PMIx_Argv_join(results.tail, ' ');
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "appfile-with-app", true,
+                           opt->values[0], (NULL == app) ? "" : app);
+            free(app);
+            PRTE_UPDATE_EXIT_STATUS(1);
+            goto DONE;
+        }
         // parse the file and add its context to the argv array
         rc = prte_load_appfile(opt->values[0], &pargv);
         if (PRTE_SUCCESS != rc) {
