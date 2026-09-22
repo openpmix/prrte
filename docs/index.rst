@@ -30,6 +30,7 @@ Table of contents
    release-notes
    getting-help
    install
+   testing/index
    configuration
    terminology
    how-things-work/index
