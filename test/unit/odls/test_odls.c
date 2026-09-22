@@ -70,6 +70,7 @@
 
 #include "src/mca/odls/odls.h"
 #include "src/mca/odls/odls_types.h"
+#include "src/mca/state/state.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/pdefault/odls_pdefault.h"
 
@@ -814,6 +815,39 @@ static int test_mempolicy(void)
 }
 
 /*
+ * A recording stub for the state machine.  The kill path reports what it
+ * learned about a child as a state activation, and there is no state
+ * component open here to receive it, so capture the reports instead: what
+ * the kill says about each child is what this test is about.
+ */
+static pmix_proc_t reported_procs[8];
+static prte_proc_state_t reported_states[8];
+static int nreported = 0;
+
+static void recording_activate(pmix_proc_t *proc, prte_proc_state_t state)
+{
+    if (nreported < (int) (sizeof(reported_states) / sizeof(reported_states[0]))) {
+        PMIX_XFER_PROCID(&reported_procs[nreported], proc);
+        reported_states[nreported] = state;
+        nreported++;
+    }
+}
+
+/* did the kill report this state for this proc? */
+static bool was_reported(pmix_proc_t *proc, prte_proc_state_t state)
+{
+    int i;
+
+    for (i = 0; i < nreported; i++) {
+        if (PMIX_CHECK_PROCID(&reported_procs[i], proc) &&
+            state == reported_states[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
  * A kill that arrives while a child is still being forked.
  *
  * launch_local flags a child ALIVE and hands it to a worker thread, and the
@@ -830,6 +864,7 @@ static int test_kill_during_launch(void)
     prte_proc_t *launching, *never;
     pmix_pointer_array_t procs;
     prte_proc_t *req;
+    prte_state_base_module_activate_proc_state_fn_t save;
     int i;
 
     launching = PMIX_NEW(prte_proc_t);
@@ -853,7 +888,11 @@ static int test_kill_during_launch(void)
     pmix_pointer_array_add(&procs, req);
 
     nsignalled = 0;
+    nreported = 0;
+    save = prte_state.activate_proc_state;
+    prte_state.activate_proc_state = recording_activate;
     prte_odls_base_default_kill_local_procs(&procs, recording_signal);
+    prte_state.activate_proc_state = save;
 
     CHECK("nothing is signaled without a pid", 0 == nsignalled);
     CHECK("a child still launching is marked for its launch to kill",
@@ -861,12 +900,17 @@ static int test_kill_during_launch(void)
     CHECK("...and is not written off as terminated",
           PRTE_PROC_STATE_INIT == launching->state &&
           !PRTE_FLAG_TEST(launching, PRTE_PROC_FLAG_WAITPID));
+    CHECK("...and its waitpid is not reported as fired",
+          !was_reported(&launching->name, PRTE_PROC_STATE_WAITPID_FIRED));
     CHECK("...and is still alive", PRTE_FLAG_TEST(launching, PRTE_PROC_FLAG_ALIVE));
     CHECK("a child never dispatched is not marked",
           !PRTE_FLAG_TEST(never, PRTE_PROC_FLAG_KILL_PENDING));
     CHECK("...it is simply recorded as over",
-          PRTE_PROC_STATE_TERMINATED == never->state &&
-          PRTE_FLAG_TEST(never, PRTE_PROC_FLAG_WAITPID));
+          PRTE_PROC_STATE_TERMINATED == never->state);
+    /* the waitpid it will never get is reported as fired so that the join
+     * completes - the kill does not set the flag itself */
+    CHECK("...and the waitpid it will never get is reported as fired",
+          was_reported(&never->name, PRTE_PROC_STATE_WAITPID_FIRED));
 
     PMIX_RELEASE(req);
     PMIX_DESTRUCT(&procs);

@@ -2578,9 +2578,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         goto MOVEON;
     }
 
-    /* mark that the waitpid fired */
-    PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
-
     /* if the proc called "abort", then we just need to flag that it
      * came thru here */
     if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ABORT)) {
@@ -2803,7 +2800,30 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 MOVEON:
     /* cancel the wait as this proc has already terminated */
     prte_wait_cb_cancel(proc);
-    PRTE_ACTIVATE_PROC_STATE(&proc->name, state);
+
+    /* Report what we learned, and then report that the waitpid fired.  Two
+     * separate activations, in that order, because they say two different
+     * things: the first is this proc's diagnosis and is the error manager's
+     * to act on, while the second is half of the join that retires the proc
+     * and belongs to the state machine.  Conflating them is what this used
+     * to do - a single activation of the diagnosis, on the assumption that
+     * whoever handled it would also complete the join - and the error
+     * manager's branches did not all carry that half, so a proc taking one
+     * of those was never retired.
+     *
+     * The order matters and is kept only by the dispatcher: activation is
+     * asynchronous, but prte_state_base_activate_proc_state() thread-shifts
+     * every activation onto prte_event_base at the same priority, so two
+     * activations from here are processed in the order they were made.
+     * Nothing enforces that priority, so if it ever changes, a diagnosis
+     * could be handled after the proc it describes has already been
+     * retired.
+     */
+    if (PRTE_PROC_STATE_WAITPID_FIRED != state) {
+        PRTE_ACTIVATE_PROC_STATE(&proc->name, state);
+    }
+    PRTE_ACTIVATE_PROC_STATE(&proc->name, PRTE_PROC_STATE_WAITPID_FIRED);
+
     /* cleanup the tracker */
     PMIX_RELEASE(t2);
 }
@@ -2936,10 +2956,6 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                      * at least have a value that will let us eventually wakeup
                      */
                     child->state = PRTE_PROC_STATE_TERMINATED;
-                    /* ensure we realize that the waitpid will never come, if
-                     * it already hasn't
-                     */
-                    PRTE_FLAG_SET(child, PRTE_PROC_FLAG_WAITPID);
                     child->pid = 0;
                     goto CLEANUP;
                 } else {
@@ -2975,12 +2991,12 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             continue;
 
         CLEANUP:
-            /* check for everything complete - this will remove
-             * the child object from our local list
+            /* the waitpid will never come for a proc that never started, so
+             * report it as having fired - that completes the join, and the
+             * state machine removes the child from our local list
              */
-            if (!prte_finalizing && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE) &&
-                PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID)) {
-                PRTE_ACTIVATE_PROC_STATE(&child->name, child->state);
+            if (!prte_finalizing) {
+                PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_WAITPID_FIRED);
             }
         }
     }
@@ -3020,10 +3036,6 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&cd->child->name)));
             kill_local(cd->child->pid, SIGKILL);
-            /* indicate the waitpid fired as this is effectively what
-             * has happened
-             */
-            PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_WAITPID);
 
             /* Since we are not going to wait for this process, make sure
              * we mark it as not-alive so that we don't wait for it
@@ -3032,19 +3044,31 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
             cd->child->pid = 0;
 
-            /* mark the child as "killed" */
-            if (cd->child->state < PRTE_PROC_STATE_TERMINATED) {
-                cd->child->state = PRTE_PROC_STATE_KILLED_BY_CMD; /* we ordered it to die */
+            if (prte_finalizing) {
+                continue;
             }
 
-            /* check for everything complete - this will remove
-             * the child object from our local list
+            /* Report that we ordered this proc to die, but only if that is
+             * actually what happened to it: a proc that already had a
+             * diagnosis of its own - it called abort, it exited non-zero -
+             * keeps it, and that diagnosis has already been reported by
+             * whoever made it.  Re-reporting it from here is what this used
+             * to do, and it delivered somebody else's diagnosis to the error
+             * manager a second time as though it were news, on a path whose
+             * only actual business was to say that the waitpid would never
+             * come.
              */
-            if (!prte_finalizing &&
-                PRTE_FLAG_TEST(cd->child, PRTE_PROC_FLAG_IOF_COMPLETE) &&
-                PRTE_FLAG_TEST(cd->child, PRTE_PROC_FLAG_WAITPID)) {
-                PRTE_ACTIVATE_PROC_STATE(&cd->child->name, cd->child->state);
+            if (cd->child->state < PRTE_PROC_STATE_TERMINATED) {
+                cd->child->state = PRTE_PROC_STATE_KILLED_BY_CMD; /* we ordered it to die */
+                PRTE_ACTIVATE_PROC_STATE(&cd->child->name, PRTE_PROC_STATE_KILLED_BY_CMD);
             }
+
+            /* we cancelled the waitpid above, so it will never fire - report
+             * it as having fired, since that is effectively what happened.
+             * This completes the join, and the state machine removes the
+             * child from our local list.
+             */
+            PRTE_ACTIVATE_PROC_STATE(&cd->child->name, PRTE_PROC_STATE_WAITPID_FIRED);
         }
     }
     PMIX_LIST_DESTRUCT(&procs_killed);
