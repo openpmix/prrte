@@ -581,6 +581,7 @@ int prun_common(pmix_cli_result_t *results,
         param = NULL;
     }
     if (PMIX_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
+        (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
         return rc;
     }
     PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
@@ -597,6 +598,7 @@ int prun_common(pmix_cli_result_t *results,
         PRTE_ERROR_LOG(ret);
         /* NOT rc: it holds the SUCCESS the signal setup just returned, so
          * returning it told our caller the tool had done its job */
+        (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
         return ret;
     }
 
@@ -638,6 +640,7 @@ int prun_common(pmix_cli_result_t *results,
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_WAIT_TO_CONNECT, opt->values[0], "a number of seconds");
             PMIX_INFO_LIST_RELEASE(tinfo);
+            (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
             return PRTE_ERR_BAD_PARAM;
         }
         ui32 = (uint32_t) ulval;
@@ -650,6 +653,7 @@ int prun_common(pmix_cli_result_t *results,
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_NUM_CONNECT_RETRIES, opt->values[0], "a number of retries");
             PMIX_INFO_LIST_RELEASE(tinfo);
+            (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
             return PRTE_ERR_BAD_PARAM;
         }
         ui32 = (uint32_t) ulval;
@@ -667,18 +671,21 @@ int prun_common(pmix_cli_result_t *results,
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "file-open-error", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], param);
             PMIX_INFO_LIST_RELEASE(tinfo);
+            (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
             return PRTE_ERR_BAD_PARAM;
         case PRTE_ERR_FILE_READ_FAILURE:
             /* we could not obtain the single conversion we require */
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-file", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], param);
             PMIX_INFO_LIST_RELEASE(tinfo);
+            (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
             return PRTE_ERR_BAD_PARAM;
         default: /* neither an integer nor a usable 'file:' spec */
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-option-input", true,
                            prte_tool_basename, "--" PRTE_CLI_PID,
                            opt->values[0], "file:path");
             PMIX_INFO_LIST_RELEASE(tinfo);
+            (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
             return PRTE_ERR_BAD_PARAM;
         }
     }
