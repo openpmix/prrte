@@ -71,6 +71,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_fd.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
@@ -79,6 +80,7 @@
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
+#include "src/util/session_dir.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -516,7 +518,7 @@ int prun_common(pmix_cli_result_t *results,
                 int pargc, char **pargv)
 {
     int rc = 1;
-    char *param, *ptr;
+    char *param;
     prte_pmix_lock_t lock, rellock;
     pmix_list_t apps, jobdata;
     prte_info_item_t *iprteinfo;
@@ -528,6 +530,8 @@ int prun_common(pmix_cli_result_t *results,
     bool flag;
     size_t n, ninfo;
     pmix_app_t *papps = NULL;
+    char *sessdir = NULL;
+    bool sessdir_created = false;
     size_t napps = 0;
     mylock_t mylock;
     uint32_t ui32;
@@ -686,10 +690,19 @@ int prun_common(pmix_cli_result_t *results,
     /* set our session directory to something hopefully unique so
      * our rendezvous files don't conflict with other prun/prte
      * instances */
-    pmix_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu", pmix_tmp_directory(), prte_tool_basename,
+    pmix_asprintf(&sessdir, "%s/%s.session.%s.%lu.%lu", pmix_tmp_directory(), prte_tool_basename,
                   prte_process_info.nodename, (unsigned long) geteuid(), (unsigned long) getpid());
-    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TMPDIR, ptr, PMIX_STRING);
-    free(ptr);
+    /* PMIx trusts the directory it is given, so this name - which anyone
+     * could predict - has to be seen to be ours before it is handed over.
+     * We then own its removal: PMIx only removes a directory it made */
+    if (NULL == sessdir ||
+        PRTE_SUCCESS != prte_session_dir_create(sessdir, &sessdir_created)) {
+        free(sessdir);
+        PMIX_INFO_LIST_RELEASE(tinfo);
+        (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+        return 1;
+    }
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TMPDIR, sessdir, PMIX_STRING);
 
     /* we are also a launcher, so pass that down so PMIx knows
      * to setup rendezvous points */
@@ -724,6 +737,10 @@ int prun_common(pmix_cli_result_t *results,
          * whoever reached this function.  There is nothing to finalize:
          * PMIx never came up. */
         (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+        if (sessdir_created) {
+            (void) pmix_os_dirpath_destroy(sessdir, true, NULL);
+        }
+        free(sessdir);
         /* 1, not a PRTE code: our return IS the tool's exit status, and
          * this is the commonest failure a script driving us will see */
         return 1;
@@ -1117,6 +1134,12 @@ DONE:
         // a warning here, if prte logging is on.
         pmix_output(0, "PMIx_tool_finalize() failed. Status = %d", ret);
     }
+    /* PMIx has removed its rendezvous files; the directory is ours */
+    if (sessdir_created) {
+        (void) pmix_os_dirpath_destroy(sessdir, true, NULL);
+    }
+    free(sessdir);
+    sessdir = NULL;
 
     /* Only NOW is the release lock finished with.  It is on our stack, and
      * the default event handler holds a pointer to it that is never

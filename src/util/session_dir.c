@@ -152,13 +152,19 @@ static int _check_owner(const pmix_nspace_t nspace, const char *directory)
 /*
  * Check and create the directory requested
  */
-static int _create_dir(const pmix_nspace_t nspace, char *directory)
+static int _create_dir(const pmix_nspace_t nspace, const char *directory, bool *created)
 {
     mode_t my_mode = S_IRWXU; /* I'm looking for full rights */
     int ret;
 
+    if (NULL != created) {
+        *created = false;
+    }
     /* attempt to create it */
     ret = pmix_os_dirpath_create(directory, my_mode);
+    if (PMIX_SUCCESS == ret && NULL != created) {
+        *created = true;
+    }
     if (PMIX_ERR_EXISTS == ret) {
         // existence is good enough - provided it is ours
         ret = PMIX_SUCCESS;
@@ -170,6 +176,11 @@ static int _create_dir(const pmix_nspace_t nspace, char *directory)
     // and pmix_os_dirpath_create() answers success, not EXISTS, when
     // the final component appeared while it was building the tree
     return _check_owner(nspace, directory);
+}
+
+int prte_session_dir_create(const char *directory, bool *created)
+{
+    return _create_dir(PRTE_PROC_MY_NAME->nspace, directory, created);
 }
 
 static int _setup_top_session_dir(void)
@@ -208,7 +219,7 @@ static int _setup_top_session_dir(void)
             }
         }
     }
-    rc = _create_dir(PRTE_PROC_MY_NAME->nspace, prte_process_info.top_session_dir);
+    rc = _create_dir(PRTE_PROC_MY_NAME->nspace, prte_process_info.top_session_dir, NULL);
 
 exit:
     if (PRTE_SUCCESS != rc) {
@@ -231,7 +242,7 @@ static int _setup_job_session_dir(prte_job_t *jdata)
                               PRTE_LOCAL_JOBID_PRINT(jdata->nspace))) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        rc = _create_dir(jdata->nspace, jdata->session_dir);
+        rc = _create_dir(jdata->nspace, jdata->session_dir, NULL);
         if (PRTE_SUCCESS != rc) {
             // forget a directory we did not get: the finalize path
             // recursively destroys whatever this names, and it may be
@@ -253,7 +264,7 @@ static int _setup_proc_session_dir(prte_job_t *jdata,
                           PMIX_RANK_PRINT(p->rank))) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    rc = _create_dir(jdata->nspace, tmp);
+    rc = _create_dir(jdata->nspace, tmp, NULL);
     free(tmp);
     return rc;
 }
