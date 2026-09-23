@@ -277,7 +277,11 @@ Note:
 
   Directives and qualifiers are case-insensitive and can be shortened
   to the minimum number of characters to uniquely identify them. Thus,
-  "L1CACHE" can be given as "l1cache" or simply as "L1".
+  "L1CACHE" can be given as "l1cache" or simply as "L1". A shortening
+  that fits more than one of them is refused rather than guessed at --
+  "N" could be "NUMA" or "NODE", and ":S" could be "SPAN" or "SHARED" --
+  as is a value given to one that takes none: "SPAN=false" is an
+  error, not "SPAN".
 
 The type of CPU (core vs hwthread) used in the mapping algorithm is
 determined as follows:

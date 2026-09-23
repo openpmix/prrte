@@ -55,7 +55,9 @@ is provided via the "--bindto" command line option.
 
 Note that directives and qualifiers are case-insensitive and can be
 shortened to the minimum number of characters to uniquely identify
-them. Thus, "L1CACHE" can be given as "l1cache" or simply as "L1".
+them. Thus, "L1CACHE" can be given as "l1cache" or simply as "L1". A
+shortening that fits more than one of them is refused rather than
+guessed at -- "N" could be "NONE" or "NUMA".
 
 Supported binding directives include:
 
