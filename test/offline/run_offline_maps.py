@@ -961,6 +961,20 @@ def device_cases(topo):
         yield Case("device.%s.gpu-ndev2" % topo.name, "device", topo, "single",
                    hostspec, pool, map_by="device=gpu:ndev=2", rank_by="slot",
                    bind_to="package", n=n // 2, expect="map")
+        # ...but a binding finer than that container has to come from where
+        # the devices are.  Taken from the container, it was its first core
+        # or NUMA domain: on this machine, one with no GPU at all.
+        yield Case("device.%s.gpu-ndev2-core" % topo.name, "device", topo,
+                   "single", hostspec, pool, map_by="device=gpu:ndev=2",
+                   rank_by="slot", bind_to="core", n=n // 2, expect="map")
+        yield Case("device.%s.gpu-ndev2-numa" % topo.name, "device", topo,
+                   "single", hostspec, pool, map_by="device=gpu:ndev=2",
+                   rank_by="slot", bind_to="numa", n=n // 2, expect="map")
+        # a comma where the qualifier's ':' belongs is not a device
+        yield Case("device.%s.gpu-comma" % topo.name, "device", topo,
+                   "single", hostspec, pool, map_by="device=gpu,ndev=2",
+                   rank_by="slot", bind_to="core", n=n // 2, expect="reject",
+                   expect_banner="contains a comma")
 
     # fewer procs than devices is where the two orders visibly differ
     if 2 <= n // 2:

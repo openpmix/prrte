@@ -384,6 +384,10 @@ gives each of the two processes two GPUs. A process holding devices in
 different NUMA domains is local to neither of them alone, so its locality
 becomes whatever contains them both --- here the package, which is why
 binding to a package is legal in this case and an error without ``ndev``.
+A finer binding still lands beside the devices: with ``--bindto core``
+the first process is bound to core 16, in the NUMA domain of its first
+GPU, and not to core 0, which is in the same package but local to neither
+of them.
 
 Because the devices are handed out in groups taken in order from the device
 list, ``interleave`` composes with ``ndev``: the interleaving decides the

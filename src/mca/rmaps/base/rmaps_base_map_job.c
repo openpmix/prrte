@@ -470,6 +470,10 @@ static void free_target(prte_rmaps_options_t *opts)
         hwloc_bitmap_free(opts->target);
         opts->target = NULL;
     }
+    if (NULL != opts->devcpus) {
+        hwloc_bitmap_free(opts->devcpus);
+        opts->devcpus = NULL;
+    }
 }
 
 static void free_cpusets(prte_rmaps_options_t *opts)
@@ -1725,6 +1729,7 @@ ranking:
              * the mappers compute their own per node */
             app_options.job_cpuset = NULL;
             app_options.target = NULL;
+            app_options.devcpus = NULL;
             /* nor of the job-level string: a pe-list mapper frees and
              * rewrites "cpuset" as it places procs, so each app needs its
              * own copy rather than a second pointer to the job's */
