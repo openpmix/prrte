@@ -162,12 +162,35 @@ static bool check_range(unsigned major, unsigned minor, unsigned release,
     return true;
 }
 
+/* Tell PMIx which generic MCA parameters are ours.  PMIx decides whether
+ * a parameter belongs to PRRTE by the first segment of its name, and it
+ * reads the list of those segments from PRTE_MCA_PREFIXES exactly once -
+ * on the first question it is asked - keeping the answer for the life of
+ * the process.  So this must run before anything asks: the tools' argv
+ * pre-scans do, well ahead of prte_init_minimum(), and each of them calls
+ * this first. */
+void prte_publish_mca_prefixes(void)
+{
+    static bool published = false;
+    char *evar;
+
+    if (published) {
+        return;
+    }
+    published = true;
+
+    evar = PMIx_Argv_join(prte_framework_names, ',');
+    if (NULL != evar) {
+        pmix_setenv("PRTE_MCA_PREFIXES", evar, true, &environ);
+        free(evar);
+    }
+}
+
 int prte_init_minimum(void)
 {
-    int ret, n;
+    int ret;
     char *path = NULL;
     char *extra;
-    char *evar, **prefixes;
     const char *rvers;
     char token[100];
     unsigned int major, minor, release;
@@ -250,18 +273,7 @@ int prte_init_minimum(void)
     /* carry across the toolname */
     pmix_tool_basename = prte_tool_basename;
 
-    // publish MCA prefixes
-    prefixes = NULL;
-    for (n=0; NULL != prte_framework_names[n]; n++) {
-        if (0 == strcmp("common", prte_framework_names[n])) {
-            continue;
-        }
-        PMIx_Argv_append_nosize(&prefixes, prte_framework_names[n]);
-    }
-    evar = PMIx_Argv_join(prefixes, ',');
-    pmix_setenv("PRTE_MCA_PREFIXES", evar, true, &environ);
-    free(evar);
-    PMIx_Argv_free(prefixes);
+    prte_publish_mca_prefixes();
 
     /* initialize install dirs code */
     ret = pmix_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
