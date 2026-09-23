@@ -115,7 +115,11 @@ int prun(int argc, char *argv[])
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prun";
     pargc = argc;
-    pargv = pmix_argv_copy_strip(argv);  // strip any quoted arguments
+    /* a plain copy: stripping quotes here reached the application's own
+     * arguments too - 'echo "a b"' arrived as 'echo "a b' - and the shell
+     * that ran us has already removed every quote the user did not mean.
+     * prte and prterun stopped stripping for the same reason. */
+    pargv = PMIx_Argv_copy(argv);
     gethostname(hostname, sizeof(hostname));
 
     /* every failure from here to the end of setup exits with 1: a PRRTE
