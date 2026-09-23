@@ -95,9 +95,15 @@ schizo->parse_cli(argv, &results, ...)    <- everything else reads `results`
 - **`parse_cli` returning `PRTE_OPERATION_SUCCEEDED` is success, not
   failure.** It means PMIx already printed `--help` or `--version` output
   and the tool must exit 0 without doing anything else.
-- **`pmix_argv_copy_strip()`** is what makes `prun -n 2 "a b"` work;
-  tools that parse their own argv (`prted`, `prun`) copy-and-strip first
-  and hand the *copy* to schizo.
+- **Only `prted` strips quotes from its argv** (`pmix_argv_copy_strip()`):
+  its command line is built by a launcher, and the plm wraps MCA values in
+  quotes that no shell may be there to remove. A user-facing tool must
+  copy its argv verbatim (`PMIx_Argv_copy`): the user's shell has already
+  removed every quote that was not meant literally, and the argv includes
+  the application's own arguments. `prun` used to strip, so `'x "y"'`
+  reached the app as `x "y` — the same command line under `prterun` was
+  untouched. Quotes around an MCA value are handled where the value is
+  read (`prte_schizo_base_strip_quotes`), not by rewriting the argv.
 
 ### Rules for `main()` in this directory
 
