@@ -298,6 +298,23 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                          AC_MSG_WARN([be the ones PMIx reports to that same process.])
                          AC_MSG_ERROR([Please update PMIx and configure again])])
 
+    dnl The values of --map-by, --bind-to, --output and their fellows are
+    dnl words from a fixed vocabulary, and a word may be abbreviated - so an
+    dnl abbreviation that fits two of them has to be refused, which only a
+    dnl matcher that sees the whole vocabulary at once can do.  That matcher
+    dnl is PMIx's, beside the rest of the command-line machinery; a copy
+    dnl here would be a second answer to "what did the user type?".
+    AC_MSG_CHECKING([for PMIx command-line vocabulary matching])
+    PRTE_CHECK_PMIX_CAP([CLI_MATCH],
+                        [AC_MSG_RESULT([yes])],
+                        [AC_MSG_RESULT([no])
+                         AC_MSG_WARN([PRRTE requires pmix_cli_match(), which this PMIx])
+                         AC_MSG_WARN([does not provide. It matches a command-line word])
+                         AC_MSG_WARN([against every word an option accepts at once, which])
+                         AC_MSG_WARN([is what lets an ambiguous abbreviation be refused])
+                         AC_MSG_WARN([rather than settled by whichever word is tested first.])
+                         AC_MSG_ERROR([Please update PMIx and configure again])])
+
     dnl The "pattern" qualifier on "--output file=NAME" hands the naming of
     dnl the output files to the user.  Expanding the pattern is PMIx's job -
     dnl PMIx owns the IOF sinks and is the only place that knows the rank and

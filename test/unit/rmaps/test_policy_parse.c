@@ -415,16 +415,25 @@ int test_policy_parse(void)
     CHECK("mapby numa:shared: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
-    /* The same prefix hazard as interleave, against a different neighbour:
-     * "shared" and "span" both begin with 's', and ":s" has meant SPAN for
-     * as long as there has been one.  The shared arm sits after it. */
+    /* "shared" and "span" both begin with 's'.  One comparison at a time,
+     * ":s" meant whichever arm of the chain was tested first - SPAN, by
+     * construction, so that adding "shared" did not silently change a
+     * working command line.  Matched against the whole vocabulary it is
+     * what it always was, ambiguous, and it is refused with both named;
+     * nothing changes silently either way. */
     app = PMIX_NEW(prte_app_context_t);
+    fprintf(stderr, "--- expected error output follows (ambiguous ':s') ---\n");
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:s");
-    CHECK("mapby ':s' : rc", PRTE_SUCCESS == rc);
-    CHECK("mapby ':s' still means SPAN, not shared",
+    CHECK("mapby ':s' is ambiguous - span or shared", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:sp");
+    CHECK("mapby ':sp' : rc", PRTE_SUCCESS == rc);
+    CHECK("mapby ':sp' is SPAN, not shared",
           !PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_MAP_SHARED));
     u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
-    CHECK("mapby ':s' set the SPAN directive",
+    CHECK("mapby ':sp' set the SPAN directive",
           0 != (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(u16)));
     PMIX_RELEASE(app);
 
@@ -463,24 +472,29 @@ int test_policy_parse(void)
     CHECK("mapby numa:ndev: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
-    /* THE regression that matters: "interleave" and "inherit" share a first
-     * letter, and the option matcher has no view of the other options - the
-     * first arm of the chain that prefix-matches wins. ":i" has meant
-     * INHERIT for as long as there has been one, so an interleave arm tested
-     * before the inherit arm would silently change what a working command
-     * line does. No error, no warning, a different mapping. */
+    /* "interleave" and "inherit" share their first letters.  Tested one
+     * option at a time, ":i" and ":in" were INHERIT only because that arm
+     * came first; they fit both, and are refused as such rather than
+     * resolved by the order code happens to be written in. */
+    fprintf(stderr, "--- expected error output follows (ambiguous ':i', ':in') ---\n");
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:i");
-    CHECK("mapby device=gpu:i : rc", PRTE_SUCCESS == rc);
-    CHECK("mapby ':i' still means INHERIT, not interleave",
+    CHECK("mapby ':i' is ambiguous - inherit or interleave", PRTE_SUCCESS != rc);
+    CHECK("mapby ':i' recorded no interleave",
           !prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING));
     PMIX_RELEASE(app);
 
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:in");
-    CHECK("mapby device=gpu:in : rc", PRTE_SUCCESS == rc);
-    CHECK("mapby ':in' still means INHERIT",
-          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING));
+    CHECK("mapby ':in' is ambiguous", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* ":inh" is unambiguously inherit... */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:inh");
+    CHECK("mapby ':inh' is inherit",
+          PRTE_SUCCESS == rc
+          && !prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING));
     PMIX_RELEASE(app);
 
     /* ...while ":int" is unambiguously interleave */

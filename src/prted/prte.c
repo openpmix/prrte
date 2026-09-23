@@ -345,7 +345,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     size_t napps;
     mylock_t mylock;
     char **pargv, **split;
-    int pargc;
+    int pargc, tag;
     prte_job_t *jdata;
     prte_app_context_t *dapp;
     bool proxyrun = false;
@@ -828,8 +828,12 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     if (NULL != opt) {
         for (i = 0; NULL != opt->values[i]; i++) {
             split = PMIx_Argv_split(opt->values[i], ',');
-            for (n = 0; NULL != split[n]; n++) {
-                if (PMIX_CHECK_CLI_OPTION(split[n], PRTE_CLI_XML)) {
+            for (n = 0; NULL != split && NULL != split[n]; n++) {
+                /* an abbreviation that fits more than "xml", or a malformed
+                 * value, is reported where the directive is parsed - all
+                 * this needs is to not act on it */
+                if (PMIX_CLI_MATCH_FOUND == pmix_cli_match(split[n], prte_cli_output_directives, &tag) &&
+                    PRTE_OUTPUT_XML == tag) {
                     if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(split[n]),
                                                             &prte_xml_output)) {
                         /* the value is reported where the directive is

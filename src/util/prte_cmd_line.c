@@ -42,6 +42,233 @@
 #include "src/util/pmix_string_copy.h"
 
 #include "src/util/prte_cmd_line.h"
+#include "src/util/prte_show_help.h"
+
+#define NOVAL  PMIX_CLI_VALUE_NONE
+#define OPTVAL PMIX_CLI_VALUE_OPTIONAL
+#define REQVAL PMIX_CLI_VALUE_REQUIRED
+
+const pmix_cli_choice_t prte_cli_mappers[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_SLOT, PRTE_MAPPER_SLOT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_HWT, PRTE_MAPPER_HWT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CORE, PRTE_MAPPER_CORE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L1CACHE, PRTE_MAPPER_L1CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L2CACHE, PRTE_MAPPER_L2CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L3CACHE, PRTE_MAPPER_L3CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NUMA, PRTE_MAPPER_NUMA, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PACKAGE, PRTE_MAPPER_PACKAGE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NODE, PRTE_MAPPER_NODE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_SEQ, PRTE_MAPPER_SEQ, NOVAL),
+    /* its N and object follow as ':'-delimited fields, not as a value */
+    PMIX_CLI_CHOICE(PRTE_CLI_PPR, PRTE_MAPPER_PPR, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_RANKFILE, PRTE_MAPPER_RANKFILE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PELIST, PRTE_MAPPER_PELIST, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_DEVICE, PRTE_MAPPER_DEVICE, REQVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_mapquals[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_PE, PRTE_MAPQUAL_PE, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_SPAN, PRTE_MAPQUAL_SPAN, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_OVERSUB, PRTE_MAPQUAL_OVERSUB, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOOVER, PRTE_MAPQUAL_NOOVER, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOLOCAL, PRTE_MAPQUAL_NOLOCAL, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_HWTCPUS, PRTE_MAPQUAL_HWTCPUS, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CORECPUS, PRTE_MAPQUAL_CORECPUS, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_INHERIT, PRTE_MAPQUAL_INHERIT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOINHERIT, PRTE_MAPQUAL_NOINHERIT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_QFILE, PRTE_MAPQUAL_FILE, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_ORDERED, PRTE_MAPQUAL_ORDERED, NOVAL),
+    /* the level to interleave across; the package when not given */
+    PMIX_CLI_CHOICE(PRTE_CLI_INTERLEAVE, PRTE_MAPQUAL_INTERLEAVE, OPTVAL),
+    /* a truth value; true when not given */
+    PMIX_CLI_CHOICE(PRTE_CLI_SHARED, PRTE_MAPQUAL_SHARED, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NDEV, PRTE_MAPQUAL_NDEV, REQVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+/* The objects a ppr pattern may count per.  "thread", "skt", "socket" and
+ * "nm" are the older spellings, still accepted. */
+const pmix_cli_choice_t prte_cli_ppr_objects[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_NODE, PRTE_PPROBJ_NODE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_HWT, PRTE_PPROBJ_HWT, NOVAL),
+    PMIX_CLI_CHOICE("thread", PRTE_PPROBJ_HWT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CORE, PRTE_PPROBJ_CORE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PACKAGE, PRTE_PPROBJ_PACKAGE, NOVAL),
+    PMIX_CLI_CHOICE("socket", PRTE_PPROBJ_PACKAGE, NOVAL),
+    PMIX_CLI_CHOICE("skt", PRTE_PPROBJ_PACKAGE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NUMA, PRTE_PPROBJ_NUMA, NOVAL),
+    PMIX_CLI_CHOICE("nm", PRTE_PPROBJ_NUMA, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L1CACHE, PRTE_PPROBJ_L1CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L2CACHE, PRTE_PPROBJ_L2CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L3CACHE, PRTE_PPROBJ_L3CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_DEVICE, PRTE_PPROBJ_DEVICE, REQVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_rankers[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_SLOT, PRTE_RANKER_SLOT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NODE, PRTE_RANKER_NODE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_FILL, PRTE_RANKER_FILL, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_SPAN, PRTE_RANKER_SPAN, NOVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_binders[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_NONE, PRTE_BINDER_NONE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_HWT, PRTE_BINDER_HWT, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CORE, PRTE_BINDER_CORE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L1CACHE, PRTE_BINDER_L1CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L2CACHE, PRTE_BINDER_L2CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_L3CACHE, PRTE_BINDER_L3CACHE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NUMA, PRTE_BINDER_NUMA, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PACKAGE, PRTE_BINDER_PACKAGE, NOVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_bindquals[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_OVERLOAD, PRTE_BINDQUAL_OVERLOAD, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOOVERLOAD, PRTE_BINDQUAL_NOOVERLOAD, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_IF_SUPP, PRTE_BINDQUAL_IF_SUPP, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_LIMIT, PRTE_BINDQUAL_LIMIT, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_REPORT, PRTE_BINDQUAL_REPORT, NOVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+/* Every boolean directive of --output, --display and --rtos may be written
+ * bare or with a truth value (see prte_cli_bool_value()), so the value is
+ * optional for all of them. */
+const pmix_cli_choice_t prte_cli_output_directives[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_TAG, PRTE_OUTPUT_TAG, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_TAG_DET, PRTE_OUTPUT_TAG_DET, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_TAG_FULL, PRTE_OUTPUT_TAG_FULL, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_RANK, PRTE_OUTPUT_RANK, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_TIMESTAMP, PRTE_OUTPUT_TIMESTAMP, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_XML, PRTE_OUTPUT_XML, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_MERGE_ERROUT, PRTE_OUTPUT_MERGE_ERROUT, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_DIR, PRTE_OUTPUT_DIR, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_FILE, PRTE_OUTPUT_FILE, REQVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_output_quals[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_COPY, PRTE_OUTQUAL_COPY, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOCOPY, PRTE_OUTQUAL_NOCOPY, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_RAW, PRTE_OUTQUAL_RAW, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PATTERN, PRTE_OUTQUAL_PATTERN, OPTVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_display_directives[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_ALLOC, PRTE_DISPLAY_ALLOC, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_MAP, PRTE_DISPLAY_MAP, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_BIND, PRTE_DISPLAY_BIND, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_MAPDEV, PRTE_DISPLAY_MAPDEV, OPTVAL),
+    /* the nodes to show; every node when not given */
+    PMIX_CLI_CHOICE(PRTE_CLI_TOPO, PRTE_DISPLAY_TOPO, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CPUS, PRTE_DISPLAY_CPUS, OPTVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_display_quals[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_PARSEABLE, PRTE_DISPQUAL_PARSEABLE, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PARSABLE, PRTE_DISPQUAL_PARSEABLE, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_PHYSICAL_CPUS, PRTE_DISPQUAL_PHYSICAL, OPTVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_rtos_directives[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_ERROR_NZ, PRTE_RTOS_ERROR_NZ, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOLAUNCH, PRTE_RTOS_NOLAUNCH, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOSPAWN, PRTE_RTOS_NOSPAWN, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_SHOW_PROGRESS, PRTE_RTOS_SHOW_PROGRESS, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_RECOVERABLE, PRTE_RTOS_RECOVERABLE, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_AUTORESTART, PRTE_RTOS_AUTORESTART, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CONTINUOUS, PRTE_RTOS_CONTINUOUS, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_MAX_RESTARTS, PRTE_RTOS_MAX_RESTARTS, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_EXEC_AGENT, PRTE_RTOS_EXEC_AGENT, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_DEFAULT_EXEC_AGENT, PRTE_RTOS_DEFAULT_EXEC_AGENT, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_STOP_ON_EXEC, PRTE_RTOS_STOP_ON_EXEC, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_STOP_IN_INIT, PRTE_RTOS_STOP_IN_INIT, OPTVAL),
+    /* a truth value, or the name of a breakpoint */
+    PMIX_CLI_CHOICE(PRTE_CLI_STOP_IN_APP, PRTE_RTOS_STOP_IN_APP, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_TIMEOUT, PRTE_RTOS_TIMEOUT, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_SPAWN_TIMEOUT, PRTE_RTOS_SPAWN_TIMEOUT, REQVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_REPORT_STATE, PRTE_RTOS_REPORT_STATE, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_STACK_TRACES, PRTE_RTOS_STACK_TRACES, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_REPORT_CHILD_SEP, PRTE_RTOS_REPORT_CHILD_SEP, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_AGG_HELP, PRTE_RTOS_AGG_HELP, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_NOTIFY_ERRORS, PRTE_RTOS_NOTIFY_ERRORS, OPTVAL),
+    /* where to write it; stdout when not given */
+    PMIX_CLI_CHOICE(PRTE_CLI_OUTPUT_PROCTABLE, PRTE_RTOS_OUTPUT_PROCTABLE, OPTVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_FWD_ENVIRON, PRTE_RTOS_FWD_ENVIRON, OPTVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const char *prte_cli_name(const pmix_cli_choice_t *choices, int tag)
+{
+    size_t n;
+
+    for (n = 0; NULL != choices[n].name; n++) {
+        if (tag == choices[n].tag) {
+            return choices[n].name;
+        }
+    }
+    return NULL;
+}
+
+int prte_cli_match(const pmix_nspace_t nspace, const char *option,
+                   const char *input, const pmix_cli_choice_t *choices,
+                   int *tag)
+{
+    const pmix_cli_choice_t *entry;
+    char *list, *name;
+    size_t len, n;
+
+    switch (pmix_cli_match(input, choices, tag)) {
+        case PMIX_CLI_MATCH_FOUND:
+            return PRTE_SUCCESS;
+        case PMIX_CLI_MATCH_NONE:
+            return PRTE_ERR_NOT_FOUND;
+        case PMIX_CLI_MATCH_AMBIGUOUS:
+            list = pmix_cli_match_list(input, choices, ',');
+            prte_show_help(nspace, "help-prte-util.txt", "cli-ambiguous", true,
+                           option, input, (NULL == list) ? "" : list);
+            free(list);
+            return PRTE_ERR_SILENT;
+        default:
+            break;
+    }
+
+    /* a value error: name the entry by its full spelling, which the user
+     * may have abbreviated */
+    entry = NULL;
+    for (n = 0; NULL != choices[n].name; n++) {
+        if (*tag == choices[n].tag) {
+            entry = &choices[n];
+            break;
+        }
+    }
+    name = NULL;
+    if (NULL != entry) {
+        len = strcspn(entry->name, "=");
+        name = (char *) malloc(len + 1);
+        if (NULL != name) {
+            memcpy(name, entry->name, len);
+            name[len] = '\0';
+        }
+    }
+    if (NULL != entry && PMIX_CLI_VALUE_NONE == entry->value) {
+        prte_show_help(nspace, "help-prte-util.txt", "cli-unexpected-value", true,
+                       option, (NULL == name) ? input : name, input);
+    } else {
+        prte_show_help(nspace, "help-prte-util.txt", "cli-missing-value", true,
+                       option, (NULL == name) ? input : name, input,
+                       (NULL == name) ? input : name);
+    }
+    free(name);
+    return PRTE_ERR_SILENT;
+}
 
 int prte_cli_bool_value(const char *value, bool *flag)
 {

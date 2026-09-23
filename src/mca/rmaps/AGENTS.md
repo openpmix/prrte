@@ -608,19 +608,29 @@ refusal names, what the pre-count may judge) — is in
   unavailable object map to by-slot, and to drop the offending node from
   consideration first — places the job by a rule nobody asked for and
   quietly shrinks the allocation the user gave us.
+- **Every word of a directive is matched against its whole vocabulary.**
+  The vocabularies - `prte_cli_mappers`, `prte_cli_mapquals`,
+  `prte_cli_ppr_objects`, `prte_cli_rankers`, `prte_cli_binders`,
+  `prte_cli_bindquals` - live once, in `src/util/prte_cmd_line.c`, and the
+  schizo sanity checker and the parsers here both match against them with
+  `pmix_cli_match()`, so they cannot disagree about what a word is. (They
+  did: schizo let `ppr:2:slot` through to a ppr parser that never knew
+  `slot`.) Matching a word against every entry at once is what lets an
+  abbreviation that fits two of them be refused: one comparison at a time,
+  a chain of `if (PMIX_CHECK_CLI_OPTION(...))` arms settled it by
+  whichever arm came first, which is why `:s` meant SPAN and `:i` meant
+  INHERIT and why arms had to be kept in a particular order. Each entry also
+  says whether it takes a value, so `span=false` is refused rather than read
+  as `span`. Switch on the tag the match returns, never on a position in
+  the table. `prte_cli_match()` reports ambiguity and value errors itself
+  and returns `PRTE_ERR_NOT_FOUND` - unreported - for a word that matches
+  nothing, since each option already has its own message for that.
 - **Qualifier names may be abbreviated; read values after the `=`, never at
-  a fixed offset.** `PMIX_CHECK_CLI_OPTION` matches any unambiguous prefix,
-  so `P=2` is `PE=2` and `F=path` is `FILE=path`. Indexing past the full
-  spelling turned `--map-by core:P=2` into pes-per-proc **0** (and then a
-  misleading "out of resource") and `seq:F=path` into an attempt to open the
-  path five characters in. `qualifier_value()` in `rmaps_base_frame.c` is the
-  one way to get a qualifier's value. (`src/hwloc/hwloc.c` had the same bug in
-  the job-level `--bind-to` `LIMIT=` value and now uses
-  `pmix_cli_qualifier_value()`.) A related trap in the same family: an
-  **empty** string matches whatever `PMIX_CHECK_CLI_OPTION` tests it against
-  first, because the comparison is only `min(strlen(a), strlen(b))` long —
-  which is why the `--map-by :QUALIFIER` form needs its own explicit branch,
-  and why `--bind-to :overload-allowed` used to resolve to `none`.
+  a fixed offset.** `P=2` is `PE=2` and `F=path` is `FILE=path`. Indexing
+  past the full spelling turned `--map-by core:P=2` into pes-per-proc
+  **0** (and then a misleading "out of resource") and `seq:F=path` into an
+  attempt to open the path five characters in.
+  `pmix_cli_qualifier_value()` is the one way to get a qualifier's value.
 - **A cpu number shown to a user goes through
   `prte_hwloc_base_cpuset2ranges()`.** The bits of a cpuset are PU *OS*
   indices; every grammar this framework accepts — slot lists, rankfile
