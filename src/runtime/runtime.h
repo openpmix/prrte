@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -65,6 +65,14 @@ PRTE_EXPORT extern int prte_cache_line_size;
 PRTE_EXPORT int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags);
 PRTE_EXPORT int prte_init_util(prte_proc_type_t flags);
 PRTE_EXPORT int prte_init_minimum(void);
+
+/**
+ * Publish the prefixes of PRRTE's MCA parameters to PMIx
+ * (PRTE_MCA_PREFIXES).  PMIx reads them once, on its first check of a
+ * generic parameter, so this must precede any such check.  Safe to call
+ * more than once.
+ */
+PRTE_EXPORT void prte_publish_mca_prefixes(void);
 
 /**
  * Initialize parameters for PRTE.

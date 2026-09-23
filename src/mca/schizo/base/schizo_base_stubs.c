@@ -25,6 +25,7 @@
 #include "src/mca/pmdl/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_basename.h"
@@ -367,6 +368,9 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
     int i;
     bool use;
     char *p1, *p2, *param;
+
+    /* the PRRTE check below fixes its list on first use */
+    prte_publish_mca_prefixes();
 
     for (i = 0; i < (argc - start); ++i) {
         if (0 == strcmp("--", argv[i])) {
@@ -773,6 +777,10 @@ int prte_schizo_base_parse_tune(int argc, int start, char **argv)
     int i, rc;
     size_t len = strlen("--" PRTE_CLI_TUNE);
     char *files = NULL, *tmp;
+
+    /* the entries are routed by the PRRTE check, which fixes its list on
+     * first use */
+    prte_publish_mca_prefixes();
 
     /* gather every --tune on the line, in order, so a parameter
      * given different values in two of them is caught */

@@ -285,9 +285,18 @@ sub mca_generate_framework_header(\$\@) {
             $framework_name_output .= "    \"${framework}\",\n";
         }
     }
-    $framework_name_output .= "    \"hwloc\",\n";
-    $framework_name_output .= "    \"if\",\n";
-    $framework_name_output .= "    \"reachable\",\n";
+    # prte_framework_names is published to PMIx as PRTE_MCA_PREFIXES: the
+    # first segments by which a generic MCA parameter is recognized as
+    # ours.  That is more than the framework directories.  grpcomm, rml and
+    # routed are no longer frameworks but still name live parameters
+    # (grpcomm_base_verbose, rml_base_radix, routed_radix); oob and hwloc
+    # are the prefixes of synonyms (oob_tcp_if_include,
+    # hwloc_default_binding_policy); "if" and "reachable" are rewritten by
+    # the schizo pre-scan to prteif and prtereachable.  Drop one only after
+    # checking nothing registers under it.
+    foreach my $prefix ("grpcomm", "hwloc", "if", "oob", "reachable", "rml", "routed") {
+        $framework_name_output .= "    \"$prefix\",\n";
+    }
 
     my $ifdef_string = uc "prte_FRAMEWORKS_H";
     open(FRAMEWORKS_OUT, ">src/include/prte_frameworks.h");
