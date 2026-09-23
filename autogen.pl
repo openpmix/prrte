@@ -291,10 +291,11 @@ sub mca_generate_framework_header(\$\@) {
     # routed are no longer frameworks but still name live parameters
     # (grpcomm_base_verbose, rml_base_radix, routed_radix); oob and hwloc
     # are the prefixes of synonyms (oob_tcp_if_include,
-    # hwloc_default_binding_policy); "if" and "reachable" are rewritten by
-    # the schizo pre-scan to prteif and prtereachable.  Drop one only after
-    # checking nothing registers under it.
-    foreach my $prefix ("grpcomm", "hwloc", "if", "oob", "reachable", "rml", "routed") {
+    # hwloc_default_binding_policy); "reachable" is rewritten by the schizo
+    # pre-scan to prtereachable.  Drop one only after checking nothing
+    # registers under it.  "if" is deliberately absent: PRRTE has no such
+    # framework, and the pre-scan hands it to PMIx's pif instead.
+    foreach my $prefix ("grpcomm", "hwloc", "oob", "reachable", "rml", "routed") {
         $framework_name_output .= "    \"$prefix\",\n";
     }
 

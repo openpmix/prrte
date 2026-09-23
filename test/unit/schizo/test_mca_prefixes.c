@@ -61,6 +61,7 @@ int main(void)
     unsetenv("PRTE_MCA_PREFIXES");
     unsetenv("PRTE_MCA_rml_base_radix");
     unsetenv("PRTE_MCA_routed_radix");
+    unsetenv("PMIX_MCA_pif_base_do_not_resolve");
 
     PMIx_Argv_append_nosize(&argv, "--mca");
     PMIx_Argv_append_nosize(&argv, "rml_base_radix");
@@ -71,10 +72,15 @@ int main(void)
     PMIx_Argv_append_nosize(&argv, "--mca");
     PMIx_Argv_append_nosize(&argv, "routed_radix");
     PMIx_Argv_append_nosize(&argv, "3");
+    PMIx_Argv_append_nosize(&argv, "--mca");
+    PMIx_Argv_append_nosize(&argv, "if_base_do_not_resolve");
+    PMIx_Argv_append_nosize(&argv, "1");
 
     /* nothing initialized: this is the state a tool's pre-scan runs in */
     CHECK("prescan-rc",
           PRTE_SUCCESS == prte_schizo_base_parse_prte(PMIx_Argv_count(argv), 0, argv, NULL));
+    CHECK("prescan-pmix-rc",
+          PRTE_SUCCESS == prte_schizo_base_parse_pmix(PMIx_Argv_count(argv), 0, argv, NULL));
 
     /* the pre-scan published our list itself, before asking PMIx */
     p = getenv("PRTE_MCA_PREFIXES");
@@ -93,6 +99,8 @@ int main(void)
     CHECK("prefix-rml", listed(published, "rml"));
     CHECK("prefix-routed", listed(published, "routed"));
     CHECK("prefix-oob", listed(published, "oob"));
+    /* PRRTE has no "if" framework - that is PMIx's pif */
+    CHECK("prefix-no-if", !listed(published, "if"));
     PMIx_Argv_free(published);
 
     /* PRRTE's parameters were claimed and applied ... */
@@ -104,6 +112,13 @@ int main(void)
     CHECK("routed-applied", NULL != p && 0 == strcmp(p, "3"));
     /* ... and somebody else's was left alone */
     CHECK("foreign-untouched", 0 == strcmp(argv[3], "--mca"));
+
+    /* "if" goes to PMIx as pif, never to a PRRTE "prteif" nothing reads -
+     * and the generic option stays for Open MPI's own if framework */
+    p = getenv("PMIX_MCA_pif_base_do_not_resolve");
+    CHECK("if-to-pif", NULL != p && 0 == strcmp(p, "1"));
+    CHECK("if-not-prte", NULL == getenv("PRTE_MCA_prteif_base_do_not_resolve"));
+    CHECK("if-left-for-ompi", 0 == strcmp(argv[9], "--mca"));
 
     PMIx_Argv_free(argv);
 

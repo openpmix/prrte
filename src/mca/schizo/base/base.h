@@ -98,6 +98,7 @@ PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
 PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);
 PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target);
 PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target);
+PRTE_EXPORT bool prte_schizo_base_is_if_param(const char *name);
 /* Open a --tune file as named, or - for a relative name not found in the
  * cwd - in the directory of parameter sets installed with PRRTE. Reports
  * the failure itself and returns NULL if neither exists. */

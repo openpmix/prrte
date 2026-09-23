@@ -1815,14 +1815,6 @@ static bool check_prte_overlap(char *var, char *value)
         setenv(tmp, value, false);
         free(tmp);
         return true;
-    } else if (0 == strncmp(var, "if_", 3)) {
-        // need to convert if to prteif
-        pmix_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
-        // set it, but don't overwrite if they already
-        // have a value in our environment
-        setenv(tmp, value, false);
-        free(tmp);
-        return true;
     } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
         // need to convert reachable to prtereachable
         pmix_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable_")]);
