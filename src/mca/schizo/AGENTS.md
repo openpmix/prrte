@@ -379,10 +379,21 @@ table.
   that pull `--prtemca`/`--mca` (and `--pmixmca`/`--gpmixmca`/`--gmca`)
   triples out of an argv, map generic `--mca fw ...` to the right
   project (`pmix_pmdl_base_check_prte_param` / `_check_pmix_param`),
-  handle framework renames (`if`→`prteif`/`pif`, `reachable`→
-  `prtereachable`/`preachable`, `plm_rsh`→`plm_ssh`, and — on the PMIx
-  side only — `dl`→`pdl`), and either push them into the environment
+  handle framework renames (`reachable`→`prtereachable`,
+  `plm_rsh`→`plm_ssh`), and either push them into the environment
   (`target == NULL`) or append them to a target argv.
+  **`if` is PMIx's alone.** PRRTE has no `if` framework (its interface
+  params are `prte_if_include`/`_exclude`), so `_parse_pmix` sends
+  `if`/`if_*` to PMIx as `pif_*` — ahead of PMIx's own check, which does
+  not claim `if` — and leaves the generic `--mca` in the argv, because it
+  is also Open MPI's `if` framework and the ompi personality forwards it
+  as `OMPI_MCA_if_*`. It used to be claimed for PRRTE and rewritten to a
+  `prteif_*` that nothing registers, which also took it away from Open
+  MPI. The tune strict check claims it by the same test
+  (`prte_schizo_base_is_if_param`). Nothing is renamed once PMIx's own
+  check has claimed a name — it claims only PMIx's real prefixes (`pif`,
+  `pdl`, ...) — so the `if`→`pif`, `reachable`→`preachable` and
+  `dl`→`pdl` arms that used to sit there were unreachable and are gone.
   PMIx's PRRTE check takes its list of prefixes from `PRTE_MCA_PREFIXES`
   on its **first** call and keeps it for the life of the process, and the
   pre-scan is that first call — it runs before any PRRTE init. So

@@ -150,6 +150,19 @@ int test_tune(void)
     good = write_file("good2", "rmaps_base_verbose = 7\n\n# c\nrmaps_base_verbose=7\n");
     CHECK("tune:check-clean", NULL != good && PRTE_SUCCESS == check(good));
 
+    /* "if" is PMIx's pif - no framework of PRRTE's - and both the pre-scan
+     * and the strict check have to agree it has somewhere to go */
+    unlink(good);
+    free(good);
+    good = write_file("if", "if_base_do_not_resolve = 1\n");
+    unsetenv("PMIX_MCA_pif_base_do_not_resolve");
+    CHECK("tune:if-scan", NULL != good && PRTE_SUCCESS == scan("--tune", good));
+    p = getenv("PMIX_MCA_pif_base_do_not_resolve");
+    CHECK("tune:if-to-pif", NULL != p && 0 == strcmp(p, "1"));
+    CHECK("tune:if-not-prte", NULL == getenv("PRTE_MCA_prteif_base_do_not_resolve"));
+    CHECK("tune:if-claimed", NULL != good && PRTE_SUCCESS == check(good));
+    unsetenv("PMIX_MCA_pif_base_do_not_resolve");
+
     clear();
     unlink(good);
     unlink(bad);

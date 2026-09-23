@@ -350,6 +350,14 @@ char *prte_schizo_base_strip_quotes(char *p)
     return pout;
 }
 
+/* Does this generic parameter name the "if" framework - "if" alone or
+ * "if_<anything>"?  No PRRTE framework has that name; it is the one PMIx
+ * calls pif (and Open MPI calls if) */
+bool prte_schizo_base_is_if_param(const char *name)
+{
+    return (0 == strcmp(name, "if") || 0 == strncmp(name, "if_", 3));
+}
+
 /*
  * prte_schizo_base_parse_prte and _parse_pmix are the tools' argv
  * pre-scans, and they run before prte_init_minimum() - they have to, as
@@ -418,12 +426,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--prtemca");
-                /* if this refers to the "if" framework, convert to "prteif" */
-                if (0 == strncasecmp(p1, "if", 2)) {
-                    pmix_asprintf(&param, "prteif_%s", &p1[3]);
-                    free(p1);
-                    p1 = param;
-                } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
+                if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
                     pmix_asprintf(&param, "prtereachable_%s", &p1[strlen("reachable_")]);
                     free(p1);
                     p1 = param;
@@ -536,6 +539,28 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                 continue;
             }
 
+            /* "if" is not a framework of PRRTE's.  It is PMIx's pif, so
+             * apply it there - but it is also Open MPI's own if framework, so
+             * leave the generic option where it is for the ompi personality
+             * to forward too */
+            if (prte_schizo_base_is_if_param(p1)) {
+                pmix_asprintf(&param, "pif%s", &p1[2]);
+                free(p1);
+                if (NULL == target) {
+                    pmix_asprintf(&p1, "PMIX_MCA_%s", param);
+                    setenv(p1, p2, true);
+                    free(p1);
+                } else {
+                    PMIx_Argv_append_nosize(target, "--pmixmca");
+                    PMIx_Argv_append_nosize(target, param);
+                    PMIx_Argv_append_nosize(target, p2);
+                }
+                free(param);
+                free(p2);
+                i += 2;
+                continue;
+            }
+
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
             use = pmix_pmdl_base_check_pmix_param(p1);
@@ -544,20 +569,6 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--pmixmca");
-                /* if this refers to the "if" framework, convert to "pif" */
-                if (0 == strncasecmp(p1, "if", 2)) {
-                    pmix_asprintf(&param, "pif_%s", &p1[3]);
-                    free(p1);
-                    p1 = param;
-                } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
-                    pmix_asprintf(&param, "preachable_%s", &p1[strlen("reachable_")]);
-                    free(p1);
-                    p1 = param;
-                } else if (0 == strncasecmp(p1, "dl", strlen("dl"))) {
-                    pmix_asprintf(&param, "pdl_%s", &p1[strlen("dl_")]);
-                    free(p1);
-                    p1 = param;
-                }
                 if (NULL == target) {
                     /* push it into our environment */
                     pmix_asprintf(&param, "PMIX_MCA_%s", p1);
@@ -633,7 +644,7 @@ static char *trim(char *s)
  * PRRTE if it belongs to a PRRTE framework, and failing that
  * prte_schizo_base_parse_pmix() claims it for PMIx. Routing it through
  * those two, rather than repeating their tests here, keeps the framework
- * renames (if -> prteif/pif and so on) in one place.
+ * renames (if -> pif, reachable -> prtereachable and so on) in one place.
  *
  * The pre-scan (strict == false) runs before any personality has been
  * chosen, and the ompi personality reads the same files with a richer
@@ -740,6 +751,7 @@ static int process_tune_files(const char *files, bool strict)
 
             if (strict) {
                 claimed = (0 == strncmp(name, "mca_base_", strlen("mca_base_")) ||
+                           prte_schizo_base_is_if_param(name) ||
                            pmix_pmdl_base_check_prte_param(name) ||
                            pmix_pmdl_base_check_pmix_param(name));
                 if (!claimed) {
