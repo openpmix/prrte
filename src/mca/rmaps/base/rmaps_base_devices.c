@@ -485,16 +485,23 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
 
     /* If every device resolves to the same place, "near this device" is
      * saying nothing about cpus - each proc still gets a distinct device,
-     * which is half of what was asked for, so proceed and say so. */
-    for (n = 1; n < dc->ngroups; n++) {
-        if (dc->grouploc[n] != dc->grouploc[0]) {
+     * which is half of what was asked for, so proceed and say so.
+     *
+     * Decided by the devices, not by the groups: that is what the message
+     * says - that the machine hangs every device off one place.  Groups can
+     * coincide on a machine where no two devices do - with ndev and
+     * interleave together, each proc gets one GPU from each package, so
+     * every group's common ancestor is the whole node - and the message
+     * then described a machine the user did not have. */
+    for (n = 1; n < dc->ngroups * dc->per; n++) {
+        if (dc->devs[n].locality != dc->devs[0].locality) {
             degenerate = false;
             break;
         }
     }
     if (degenerate && 1 < dc->ngroups) {
         prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
-                       true, opts->map_device, node->name, (int) dc->ngroups);
+                       true, opts->map_device, node->name, (int) (dc->ngroups * dc->per));
     }
 
     *ctx = dc;

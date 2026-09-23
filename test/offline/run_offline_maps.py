@@ -970,6 +970,13 @@ def device_cases(topo):
         yield Case("device.%s.gpu-ndev2-numa" % topo.name, "device", topo,
                    "single", hostspec, pool, map_by="device=gpu:ndev=2",
                    rank_by="slot", bind_to="numa", n=n // 2, expect="map")
+        # interleave decides the order the groups are taken from, so each
+        # proc gets one GPU per package; that must not be reported as a
+        # machine whose devices all hang off one place
+        yield Case("device.%s.gpu-ndev2-interleave" % topo.name, "device",
+                   topo, "single", hostspec, pool,
+                   map_by="device=gpu:interleave:ndev=2", rank_by="slot",
+                   bind_to="core", n=n // 2, expect="map")
         # a comma where the qualifier's ':' belongs is not a device
         yield Case("device.%s.gpu-comma" % topo.name, "device", topo,
                    "single", hostspec, pool, map_by="device=gpu,ndev=2",
