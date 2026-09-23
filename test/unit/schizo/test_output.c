@@ -249,6 +249,8 @@ int test_output(void)
     char *dvals2[] = {"map", "bind", NULL};
     char *dvals3[] = {"map:parseable", NULL};
     char *dvals4[] = {"topo=node1;node2", NULL};
+    /* the documented replacement for --report-bindings */
+    char *dbindings[] = {"bindings", NULL};
     char *dvals4b[] = {"topo", NULL};
     char *dvals4c[] = {"topo=", NULL};
     char *dvals5[] = {"map:bogus", NULL};
@@ -343,6 +345,15 @@ int test_output(void)
     CHECK("display:multi-rc", PRTE_SUCCESS == rc);
     CHECK("display:multi-map", has_key(iptr, ninfo, PMIX_DISPLAY_MAP));
     CHECK("display:multi-bind", has_key(iptr, ninfo, PMIX_REPORT_BINDINGS));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    /*** "--display bindings" is what the deprecated --report-bindings is
+     * documented to become.  It only ever worked because the matcher took
+     * any word that BEGAN with "bind"; it is a spelling of its own now ***/
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dbindings,
+                    &iptr, &ninfo);
+    CHECK("display:bindings-rc", PRTE_SUCCESS == rc);
+    CHECK("display:bindings", has_key(iptr, ninfo, PMIX_REPORT_BINDINGS));
     PMIX_INFO_FREE(iptr, ninfo);
 
     /*** display qualifiers ***/
