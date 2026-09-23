@@ -431,14 +431,22 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
      * When the app changed neither, the job-level binding stands. */
     have_bind = prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16);
     opts->appbind = 0;
-    if (have_bind) {
+    if (have_bind && PRTE_BINDING_POLICY_IS_SET(u16)) {
         opts->bind = PRTE_GET_BINDING_POLICY(u16);
-        opts->overload = (0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
-        /* keep the whole word: the app asked for this binding, so its own
-         * directives - IF-SUPPORTED above all - describe it, not the job's */
-        opts->appbind = u16;
     } else if (have_map) {
         opts->bind = prte_rmaps_base_derive_binding(opts);
+    }
+    if (have_bind) {
+        opts->overload = (0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
+        /* keep the whole word: the app asked for this binding, so its own
+         * directives - IF-SUPPORTED above all - describe it, not the job's.
+         * A word that carried qualifiers but no policy ("--bind-to
+         * :overload-allowed") asked for the default binding, and a default
+         * is only ever a preference - as it is for the job */
+        opts->appbind = u16;
+        if (!PRTE_BINDING_POLICY_IS_SET(u16)) {
+            opts->appbind |= PRTE_BIND_IF_SUPPORTED;
+        }
     }
 
     /* keep the hwloc binding object in sync with the (possibly changed)
