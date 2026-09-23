@@ -151,6 +151,10 @@ static int test_hoist(void)
     char *files[] = {"file=/tmp/a", "file=/tmp/b", NULL};
     char *samefile[] = {"file=/tmp/a", "file=/tmp/a", NULL};
     char *timeouts[] = {"timeout=60", "timeout=30", NULL};
+    /* the same hours, different minutes: split at ':' these both read as
+     * "timeout=1" and passed as agreeing */
+    char *hhmmss[] = {"timeout=1:30:00", "timeout=1:45:00", NULL};
+    char *hhmmss_same[] = {"timeout=1:30:00", "timeout=1:30:00", NULL};
     char *empty[] = {NULL};
 
     /* the ordinary MPMD case: the option was written in one segment, and
@@ -198,6 +202,20 @@ static int test_hoist(void)
     fprintf(stderr, "--- expected error output follows (hoist: two timeouts) ---\n");
     rc = run_hoist(PRTE_CLI_RTOS, timeouts, NULL, &merged);
     CHECK("hoist:two-timeouts", PRTE_SUCCESS != rc);
+    free(merged);
+    merged = NULL;
+
+    fprintf(stderr, "--- expected error output follows (hoist: two hh:mm:ss timeouts) ---\n");
+    rc = run_hoist(PRTE_CLI_RTOS, hhmmss, NULL, &merged);
+    CHECK("hoist:two-timeouts-with-colons", PRTE_SUCCESS != rc);
+    free(merged);
+    merged = NULL;
+
+    rc = run_hoist(PRTE_CLI_RTOS, hhmmss_same, NULL, &merged);
+    CHECK("hoist:same-timeout-with-colons", PRTE_SUCCESS == rc);
+    CHECK("hoist:same-timeout-with-colons-value",
+          NULL != merged && 0 == strcmp(merged, "timeout=1:30:00,timeout=1:30:00"));
+    free(merged);
 
     /* no segment wrote the option: whatever the global parse holds is the
      * whole of it, and must not be disturbed */
