@@ -163,6 +163,11 @@ const pmix_cli_choice_t prte_cli_display_directives[] = {
     PMIX_CLI_CHOICE(PRTE_CLI_ALLOC, PRTE_DISPLAY_ALLOC, OPTVAL),
     PMIX_CLI_CHOICE(PRTE_CLI_MAP, PRTE_DISPLAY_MAP, OPTVAL),
     PMIX_CLI_CHOICE(PRTE_CLI_BIND, PRTE_DISPLAY_BIND, OPTVAL),
+    /* the spelling the replacement for the deprecated --report-bindings
+     * has always been documented with.  It only ever worked because the
+     * matcher accepted a word that merely began with "bind" - so it is a
+     * spelling in its own right now, rather than an accident */
+    PMIX_CLI_CHOICE("bindings", PRTE_DISPLAY_BIND, OPTVAL),
     PMIX_CLI_CHOICE(PRTE_CLI_MAPDEV, PRTE_DISPLAY_MAPDEV, OPTVAL),
     /* the nodes to show; every node when not given */
     PMIX_CLI_CHOICE(PRTE_CLI_TOPO, PRTE_DISPLAY_TOPO, OPTVAL),
