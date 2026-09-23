@@ -609,8 +609,22 @@ int prte_schizo_base_hoist_job_option(pmix_cli_result_t *results,
         toks = PMIx_Argv_split(contributions[n], ',');
         for (m = 0; NULL != toks[m]; m++) {
             /* a directive and its qualifiers are ':'-delimited, and each of
-             * them answers a question of its own */
-            parts = PMIx_Argv_split(toks[m], ':');
+             * them answers a question of its own - but only for an option
+             * that has qualifiers.  One that has none is not split: the
+             * value of "--rtos timeout=1:30:00" contains ':'s, and split
+             * there it read as "timeout=1", so two app segments asking
+             * for 1:30:00 and 1:45:00 appeared to agree and the job
+             * silently took whichever came last. */
+            if (NULL == quals) {
+                parts = NULL;
+                if (PMIX_SUCCESS != PMIx_Argv_append_nosize(&parts, toks[m])) {
+                    PMIx_Argv_free(toks);
+                    rc = PRTE_ERR_OUT_OF_RESOURCE;
+                    goto cleanup;
+                }
+            } else {
+                parts = PMIx_Argv_split(toks[m], ':');
+            }
             for (p = 0; NULL != parts[p]; p++) {
                 name = hoist_canonical(parts[p], dirs, quals, &invert);
                 if (NULL == name) {
