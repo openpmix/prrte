@@ -133,7 +133,8 @@ counterpart in prte.
 - **`check_prte_overlap` / `check_pmix_overlap`** encode the specific
   OMPI-name → PRRTE/PMIx-name equivalences (framework renames like OMPI
   `oob`/`if`/`dl`/`reachable`/`hwloc` mapping onto their PRRTE/PMIx
-  counterparts).
+  counterparts). `if` maps to PMIx's `pif` only: PRRTE has no `if`
+  framework, and the `prteif` it used to be given names nothing.
 - **`parse_env`** is the runtime-side companion: it forwards the
   user's `OMPI_MCA_*`/`-x`/tune-file/`--mca` selections that name real
   OMPI frameworks (validated by `check_generic` against the
