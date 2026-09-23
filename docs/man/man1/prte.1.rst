@@ -38,6 +38,11 @@ All of the text below is also available from the command itself:
 ``prte --help`` lists the options, and ``prte --help <option>`` prints
 the full description of one.
 
+DIRECTIVES AND QUALIFIERS
+-------------------------
+
+.. include:: /prrte-rst-content/detail-directive-syntax.rst
+
 OPTIONS
 -------
 

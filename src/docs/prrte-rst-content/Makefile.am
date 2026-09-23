@@ -112,6 +112,7 @@ dist_rst_DATA = \
     deprecated-tag-output.rst \
     deprecated-timestamp-output.rst \
     deprecated-xml.rst \
+    detail-directive-syntax.rst \
     detail-hostfiles.rst \
     detail-hosts-cli.rst \
     detail-hosts-relative-indexing.rst \
