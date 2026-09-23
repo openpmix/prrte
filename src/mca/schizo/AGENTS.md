@@ -318,7 +318,7 @@ table.
      After the `,` split, the text following the first `:` in a token is
      a `:`-joined run of qualifiers and must be split on `:` again.
      Splitting it on `,` yields one token that still contains the
-     colons, and `PMIX_CHECK_CLI_OPTION` prefix-matches it against the
+     colons, and the matcher of the day prefix-matched it against the
      first qualifier only — so `file=X:raw:nocopy` kept `raw` and lost
      `nocopy`, while `file=X:nocopy:raw` did the reverse. Order must not
      matter.
