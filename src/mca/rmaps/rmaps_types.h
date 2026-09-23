@@ -130,6 +130,13 @@ typedef struct {
     /* usage tracking */
     hwloc_cpuset_t target;
     hwloc_obj_t obj;
+    /* When placing against devices, the cpus local to the devices of the
+     * proc being placed.  A proc given several (ndev) is placed against
+     * their common ancestor - that is what decides how coarse a binding may
+     * be - but the ancestor can hold cpus local to NONE of them, so a finer
+     * binding is chosen from these instead.  Rewritten for every placement
+     * by prte_rmaps_base_devices_locale(); owned here, like "target". */
+    hwloc_cpuset_t devcpus;
 
     /* When >= 0, map only the app context at this index in jdata->apps.
      * When < 0 (default -1), map all app contexts as today. */

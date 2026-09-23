@@ -217,7 +217,10 @@ Per node, in this order:
 
 `prte_rmaps_device_map_t` owns the device array PMIx returned (release with
 `pmix_hwloc_release_devices()`, never `free()` alone — each entry owns
-strings) and the `grouploc` array. The `locality` pointers inside both are
+strings), the `grouploc` array, and `groupcpus` - per group, the union of
+its members' localities. Every exit from `begin()` after allocation goes
+through `prte_rmaps_base_devices_end()`, which releases all of it. The
+`locality` pointers inside the device and `grouploc` arrays are
 **borrowed from `node->topology`**: valid because the node's list holds a
 reference for the whole of the node's placement, and meaningless once it
 does not. `record()` copies what it publishes, so a proc never points into
@@ -229,6 +232,18 @@ per-group counts are exact — so ownership of every string moves with it.
 
 ### Traps
 
+- **A group's locality decides how coarse a binding may be; its devices
+  decide where a finer one goes.** With `ndev`, a group is placed against
+  the common ancestor of its devices' localities - which is what makes
+  `--bind-to package` legal for two GPUs on different NUMA domains of one
+  package. But binding picks its object from the cpus of whatever it was
+  placed against, and the first core or NUMA domain of that package is
+  local to neither GPU: `device=gpu:ndev=2 --bind-to numa` bound to NUMA
+  domain 0 on a machine whose GPUs are on 1 and 2. `devices_locale()`
+  therefore also copies the group's `groupcpus` into `options->devcpus`,
+  and `bind_generic()`/`bind_multiple()` narrow their candidates to it
+  (`narrow_to_devices()`). It is a copy, owned by the options like
+  `target`, because the context is released at the end of each node.
 - **`interleave=<level>` finds the level object by cpuset, never by walking
   up.** A device's locality is usually a Package or a Group, and in hwloc 2
   a NUMA node is a memory child — nobody's ancestor.

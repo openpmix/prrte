@@ -75,6 +75,10 @@ typedef struct {
      * the default of one device per proc a group IS a device and the
      * ancestor is that device's own locality, so nothing changes. */
     hwloc_obj_t *grouploc;
+    /* ...and the cpus actually local to its members - the union of their
+     * localities, which is what a binding finer than the ancestor has to
+     * be chosen from.  NULL for a group whose locality is unknown. */
+    hwloc_cpuset_t *groupcpus;
     size_t ngroups;
     size_t per;                 /* devices per group */
 } prte_rmaps_device_map_t;
@@ -434,9 +438,9 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
         return PRTE_SUCCESS;
     }
     dc->grouploc = (hwloc_obj_t *) calloc(dc->ngroups, sizeof(hwloc_obj_t));
-    if (NULL == dc->grouploc) {
-        pmix_hwloc_release_devices(dc->devs, dc->ndevs);
-        free(dc);
+    dc->groupcpus = (hwloc_cpuset_t *) calloc(dc->ngroups, sizeof(hwloc_cpuset_t));
+    if (NULL == dc->grouploc || NULL == dc->groupcpus) {
+        prte_rmaps_base_devices_end(dc);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     for (n = 0; n < dc->ngroups; n++) {
@@ -451,6 +455,18 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
             loc = hwloc_get_common_ancestor_obj(node->topology->topo, loc, other);
         }
         dc->grouploc[n] = loc;
+        if (NULL == loc) {
+            continue;
+        }
+        dc->groupcpus[n] = hwloc_bitmap_alloc();
+        if (NULL == dc->groupcpus[n]) {
+            prte_rmaps_base_devices_end(dc);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        for (m = 0; m < dc->per; m++) {
+            hwloc_bitmap_or(dc->groupcpus[n], dc->groupcpus[n],
+                            dc->devs[n * dc->per + m].locality->cpuset);
+        }
     }
 
     /* Refuse a binding coarser than the devices are local to, before any
@@ -462,8 +478,7 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
                            prte_hwloc_base_print_binding(opts->bind),
                            opts->map_device, node->name);
-            pmix_hwloc_release_devices(dc->devs, dc->ndevs);
-            free(dc);
+            prte_rmaps_base_devices_end(dc);
             return PRTE_ERR_SILENT;
         }
     }
@@ -503,9 +518,23 @@ hwloc_obj_t prte_rmaps_base_devices_locale(prte_node_t *node, prte_rmaps_options
 {
     prte_rmaps_device_map_t *dc = (prte_rmaps_device_map_t *) ctx;
 
-    PRTE_HIDE_UNUSED_PARAMS(node, opts);
+    PRTE_HIDE_UNUSED_PARAMS(node);
     if (NULL == dc || (size_t) j >= dc->ngroups) {
         return NULL;
+    }
+    /* what a binding finer than the returned object is chosen from - see
+     * narrow_to_devices() in rmaps_base_binding.c.  Copied, not lent: the
+     * context is gone by the time the options are, and a group whose
+     * locality is unknown leaves nothing to narrow to. */
+    if (NULL == dc->groupcpus[j]) {
+        if (NULL != opts->devcpus) {
+            hwloc_bitmap_free(opts->devcpus);
+            opts->devcpus = NULL;
+        }
+    } else if (NULL == opts->devcpus) {
+        opts->devcpus = hwloc_bitmap_dup(dc->groupcpus[j]);
+    } else {
+        hwloc_bitmap_copy(opts->devcpus, dc->groupcpus[j]);
     }
     return dc->grouploc[j];
 }
@@ -588,6 +617,7 @@ int prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opts
 void prte_rmaps_base_devices_end(void *ctx)
 {
     prte_rmaps_device_map_t *dc = (prte_rmaps_device_map_t *) ctx;
+    size_t n;
 
     if (NULL == dc) {
         return;
@@ -597,6 +627,14 @@ void prte_rmaps_base_devices_end(void *ctx)
     }
     if (NULL != dc->grouploc) {
         free(dc->grouploc);
+    }
+    if (NULL != dc->groupcpus) {
+        for (n = 0; n < dc->ngroups; n++) {
+            if (NULL != dc->groupcpus[n]) {
+                hwloc_bitmap_free(dc->groupcpus[n]);
+            }
+        }
+        free(dc->groupcpus);
     }
     free(dc);
 }
