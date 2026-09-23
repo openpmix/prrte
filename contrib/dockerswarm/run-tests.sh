@@ -1704,6 +1704,31 @@ test_state() {
     fi
     for n in 1 2 3; do ON $n 'rm -rf /tmp/dyn' >/dev/null 2>&1; done
 
+    banner "state: a child still being killed keeps the DVM up until its status is in"
+    # The window the case above only hits by luck, held open on purpose.  The
+    # errmgr marks a job NON_ZERO_TERM the moment its first proc exits
+    # non-zero and then kills the rest - and odls takes half a second over a
+    # kill (SIGCONT, 250 ms, SIGTERM, 250 ms, SIGKILL).  The prterun DVM used
+    # to read that state as "this job is over" when the PARENT finished, shut
+    # down under the child, and never recorded the child's status: it exited
+    # 0.  Here rank 0 of the child exits 7 at once and rank 1 ignores SIGTERM,
+    # so the parent is guaranteed to finish while the child is still being
+    # killed.  prterun must wait for it and return 7.
+    for n in 1 2 3; do
+        ON $n 'rm -rf /tmp/dyn2 && mkdir -p /tmp/dyn2 &&
+               printf "#!/bin/sh\nif [ \"\$PMIX_RANK\" = 0 ]; then exit 7; fi\ntrap \"\" TERM\nsleep 30\n" > /tmp/dyn2/client &&
+               chmod +x /tmp/dyn2/client' >/dev/null 2>&1
+    done
+    out=$(RUN "cd /tmp/dyn2 && timeout 90 prterun $dynhosts -np 1 dynamic" 2>&1); rc=$?
+    if ! echo "$out" | grep -q 'Spawn success'; then
+        bad "dynamic could not spawn the child job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        [ "$rc" = 7 ] \
+            && ok "the child's status survives a parent that finished first (rc=$rc)" \
+            || bad "the DVM shut down under a child still being killed and lost its status (rc=$rc)"
+    fi
+    for n in 1 2 3; do ON $n 'rm -rf /tmp/dyn2' >/dev/null 2>&1; done
+
     banner "state: an unrecognized runtime option is refused, not ignored"
     out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options no-such-option hostname' 2>&1)
     echo "$out" | grep -q 'not recognized' \
