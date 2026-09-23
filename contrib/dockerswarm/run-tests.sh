@@ -1474,6 +1474,23 @@ test_schizo() {
         bad "could not start a DVM for the unknown-personality test"
     fi
     cleanup_swarm
+
+    banner "schizo: prun hands the application its arguments verbatim"
+    # prun used to strip a leading and a trailing '"' from EVERY argument,
+    # the application's included, so 'x "y"' reached the app as 'x "y' and
+    # '"q"' as 'q'.  prterun did not, so the same command line behaved
+    # differently depending on which tool submitted it.  Run the app on a
+    # remote node so the arguments cross the launch message as well.
+    if dvm_start_uri /tmp/szq.uri 'node2:1' ''; then
+        out=$(PRUN_URI /tmp/szq.uri -n 1 printf "'[%s]\n'" "'x \"y\"'" "'\"q\"'" 2>&1)
+        echo "$out" | grep -qxF '[x "y"]' && echo "$out" | grep -qxF '["q"]' \
+            && ok "quotes inside the application's arguments survive prun" \
+            || bad "prun altered the application's arguments: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/szq.uri" >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the prun argument test"
+    fi
+    cleanup_swarm
 }
 
 ########################################################################
