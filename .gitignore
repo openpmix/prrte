@@ -89,6 +89,7 @@ test/unit/common/test_common_slurm
 test/unit/ras/test_ras
 test/unit/schizo/Makefile
 test/unit/schizo/test_schizo
+test/unit/schizo/test_mca_prefixes
 test/unit/state/Makefile
 test/unit/state/test_state
 test/unit/tools/Makefile
