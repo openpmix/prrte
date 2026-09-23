@@ -523,6 +523,60 @@ static int stdin_target_rank(pmix_cli_result_t *results, pmix_rank_t *rank)
     return PRTE_SUCCESS;
 }
 
+/* "--dvm <how>" names the DVM to connect to in mpirun's vocabulary, and it
+ * is the only way to name one under the ompi personality, whose option table
+ * has none of prun's own (--dvm-uri, --pid, --namespace, ...).  Turn it into
+ * the key that says the same thing.  This used to happen only in prte.c,
+ * before "prterun --dvm" handed off to us - so "prun --personality ompi
+ * --dvm file:X" parsed the option and then ignored it, and searched for a
+ * server instead.  With more than one DVM running that search fails.
+ *
+ * The prefixed forms are prefixes; the keywords are matched whole, as
+ * "system" is a prefix of "system-first".  "search" leaves the key alone:
+ * nothing reads PRTE_CLI_DVM, so the tool conducts its standard search. */
+static bool translate_dvm_option(pmix_cli_result_t *results)
+{
+    pmix_cli_item_t *opt;
+    const char *newkey = NULL;
+    size_t skip = 0;
+    char *cptr;
+
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_DVM);
+    if (NULL == opt || NULL == opt->values || NULL == opt->values[0]) {
+        return true;
+    }
+    if (0 == strncasecmp(opt->values[0], "file:", 5)) {
+        newkey = PRTE_CLI_DVM_URI;      // the uri option takes "file:" itself
+    } else if (0 == strncasecmp(opt->values[0], "uri:", 4)) {
+        newkey = PRTE_CLI_DVM_URI;
+        skip = 4;
+    } else if (0 == strncasecmp(opt->values[0], "pid:", 4)) {
+        newkey = PRTE_CLI_PID;
+        skip = 4;
+    } else if (0 == strncasecmp(opt->values[0], "ns:", 3)) {
+        newkey = PRTE_CLI_NAMESPACE;
+        skip = 3;
+    } else if (0 == strcasecmp(opt->values[0], "system-first")) {
+        newkey = PRTE_CLI_SYS_SERVER_FIRST;
+    } else if (0 == strcasecmp(opt->values[0], "system")) {
+        newkey = PRTE_CLI_SYS_SERVER_ONLY;
+    } else if (0 != strcasecmp(opt->values[0], "search")) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-dvm-option", true,
+                       opt->values[0], prte_tool_basename);
+        return false;
+    }
+    if (NULL != newkey) {
+        free(opt->key);
+        opt->key = strdup(newkey);
+    }
+    if (0 < skip) {
+        cptr = strdup(&opt->values[0][skip]);
+        free(opt->values[0]);
+        opt->values[0] = cptr;
+    }
+    return true;
+}
+
 int prun_common(pmix_cli_result_t *results,
                 prte_schizo_base_module_t *schizo,
                 int pargc, char **pargv)
@@ -562,6 +616,12 @@ int prun_common(pmix_cli_result_t *results,
      * option did nothing at all.  prte.c had the same defect and reads its
      * own copy now; this is the one prun and "prterun --dvm" run. */
     verbose = pmix_cmd_line_is_taken(results, PRTE_CLI_VERBOSE);
+    if (!translate_dvm_option(results)) {
+        /* nothing is set up yet but the ess framework our caller opened,
+         * which is ours to close - see the end of this function */
+        (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+        return 1;
+    }
     PMIX_CONSTRUCT(&apps, pmix_list_t);
     /* this only names the tool to PMIx, so a host that will not tell us
      * its name is not fatal - but the buffer has to be readable either
