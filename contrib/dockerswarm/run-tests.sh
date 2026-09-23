@@ -1166,6 +1166,35 @@ test_schizo() {
         && ok "-x / set / wildcard-unset applied on both remote nodes" \
         || bad "envar directives wrong on a remote node (rc=$rc, matched=$n): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
 
+    banner "schizo: prun forwards the user's MCA environment to a REMOTE process"
+    # prun asks PMIx to collect what the job should inherit from the
+    # submitting shell - PMIX_MCA_* always, OMPI_MCA_* under the ompi
+    # personality - and then tells the DVM the collection is done, so no
+    # daemon repeats it.  It used to ask in the name of an empty namespace
+    # (prte_process_info.myproc, which nothing sets in a tool); PMIx refused,
+    # prun ignored the refusal, and nothing exported ever reached a process.
+    # -x kept working because it does not go through that collection, which
+    # is what made it look like a personality problem.  The DVM here is its
+    # own process, not the shell prun ran in, so only a forwarded variable
+    # can show up - and node2 is not even the node prun runs on.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:1,node2:1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'PMIX_MCA_ptl_base_verbose=0 timeout 30 prun --host node2:1 -np 1 env' 2>&1)
+        echo "$out" | grep -qx 'PMIX_MCA_ptl_base_verbose=0' \
+            && ok "an exported PMIX_MCA_ param reaches a remote process" \
+            || bad "an exported PMIX_MCA_ param did not reach the process: $(echo "$out" | grep -i 'mca\|error' | tr '\n' ' ' | tail -c 200)"
+        # the ompi personality gates root on its own envars - see OMPIROOT
+        out=$(RUN "$OMPIROOT OMPI_MCA_pml=ob1 timeout 30 prun --personality ompi --host node2:1 -np 1 env" 2>&1)
+        echo "$out" | grep -qx 'OMPI_MCA_pml=ob1' \
+            && ok "an exported OMPI_MCA_ param reaches it under the ompi personality" \
+            || bad "an exported OMPI_MCA_ param did not reach the process: $(echo "$out" | grep -i 'mca\|error' | tr '\n' ' ' | tail -c 200)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the MCA environment test"
+    fi
+    cleanup_swarm
+
     # PREPEND/APPEND edit an EXISTING value, so they need a variable the
     # daemon really owns - PATH.  Two things are checked at once:
     #

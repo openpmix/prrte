@@ -205,10 +205,18 @@ static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
         pmix_proc_t target;
         pmix_info_t directive;
 
-        /* tell PRTE to terminate our job */
-        PMIX_LOAD_PROCID(&target, prte_process_info.myproc.nspace, PMIX_RANK_WILDCARD);
-        PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
-        rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
+        /* tell PRTE to terminate the job we launched.  That is
+         * spawnednspace - prte_process_info.myproc is never set in a tool,
+         * and a kill aimed at its empty namespace named no job at all, or
+         * every job, depending on who compared it.  Before the spawn has
+         * returned there is no job of ours to kill. */
+        if ('\0' == spawnednspace[0]) {
+            rc = PMIX_ERR_NOT_FOUND;
+        } else {
+            PMIX_LOAD_PROCID(&target, spawnednspace, PMIX_RANK_WILDCARD);
+            PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
+            rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
+        }
         if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
             /* we cannot terminate the job. This handler executes on
              * the PMIx progress thread, so we must not finalize the
@@ -456,8 +464,10 @@ static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
 {
     mylock_t *mylock = (mylock_t *) provided_cbdata;
     size_t n;
-    PRTE_HIDE_UNUSED_PARAMS(status);
 
+    /* a failed harvest comes back with no info at all, which looks
+     * exactly like an environment with nothing in it to forward */
+    mylock->lock.status = status;
     if (NULL != info) {
         mylock->ninfo = ninfo;
         PMIX_INFO_CREATE(mylock->info, mylock->ninfo);
@@ -542,7 +552,6 @@ int prun_common(pmix_cli_result_t *results,
     char hostname[PRTE_PATH_MAX];
     pmix_rank_t rank;
     pmix_status_t code;
-    pmix_proc_t parent;
     pmix_cli_item_t *opt;
     unsigned long ulval;
     PRTE_HIDE_UNUSED_PARAMS(pargc);
@@ -799,7 +808,6 @@ int prun_common(pmix_cli_result_t *results,
 
     /***** CONSTRUCT THE APP'S JOB-INFO ****/
     PMIX_INFO_LIST_START(jinfo);
-    PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
 
     /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
     PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
@@ -840,8 +848,13 @@ int prun_common(pmix_cli_result_t *results,
     PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
     PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, schizo->name, PMIX_STRING);
 
+    /* Our own namespace, as PMIx_tool_init gave it to us.  Not
+     * prte_process_info.myproc: nothing sets that in a tool, and PMIx
+     * refuses an empty namespace - so every harvest used to fail, and
+     * nothing from the user's environment (PMIX_MCA_*, OMPI_MCA_*, the
+     * MCA param files) ever reached the job. */
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-    ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc,
+    ret = PMIx_server_setup_application(myproc.nspace, iptr, ninfo, setupcbfunc,
                                         &mylock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
@@ -853,7 +866,20 @@ int prun_common(pmix_cli_result_t *results,
     }
     PRTE_PMIX_WAIT_THREAD(&mylock.lock);
     PMIX_INFO_FREE(iptr, ninfo);
+    ret = mylock.lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+    if (PMIX_SUCCESS != ret) {
+        /* launching anyway would run the job without the settings the
+         * user exported for it, and say nothing */
+        fprintf(stderr, "%s: could not collect the environment to forward to the job: %s\n",
+                prte_tool_basename, PMIx_Error_string(ret));
+        if (NULL != mylock.info) {
+            PMIX_INFO_FREE(mylock.info, mylock.ninfo);
+        }
+        PRTE_UPDATE_EXIT_STATUS(ret);
+        rc = ret;
+        goto DONE;
+    }
     /* transfer any returned ENVARS to the job_info */
     if (NULL != mylock.info) {
         for (n = 0; n < mylock.ninfo; n++) {

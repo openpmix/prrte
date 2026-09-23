@@ -418,6 +418,19 @@ report the job's exit status. Signal forwarding is done with
 which is what eventually arrives at `prted_comm.c`'s
 `SIGNAL_LOCAL_PROCS`.
 
+**prun's own name is the static `myproc`, never `prte_process_info.myproc`.**
+`PMIx_tool_init()` fills in `myproc`; nothing sets
+`prte_process_info.myproc` in a tool, so it holds an empty namespace. The
+environment harvest (`PMIx_server_setup_application`) was asked in that
+empty name, PMIx refused it, and `setupcbfunc()` threw the status away — so
+for as long as that lasted, nothing from the submitting shell (`PMIX_MCA_*`,
+`OMPI_MCA_*` under the ompi personality, the MCA param files) reached any
+job, while prun still told the DVM the harvest was done so no daemon did it
+either. `-x` kept working because it does not go through the harvest. A
+failed harvest now fails the launch. The IOF-failure kill in `defhandler()`
+had the same fault; it targets `spawnednspace`. The job prun *launched* is
+`spawnednspace`, prun itself is `myproc`, and there is no third name.
+
 **Its return value IS the tool's exit status**, and `rc` holds
 `PRTE_SUCCESS` for most of the function's length — it is left there by the
 last thing that succeeded. So a `goto DONE` that does not assign `rc` first
