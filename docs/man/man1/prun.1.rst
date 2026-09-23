@@ -50,6 +50,11 @@ example, ``prun --help mapby``) prints the full description of one.
 ``prun --help placement`` describes the mapping, ranking and binding
 procedure in detail.
 
+DIRECTIVES AND QUALIFIERS
+-------------------------
+
+.. include:: /prrte-rst-content/detail-directive-syntax.rst
+
 OPTIONS
 -------
 
