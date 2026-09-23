@@ -77,7 +77,9 @@ Supported binding directives include:
 
 Any directive can include qualifiers by adding a colon (:) and any
 combination of one or more of the following to the ``--bindto``
-option:
+option, each separated from the next by a colon as well - never a
+comma. For example, ``--bindto core:overload-allowed:report`` or
+``--bindto numa:limit=2``:
 
 * ``OVERLOAD`` indicates that objects can have more
   processes bound to them than CPUs within them

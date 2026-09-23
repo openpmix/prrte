@@ -50,6 +50,11 @@ All of the text below is also available from the command itself:
 one. ``prterun --help placement`` describes the mapping, ranking and
 binding procedure in detail.
 
+DIRECTIVES AND QUALIFIERS
+-------------------------
+
+.. include:: /prrte-rst-content/detail-directive-syntax.rst
+
 OPTIONS
 -------
 
