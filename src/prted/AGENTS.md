@@ -240,9 +240,12 @@ relative to `prte_init()`.
   inside the event loop.
 - **`prte_event_reinit()` after `--daemonize`.** The event base is opened
   before the fork and some backends (kqueue on macOS) do not survive it.
-- **The `--dvm <keyword>` values are keywords, not prefixes.** The block
-  that rewrites the `--dvm` option's key into the one `prun_common()`
-  expects tests `file:`, `uri:`, `pid:` and `ns:` as prefixes, which they
+- **The `--dvm <keyword>` values are keywords, not prefixes.** The
+  translation of `--dvm` into the key that names a DVM now lives in
+  `prun_common()` (`translate_dvm_option()`), so `prun` under the ompi
+  personality - whose option table offers `--dvm` and none of prun's own
+  `--dvm-uri`/`--pid`/`--namespace` - gets it too; it used to be done only
+  here, before the proxy hand-off. It tests `file:`, `uri:`, `pid:` and `ns:` as prefixes, which they
   are, and then `system`, `system-first` and `search`, which are not.
   Testing those three with `strncasecmp(..., 6)` made `system-first`
   unreachable — it matches `system` in its first six characters, so the

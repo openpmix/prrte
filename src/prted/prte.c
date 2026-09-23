@@ -593,58 +593,8 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     /* decide if we are to use a persistent DVM, or act alone */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DVM);
     if (proxyrun && (NULL != opt || NULL != getenv("PRTEPROXY_USE_DVM"))) {
-        /* use a persistent DVM - act like prun */
-        if (NULL != opt && NULL != opt->values && NULL != opt->values[0]) {
-            /* they provided a directive on how to find the DVM */
-            if (0 == strncasecmp(opt->values[0], "file:", 5)) {
-                /* change the key to match what prun expects */
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_DVM_URI);
-            } else if (0 == strncasecmp(opt->values[0], "uri:", 4)) {
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_DVM_URI);
-                /* must remove the "uri:" prefix */
-                cptr = strdup(&opt->values[0][4]);
-                free(opt->values[0]);
-                opt->values[0] = cptr;
-            } else if (0 == strncasecmp(opt->values[0], "pid:", 4)) {
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_PID);
-                /* must remove the "pid:" prefix */
-                cptr = strdup(&opt->values[0][4]);
-                free(opt->values[0]);
-                opt->values[0] = cptr;
-            } else if (0 == strncasecmp(opt->values[0], "ns:", 3)) {
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_NAMESPACE);
-                /* must remove the "ns:" prefix */
-                cptr = strdup(&opt->values[0][3]);
-                free(opt->values[0]);
-                opt->values[0] = cptr;
-            } else if (0 == strcasecmp(opt->values[0], "system-first")) {
-                /* direct to search for a system server first, and then
-                 * take the first available DVM */
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_SYS_SERVER_FIRST);
-            } else if (0 == strcasecmp(opt->values[0], "system")) {
-                /* direct to search for a system server */
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_SYS_SERVER_ONLY);
-            } else if (0 != strcasecmp(opt->values[0], "search")) {
-                /* "search" would mean to look for first available DVM,
-                 * so we wouldn't have to adjust anything as the opt
-                 * key is already set to PRTE_CLI_DVM, which will be
-                 * ignored so that the PMIx_tool_init in prun_common
-                 * will conduct its standard server search.
-                 * However, if this is not "search", then this is an
-                 * unknown option and must be reported to the user as
-                 * an error */
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "bad-dvm-option", true,
-                               opt->values[0], prte_tool_basename);
-                return 1;
-            }
-        }
-
+        /* use a persistent DVM - act like prun.  prun_common() works out
+         * which one from the --dvm directive, as it does for prun */
         // open the ess framework so it can init the signal forwarding
         // list - we don't actually need the components.  prun_common()
         // closes it, because it has to be closed before PMIx_tool_finalize
