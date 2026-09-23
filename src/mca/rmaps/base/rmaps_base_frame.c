@@ -320,6 +320,51 @@ static int check_pe_list(const char *spec)
     return rc;
 }
 
+/*
+ * Refuse a device value with a comma in it.
+ *
+ * No device is named with one - not a class, not an OS device, not a
+ * uuid - so a comma is a qualifier written after the device with the
+ * wrong separator: "device=gpu,ndev=2".  It used to reach the mapper as the
+ * class "gpu" with the rest silently dropped, so each process got one GPU
+ * where two were asked for.  The matcher no longer truncates it, which
+ * leaves a device nobody has; say what was almost certainly meant instead.
+ */
+static bool device_spec_ok(const pmix_nspace_t nspace, const char *spec,
+                           const char *device)
+{
+    char *fixed, *p;
+
+    if (NULL == device || NULL == strchr(device, ',')) {
+        return true;
+    }
+    fixed = strdup(spec);
+    if (NULL != fixed) {
+        for (p = fixed; '\0' != *p; p++) {
+            if (',' == *p) {
+                *p = ':';
+            }
+        }
+    }
+    prte_show_help(nspace, "help-prte-rmaps-base.txt", "rmaps:device-with-comma", true,
+                   device, (NULL == fixed) ? spec : fixed);
+    free(fixed);
+    return false;
+}
+
+/* The device a ppr pattern's object names, or NULL if it names none -
+ * "N:device=<class>" rather than "N:<hwloc object>" */
+static const char *ppr_device(const char *object)
+{
+    int tag;
+
+    if (PMIX_CLI_MATCH_FOUND != pmix_cli_match(object, prte_cli_ppr_objects, &tag) ||
+        PRTE_PPROBJ_DEVICE != tag) {
+        return NULL;
+    }
+    return pmix_cli_qualifier_value((char *) object);
+}
+
 static int check_modifiers(char *ck, prte_job_t *jdata,
                            prte_app_context_t *app,
                            prte_mapping_policy_t *tmp)
@@ -898,6 +943,10 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             PMIx_Argv_free(ck);
             return PRTE_ERR_SILENT;
         }
+        if (!device_spec_ok(PRTE_JOB_NSPACE(jdata), inspec, ppr_device(ck[2]))) {
+            PMIx_Argv_free(ck);
+            return PRTE_ERR_SILENT;
+        }
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "%s rmaps:base policy %s pattern %s:%s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ck[0], ck[1], ck[2]);
@@ -1061,6 +1110,10 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             if (NULL == jdata) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-policy", true,
                                "mapping", ck[0]);
+                PMIx_Argv_free(ck);
+                return PRTE_ERR_SILENT;
+            }
+            if (!device_spec_ok(PRTE_JOB_NSPACE(jdata), inspec, val)) {
                 PMIx_Argv_free(ck);
                 return PRTE_ERR_SILENT;
             }
@@ -1282,6 +1335,10 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
             PMIx_Argv_free(ck);
             return PRTE_ERR_SILENT;
         }
+        if (!device_spec_ok(PRTE_PROC_MY_NAME->nspace, inspec, ppr_device(ck[2]))) {
+            PMIx_Argv_free(ck);
+            return PRTE_ERR_SILENT;
+        }
         /* ck[1] = N, ck[2] = object type. Save the whole pattern, in the
          * same spelling the job-level parser uses: the object is as much
          * a part of what this app asked for as the count, and recording
@@ -1401,6 +1458,10 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
              * business as the object it maps by. Must stay in step with the
              * job-level arm: a directive accepted at one level and refused
              * at the other is the recurring bug in this file */
+            if (!device_spec_ok(PRTE_PROC_MY_NAME->nspace, inspec, val)) {
+                PMIx_Argv_free(ck);
+                return PRTE_ERR_SILENT;
+            }
             prte_set_attribute(&app->attributes, PRTE_APP_MAP_DEVICE, PRTE_ATTR_GLOBAL,
                                val, PMIX_STRING);
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYDEVICE);
