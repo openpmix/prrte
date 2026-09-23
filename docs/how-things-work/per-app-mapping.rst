@@ -217,7 +217,7 @@ switches to a per-app loop:
    policy, which is why a per-app ``seq``, ``rankfile`` or ``ppr`` reaches
    its own component.  Different app contexts of one job may
    therefore be placed by different components; the component that placed
-   each one is recorded on the app and shown by ``--display devel-map``.
+   each one is recorded on the app and shown by ``--display map-devel``.
 
 #. **Rank assignment** — ``prte_rmaps_base_compute_vpids()`` is called once
    per app context after placement, with the app index and a running vpid
@@ -298,7 +298,7 @@ Two further attributes are recorded by the rmaps base rather than supplied by
 the user, are local to the HNP, and are never packed or sent off-node:
 ``PRTE_APP_RESOLVED_MAPBY`` / ``RANKBY`` / ``BINDTO`` (35-37), the policies
 this app was actually placed with, and ``PRTE_APP_LAST_MAPPER`` (38), the
-component that placed it.  ``--display devel-map`` reads all four.
+component that placed it.  ``--display map-devel`` reads all four.
 
 ``PRTE_APP_LAST_MAPPER`` is the *only* record PRRTE keeps of which component
 mapped anything; ``prte_job_map_t`` carries no mapper name at all.  It is
