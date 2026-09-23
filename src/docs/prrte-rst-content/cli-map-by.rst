@@ -243,14 +243,21 @@ the ``--mapby`` option (except where noted):
   understanding. A process holding two GPUs attached to different NUMA
   domains is local to neither of them alone --- it is local to whatever
   contains them both. So the locality of a process becomes the **common
-  ancestor** of its devices' localities, and binding descends from there. On
-  a node with two GPUs per socket, ``ndev=2`` therefore makes each process
-  package-local, which means ``--bindto package`` is legitimate in that case
-  and remains an error without ``ndev``.
+  ancestor** of its devices' localities, and that decides how coarse a
+  binding may be. On a node with two GPUs per socket, ``ndev=2`` therefore
+  makes each process package-local, which means ``--bindto package`` is
+  legitimate in that case and remains an error without ``ndev``.
+
+  A *finer* binding is chosen from the devices' own localities, not from
+  anywhere in that ancestor: ``--bindto numa`` binds to the NUMA domain of
+  one of the process's GPUs, and ``--bindto core`` to a core in one of them
+  --- never to a part of the package that is local to neither.
 
   Devices are handed out in groups taken in order from the device list, so a
   group is a contiguous run of that order and the ``INTERLEAVE`` qualifier
-  composes with this one.
+  composes with this one. On a node with two GPUs per socket, interleaving
+  across packages and then taking ``ndev=2`` gives each process one GPU from
+  each socket.
 
 * ``ORDERED`` only applies to the ``PE-LIST`` option to indicate that
   procs are to be bound to each of the specified CPUs in the order in

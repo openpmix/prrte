@@ -93,6 +93,28 @@ static void set_proc_cpuset(prte_proc_t *proc, prte_node_t *node,
     hwloc_bitmap_list_asprintf(&proc->cpuset, prte_rmaps_base.baseset);
 }
 
+/* A proc placed against devices takes its cpus from where the devices
+ * are, not from the whole object it was placed against.
+ *
+ * With one device per proc the two are the same.  With several ("ndev") the
+ * object is their common ancestor, and that decides how coarse a binding
+ * may be - binding to the package holding two GPUs is legitimate.  But a
+ * FINER binding has to be picked from inside the devices' own localities:
+ * picked from the ancestor it was simply its first core or NUMA domain, so
+ * a proc given the GPUs on NUMA domains 1 and 2 was bound to domain 0,
+ * local to neither of them. */
+static void narrow_to_devices(prte_rmaps_options_t *options)
+{
+    if (NULL == options->devcpus) {
+        return;
+    }
+    if (PRTE_MAPPING_BYDEVICE != options->map &&
+        HWLOC_OBJ_OS_DEVICE != options->maptype) {
+        return;
+    }
+    hwloc_bitmap_and(prte_rmaps_base.baseset, prte_rmaps_base.baseset, options->devcpus);
+}
+
 static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
                         prte_node_t *node, hwloc_obj_t obj,
                         prte_rmaps_options_t *options)
@@ -121,6 +143,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     }
     tgtcpus = target->cpuset;
     hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
+    narrow_to_devices(options);
 
     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, options->hwb);
 
@@ -447,6 +470,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     }
     tgtcpus = target->cpuset;
     hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
+    narrow_to_devices(options);
     if (options->use_hwthreads) {
         type = HWLOC_OBJ_PU;
     } else {
