@@ -261,9 +261,40 @@ RELM dropped the very message it exists to deliver when the daemon
 holding it died; a rank that aborted -- the ordinary ``MPI_Abort`` case
 -- could, depending on whether its output drained before or after it
 was killed, never be retired by its daemon, so the master believed it
-alive for ever and ``prterun`` hung with every daemon still up; and a job held by the elastic launch fence was caught up
-to newly grown daemons as though it were already running, so its own
-launch message reached them as a duplicate and forked nothing.
+alive for ever and ``prterun`` hung with every daemon still up; and a
+job held by the elastic launch fence was caught up to newly grown
+daemons as though it were already running, so its own launch message
+reached them as a duplicate and forked nothing.
+
+The values of ``--map-by``, ``--rank-by``, ``--bind-to``, ``--output``,
+``--display``, and ``--rtos`` are now matched against each option's
+whole vocabulary, defined once and shared by the command-line checker
+and every parser, job-level and per-app. They used to be tested one word
+at a time, so an abbreviation that fit two words was settled silently by
+the order the tests were written in -- ``--bind-to n`` was ``none``
+although ``numa`` fits too, and ``:s`` was ``span`` rather than
+``shared`` -- and a value given to a word that takes none was dropped,
+so ``--map-by core:span=false`` turned ``span`` on. An ambiguous
+abbreviation or a misplaced value is now refused with a message naming
+the candidates. Abbreviations that were resolved silently before --
+``:s``, ``:i``, ``--rank-by s``, ``--output ta`` and the like -- are
+refused as the ambiguities they always were. Several defects were found
+along the way. A trailing ``:`` in ``--bind-to core:`` crashed
+``prterun``, and because the HNP runs the same parser on a spawn
+request's ``PMIX_BINDTO``, one such request took a persistent DVM down
+with it. A per-app ``--bind-to :overload-allowed`` read its empty policy
+as ``none`` and left the app unbound; it now gets the binding the app
+would have had anyway, as the job-level parser already did. Two MPMD
+segments giving different ``--rtos timeout=`` values were split at the
+time's own colons, appeared to agree, and the job ran with whichever came
+last. ``--map-by rankfile`` without a ``FILE=`` now falls back to the
+DVM's default rankfile as it was always written to, rather than refusing
+the job before the fallback could run. ``--map-by device=gpu,ndev=2`` --
+a comma where the qualifier's ``:`` belongs -- used to be read as the
+class ``gpu`` with the rest silently dropped, and is now refused with the
+spelling that was meant. ``--display bindings``, the replacement the
+``--report-bindings`` deprecation notice names, is accepted as a spelling
+of ``bind``.
 
 Placement now matches what the mapper documents. ``round_robin`` is held
 to a node's ``max_slots``, which no oversubscribe directive lifts, and
@@ -285,8 +316,15 @@ node of the DVM for every later job. Releasing the cpus of such a job's
 procs no longer leaks them, which had left the DVM unable to bind later
 jobs. The free-cpu snapshot that limits an object binding is taken once
 per job rather than per app, so each later app of an MPMD job is no
-longer bound short by the cpus its predecessors took.
-``--uniform-nodes`` asserts that every node is
+longer bound short by the cpus its predecessors took. A process given
+several devices with ``ndev`` that span NUMA domains is bound among the
+cpus local to those devices, rather than to the first core or NUMA
+domain of the package that contains them -- which, since that is the
+default binding, had left every such job bound away from its GPUs. The
+warning that every device on a node shares one locality now compares the
+devices themselves, not the groups they are handed out in, so
+``interleave`` with ``ndev`` no longer claims that GPUs on four NUMA
+domains share one. ``--uniform-nodes`` asserts that every node is
 identical and stops PRRTE asking, so a node that then reports a different
 topology now fails the launch and is named, instead of being described to
 the mapper as something it is not. ``PMIX_NOTIFY_COMPLETION`` is honored:
@@ -354,7 +392,12 @@ PRRTE had no automated tests at v4.0.0. It now ships five harnesses:
 * ``contrib/dockerswarm`` builds your live working tree and runs it as a
   ten-node containerized DVM, covering launch, I/O forwarding, file
   preloading, elastic grow and shrink, relay, and client churn, with
-  AddressSanitizer and valgrind arms.
+  AddressSanitizer and valgrind arms. The same suite now runs on real
+  nodes over ssh with ``run-tests.sh cluster``, after
+  ``cluster-setup.sh`` has prepared an existing installation for it, so
+  it can speak for an interconnect, file system, resource manager, and
+  scale that no container has. The harness is shipped in the release
+  tarball.
 
 * ``contrib/slurmswarm`` is the same harness with a real ``slurmctld``
   and ten ``slurmd``\ s, and is the only place ``plm/slurm`` and the
@@ -374,7 +417,14 @@ Full man pages for ``prte``, ``prterun``, ``prun``, ``pterm``, and
 the same RST snippets as the HTML documentation and the ``--help``
 output, after reconciling a help text and documentation that had been
 maintained apart for years and disagreed in places, so all three now
-say the same thing. New sections covering how to launch applications under each supported
+say the same thing. A DIRECTIVES AND QUALIFIERS section, shared by the
+``prte``, ``prterun``, and ``prun`` pages, explains how the values of
+``--map-by`` and its fellows are put together -- ``:`` separates
+qualifiers, ``,`` only separates directives -- and what an abbreviation
+may be. A new top-level Testing chapter, placed after Install, says which
+of the testing layers can answer which question and gives the full
+account of running the multi-node suite on your own cluster. New
+sections covering how to launch applications under each supported
 resource manager (Slurm, LSF, TM, Grid Engine, ssh, localhost) with
 prerequisites and troubleshooting; a "how things work" section
 describing the state machine, the RML transport and reliable messaging,
@@ -389,6 +439,8 @@ Requirement changes and removals
 
 * The minimum PMIx version for both build and execution is now v7.0.0,
   and the minimum Python needed to build from a Git clone is v3.6.
+  Configure also requires a PMIx that provides ``pmix_cli_match()``
+  (the ``CLI_MATCH`` capability), which PRRTE's directive parsing uses.
 
 * Flex is no longer needed to build PRRTE from a Git clone. The hostfile
   and rankfile scanners were the last flex input in the tree, and with
