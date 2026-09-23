@@ -185,7 +185,15 @@ applied at the job level:
 
 Any directive can include qualifiers by adding a colon (":") and any
 combination of one or more of the following (delimited by colons) to
-the "--mapby" option (except where noted):
+the "--mapby" option (except where noted). A comma does not separate
+qualifiers: "--mapby device=gpu:ndev=2" gives each process two GPUs,
+while "--mapby device=gpu,ndev=2" names a device called "gpu,ndev=2"
+and is refused. For example:
+
+  --mapby package:span                  load balance across the nodes
+  --mapby core:pe=2:hwtcpus             two hwthreads per process
+  --mapby device=gpu:ndev=2:interleave  two GPUs each, one per package
+  --mapby ppr:2:numa:pe=4               two processes per NUMA domain
 
 * "PE=n" bind n CPUs to each process (can not be used in combination
   with rankfile or pe-list directives)
