@@ -207,6 +207,10 @@ relative to `prte_init()`.
    options (`--daemonize`, `--report-uri`, `--singleton`, `--prefix`,
    `--report-pid`, `--keepalive`, …).
 4. **Proxy hand-off.** `--dvm` + proxy ⇒ `prun_common()` and `exit()`.
+   It must be handed `pargc`/`pargv` - the copy the MCA pre-scan, the
+   spelling normalizer and the `--app` expansion worked on - never the raw
+   `argv`: that made the app parse see `--map-by` where the tables spell
+   `--mapby`, so `mpirun --dvm ... --map-by X` was refused outright.
 5. **`prte_init(PRTE_PROC_MASTER)`.** After this the daemon job object,
    the node pool, and the PMIx server all exist. **Anything that must
    reject bad user input before PMIx sees it has to happen above this
