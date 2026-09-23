@@ -631,8 +631,12 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     }
 
     if (NULL != ptr) {
+        /* A trailing ':' leaves an empty qualifier list, and
+         * PMIx_Argv_split() hands back NULL for that rather than an empty
+         * array - so "core:" indexed a NULL and took the process down. On
+         * the spawn path that process is the DVM's controller. */
         quals = PMIx_Argv_split(ptr, ':');
-        for (i = 0; NULL != quals[i]; i++) {
+        for (i = 0; NULL != quals && NULL != quals[i]; i++) {
             if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
 

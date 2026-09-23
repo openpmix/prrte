@@ -637,5 +637,35 @@ int test_policy_parse(void)
     CHECK("bindto limit zero is refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
+    /* --- binding policy: an empty qualifier list.  PMIx_Argv_split() hands
+     * back NULL for it rather than an empty array, and the qualifier loop
+     * indexed that NULL - a segfault in whatever process was parsing,
+     * which on the spawn path is the DVM's controller --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:");
+    CHECK("bindto core: (trailing colon): rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_BINDTO);
+    CHECK("bindto core: (trailing colon): policy", PRTE_BIND_TO_CORE == PRTE_GET_BINDING_POLICY(u16));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, ":");
+    CHECK("bindto \":\": rc", PRTE_SUCCESS == rc);
+    PMIX_RELEASE(app);
+
+    /* --- binding policy: qualifiers with no policy word.  The empty word
+     * used to match "none", so ":overload-allowed" quietly unbound the app;
+     * like the job-level parser, it names no policy and leaves the policy
+     * bits clear for the resolver to fill in --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, ":overload-allowed");
+    CHECK("bindto :overload-allowed: rc", PRTE_SUCCESS == rc);
+    CHECK("bindto :overload-allowed: recorded",
+          prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, NULL, PMIX_UINT16));
+    u16 = get_u16(&app->attributes, PRTE_APP_BINDTO);
+    CHECK("bindto :overload-allowed: no policy", !PRTE_BINDING_POLICY_IS_SET(u16));
+    CHECK("bindto :overload-allowed: overload", 0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
+    PMIX_RELEASE(app);
+
     return failures;
 }
