@@ -236,14 +236,22 @@ index past a qualifier's name to find its `=value`** — use
 `pmix_cli_qualifier_value()`. `limit=N` lands in a `uint16_t` attribute, so
 a value that does not fit has to be rejected rather than truncated.
 
-**Three lists have to agree about what a `--bind-to` qualifier is**, and
-they did not:
+**Three readers have to agree about what a `--bind-to` word is**, and
+they did not while each kept its own list:
 
 | Where | What it is |
 |-------|------------|
-| `bndquals[]` in `schizo/base/schizo_base_frame.c` | the front-door whitelist — a name missing here never reaches a parser |
+| `prte_schizo_base_sanity()` in `schizo/base/schizo_base_frame.c` | the front door - a word it refuses never reaches a parser |
 | `prte_hwloc_base_set_binding_policy()` (here) | the job-level parser |
 | `prte_rmaps_base_set_app_binding_policy()` (`rmaps/base/rmaps_base_frame.c`) | the per-app parser |
+
+All three now match against the same two vocabularies,
+`prte_cli_binders` and `prte_cli_bindquals` in `src/util/prte_cmd_line.c`,
+with `pmix_cli_match()` - the whole table at once, so an abbreviation that
+fits two words (`n` is `none` and `numa`) is refused rather than settled by
+whichever arm of a chain was tested first, and a value given to a word that
+takes none is refused rather than dropped. Add a word to the table and all
+three know it.
 
 `report` was implemented only in the job-level parser and was missing from
 the whitelist, so no command line could reach it — including the `show_help`
@@ -255,17 +263,22 @@ counterpart, so `report` describes the whole job or nothing.
 
 Two ordering rules the parser now encodes:
 
-- **`pmix_check_cli_option()` compares only `min(strlen(a), strlen(b))`
-  characters, so an empty string matches whatever it is tested against
-  first.** The policy word is empty for the `--bind-to :qualifier` form,
-  and that form used to fall straight into the first arm of the chain —
-  `none` — silently disabling binding *and* dragging the default mapping
-  policy from `BYCORE` down to `BYSLOT` with it. A qualifier with no policy
-  means "the binding I would otherwise have got, plus this qualifier",
-  exactly as `--map-by :OVERSUBSCRIBE` does; leave the policy bits at zero
-  so `PRTE_SET_DEFAULT_BINDING_POLICY` can fill them in around the
-  qualifiers later. Any new empty-string-versus-option test here needs the
-  same guard.
+- **An empty policy word is not looked up at all.** The policy word is
+  empty for the `--bind-to :qualifier` form, and the matcher used to
+  compare only `min(strlen(a), strlen(b))` characters, so that form fell
+  straight into the first arm of the chain - `none` - silently disabling
+  binding *and* dragging the default mapping policy from `BYCORE` down to
+  `BYSLOT` with it. (The per-app parser kept doing that long after this one
+  stopped.) A qualifier with no policy means "the binding I would otherwise
+  have got, plus this qualifier", exactly as `--map-by :OVERSUBSCRIBE`
+  does; leave the policy bits at zero so `PRTE_SET_DEFAULT_BINDING_POLICY`
+  - or, per app, `prte_rmaps_base_resolve_app_options()` - can fill them
+  in around the qualifiers later. The matcher now refuses an empty input,
+  but "no policy" is a legitimate answer here, not an error.
+- **The qualifier list can be empty too.** `core:` leaves nothing after
+  the `:`, and `PMIx_Argv_split()` returns NULL for that, not an empty
+  array. Both parsers indexed it; `--bind-to core:` was a segfault, and on
+  the spawn path the process that died was a persistent DVM's controller.
 - **Resolve the policy word before applying any qualifier**, because
   `report` and `limit=N` write to `jdata->attributes`. Parsed the other way
   round, `--bind-to sockets:report` recorded report-bindings on the job and

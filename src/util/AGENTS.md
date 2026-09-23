@@ -33,7 +33,7 @@ linked into `libprrte`. There are no MCA components here.
 | **Errors and states** | `error.[ch]`, `error_strings.[ch]` | `prte_strerror()`, `PRTE_ERROR_LOG()`, and the four state→name renderers. |
 | **Process info** | `proc_info.[ch]` | The `prte_process_info` global: hostname and its aliases, uid/gid, session-dir paths, proc type. |
 | **Session directories** | `session_dir.[ch]` | Construction and teardown of the `$TMPDIR/<prefix>.<pid>/<jobid>/<rank>` tree. |
-| **Tool option values** | `prte_cmd_line.[ch]` | Value interpreters more than one tool needs (`--pid`, `--app`, the daemon umask). See [`src/tools/AGENTS.md`](../tools/AGENTS.md). |
+| **Tool option values** | `prte_cmd_line.[ch]` | Value interpreters more than one tool needs (`--pid`, `--app`, the daemon umask), and the vocabularies of the directive-valued options - see "Directive vocabularies" below. See [`src/tools/AGENTS.md`](../tools/AGENTS.md). |
 | **Bootstrap** | `prte_bootstrap.[ch]` | Reading `prte.conf` for a launcher-less DVM. |
 | **Process plumbing** | `daemon_init.c`, `sys_limits.[ch]`, `stacktrace.[ch]`, `ethtool.[ch]` | Daemonizing, `setrlimit`, the crash handler, and the Linux interface-speed ioctl. |
 | **Help delivery** | `prte_show_help.[ch]` | `prte_show_help()` — a drop-in for `pmix_show_help()` that works on a **daemon**. See below. |
@@ -300,6 +300,32 @@ master, whose copy of the map is authoritative and never decoded. That is the
 elastic grow/shrink/grow case in `contrib/dockerswarm/run-tests.sh`.
 
 ---
+
+## Directive vocabularies
+
+`--map-by`, `--rank-by`, `--bind-to`, `--output`, `--display` and `--rtos`
+take values that are a small language of their own -
+`package:span:pe=2`, `tag,file=out:nocopy` - and each set of words a user
+chooses from is one `pmix_cli_choice_t` table in `prte_cmd_line.c`, with an
+enum of tags beside it in `prte_cmd_line.h`. Two rules:
+
+- **One table per vocabulary, and every reader uses it.** The schizo sanity
+  checker, which refuses a bad command line, and the parser that acts on a
+  good one used to keep a list apiece, and the lists drifted. Adding a word
+  means adding a table entry and a `case` for its tag in the parser; the
+  checker then knows it without being told.
+- **Match with the whole table, never one word at a time.**
+  `prte_cli_match()` wraps PMIx's `pmix_cli_match()`: a word given in full
+  is that word, an abbreviation must fit exactly one entry, entries sharing
+  a tag are spellings of one thing (`parseable`/`parsable`), and each entry
+  says whether it takes a value. It reports an ambiguous word, or a value
+  that is wrong for its word, with the generic `cli-*` topics in
+  `help-prte-util.txt`; a word that matches nothing comes back
+  `PRTE_ERR_NOT_FOUND` *unreported*, because each option has its own
+  message listing what it does accept. A chain of
+  `PMIX_CHECK_CLI_OPTION()` tests cannot see ambiguity at all - it answers
+  for one option at a time - which is why `--bind-to n` quietly meant
+  `none` while `numa` fits as well.
 
 ## `prte_show_help()` — because `pmix_show_help()` does not work on a daemon
 

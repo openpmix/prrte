@@ -111,12 +111,17 @@ PRTE_EXPORT int prte_schizo_base_parse_tune(int argc, int start, char **argv);
  * entry must be "param = value" naming a PRRTE or PMIx parameter */
 PRTE_EXPORT int prte_schizo_base_check_tune(pmix_cli_result_t *results);
 PRTE_EXPORT int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line);
-PRTE_EXPORT bool prte_schizo_base_check_directives(char *directive,
-                                                   char **valid,
-                                                   char **quals,
+/* Check one directive of an option - "package:span:pe=2" - against the
+ * option's vocabulary of directives and of qualifiers (see
+ * src/util/prte_cmd_line.h), explaining any refusal.  A NULL "quals" means
+ * the option has no qualifiers, and its values are not split at ':' - the
+ * value of "--rtos timeout=1:30:00" contains them. */
+PRTE_EXPORT bool prte_schizo_base_check_directives(const char *directive,
+                                                   const pmix_cli_choice_t *valid,
+                                                   const pmix_cli_choice_t *quals,
                                                    char *dir);
-PRTE_EXPORT bool prte_schizo_base_check_qualifiers(char *directive,
-                                                   char **valid,
+PRTE_EXPORT bool prte_schizo_base_check_qualifiers(const char *directive,
+                                                   const pmix_cli_choice_t *valid,
                                                    char *qual);
 PRTE_EXPORT void prte_schizo_base_expose(char *param, char *prefix);
 PRTE_EXPORT int prte_schizo_base_add_directive(pmix_cli_result_t *results,

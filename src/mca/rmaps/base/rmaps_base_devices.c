@@ -79,42 +79,66 @@ typedef struct {
     size_t per;                 /* devices per group */
 } prte_rmaps_device_map_t;
 
+/* The device classes, and the spellings of each.
+ *
+ * Every spelling of "the thing this node talks to the network with" means
+ * the same set, deliberately.  One HCA presents itself twice - an
+ * OpenFabrics OS device (mlx5_0) and a network one (ib0) on the same PCI
+ * function - and a user asking for a NIC wants the card, not one of
+ * hwloc's two views of it.  Splitting the spellings, as this once did,
+ * made "network" and "openfabrics" return the same hardware under
+ * different names and gave whichever the user did not type an answer that
+ * looked wrong.  The enumeration dedupes by PCI function, so the union is
+ * one entry per card; a particular interface is still reachable by naming
+ * it (device=eno6).
+ *
+ * The cost is that there is no longer a spelling for "ethernet only".
+ * That is a narrower question than the directive is for, and naming the
+ * interface answers it exactly.
+ *
+ * A coprocessor is a GPU that hwloc happened to learn about through a
+ * vendor backend rather than through DRM, so the GPU class takes both. */
+enum {
+    DEVCLASS_GPU,
+    DEVCLASS_NETWORK,
+    DEVCLASS_BLOCK
+};
+
+static const pmix_cli_choice_t device_classes[] = {
+    PMIX_CLI_CHOICE("gpu", DEVCLASS_GPU, PMIX_CLI_VALUE_NONE),
+    PMIX_CLI_CHOICE("network", DEVCLASS_NETWORK, PMIX_CLI_VALUE_NONE),
+    PMIX_CLI_CHOICE("openfabrics", DEVCLASS_NETWORK, PMIX_CLI_VALUE_NONE),
+    PMIX_CLI_CHOICE("fabric", DEVCLASS_NETWORK, PMIX_CLI_VALUE_NONE),
+    PMIX_CLI_CHOICE("nic", DEVCLASS_NETWORK, PMIX_CLI_VALUE_NONE),
+    PMIX_CLI_CHOICE("block", DEVCLASS_BLOCK, PMIX_CLI_VALUE_NONE),
+    PMIX_CLI_CHOICE_END
+};
+
 /* Map a --map-by device= value to a device class.  Returns
  * PMIX_DEVTYPE_UNKNOWN when the value is not a class, in which case it is
- * taken as the name or uuid of one particular device. */
+ * taken as the name or uuid of one particular device.
+ *
+ * A class may be abbreviated, but nothing may follow it: the comparison
+ * used to stop at the end of the class name, so "gpu,ndev=2" - a request
+ * for two GPUs per process written with a comma - was the class "gpu" and
+ * each process silently got one. */
 static pmix_device_type_t device_class(const char *spec)
 {
-    char *s = (char *) spec;
+    int tag;
 
-    if (PMIX_CHECK_CLI_OPTION(s, "gpu")) {
-        /* a coprocessor is a GPU that hwloc happened to learn about through
-         * a vendor backend rather than through DRM */
-        return PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC;
+    if (PMIX_CLI_MATCH_FOUND != pmix_cli_match(spec, device_classes, &tag)) {
+        return PMIX_DEVTYPE_UNKNOWN;
     }
-    /* Every spelling of "the thing this node talks to the network with"
-     * means the same set, deliberately.  One HCA presents itself twice -
-     * an OpenFabrics OS device (mlx5_0) and a network one (ib0) on the same
-     * PCI function - and a user asking for a NIC wants the card, not one of
-     * hwloc's two views of it.  Splitting the spellings, as this once did,
-     * made "network" and "openfabrics" return the same hardware under
-     * different names and gave whichever the user did not type an answer
-     * that looked wrong.  The enumeration dedupes by PCI function, so the
-     * union is one entry per card; a particular interface is still
-     * reachable by naming it (device=eno6).
-     *
-     * The cost is that there is no longer a spelling for "ethernet only".
-     * That is a narrower question than the directive is for, and naming the
-     * interface answers it exactly. */
-    if (PMIX_CHECK_CLI_OPTION(s, "network")
-        || PMIX_CHECK_CLI_OPTION(s, "openfabrics")
-        || PMIX_CHECK_CLI_OPTION(s, "fabric")
-        || PMIX_CHECK_CLI_OPTION(s, "nic")) {
-        return PMIX_DEVTYPE_NETWORK | PMIX_DEVTYPE_OPENFABRICS;
+    switch (tag) {
+        case DEVCLASS_GPU:
+            return PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC;
+        case DEVCLASS_NETWORK:
+            return PMIX_DEVTYPE_NETWORK | PMIX_DEVTYPE_OPENFABRICS;
+        case DEVCLASS_BLOCK:
+            return PMIX_DEVTYPE_BLOCK;
+        default:
+            return PMIX_DEVTYPE_UNKNOWN;
     }
-    if (PMIX_CHECK_CLI_OPTION(s, "block")) {
-        return PMIX_DEVTYPE_BLOCK;
-    }
-    return PMIX_DEVTYPE_UNKNOWN;
 }
 
 /* Does the spec name one device rather than a class?

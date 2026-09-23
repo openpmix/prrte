@@ -541,7 +541,7 @@ prte_hwloc_print_buffers_t *prte_hwloc_get_print_buffer(void)
 
 int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {
-    int i;
+    int i, rc, tag;
     prte_binding_policy_t tmp;
     char **quals, *myspec, *ptr, *p2, *endp;
     prte_job_t *jdata = (prte_job_t *) jdat;
@@ -582,51 +582,54 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
      * An empty policy word - the ":qualifier" form, with no policy at all -
      * means "keep whatever binding policy would otherwise apply, but with
      * these qualifiers". That is what "--map-by :OVERSUBSCRIBE" has always
-     * meant on the mapping side, and it has to mean the same here. It did
-     * not: pmix_check_cli_option() compares only min(strlen(a), strlen(b))
-     * characters, so an empty string matches the first option it is tested
-     * against - which is "none". "--bind-to :overload-allowed" therefore
-     * disabled binding outright, silently, and took the default mapping
-     * policy down with it. Leaving the policy bits at zero here means
+     * meant on the mapping side, and it has to mean the same here - so it
+     * is not looked up at all. Leaving the policy bits at zero means
      * PRTE_BINDING_POLICY_IS_SET() still answers "no" and
      * PRTE_SET_DEFAULT_BINDING_POLICY() later fills the policy in while
      * preserving the qualifier half of the word. */
     if ('\0' != myspec[0]) {
-        if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
-            /* honor the user's "core" unless the topology has no cores at all;
-             * a core that holds a single hwthread is still a core to bind to */
-            if (!prte_rmaps_base.have_cores) {
-                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
-            } else {
-                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
-            }
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
-
-        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
-
-        } else {
+        rc = prte_cli_match(PRTE_JOB_NSPACE(jdata), "--bind-to", myspec,
+                            prte_cli_binders, &tag);
+        if (PRTE_ERR_NOT_FOUND == rc) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
                            spec);
             free(myspec);
             return PRTE_ERR_BAD_PARAM;
+        } else if (PRTE_SUCCESS != rc) {
+            free(myspec);
+            return rc;
+        }
+        switch (tag) {
+            case PRTE_BINDER_NONE:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
+                break;
+            case PRTE_BINDER_HWT:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+                break;
+            case PRTE_BINDER_CORE:
+                /* honor the user's "core" unless the topology has no cores at all;
+                 * a core that holds a single hwthread is still a core to bind to */
+                if (!prte_rmaps_base.have_cores) {
+                    PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+                } else {
+                    PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
+                }
+                break;
+            case PRTE_BINDER_L1CACHE:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
+                break;
+            case PRTE_BINDER_L2CACHE:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
+                break;
+            case PRTE_BINDER_L3CACHE:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
+                break;
+            case PRTE_BINDER_NUMA:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
+                break;
+            case PRTE_BINDER_PACKAGE:
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
+                break;
         }
     }
 
@@ -637,17 +640,30 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
          * the spawn path that process is the DVM's controller. */
         quals = PMIx_Argv_split(ptr, ':');
         for (i = 0; NULL != quals && NULL != quals[i]; i++) {
-            if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
+            rc = prte_cli_match(PRTE_JOB_NSPACE(jdata), "--bind-to", quals[i],
+                                prte_cli_bindquals, &tag);
+            if (PRTE_ERR_NOT_FOUND == rc) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                PMIx_Argv_free(quals);
+                free(myspec);
+                return PRTE_ERR_BAD_PARAM;
+            } else if (PRTE_SUCCESS != rc) {
+                PMIx_Argv_free(quals);
+                free(myspec);
+                return rc;
+            }
+
+            if (PRTE_BINDQUAL_IF_SUPP == tag) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
 
-            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_OVERLOAD)) {
+            } else if (PRTE_BINDQUAL_OVERLOAD == tag) {
                 tmp |= (PRTE_BIND_ALLOW_OVERLOAD | PRTE_BIND_OVERLOAD_GIVEN);
 
-            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_NOOVERLOAD)) {
+            } else if (PRTE_BINDQUAL_NOOVERLOAD == tag) {
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
 
-            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_REPORT)) {
+            } else if (PRTE_BINDQUAL_REPORT == tag) {
                 if (NULL == jdata) {
                     prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
@@ -657,7 +673,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 }
                 prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL, true);
 
-            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
+            } else if (PRTE_BINDQUAL_LIMIT == tag) {
                 if (NULL == jdata) {
                     prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
@@ -666,8 +682,8 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     return PRTE_ERR_SILENT;
                 }
                 /* Numeric value follows the '=' (LIMIT=2). Do not index past
-                 * the qualifier's full spelling - the name may be abbreviated
-                 * to any unambiguous prefix, so "L=2" is this same option */
+                 * the qualifier's full spelling - the name may be abbreviated,
+                 * so "L=2" is this same option */
                 p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {
                     /* missing the value */
@@ -695,13 +711,6 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 u16 = (uint16_t) lval;
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, PRTE_ATTR_GLOBAL,
                                    &u16, PMIX_UINT16);
-
-            } else {
-                /* unknown option */
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
-                PMIx_Argv_free(quals);
-                free(myspec);
-                return PRTE_ERR_BAD_PARAM;
             }
         }
         PMIx_Argv_free(quals);

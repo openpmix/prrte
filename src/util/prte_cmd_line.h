@@ -47,6 +47,8 @@
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_object.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_cmd_line.h"
+#include "pmix_common.h"
 
 BEGIN_C_DECLS
 
@@ -281,15 +283,218 @@ BEGIN_C_DECLS
 /*
  * The value of a qualifier declared above with a trailing '=' - PE=2,
  * FILE=path, LIMIT=4 - is read with pmix_cli_qualifier_value(), which comes
- * from PMIx alongside PMIX_CHECK_CLI_OPTION: the two belong together,
- * because the matcher accepts any unambiguous prefix of a qualifier's name
- * and the caller therefore cannot know how long the name it matched was.
+ * from PMIx alongside the option matchers: the two belong together,
+ * because the matchers accept any abbreviation of a qualifier's name and
+ * the caller therefore cannot know how long the name it matched was.
  * Never index past the qualifier's full spelling to reach its value.
  *
  * There is deliberately no local fallback for a PMIx that lacks it.  A
  * second implementation of a rule this easy to get wrong is a second thing
  * to keep right; configure refuses such a PMIx instead.
  */
+
+/*
+ * The vocabularies of the options whose values are themselves a small
+ * language - "--map-by package:span:pe=2", "--output tag,file=out" - one
+ * table per set of words a user chooses from.
+ *
+ * Each vocabulary is defined here ONCE, and both of its readers use it:
+ * the sanity checker in schizo, which refuses a bad command line before
+ * anything acts on it, and the parser that acts on a good one.  They used
+ * to keep a list apiece and the lists drifted - the checker let
+ * "ppr:2:slot" through to a parser that has never known what to do with
+ * it, and the parser accepted spellings of a ppr object the checker then
+ * refused.
+ *
+ * A word is matched with pmix_cli_match() against the WHOLE table, so an
+ * abbreviation that fits two entries is refused as ambiguous rather than
+ * settled by whichever one a chain of comparisons happened to test first,
+ * and a value given to a word that takes none is refused rather than
+ * dropped.  Entries sharing a tag are spellings of one thing.  The tag is
+ * what the parser switches on - never the position in the table.
+ */
+
+/* --map-by: the policy word */
+typedef enum {
+    PRTE_MAPPER_SLOT,
+    PRTE_MAPPER_HWT,
+    PRTE_MAPPER_CORE,
+    PRTE_MAPPER_L1CACHE,
+    PRTE_MAPPER_L2CACHE,
+    PRTE_MAPPER_L3CACHE,
+    PRTE_MAPPER_NUMA,
+    PRTE_MAPPER_PACKAGE,
+    PRTE_MAPPER_NODE,
+    PRTE_MAPPER_SEQ,
+    PRTE_MAPPER_PPR,
+    PRTE_MAPPER_RANKFILE,
+    PRTE_MAPPER_PELIST,
+    PRTE_MAPPER_DEVICE
+} prte_cli_mapper_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_mappers[];
+
+/* --map-by: the qualifiers */
+typedef enum {
+    PRTE_MAPQUAL_PE,
+    PRTE_MAPQUAL_SPAN,
+    PRTE_MAPQUAL_OVERSUB,
+    PRTE_MAPQUAL_NOOVER,
+    PRTE_MAPQUAL_NOLOCAL,
+    PRTE_MAPQUAL_HWTCPUS,
+    PRTE_MAPQUAL_CORECPUS,
+    PRTE_MAPQUAL_INHERIT,
+    PRTE_MAPQUAL_NOINHERIT,
+    PRTE_MAPQUAL_FILE,
+    PRTE_MAPQUAL_ORDERED,
+    PRTE_MAPQUAL_INTERLEAVE,
+    PRTE_MAPQUAL_SHARED,
+    PRTE_MAPQUAL_NDEV
+} prte_cli_mapqual_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_mapquals[];
+
+/* --map-by ppr:N:<object> - the object */
+typedef enum {
+    PRTE_PPROBJ_NODE,
+    PRTE_PPROBJ_HWT,
+    PRTE_PPROBJ_CORE,
+    PRTE_PPROBJ_PACKAGE,
+    PRTE_PPROBJ_NUMA,
+    PRTE_PPROBJ_L1CACHE,
+    PRTE_PPROBJ_L2CACHE,
+    PRTE_PPROBJ_L3CACHE,
+    PRTE_PPROBJ_DEVICE
+} prte_cli_pprobj_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_ppr_objects[];
+
+/* --rank-by: the policy word.  It takes no qualifiers. */
+typedef enum {
+    PRTE_RANKER_SLOT,
+    PRTE_RANKER_NODE,
+    PRTE_RANKER_FILL,
+    PRTE_RANKER_SPAN
+} prte_cli_ranker_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_rankers[];
+
+/* --bind-to: the policy word */
+typedef enum {
+    PRTE_BINDER_NONE,
+    PRTE_BINDER_HWT,
+    PRTE_BINDER_CORE,
+    PRTE_BINDER_L1CACHE,
+    PRTE_BINDER_L2CACHE,
+    PRTE_BINDER_L3CACHE,
+    PRTE_BINDER_NUMA,
+    PRTE_BINDER_PACKAGE
+} prte_cli_binder_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_binders[];
+
+/* --bind-to: the qualifiers */
+typedef enum {
+    PRTE_BINDQUAL_OVERLOAD,
+    PRTE_BINDQUAL_NOOVERLOAD,
+    PRTE_BINDQUAL_IF_SUPP,
+    PRTE_BINDQUAL_LIMIT,
+    PRTE_BINDQUAL_REPORT
+} prte_cli_bindqual_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_bindquals[];
+
+/* --output: the directives, then their qualifiers */
+typedef enum {
+    PRTE_OUTPUT_TAG,
+    PRTE_OUTPUT_TAG_DET,
+    PRTE_OUTPUT_TAG_FULL,
+    PRTE_OUTPUT_RANK,
+    PRTE_OUTPUT_TIMESTAMP,
+    PRTE_OUTPUT_XML,
+    PRTE_OUTPUT_MERGE_ERROUT,
+    PRTE_OUTPUT_DIR,
+    PRTE_OUTPUT_FILE
+} prte_cli_output_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_output_directives[];
+
+typedef enum {
+    PRTE_OUTQUAL_COPY,
+    PRTE_OUTQUAL_NOCOPY,
+    PRTE_OUTQUAL_RAW,
+    PRTE_OUTQUAL_PATTERN
+} prte_cli_outqual_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_output_quals[];
+
+/* --display: the directives, then their qualifiers */
+typedef enum {
+    PRTE_DISPLAY_ALLOC,
+    PRTE_DISPLAY_MAP,
+    PRTE_DISPLAY_BIND,
+    PRTE_DISPLAY_MAPDEV,
+    PRTE_DISPLAY_TOPO,
+    PRTE_DISPLAY_CPUS
+} prte_cli_display_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_display_directives[];
+
+typedef enum {
+    PRTE_DISPQUAL_PARSEABLE,
+    PRTE_DISPQUAL_PHYSICAL
+} prte_cli_dispqual_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_display_quals[];
+
+/* --rtos: the directives.  They take no qualifiers. */
+typedef enum {
+    PRTE_RTOS_ERROR_NZ,
+    PRTE_RTOS_NOLAUNCH,
+    PRTE_RTOS_NOSPAWN,
+    PRTE_RTOS_SHOW_PROGRESS,
+    PRTE_RTOS_RECOVERABLE,
+    PRTE_RTOS_AUTORESTART,
+    PRTE_RTOS_CONTINUOUS,
+    PRTE_RTOS_MAX_RESTARTS,
+    PRTE_RTOS_EXEC_AGENT,
+    PRTE_RTOS_DEFAULT_EXEC_AGENT,
+    PRTE_RTOS_STOP_ON_EXEC,
+    PRTE_RTOS_STOP_IN_INIT,
+    PRTE_RTOS_STOP_IN_APP,
+    PRTE_RTOS_TIMEOUT,
+    PRTE_RTOS_SPAWN_TIMEOUT,
+    PRTE_RTOS_REPORT_STATE,
+    PRTE_RTOS_STACK_TRACES,
+    PRTE_RTOS_REPORT_CHILD_SEP,
+    PRTE_RTOS_AGG_HELP,
+    PRTE_RTOS_NOTIFY_ERRORS,
+    PRTE_RTOS_OUTPUT_PROCTABLE,
+    PRTE_RTOS_FWD_ENVIRON
+} prte_cli_rtos_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_rtos_directives[];
+
+/**
+ * Match one word of a directive against a vocabulary, and explain any
+ * failure other than "matches nothing".
+ *
+ * An ambiguous abbreviation, and a value given to a word that takes none
+ * or withheld from one that needs it, are reported here - one message
+ * for each, whichever option they turn up in.  An input that matches
+ * nothing is NOT reported, because each option already has its own
+ * message for that listing what it does accept, and the caller is the one
+ * that knows which.
+ *
+ * @param nspace   the job the command line belongs to, for show_help
+ * @param option   the option being parsed ("map-by"), for the message
+ * @param input    the word as the user wrote it, with any "=value"
+ * @param choices  the vocabulary
+ * @param tag      set to the matched entry's tag on success
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_NOT_FOUND  matches nothing - not yet reported
+ * @retval PRTE_ERR_SILENT     reported
+ */
+PRTE_EXPORT int prte_cli_match(const pmix_nspace_t nspace, const char *option,
+                               const char *input, const pmix_cli_choice_t *choices,
+                               int *tag);
+
+/**
+ * The name a vocabulary gives a tag - the first spelling it lists - for
+ * whatever has to name what the user asked for in full, which they may
+ * have abbreviated.  NULL if no entry carries the tag.
+ */
+PRTE_EXPORT const char *prte_cli_name(const pmix_cli_choice_t *choices, int tag);
 
 /*
  * Interpreters for option values that more than one tool accepts.  These

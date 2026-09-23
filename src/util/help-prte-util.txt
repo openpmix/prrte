@@ -57,3 +57,27 @@ does not recognize or currently support the specified resource:
    Limit:     %s
 
 Please correct the request and try again.
+#
+[cli-ambiguous]
+The %s option was given a word that abbreviates more than one of the
+words it accepts:
+
+  Given:    %s
+  Matches:  %s
+
+Please give enough of the word to say which one you mean.
+#
+[cli-unexpected-value]
+The %s option was given a value for "%s", which takes none:
+
+  Given:  %s
+
+It is asked for by being given, and not asked for by being left out, so
+there is no value to give it. Please remove the '=' and what follows.
+#
+[cli-missing-value]
+The %s option was given "%s" without the value it requires:
+
+  Given:  %s
+
+Please write it as %s=<value>.

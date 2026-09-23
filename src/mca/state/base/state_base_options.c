@@ -81,21 +81,18 @@ bool prte_state_base_report_child_sep(const char *spec)
     char **options, *ptr;
     pmix_value_t value;
     bool flag = false;
-    int n;
+    int n, tag;
 
     if (NULL == spec) {
         return false;
     }
     options = PMIx_Argv_split(spec, ',');
-    for (n = 0; NULL != options[n]; n++) {
-        ptr = strchr(options[n], '=');
-        if (NULL != ptr) {
-            *ptr = '\0';
-            ++ptr;
-        }
-        if (!PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_CHILD_SEP)) {
+    for (n = 0; NULL != options && NULL != options[n]; n++) {
+        if (PMIX_CLI_MATCH_FOUND != pmix_cli_match(options[n], prte_cli_rtos_directives, &tag) ||
+            PRTE_RTOS_REPORT_CHILD_SEP != tag) {
             continue;
         }
+        ptr = PMIX_CLI_QUALIFIER_VALUE(options[n]);
         /* the same pair the walk below uses, so a value this says "true" to
          * is exactly one that sets the attribute there */
         PMIX_VALUE_LOAD(&value, ptr, PMIX_STRING);
@@ -111,7 +108,7 @@ bool prte_state_base_report_child_sep(const char *spec)
 int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
 {
     char **options, *ptr, *bkpt;
-    int n, k, tm;
+    int n, k, tm, rc, tag;
     int32_t i32;
     bool flag;
     prte_job_t *djob;
@@ -205,20 +202,23 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
 
     } else {
         options = PMIx_Argv_split(spec, ',');
-        for (n=0; NULL != options[n]; n++) {
-            /* see if there is an '=' */
-            ptr = strchr(options[n], '=');
-            if (NULL != ptr) {
-                *ptr = '\0';
-                ++ptr;
-                if ('\0' == *ptr) {
-                    /* missing the value */
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value", true,
-                                   "runtime options", options[n], "empty");
-                    PMIx_Argv_free(options);
-                    return PRTE_ERR_BAD_PARAM;
-                }
+        for (n=0; NULL != options && NULL != options[n]; n++) {
+            /* Matched against the whole vocabulary, which also says which
+             * directives carry a value - so a value missing from one that
+             * needs it ("timeout", "timeout="), or promised by an '=' and
+             * not given, is refused here with the directive named. */
+            rc = prte_cli_match(PRTE_JOB_NSPACE(jdata), "--rtos", options[n],
+                                prte_cli_rtos_directives, &tag);
+            if (PRTE_ERR_NOT_FOUND == rc) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy", true,
+                               "runtime options", spec);
+                PMIx_Argv_free(options);
+                return PRTE_ERR_SILENT;
+            } else if (PRTE_SUCCESS != rc) {
+                PMIx_Argv_free(options);
+                return rc;
             }
+            ptr = PMIX_CLI_QUALIFIER_VALUE(options[n]);
             PMIX_VALUE_LOAD(&value, ptr, PMIX_STRING); // just in case we need to evaluate a bool
             /* Every directive below except the handful that carry a value of
              * their own is a BOOLEAN, read with PMIX_CHECK_TRUE - which
@@ -226,21 +226,22 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
              * "donotlaunch=maybe" would quietly launch.  Refuse the value
              * here instead, where it is still the user's command line and
              * not a policy nobody asked for. */
-            if (NULL != ptr && !prte_schizo_base_directive_is_valued(options[n]) &&
-                !PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP) &&
+            if (NULL != ptr &&
+                !prte_schizo_base_directive_is_valued(prte_cli_name(prte_cli_rtos_directives, tag)) &&
+                PRTE_RTOS_STOP_IN_APP != tag &&
                 PRTE_SUCCESS != prte_cli_bool_value(ptr, &flag)) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "non-boolean-value", true,
-                               PRTE_CLI_RTOS, options[n], ptr);
+                               PRTE_CLI_RTOS, prte_cli_name(prte_cli_rtos_directives, tag), ptr);
                 PMIX_VALUE_DESTRUCT(&value);
                 PMIx_Argv_free(options);
                 return PRTE_ERR_SILENT;
             }
-            /* check the options */
-            if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_ERROR_NZ)) {
+            /* act on the directive */
+            if (PRTE_RTOS_ERROR_NZ == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_ERROR_NONZERO_EXIT, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
+            } else if (PRTE_RTOS_NOLAUNCH == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_DO_NOT_LAUNCH, flag);
                 /* if we are not in a persistent DVM, then make sure we also
@@ -252,7 +253,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     }
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOSPAWN)) {
+            } else if (PRTE_RTOS_NOSPAWN == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_DO_NOT_SPAWN, flag);
                 /* if we are not in a persistent DVM, then make sure we also
@@ -264,35 +265,28 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     }
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
+            } else if (PRTE_RTOS_SHOW_PROGRESS == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_SHOW_PROGRESS, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOTIFY_ERRORS)) {
+            } else if (PRTE_RTOS_NOTIFY_ERRORS == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_NOTIFY_ERRORS, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_RECOVERABLE)) {
+            } else if (PRTE_RTOS_RECOVERABLE == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_RECOVERABLE, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_AUTORESTART)) {
+            } else if (PRTE_RTOS_AUTORESTART == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_AUTORESTART, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_CONTINUOUS)) {
+            } else if (PRTE_RTOS_CONTINUOUS == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_CONTINUOUS, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
-                if (NULL == ptr || '\0' == *ptr) {
-                    /* missing the value */
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "missing-value", true,
-                                   "runtime options", options[n], "empty");
-                    PMIX_VALUE_DESTRUCT(&value);
-                    PMIx_Argv_free(options);
-                    return PRTE_ERR_BAD_PARAM;
-                }
+            } else if (PRTE_RTOS_MAX_RESTARTS == tag) {
+                /* the vocabulary requires the value, so it is here */
                 i32 = strtol(ptr, NULL, 10);
                 /* 'k', not 'n' - 'n' indexes the option list we are walking */
                 for (k = 0; k < jdata->apps->size; k++) {
@@ -304,14 +298,14 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                                        &i32, PMIX_INT32);
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_EXEC_AGENT)) {
+            } else if (PRTE_RTOS_EXEC_AGENT == tag) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, PRTE_ATTR_GLOBAL,
                                    ptr, PMIX_STRING);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_DEFAULT_EXEC_AGENT)) {
+            } else if (PRTE_RTOS_DEFAULT_EXEC_AGENT == tag) {
                 prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
+            } else if (PRTE_RTOS_STOP_ON_EXEC == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL, true);
@@ -319,7 +313,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC);
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
+            } else if (PRTE_RTOS_STOP_IN_INIT == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL, true);
@@ -330,7 +324,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT);
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
+            } else if (PRTE_RTOS_STOP_IN_APP == tag) {
                 /* this is the one hybrid directive: written bare or with a
                  * truth value it asserts the boolean "stop wherever the
                  * application chooses to stop", and written with anything
@@ -370,7 +364,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT);
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
+            } else if (PRTE_RTOS_TIMEOUT == tag) {
                 /* 'tm', not 'n' - assigning the converted time to the loop
                  * index made the walk resume at "60" for "timeout=60", running
                  * off the end of the option array */
@@ -378,20 +372,20 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
                                    &tm, PMIX_INT);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SPAWN_TIMEOUT)) {
+            } else if (PRTE_RTOS_SPAWN_TIMEOUT == tag) {
                 tm = PMIX_CONVERT_TIME(ptr);
                 prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
                                    &tm, PMIX_INT);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STACK_TRACES)) {
+            } else if (PRTE_RTOS_STACK_TRACES == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_STACKTRACES, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_STATE)) {
+            } else if (PRTE_RTOS_REPORT_STATE == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_REPORT_STATE, flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_CHILD_SEP)) {
+            } else if (PRTE_RTOS_REPORT_CHILD_SEP == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_REPORT_CHILD_SEP, flag);
                 /* This governs how the DVM reports its OVERALL exit status,
@@ -410,7 +404,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     }
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_AGG_HELP)) {
+            } else if (PRTE_RTOS_AGG_HELP == tag) {
                 /* the attribute is the NEGATIVE of the directive: the user asks
                  * to aggregate help, PRTE_JOB_NOAGG_HELP records the request NOT
                  * to.  Driving it from the directive's own sense (as this did)
@@ -418,24 +412,17 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 flag = PMIX_CHECK_TRUE(&value);
                 set_bool_option(jdata, PRTE_JOB_NOAGG_HELP, !flag);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_OUTPUT_PROCTABLE)) {
-                if (NULL == ptr || '\0' == *ptr) {
+            } else if (PRTE_RTOS_OUTPUT_PROCTABLE == tag) {
+                if (NULL == ptr) {
                     /* no value provided, so assume stdout */
                     ptr = "-";
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_PROCTABLE,
                                     PRTE_ATTR_GLOBAL, ptr, PMIX_STRING);
 
-            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_FWD_ENVIRON)) {
+            } else if (PRTE_RTOS_FWD_ENVIRON == tag) {
                 flag = PMIX_CHECK_TRUE(&value);
                 prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL, flag);
-
-            } else {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy", true,
-                               "runtime options", spec);
-                PMIX_VALUE_DESTRUCT(&value);
-                PMIx_Argv_free(options);
-                return PRTE_ERR_SILENT;
             }
             /* PMIX_VALUE_LOAD copied the value string - release it before
              * the next directive overwrites the struct */

@@ -32,11 +32,21 @@ int test_directives(void)
     pmix_cli_result_t results;
     char *v;
 
-    char *mappers[] = {
-        PRTE_CLI_SLOT, PRTE_CLI_NODE, PRTE_CLI_PPR, PRTE_CLI_PACKAGE, NULL
+    /* a cut-down vocabulary of the kind the sanity checker is handed; the
+     * tags are the real ones, since the ppr special case reads the tag */
+    const pmix_cli_choice_t mappers[] = {
+        PMIX_CLI_CHOICE(PRTE_CLI_SLOT, PRTE_MAPPER_SLOT, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE(PRTE_CLI_NODE, PRTE_MAPPER_NODE, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE(PRTE_CLI_PPR, PRTE_MAPPER_PPR, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE(PRTE_CLI_PACKAGE, PRTE_MAPPER_PACKAGE, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE_END
     };
-    char *mapquals[] = {
-        PRTE_CLI_PE, PRTE_CLI_SPAN, PRTE_CLI_OVERSUB, PRTE_CLI_NOLOCAL, NULL
+    const pmix_cli_choice_t mapquals[] = {
+        PMIX_CLI_CHOICE(PRTE_CLI_PE, PRTE_MAPQUAL_PE, PMIX_CLI_VALUE_REQUIRED),
+        PMIX_CLI_CHOICE(PRTE_CLI_SPAN, PRTE_MAPQUAL_SPAN, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE(PRTE_CLI_OVERSUB, PRTE_MAPQUAL_OVERSUB, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE(PRTE_CLI_NOLOCAL, PRTE_MAPQUAL_NOLOCAL, PMIX_CLI_VALUE_NONE),
+        PMIX_CLI_CHOICE_END
     };
 
     /*** a directive lands on an option that did not exist yet ***/
@@ -187,6 +197,47 @@ int test_directives(void)
     fprintf(stderr, "--- expected error output follows (bad qualifier) ---\n");
     CHECK("check_qualifiers:invalid",
           !prte_schizo_base_check_qualifiers(PRTE_CLI_MAPBY, mapquals, "bogus"));
+
+    /*** a word is matched against the whole vocabulary ***
+     *
+     * One comparison at a time settled an abbreviation that fits two words
+     * by whichever was tested first, and let a word that merely BEGAN with
+     * a directive's name be that directive - "gpu,ndev=2" was "gpu" with
+     * the rest thrown away.  A value given to a word that takes none was
+     * dropped the same way: "span=false" turned SPAN on.
+     */
+    fprintf(stderr, "--- expected error output follows (ambiguous, over-long, values) ---\n");
+    CHECK("check_directives:ambiguous",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, "p"));
+    CHECK("check_directives:longer-than-the-name",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, "nodes"));
+    CHECK("check_directives:value-on-a-directive-that-takes-none",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, "node=3"));
+    CHECK("check_qualifiers:value-on-a-qualifier-that-takes-none",
+          !prte_schizo_base_check_qualifiers(PRTE_CLI_MAPBY, mapquals, "span=false"));
+    CHECK("check_qualifiers:required-value-missing",
+          !prte_schizo_base_check_qualifiers(PRTE_CLI_MAPBY, mapquals, "pe"));
+    CHECK("check_qualifiers:longer-than-the-name",
+          !prte_schizo_base_check_qualifiers(PRTE_CLI_MAPBY, mapquals, "spanish"));
+
+    /* the ppr object is held to the vocabulary the mapper reads it with:
+     * "slot" used to pass here and be refused there, and "n" - node, numa
+     * or nm - is ambiguous */
+    CHECK("check_directives:ppr-object-the-mapper-cannot-place",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals,
+                                             "ppr:2:slot"));
+    CHECK("check_directives:ppr-object-ambiguous",
+          !prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals,
+                                             "ppr:2:n"));
+    CHECK("check_directives:ppr-object-older-spelling",
+          prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals,
+                                            "ppr:2:socket"));
+
+    /* --rtos is not split at ':' - the value of one of its directives may
+     * contain one */
+    CHECK("check_directives:rtos-value-with-colons",
+          prte_schizo_base_check_directives(PRTE_CLI_RTOS, prte_cli_rtos_directives, NULL,
+                                            "timeout=1:30:00"));
 
     return failures;
 }

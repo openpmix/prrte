@@ -172,57 +172,70 @@ void prte_schizo_base_expose(char *param, char *prefix)
     *value = '=';
 }
 
-bool prte_schizo_base_check_qualifiers(char *directive,
-                                       char **valid,
+/* An option as a user writes it, for a message that has to name it: the
+ * keys are the options' internal spellings, and nobody types "--mapby". */
+static const char *option_label(const char *key)
+{
+    static const struct {
+        const char *key;
+        const char *label;
+    } labels[] = {
+        {PRTE_CLI_MAPBY, "--map-by"},
+        {PRTE_CLI_RANKBY, "--rank-by"},
+        {PRTE_CLI_BINDTO, "--bind-to"},
+        {PRTE_CLI_OUTPUT, "--output"},
+        {PRTE_CLI_DISPLAY, "--display"},
+        {PRTE_CLI_RTOS, "--rtos"},
+        {NULL, NULL}
+    };
+    size_t n;
+
+    for (n = 0; NULL != labels[n].key; n++) {
+        if (0 == strcmp(key, labels[n].key)) {
+            return labels[n].label;
+        }
+    }
+    return key;
+}
+
+bool prte_schizo_base_check_qualifiers(const char *directive,
+                                       const pmix_cli_choice_t *valid,
                                        char *qual)
 {
-    size_t n;
+    int rc, tag;
     char *v;
 
     /* An option that accepts no qualifiers at all is checked with a NULL
-     * table - "--runtime-options" is - so there is nothing to walk and
-     * every qualifier given is unrecognized.  Walking it anyway indexed
-     * the NULL: "--rtos :anything" crashed the tool.  PMIx_Argv_join()
-     * answers "" for a NULL table, which is the right "valid qualifiers"
-     * list to print here. */
+     * table - "--runtime-options" is - so every qualifier given is
+     * unrecognized.  Walking it anyway indexed the NULL: "--rtos :anything"
+     * crashed the tool. */
     if (NULL != valid) {
-        for (n=0; NULL != valid[n]; n++) {
-            if (PMIX_CHECK_CLI_OPTION(qual, valid[n])) {
-                return true;
-            }
+        rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, option_label(directive), qual, valid, &tag);
+        if (PRTE_SUCCESS == rc) {
+            return true;
+        }
+        if (PRTE_ERR_NOT_FOUND != rc) {
+            /* ambiguous, or a value it should or should not have had -
+             * already explained */
+            return false;
         }
     }
-    v = PMIx_Argv_join(valid, ',');
+    v = (NULL == valid) ? NULL : pmix_cli_match_list(NULL, valid, ',');
     prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
                    "unrecognized-qualifier", true,
-                   directive, qual, v);
+                   directive, qual, (NULL == v) ? "" : v);
     free(v);
     return false;
 }
 
-bool prte_schizo_base_check_directives(char *directive,
-                                       char **valid,
-                                       char **quals,
+bool prte_schizo_base_check_directives(const char *directive,
+                                       const pmix_cli_choice_t *valid,
+                                       const pmix_cli_choice_t *quals,
                                        char *dir)
 {
-    size_t n, m;
+    size_t m;
+    int rc, tag;
     char **args, **qls, *v, *q;
-    char *pproptions[] = {
-        PRTE_CLI_SLOT,
-        PRTE_CLI_HWT,
-        PRTE_CLI_CORE,
-        PRTE_CLI_L1CACHE,
-        PRTE_CLI_L2CACHE,
-        PRTE_CLI_L3CACHE,
-        PRTE_CLI_NUMA,
-        PRTE_CLI_PACKAGE,
-        "socket",  // dealt with elsewhere
-        "skt",     // dealt with elsewhere
-        PRTE_CLI_NODE,
-        PRTE_CLI_DEVICE,
-        NULL
-    };
-    bool found;
 
     /* An option written with no value, or with one that is nothing but
      * delimiters, names no directive.  It has to be refused here rather
@@ -262,112 +275,104 @@ bool prte_schizo_base_check_directives(char *directive,
         return true;
     }
 
-    args = PMIx_Argv_split(dir, ':');
+    /* An option without qualifiers is not split: nothing in its value is a
+     * qualifier, and the value of one of its directives may itself contain
+     * a ':' ("timeout=1:30:00"). */
+    if (NULL == quals) {
+        args = NULL;
+        if (PMIX_SUCCESS != PMIx_Argv_append_nosize(&args, dir)) {
+            return false;
+        }
+    } else {
+        args = PMIx_Argv_split(dir, ':');
+    }
     if (NULL == args) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt",
                        "empty-directive", true, directive, directive);
         return false;
     }
-    /* remove any '=' in the directive */
-    if (NULL != (v = strchr(args[0], '='))) {
-        *v = '\0';
+
+    /* The directive, with any value it carries - the vocabulary says
+     * whether it may have one, and a value given to a directive that takes
+     * none is refused rather than dropped. */
+    rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, option_label(directive), args[0], valid, &tag);
+    if (PRTE_ERR_NOT_FOUND == rc) {
+        v = pmix_cli_match_list(NULL, valid, ':');
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                       "unrecognized-directive", true,
+                       directive, dir, (NULL == v) ? "" : v);
+        free(v);
+        PMIx_Argv_free(args);
+        return false;
+    } else if (PRTE_SUCCESS != rc) {
+        PMIx_Argv_free(args);
+        return false;
     }
-    for (n = 0; NULL != valid[n]; n++) {
-        if (PMIX_CHECK_CLI_OPTION(args[0], valid[n])) {
-            /* valid directive - check any qualifiers */
-            if (NULL != args[1] && NULL != quals) {
-                if (0 == strcmp(directive, PRTE_CLI_MAPBY) &&
-                    0 == strcmp(args[0], PRTE_CLI_PPR)) {
-                    /* unfortunately, this is a special case that
-                     * must be checked separately due to the format
-                     * of the qualifier */
-                    if (3 > PMIx_Argv_count(args)) {
-                        /* this is an error as there must be at least
-                         * the "ppr" directive, a number, and then the
-                         * resource type. There may also be additional
-                         * qualifiers given, so the count could be greater
-                         * than 3 - but it has to at least contain
-                         * those three fields */
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                                       "invalid-pattern", true,
-                                       dir);
-                        PMIx_Argv_free(args);
-                        return false;
-                    }
-                    v = NULL;
-                    /* only the end pointer matters here - the count itself
-                     * is the mapper's business, not this validator's */
-                    (void) strtoul(args[1], &v, 10);
-                    if (NULL != v && 0 < strlen(v)) {
-                        /* the first entry had to be a pure number */
-                        pmix_asprintf(&v, "ppr:[Number of procs/object]:%s", args[2]);
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                                       "unrecognized-qualifier", true,
-                                       directive, dir, v);
-                        free(v);
-                        PMIx_Argv_free(args);
-                        return false;
-                    }
-                    found = false;
-                    for (m=0; NULL != pproptions[m]; m++) {
-                        size_t olen = strlen(pproptions[m]);
-                        /* An option ending in "=" carries its value with it
-                         * ("device=gpu"), so match only the name: comparing
-                         * strlen(given) characters can never match, since
-                         * the given string is the longer of the two.  Every
-                         * other option is matched by any unambiguous prefix
-                         * of it, as before. */
-                        if ('=' == pproptions[m][olen - 1]) {
-                            if (0 == strncasecmp(args[2], pproptions[m], olen)) {
-                                found = true;
-                                break;
-                            }
-                        } else if (0 == strncasecmp(args[2], pproptions[m], strlen(args[2]))) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        v = PMIx_Argv_join(pproptions, ':');
-                        pmix_asprintf(&q, "ppr:%s:[%s]", args[1], v);
-                        free(v);
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                                       "unrecognized-qualifier", true,
-                                       directive, dir, q);
-                        free(q);
-                        PMIx_Argv_free(args);
-                        return false;
-                    }
-                    if (NULL != args[3]) {
-                        qls = PMIx_Argv_split(args[3], ':');
-                    } else {
-                        PMIx_Argv_free(args);
-                        return true;
-                    }
-                } else {
-                    qls = PMIx_Argv_split(args[1], ':');
-                }
-                for (m=0; NULL != qls[m]; m++) {
-                    if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
-                        PMIx_Argv_free(qls);
-                        PMIx_Argv_free(args);
-                        return false;
-                    }
-                }
-                PMIx_Argv_free(qls);
-                PMIx_Argv_free(args);
-                return true;
-            }
+
+    if (NULL == args[1] || NULL == quals) {
+        PMIx_Argv_free(args);
+        return true;
+    }
+
+    if (0 == strcmp(directive, PRTE_CLI_MAPBY) && PRTE_MAPPER_PPR == tag) {
+        /* unfortunately, this is a special case that must be checked
+         * separately due to the format of the qualifier */
+        if (3 > PMIx_Argv_count(args)) {
+            /* this is an error as there must be at least the "ppr"
+             * directive, a number, and then the resource type. There may
+             * also be additional qualifiers given, so the count could be
+             * greater than 3 - but it has to at least contain those three
+             * fields */
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                           "invalid-pattern", true,
+                           dir);
             PMIx_Argv_free(args);
-            return true;
+            return false;
+        }
+        v = NULL;
+        /* only the end pointer matters here - the count itself is the
+         * mapper's business, not this validator's */
+        (void) strtoul(args[1], &v, 10);
+        if (NULL != v && 0 < strlen(v)) {
+            /* the first entry had to be a pure number */
+            pmix_asprintf(&v, "ppr:[Number of procs/object]:%s", args[2]);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                           "unrecognized-qualifier", true,
+                           directive, dir, v);
+            free(v);
+            PMIx_Argv_free(args);
+            return false;
+        }
+        /* the object - held to the same vocabulary the mapper reads it
+         * with, so the two cannot disagree about what is one */
+        rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, option_label(directive), args[2],
+                            prte_cli_ppr_objects, &tag);
+        if (PRTE_ERR_NOT_FOUND == rc) {
+            v = pmix_cli_match_list(NULL, prte_cli_ppr_objects, ':');
+            pmix_asprintf(&q, "ppr:%s:[%s]", args[1], (NULL == v) ? "" : v);
+            free(v);
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                           "unrecognized-qualifier", true,
+                           directive, dir, q);
+            free(q);
+            PMIx_Argv_free(args);
+            return false;
+        } else if (PRTE_SUCCESS != rc) {
+            PMIx_Argv_free(args);
+            return false;
+        }
+        m = 3;
+    } else {
+        m = 1;
+    }
+    for (; NULL != args[m]; m++) {
+        if (!prte_schizo_base_check_qualifiers(directive, quals, args[m])) {
+            PMIx_Argv_free(args);
+            return false;
         }
     }
-    v = PMIx_Argv_join(valid, ':');
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                   "unrecognized-directive", true,
-                   directive, dir, v);
     PMIx_Argv_free(args);
-    return false;
+    return true;
 }
 
 typedef struct {
@@ -431,84 +436,13 @@ static int check_ndirs(pmix_cli_item_t *opt)
     return PRTE_SUCCESS;
 }
 
-/*
- * The vocabularies of the three JOB-LEVEL options.
- *
- * These sit at file scope, and not inside the sanity checker with the
- * mapping vocabularies, because a second reader needs them: an MPMD command
- * line may write "--output"/"--display"/"--rtos" in any app segment, and
- * prte_schizo_base_hoist_job_option() has to recognize the directives it is
- * collecting from those segments in order to tell a repeat from a
- * contradiction.  One copy means the two readers cannot drift.
- */
-static char *output_directives[] = {
-    PRTE_CLI_TAG,
-    PRTE_CLI_TAG_DET,
-    PRTE_CLI_TAG_FULL,
-    PRTE_CLI_RANK,
-    PRTE_CLI_TIMESTAMP,
-    PRTE_CLI_XML,
-    PRTE_CLI_MERGE_ERROUT,
-    PRTE_CLI_DIR,
-    PRTE_CLI_FILE,
-    NULL
-};
-static char *output_quals[] = {
-    PRTE_CLI_COPY,
-    PRTE_CLI_NOCOPY,
-    PRTE_CLI_RAW,
-    PRTE_CLI_PATTERN,
-    NULL
-};
-
-static char *display_directives[] = {
-    PRTE_CLI_ALLOC,
-    PRTE_CLI_MAP,
-    PRTE_CLI_BIND,
-    PRTE_CLI_MAPDEV,
-    PRTE_CLI_TOPO,
-    PRTE_CLI_CPUS,
-    NULL
-};
-static char *display_quals[] = {
-    PRTE_CLI_PARSEABLE,
-    PRTE_CLI_PARSABLE,
-    PRTE_CLI_PHYSICAL_CPUS,
-    NULL
-};
-
-static char *rto_directives[] = {
-    PRTE_CLI_ERROR_NZ,
-    PRTE_CLI_NOLAUNCH,
-    PRTE_CLI_NOSPAWN,
-    PRTE_CLI_SHOW_PROGRESS,
-    PRTE_CLI_RECOVERABLE,
-    PRTE_CLI_AUTORESTART,
-    PRTE_CLI_CONTINUOUS,
-    PRTE_CLI_MAX_RESTARTS,
-    PRTE_CLI_EXEC_AGENT,
-    PRTE_CLI_DEFAULT_EXEC_AGENT,
-    PRTE_CLI_STOP_ON_EXEC,
-    PRTE_CLI_STOP_IN_INIT,
-    PRTE_CLI_STOP_IN_APP,
-    PRTE_CLI_TIMEOUT,
-    PRTE_CLI_SPAWN_TIMEOUT,
-    PRTE_CLI_REPORT_STATE,
-    PRTE_CLI_STACK_TRACES,
-    PRTE_CLI_REPORT_CHILD_SEP,
-    PRTE_CLI_AGG_HELP,
-    PRTE_CLI_NOTIFY_ERRORS,
-    PRTE_CLI_OUTPUT_PROCTABLE,
-    PRTE_CLI_FWD_ENVIRON,
-    NULL
-};
-
-/* Every other directive of those three options is a BOOLEAN: written bare
- * to assert it, or with a truth value to say so explicitly.  These are the
- * ones that carry a value of their own instead, so "timeout=60" and
- * "timeout=30" are two different answers rather than two ways of saying
- * "true". */
-static char *valued_directives[] = {
+/* Every other directive of "--output", "--display" and "--rtos" is a
+ * BOOLEAN: written bare to assert it, or with a truth value to say so
+ * explicitly.  These are the ones that carry a value of their own instead,
+ * so "timeout=60" and "timeout=30" are two different answers rather than
+ * two ways of saying "true".  (Their vocabularies are in
+ * src/util/prte_cmd_line.c, shared with the parsers that act on them.) */
+static const char *valued_directives[] = {
     PRTE_CLI_DIR,
     PRTE_CLI_FILE,
     PRTE_CLI_TOPO,
@@ -521,32 +455,45 @@ static char *valued_directives[] = {
     NULL
 };
 
+/* Is this - a directive's full name, as a vocabulary spells it - one that
+ * carries a value?  Compared in full, not as an abbreviation: the callers
+ * hold the canonical name, and "t" is not "timeout". */
 bool prte_schizo_base_directive_is_valued(const char *directive)
 {
-    size_t n;
+    size_t n, len;
 
+    if (NULL == directive) {
+        return false;
+    }
+    len = strcspn(directive, "=");
     for (n = 0; NULL != valued_directives[n]; n++) {
-        if (PMIX_CHECK_CLI_OPTION((char *) directive, valued_directives[n])) {
+        if (len == strcspn(valued_directives[n], "=") &&
+            0 == strncasecmp(directive, valued_directives[n], len)) {
             return true;
         }
     }
     return false;
 }
 
-static bool option_vocabulary(const char *key, char ***dirs, char ***quals)
+/* The vocabularies of the three JOB-LEVEL options, which an MPMD command
+ * line may write in any app segment - prte_schizo_base_hoist_job_option()
+ * has to recognize the directives it is collecting from those segments in
+ * order to tell a repeat from a contradiction. */
+static bool option_vocabulary(const char *key, const pmix_cli_choice_t **dirs,
+                              const pmix_cli_choice_t **quals)
 {
     if (0 == strcmp(key, PRTE_CLI_OUTPUT)) {
-        *dirs = output_directives;
-        *quals = output_quals;
+        *dirs = prte_cli_output_directives;
+        *quals = prte_cli_output_quals;
         return true;
     }
     if (0 == strcmp(key, PRTE_CLI_DISPLAY)) {
-        *dirs = display_directives;
-        *quals = display_quals;
+        *dirs = prte_cli_display_directives;
+        *quals = prte_cli_display_quals;
         return true;
     }
     if (0 == strcmp(key, PRTE_CLI_RTOS)) {
-        *dirs = rto_directives;
+        *dirs = prte_cli_rtos_directives;
         *quals = NULL;
         return true;
     }
@@ -564,44 +511,35 @@ typedef struct {
 /* Directives that ask ONE question under two names.  Comparing the names
  * alone would let "copy" in one app segment and "nocopy" in another pass as
  * two unrelated requests, when they are opposite answers to the same
- * question - and "parseable"/"parsable" as two requests for the same thing,
- * which is merely untidy but would defeat the check for the pair given with
- * opposite truths. */
+ * question.  (Two spellings of the SAME answer - "parseable" and
+ * "parsable" - share a tag in their vocabulary, and so already resolve to
+ * one name.) */
 static struct {
     const char *spelling;
     const char *question;
     bool invert;
 } directive_aliases[] = {
     {PRTE_CLI_NOCOPY, PRTE_CLI_COPY, true},
-    {PRTE_CLI_PARSABLE, PRTE_CLI_PARSEABLE, false},
     {NULL, NULL, false}
 };
 
 /*
  * Name the question a token asks, or NULL for a token that belongs to
- * neither vocabulary - the sanity checker reports those, and it reports
- * them better than this can.
+ * neither vocabulary, or fits more than one word of it - the sanity checker
+ * reports those, and it reports them better than this can.
  */
-static const char *hoist_canonical(char *token, char **dirs, char **quals,
-                                   bool *invert)
+static const char *hoist_canonical(char *token, const pmix_cli_choice_t *dirs,
+                                   const pmix_cli_choice_t *quals, bool *invert)
 {
     const char *found = NULL;
+    int tag;
     size_t n;
 
     *invert = false;
-    if (NULL != dirs) {
-        for (n = 0; NULL == found && NULL != dirs[n]; n++) {
-            if (PMIX_CHECK_CLI_OPTION(token, dirs[n])) {
-                found = dirs[n];
-            }
-        }
-    }
-    if (NULL == found && NULL != quals) {
-        for (n = 0; NULL == found && NULL != quals[n]; n++) {
-            if (PMIX_CHECK_CLI_OPTION(token, quals[n])) {
-                found = quals[n];
-            }
-        }
+    if (NULL != dirs && PMIX_CLI_MATCH_FOUND == pmix_cli_match(token, dirs, &tag)) {
+        found = prte_cli_name(dirs, tag);
+    } else if (NULL != quals && PMIX_CLI_MATCH_FOUND == pmix_cli_match(token, quals, &tag)) {
+        found = prte_cli_name(quals, tag);
     }
     if (NULL == found) {
         return NULL;
@@ -648,7 +586,7 @@ static bool hoist_agree(prte_hoist_item_t *a, prte_hoist_item_t *b)
 int prte_schizo_base_hoist_job_option(pmix_cli_result_t *results,
                                       const char *key, char **contributions)
 {
-    char **dirs = NULL, **quals = NULL;
+    const pmix_cli_choice_t *dirs = NULL, *quals = NULL;
     char **toks = NULL, **parts = NULL;
     prte_hoist_item_t *items = NULL;
     size_t nitems = 0, alloc = 0, i, j;
@@ -777,8 +715,8 @@ static char *first_value(pmix_cli_item_t *opt)
  * one to be validated by nothing.  And it frees the split on the refusal
  * path as well as the accepting one - it used to be abandoned there,
  * leaking a copy of the whole list for each such option. */
-static int check_directive_list(char *option, char **valid, char **quals,
-                                pmix_cli_item_t *opt)
+static int check_directive_list(char *option, const pmix_cli_choice_t *valid,
+                                const pmix_cli_choice_t *quals, pmix_cli_item_t *opt)
 {
     char **vtmp;
     int n, v, rc = PRTE_SUCCESS;
@@ -823,79 +761,12 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     char **tmp;
     bool haspe = false;
 
-    char *mappers[] = {
-        PRTE_CLI_SLOT,
-        PRTE_CLI_HWT,
-        PRTE_CLI_CORE,
-        PRTE_CLI_L1CACHE,
-        PRTE_CLI_L2CACHE,
-        PRTE_CLI_L3CACHE,
-        PRTE_CLI_NUMA,
-        PRTE_CLI_PACKAGE,
-        PRTE_CLI_NODE,
-        PRTE_CLI_SEQ,
-        PRTE_CLI_PPR,
-        PRTE_CLI_RANKFILE,
-        PRTE_CLI_PELIST,
-        PRTE_CLI_DEVICE,
-        NULL
+    /* --rank-by takes no qualifiers, and says so if given one - unlike
+     * --rtos, whose values are not split into qualifiers at all */
+    static const pmix_cli_choice_t no_quals[] = {
+        PMIX_CLI_CHOICE_END
     };
-    char *mapquals[] = {
-        PRTE_CLI_PE,
-        PRTE_CLI_SPAN,
-        PRTE_CLI_OVERSUB,
-        PRTE_CLI_NOOVER,
-        PRTE_CLI_NOLOCAL,
-        PRTE_CLI_HWTCPUS,
-        PRTE_CLI_CORECPUS,
-        PRTE_CLI_INHERIT,
-        PRTE_CLI_NOINHERIT,
-        PRTE_CLI_QFILE,
-        PRTE_CLI_ORDERED,
-        PRTE_CLI_INTERLEAVE,
-        PRTE_CLI_SHARED,
-        PRTE_CLI_NDEV,
-        NULL
-    };
-
-    char *rankers[] = {
-        PRTE_CLI_SLOT,
-        PRTE_CLI_NODE,
-        PRTE_CLI_FILL,
-        PRTE_CLI_SPAN,
-        NULL
-    };
-    char *rkquals[] = {
-        NULL
-    };
-
-    char *binders[] = {
-        PRTE_CLI_NONE,
-        PRTE_CLI_HWT,
-        PRTE_CLI_CORE,
-        PRTE_CLI_L1CACHE,
-        PRTE_CLI_L2CACHE,
-        PRTE_CLI_L3CACHE,
-        PRTE_CLI_NUMA,
-        PRTE_CLI_PACKAGE,
-        NULL
-    };
-    /* This list is the front door: a qualifier missing from it is refused
-     * here and never reaches the parser that implements it. REPORT was
-     * missing, so the job-level arm for it in
-     * prte_hwloc_base_set_binding_policy() was unreachable from any command
-     * line - including the show_help that arm produces at DVM scope, which
-     * tells the user "you can provide this modifier on a per-job basis".
-     * Keep this in step with both parsers (src/hwloc/hwloc.c for the job,
-     * rmaps_base_set_app_binding_policy() below for an app). */
-    char *bndquals[] = {
-        PRTE_CLI_OVERLOAD,
-        PRTE_CLI_NOOVERLOAD,
-        PRTE_CLI_IF_SUPP,
-        PRTE_CLI_LIMIT,
-        PRTE_CLI_REPORT,
-        NULL
-    };
+    int tag;
 
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
@@ -943,7 +814,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     /* quick check that we have valid directives */
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_MAPBY);
     if (NULL != opt) {
-        if (!prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals,
+        if (!prte_schizo_base_check_directives(PRTE_CLI_MAPBY, prte_cli_mappers, prte_cli_mapquals,
                                                first_value(opt))) {
             return PRTE_ERR_SILENT;
         }
@@ -951,7 +822,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_RANKBY);
     if (NULL != opt) {
-        if (!prte_schizo_base_check_directives(PRTE_CLI_RANKBY, rankers, rkquals,
+        if (!prte_schizo_base_check_directives(PRTE_CLI_RANKBY, prte_cli_rankers, no_quals,
                                                first_value(opt))) {
             return PRTE_ERR_SILENT;
         }
@@ -959,7 +830,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_BINDTO);
     if (NULL != opt) {
-        if (!prte_schizo_base_check_directives(PRTE_CLI_BINDTO, binders, bndquals,
+        if (!prte_schizo_base_check_directives(PRTE_CLI_BINDTO, prte_cli_binders, prte_cli_bindquals,
                                                first_value(opt))) {
             return PRTE_ERR_SILENT;
         }
@@ -968,7 +839,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     /* the following have multiple directives */
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
-        rc = check_directive_list(PRTE_CLI_OUTPUT, output_directives, output_quals, opt);
+        rc = check_directive_list(PRTE_CLI_OUTPUT, prte_cli_output_directives, prte_cli_output_quals, opt);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -976,7 +847,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
-        rc = check_directive_list(PRTE_CLI_DISPLAY, display_directives, display_quals, opt);
+        rc = check_directive_list(PRTE_CLI_DISPLAY, prte_cli_display_directives, prte_cli_display_quals, opt);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -984,7 +855,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_RTOS);
     if (NULL != opt) {
-        rc = check_directive_list(PRTE_CLI_RTOS, rto_directives, NULL, opt);
+        rc = check_directive_list(PRTE_CLI_RTOS, prte_cli_rtos_directives, NULL, opt);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -1011,14 +882,19 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
          * qualifiers, which is what "PE=n" is. */
         tmp = PMIx_Argv_split(first_value(opt), ':');
         if (NULL != tmp) {
-            if (NULL != tmp[0] && 0 < strlen(tmp[0])
-                && PMIX_CHECK_CLI_OPTION(tmp[0], PRTE_CLI_PELIST)) {
-                haspe = true;
+            /* a value that opens with ':' has no policy word - its first
+             * field is already a qualifier */
+            n = 0;
+            if (':' != first_value(opt)[0]) {
+                if (PMIX_CLI_MATCH_FOUND == pmix_cli_match(tmp[0], prte_cli_mappers, &tag) &&
+                    PRTE_MAPPER_PELIST == tag) {
+                    haspe = true;
+                }
+                n = 1;
             }
-            for (n = 1; !haspe && NULL != tmp[n]; n++) {
-                /* an empty token matches whatever it is tested against
-                 * first, so skip it rather than let it claim PE */
-                if (0 < strlen(tmp[n]) && PMIX_CHECK_CLI_OPTION(tmp[n], PRTE_CLI_PE)) {
+            for (; !haspe && NULL != tmp[n]; n++) {
+                if (PMIX_CLI_MATCH_FOUND == pmix_cli_match(tmp[n], prte_cli_mapquals, &tag) &&
+                    PRTE_MAPQUAL_PE == tag) {
                     haspe = true;
                 }
             }
@@ -1036,9 +912,9 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
              * strcasestr(), which is a GNU/BSD extension present in neither
              * POSIX nor C11 and guarded by no configure check here. */
             tmp = PMIx_Argv_split(bnd, ':');
-            if (NULL != tmp && NULL != tmp[0] && 0 < strlen(tmp[0]) &&
-                (PMIX_CHECK_CLI_OPTION(tmp[0], PRTE_CLI_CORE) ||
-                 PMIX_CHECK_CLI_OPTION(tmp[0], PRTE_CLI_HWT))) {
+            if (NULL != tmp && NULL != bnd && ':' != bnd[0] &&
+                PMIX_CLI_MATCH_FOUND == pmix_cli_match(tmp[0], prte_cli_binders, &tag) &&
+                (PRTE_BINDER_CORE == tag || PRTE_BINDER_HWT == tag)) {
                 pebind = true;
             }
             PMIx_Argv_free(tmp);
@@ -1075,39 +951,35 @@ typedef struct {
 } prte_bool_directive_t;
 
 /*
- * Record the truth of one boolean directive.
+ * Record the truth of one boolean directive, named by its full spelling -
+ * the caller has already matched what the user wrote against the option's
+ * vocabulary, which is where an abbreviation is resolved (or refused as
+ * ambiguous).
  *
- * The table is searched in order because the matcher accepts any
- * unambiguous prefix and "tag" is a prefix of "tag-detailed": whichever
- * entry comes first is what a bare "tag" means, so the order here is the
- * user-facing definition of the abbreviations and must not be shuffled.
- *
- * Returns false if the token names no boolean directive in this table -
- * the caller then tries the directives that carry a real value.  On a
- * malformed value it reports the error itself and hands back *rc.
+ * Returns PRTE_ERR_NOT_FOUND if the name is no boolean directive in this
+ * table.  On a malformed value it reports the error itself and returns
+ * PRTE_ERR_SILENT.
  */
-static bool set_bool_directive(prte_bool_directive_t *tbl, const char *option,
-                               char *token, const char *value, int *rc)
+static int set_bool_directive(prte_bool_directive_t *tbl, const char *option,
+                              const char *name, const char *value)
 {
     size_t n;
     bool flag;
 
-    *rc = PRTE_SUCCESS;
-    for (n = 0; NULL != tbl[n].directive; n++) {
-        if (!PMIX_CHECK_CLI_OPTION(token, (char *) tbl[n].directive)) {
+    for (n = 0; NULL != name && NULL != tbl[n].directive; n++) {
+        if (0 != strcmp(name, tbl[n].directive)) {
             continue;
         }
         if (PRTE_SUCCESS != prte_cli_bool_value(value, &flag)) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "non-boolean-value", true,
                            option, tbl[n].directive, value);
-            *rc = PRTE_ERR_SILENT;
-            return true;
+            return PRTE_ERR_SILENT;
         }
         tbl[n].given = true;
         tbl[n].flag = flag;
-        return true;
+        return PRTE_SUCCESS;
     }
-    return false;
+    return PRTE_ERR_NOT_FOUND;
 }
 
 /* Emit the keys of every boolean directive that was given as true.
@@ -1147,15 +1019,13 @@ static int emit_bool_directives(prte_bool_directive_t *tbl, void *jinfo)
 
 int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 {
-    int n, idx, rc;
+    int n, idx, rc, tag;
     size_t m;
     pmix_status_t ret;
     char **targv = NULL, *ptr, *cptr, **quals = NULL;
     char *topo = NULL, *cpus = NULL, *valid;
     bool topogiven = false, cpusgiven = false;
     prte_bool_directive_t bools[] = {
-        /* "map" must precede "map-devel"; see the comment on
-         * set_bool_directive() */
         {PRTE_CLI_ALLOC, PMIX_DISPLAY_ALLOCATION, false, false},
         {PRTE_CLI_MAP, PMIX_DISPLAY_MAP, false, false},
         {PRTE_CLI_MAPDEV, PMIX_DISPLAY_MAP_DETAILED, false, false},
@@ -1164,14 +1034,13 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
     };
     prte_bool_directive_t qualtbl[] = {
         {PRTE_CLI_PARSEABLE, PMIX_DISPLAY_PARSEABLE_OUTPUT, false, false},
-        {PRTE_CLI_PARSABLE, PMIX_DISPLAY_PARSEABLE_OUTPUT, false, false},
         {PRTE_CLI_PHYSICAL_CPUS, PMIX_REPORT_PHYSICAL_CPUS, false, false},
         {NULL, NULL, false, false}
     };
 
     for (n=0; NULL != opt->values[n]; n++) {
         targv = PMIx_Argv_split(opt->values[n], ',');
-        for (idx = 0; NULL != targv[idx]; idx++) {
+        for (idx = 0; NULL != targv && NULL != targv[idx]; idx++) {
             /* check for qualifiers */
             cptr = strchr(targv[idx], ':');
             if (NULL != cptr) {
@@ -1179,14 +1048,22 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 ++cptr;
                 quals = PMIx_Argv_split(cptr, ':');
                 /* check qualifiers */
-                for (m=0; NULL != quals[m]; m++) {
-                    if (!set_bool_directive(qualtbl, PRTE_CLI_DISPLAY, quals[m],
-                                            PMIX_CLI_QUALIFIER_VALUE(quals[m]), &rc)) {
+                for (m=0; NULL != quals && NULL != quals[m]; m++) {
+                    rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--display", quals[m],
+                                        prte_cli_display_quals, &tag);
+                    if (PRTE_ERR_NOT_FOUND == rc) {
+                        valid = pmix_cli_match_list(NULL, prte_cli_display_quals, ',');
                         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "unrecognized-qualifier", true,
-                                       "display", cptr, "PARSEABLE,PARSABLE,PHYSICAL");
-                        rc = PRTE_ERR_FATAL;
+                                       PRTE_CLI_DISPLAY, quals[m], (NULL == valid) ? "" : valid);
+                        free(valid);
+                        rc = PRTE_ERR_SILENT;
+                        goto cleanup;
+                    } else if (PRTE_SUCCESS != rc) {
                         goto cleanup;
                     }
+                    rc = set_bool_directive(qualtbl, PRTE_CLI_DISPLAY,
+                                            prte_cli_name(prte_cli_display_quals, tag),
+                                            PMIX_CLI_QUALIFIER_VALUE(quals[m]));
                     if (PRTE_SUCCESS != rc) {
                         goto cleanup;
                     }
@@ -1199,24 +1076,28 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 continue;
             }
 
-            if (set_bool_directive(bools, PRTE_CLI_DISPLAY, targv[idx],
-                                   PMIX_CLI_QUALIFIER_VALUE(targv[idx]), &rc)) {
-                if (PRTE_SUCCESS != rc) {
-                    goto cleanup;
-                }
+            /* Refuse what we do not understand rather than drop it.  The
+             * sanity checker validates a directive list that came from a
+             * command line, but the "prte_display" MCA param reaches this
+             * parser without passing through it - so a misspelling there
+             * used to be honored as silence: the job ran, displayed
+             * nothing, and exited 0. */
+            rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--display", targv[idx],
+                                prte_cli_display_directives, &tag);
+            if (PRTE_ERR_NOT_FOUND == rc) {
+                valid = pmix_cli_match_list(NULL, prte_cli_display_directives, ':');
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                               "unrecognized-directive", true,
+                               PRTE_CLI_DISPLAY, targv[idx], (NULL == valid) ? "" : valid);
+                free(valid);
+                rc = PRTE_ERR_SILENT;
+                goto cleanup;
+            } else if (PRTE_SUCCESS != rc) {
+                goto cleanup;
+            }
+            ptr = PMIX_CLI_QUALIFIER_VALUE(targv[idx]);
 
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
-                ptr = strchr(targv[idx], '=');
-                if (NULL != ptr) {
-                    ++ptr;
-                    if ('\0' == *ptr) {
-                        /* missing the value or value is invalid */
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-value", true,
-                                       "display", "TOPO", targv[idx]);
-                        rc = PRTE_ERR_FATAL;
-                        goto cleanup;
-                    }
-                }
+            if (PRTE_DISPLAY_TOPO == tag) {
                 /* "topo" with no value means "every node", which is a
                  * legitimate request - so record that it was asked for
                  * separately from the value it may have carried */
@@ -1226,18 +1107,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 topo = (NULL == ptr) ? NULL : strdup(ptr);
                 topogiven = true;
 
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_CPUS)) {
-                ptr = strchr(targv[idx], '=');
-                if (NULL != ptr) {
-                    ++ptr;
-                    if ('\0' == *ptr) {
-                        /* missing the value or value is invalid */
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "invalid-value", true,
-                                       "display", "PROCESSORS", targv[idx]);
-                        rc = PRTE_ERR_FATAL;
-                        goto cleanup;
-                    }
-                }
+            } else if (PRTE_DISPLAY_CPUS == tag) {
                 if (NULL != cpus) {
                     free(cpus);
                 }
@@ -1245,19 +1115,11 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 cpusgiven = true;
 
             } else {
-                /* Refuse what we do not understand rather than drop it.
-                 * The sanity checker validates a directive list that came
-                 * from a command line, but the "prte_display" MCA param
-                 * reaches this parser without passing through it - so a
-                 * misspelling there used to be honored as silence: the job
-                 * ran, displayed nothing, and exited 0. */
-                valid = PMIx_Argv_join(display_directives, ':');
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                               "unrecognized-directive", true,
-                               PRTE_CLI_DISPLAY, targv[idx], valid);
-                free(valid);
-                rc = PRTE_ERR_SILENT;
-                goto cleanup;
+                rc = set_bool_directive(bools, PRTE_CLI_DISPLAY,
+                                        prte_cli_name(prte_cli_display_directives, tag), ptr);
+                if (PRTE_SUCCESS != rc) {
+                    goto cleanup;
+                }
             }
         }
         PMIx_Argv_free(targv);
@@ -1311,15 +1173,13 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
     char *outfile=NULL;
     char *outfileraw=NULL;
     char **targv = NULL, *ptr, *cptr, **options = NULL, *valid;
-    int m, n, idx, rc;
+    int m, n, idx, rc, tag;
     pmix_status_t ret;
     bool fileonly = true;
     bool copyqualgiven = false;
     bool patternqualgiven = false;
     bool flag;
     prte_bool_directive_t bools[] = {
-        /* "tag" must precede "tag-detailed"/"tag-fullname"; see the comment
-         * on set_bool_directive() */
         {PRTE_CLI_TAG, PMIX_IOF_TAG_OUTPUT, false, false},
         {PRTE_CLI_TAG_DET, PMIX_IOF_TAG_DETAILED_OUTPUT, false, false},
         {PRTE_CLI_TAG_FULL, PMIX_IOF_TAG_FULLNAME_OUTPUT, false, false},
@@ -1339,7 +1199,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
          * user may repeat "--output" as well as comma-delimit within one
          * instance, and both spellings have to be honored */
         targv = PMIx_Argv_split(opt->values[n], ',');
-        for (idx = 0; NULL != targv[idx]; idx++) {
+        for (idx = 0; NULL != targv && NULL != targv[idx]; idx++) {
             /* check for qualifiers */
             cptr = strchr(targv[idx], ':');
             if (NULL != cptr) {
@@ -1349,57 +1209,52 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                  * from the directive - and from its fellows - by a ':'.  The
                  * ',' that separates directives has already been consumed
                  * above, so splitting on ',' here would hand the whole
-                 * ':'-joined run to the matcher as one token; that token
-                 * prefix-matches only its FIRST qualifier, and every
-                 * qualifier after it is silently dropped */
+                 * ':'-joined run to the matcher as one token, and every
+                 * qualifier after the first would be lost */
                 options = PMIx_Argv_split(cptr, ':');
-                for (m=0; NULL != options[m]; m++) {
+                for (m=0; NULL != options && NULL != options[m]; m++) {
+                    /* see the directive below - the same refusal, for a
+                     * qualifier */
+                    rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--output", options[m],
+                                        prte_cli_output_quals, &tag);
+                    if (PRTE_ERR_NOT_FOUND == rc) {
+                        valid = pmix_cli_match_list(NULL, prte_cli_output_quals, ':');
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                                       "unrecognized-qualifier", true,
+                                       PRTE_CLI_OUTPUT, options[m], (NULL == valid) ? "" : valid);
+                        free(valid);
+                        rc = PRTE_ERR_SILENT;
+                        goto cleanup;
+                    } else if (PRTE_SUCCESS != rc) {
+                        goto cleanup;
+                    }
+                    ptr = PMIX_CLI_QUALIFIER_VALUE(options[m]);
 
-                    if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
+                    if (PRTE_OUTQUAL_RAW == tag) {
+                        rc = set_bool_directive(qualtbl, PRTE_CLI_OUTPUT, PRTE_CLI_RAW, ptr);
+                        if (PRTE_SUCCESS != rc) {
+                            goto cleanup;
+                        }
+                        continue;
+                    }
+
+                    if (PRTE_SUCCESS != prte_cli_bool_value(ptr, &flag)) {
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "non-boolean-value", true,
+                                       PRTE_CLI_OUTPUT, prte_cli_name(prte_cli_output_quals, tag), ptr);
+                        rc = PRTE_ERR_SILENT;
+                        goto cleanup;
+                    }
+                    if (PRTE_OUTQUAL_NOCOPY == tag || PRTE_OUTQUAL_COPY == tag) {
                         if (copyqualgiven) {
                             // cannot give both copy and nocopy
                             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-output.txt", "copy-nocopy", true, cptr);
                             rc = PRTE_ERR_SILENT;
                             goto cleanup;
                         }
-                        if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(options[m]),
-                                                                &flag)) {
-                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "non-boolean-value", true,
-                                           PRTE_CLI_OUTPUT, PRTE_CLI_NOCOPY,
-                                           PMIX_CLI_QUALIFIER_VALUE(options[m]));
-                            rc = PRTE_ERR_SILENT;
-                            goto cleanup;
-                        }
-                        fileonly = flag;
+                        fileonly = (PRTE_OUTQUAL_NOCOPY == tag) ? flag : !flag;
                         copyqualgiven = true;
 
-                    } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_COPY)) {
-                        if (copyqualgiven) {
-                            // cannot give both copy and nocopy
-                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-output.txt", "copy-nocopy", true, cptr);
-                            rc = PRTE_ERR_SILENT;
-                            goto cleanup;
-                        }
-                        if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(options[m]),
-                                                                &flag)) {
-                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "non-boolean-value", true,
-                                           PRTE_CLI_OUTPUT, PRTE_CLI_COPY,
-                                           PMIX_CLI_QUALIFIER_VALUE(options[m]));
-                            rc = PRTE_ERR_SILENT;
-                            goto cleanup;
-                        }
-                        fileonly = !flag;
-                        copyqualgiven = true;
-
-                    } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
-                        if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(options[m]),
-                                                                &flag)) {
-                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "non-boolean-value", true,
-                                           PRTE_CLI_OUTPUT, PRTE_CLI_PATTERN,
-                                           PMIX_CLI_QUALIFIER_VALUE(options[m]));
-                            rc = PRTE_ERR_SILENT;
-                            goto cleanup;
-                        }
+                    } else if (PRTE_OUTQUAL_PATTERN == tag) {
 #if PRTE_PMIX_IOF_FILE_PATTERN
                         /* only record it here - the key is emitted with the
                          * filename it qualifies, since it means nothing
@@ -1415,23 +1270,6 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                             goto cleanup;
                         }
 #endif
-
-                    } else if (set_bool_directive(qualtbl, PRTE_CLI_OUTPUT, options[m],
-                                                  PMIX_CLI_QUALIFIER_VALUE(options[m]), &rc)) {
-                        if (PRTE_SUCCESS != rc) {
-                            goto cleanup;
-                        }
-
-                    } else {
-                        /* see the directive arm below - the same silence,
-                         * for a qualifier */
-                        valid = PMIx_Argv_join(output_quals, ':');
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                                       "unrecognized-qualifier", true,
-                                       PRTE_CLI_OUTPUT, options[m], valid);
-                        free(valid);
-                        rc = PRTE_ERR_SILENT;
-                        goto cleanup;
                     }
                 }
                 PMIx_Argv_free(options);
@@ -1441,24 +1279,33 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 // only qualifiers were given
                 continue;
             }
-            /* remove any '=' sign in the directive */
-            if (NULL != (ptr = strchr(targv[idx], '='))) {
-                *ptr = '\0';
-                ++ptr; // step over '=' sign
-            }
-            if (set_bool_directive(bools, PRTE_CLI_OUTPUT, targv[idx], ptr, &rc)) {
-                if (PRTE_SUCCESS != rc) {
-                    goto cleanup;
-                }
 
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_DIR)) {
-                if (NULL == ptr || '\0' == *ptr) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                                   "missing-qualifier", true,
-                                   "output", "directory", "directory");
-                    rc = PRTE_ERR_FATAL;
-                    goto cleanup;
-                }
+            /* Refuse what we do not understand rather than drop it.  The
+             * sanity checker validates a directive list that came from a
+             * command line, but the "prte_output" MCA param reaches this
+             * parser without passing through it - so a misspelling there
+             * used to be honored as silence: the job ran with no tagging,
+             * no file, and an exit status of 0, while the identical word
+             * written on the command line was reported. */
+            rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--output", targv[idx],
+                                prte_cli_output_directives, &tag);
+            if (PRTE_ERR_NOT_FOUND == rc) {
+                valid = pmix_cli_match_list(NULL, prte_cli_output_directives, ':');
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
+                               "unrecognized-directive", true,
+                               PRTE_CLI_OUTPUT, targv[idx], (NULL == valid) ? "" : valid);
+                free(valid);
+                rc = PRTE_ERR_SILENT;
+                goto cleanup;
+            } else if (PRTE_SUCCESS != rc) {
+                goto cleanup;
+            }
+            /* the directory and the filename are required by the
+             * vocabulary to carry their value, so a NULL here is a boolean
+             * directive given bare */
+            ptr = PMIX_CLI_QUALIFIER_VALUE(targv[idx]);
+
+            if (PRTE_OUTPUT_DIR == tag) {
                 if (NULL != outfile) {
                     prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "both-file-and-dir-set", true, outfile, ptr);
                     rc = PRTE_ERR_FATAL;
@@ -1483,14 +1330,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     outdir = strdup(ptr);
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_FILE)) {
-                if (NULL == ptr || '\0' == *ptr) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                                   "missing-qualifier", true,
-                                   "output", "filename", "filename");
-                    rc = PRTE_ERR_FATAL;
-                    goto cleanup;
-                }
+            } else if (PRTE_OUTPUT_FILE == tag) {
                 if (NULL != outdir) {
                     prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "both-file-and-dir-set", true, ptr, outdir);
                     rc = PRTE_ERR_FATAL;
@@ -1518,21 +1358,11 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 }
 
             } else {
-                /* Refuse what we do not understand rather than drop it.
-                 * The sanity checker validates a directive list that came
-                 * from a command line, but the "prte_output" MCA param
-                 * reaches this parser without passing through it - so a
-                 * misspelling there used to be honored as silence: the job
-                 * ran with no tagging, no file, and an exit status of 0,
-                 * while the identical word written on the command line was
-                 * reported. */
-                valid = PMIx_Argv_join(output_directives, ':');
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
-                               "unrecognized-directive", true,
-                               PRTE_CLI_OUTPUT, targv[idx], valid);
-                free(valid);
-                rc = PRTE_ERR_SILENT;
-                goto cleanup;
+                rc = set_bool_directive(bools, PRTE_CLI_OUTPUT,
+                                        prte_cli_name(prte_cli_output_directives, tag), ptr);
+                if (PRTE_SUCCESS != rc) {
+                    goto cleanup;
+                }
             }
         }
         PMIx_Argv_free(targv);
