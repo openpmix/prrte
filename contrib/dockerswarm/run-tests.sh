@@ -1520,6 +1520,34 @@ test_schizo() {
         bad "could not start a DVM for the prun argument test"
     fi
     cleanup_swarm
+
+    banner "schizo: --dvm names the DVM under the ompi personality, for prun and prterun"
+    # Under the ompi personality "--dvm <how>" is the only way to name a DVM -
+    # its table has none of prun's --dvm-uri/--pid/--namespace.  Two DVMs are
+    # up, so a tool that ignores the option and searches instead cannot pick
+    # one.  prun used to do exactly that: only prte.c translated --dvm, before
+    # "prterun --dvm" handed off.  And that hand-off passed the RAW argv to the
+    # app parse, so a "--map-by" (tables spell it "--mapby") was refused as an
+    # unrecognized option under "mpirun --dvm".
+    if dvm_start_uri /tmp/szd-a.uri 'node2:2' '' && dvm_start_uri /tmp/szd-b.uri 'node3:2' ''; then
+        out=$(RUN "$OMPIROOT timeout 30 prun --personality ompi --dvm file:/tmp/szd-b.uri -np 1 hostname" 2>&1)
+        echo "$out" | grep -qx 'node3' \
+            && ok "prun --personality ompi --dvm file: reached the DVM it named" \
+            || bad "prun --personality ompi ignored --dvm: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        out=$(RUN "$OMPIROOT timeout 30 prterun --personality ompi --dvm file:/tmp/szd-a.uri --map-by :OVERSUBSCRIBE -np 3 hostname" 2>&1)
+        [ "$(echo "$out" | grep -cx 'node2')" = 3 ] \
+            && ok "--map-by is accepted under prterun --personality ompi --dvm" \
+            || bad "--map-by refused under prterun --dvm: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        out=$(RUN "$OMPIROOT timeout 30 prun --personality ompi --dvm bogus:x -np 1 hostname" 2>&1); rc=$?
+        [ "$rc" != 0 ] && echo "$out" | grep -q 'bogus:x' \
+            && ok "an unrecognized --dvm directive is refused by name" \
+            || bad "a bad --dvm directive was not reported (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    else
+        bad "could not start two DVMs for the --dvm test"
+    fi
+    RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/szd-a.uri" >/dev/null 2>&1
+    RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/szd-b.uri" >/dev/null 2>&1
+    cleanup_swarm
 }
 
 ########################################################################

@@ -606,7 +606,13 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
             exit(rc);
         }
-        rc = prun_common(&results, schizo, argc, argv);
+        /* pargv, not argv: it is the copy the MCA pre-scan, the spelling
+         * normalizer and the --app expansion all worked on, and that
+         * "results" was parsed from.  Handing over the raw argv made the
+         * app parse see "--map-by" where every option table spells it
+         * "--mapby", so "mpirun --dvm ... --map-by X" was refused as an
+         * unrecognized option, and an --app file's contents were lost. */
+        rc = prun_common(&results, schizo, pargc, pargv);
 
         exit(rc);
     }
