@@ -216,6 +216,22 @@ int test_job_policy(void)
     free(sval);
     PMIX_RELEASE(jdata);
 
+    /* a qualifier written after the device with ',' instead of ':' is
+     * refused.  It used to reach the mapper as the class "gpu" with the
+     * rest dropped - one GPU per process where two were asked for */
+    fprintf(stderr, "--- expected error output follows (device with a comma) ---\n");
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "device=gpu,ndev=2");
+    CHECK("job device=gpu,ndev=2: refused", PRTE_SUCCESS != rc);
+    CHECK("job device=gpu,ndev=2: no device recorded",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_DEVICE, NULL, PMIX_STRING));
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "ppr:2:device=gpu,ndev=2");
+    CHECK("job ppr:2:device=gpu,ndev=2: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
     /* abbreviated, and the value read after the "=" rather than at a fixed
      * offset past the full spelling */
     jdata = newjob();

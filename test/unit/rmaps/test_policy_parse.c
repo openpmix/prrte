@@ -513,6 +513,18 @@ int test_policy_parse(void)
     CHECK("mapby bare gpu: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
+    /* the reporter's spelling: a comma where the qualifier's ':' belongs */
+    fprintf(stderr, "--- expected error output follows (device with a comma) ---\n");
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu,ndev=2");
+    CHECK("mapby device=gpu,ndev=2: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "ppr:1:device=gpu,ndev=2");
+    CHECK("mapby ppr:1:device=gpu,ndev=2: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
     /* the value is validated here, not left for the mapper to trip over */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "pe-list=0-3-5");
