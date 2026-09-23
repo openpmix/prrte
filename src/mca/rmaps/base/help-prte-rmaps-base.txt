@@ -481,6 +481,20 @@ requirements:
 
 Please adjust the request and try again.
 #
+[rmaps:device-with-comma]
+The device named in a mapping request contains a comma:
+
+  Given:  %s
+
+No device is named with a comma, so this is almost certainly a
+qualifier that follows the device written with ',' where ':' belongs.
+The qualifiers of --map-by are separated by colons:
+
+  %s
+
+Nothing was mapped, rather than map by a device that cannot exist - or
+silently drop the qualifier, as this once did.
+#
 [rmaps:bind-above-device]
 A binding was requested that is coarser than the devices the job was
 mapped against:
