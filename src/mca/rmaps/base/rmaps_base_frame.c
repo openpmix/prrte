@@ -361,8 +361,9 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         attrs = &jdata->attributes;
     }
 
+    /* nothing but delimiters splits to NULL rather than to an empty array */
     ck2 = PMIx_Argv_split(ck, ':');
-    for (i = 0; NULL != ck2[i]; i++) {
+    for (i = 0; NULL != ck2 && NULL != ck2[i]; i++) {
         if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SPAN);
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_GIVEN);
@@ -1563,8 +1564,10 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
     if (NULL != ptr) {
         *ptr = '\0';
         ++ptr;
+        /* an empty qualifier list - "core:" - splits to NULL, not to an
+         * empty array; see the job-level parser */
         quals = PMIx_Argv_split(ptr, ':');
-        for (i = 0; NULL != quals[i]; i++) {
+        for (i = 0; NULL != quals && NULL != quals[i]; i++) {
             if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_OVERLOAD)) {
@@ -1621,6 +1624,19 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
             }
         }
         PMIx_Argv_free(quals);
+    }
+
+    /* An empty policy word - ":overload-allowed" - names no policy: the app
+     * gets the binding it would have had anyway, with these qualifiers. That
+     * is what the job-level parser does, and what the matcher below cannot
+     * be asked, since an empty word used to match the first thing it was
+     * tested against - so the app was silently not bound at all. The
+     * policy bits stay clear and prte_rmaps_base_resolve_app_options()
+     * fills them in. */
+    if ('\0' == myspec[0]) {
+        free(myspec);
+        prte_set_attribute(&app->attributes, PRTE_APP_BINDTO, PRTE_ATTR_GLOBAL, &tmp, PMIX_UINT16);
+        return PRTE_SUCCESS;
     }
 
     if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {

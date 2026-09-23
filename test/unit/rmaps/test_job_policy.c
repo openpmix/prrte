@@ -354,6 +354,22 @@ int test_job_policy(void)
     CHECK("bindto core:LIMIT=two: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(jdata);
 
+    /* an empty qualifier list splits to NULL, not to an empty array, and
+     * the qualifier loop indexed it: "--bind-to core:" killed prterun, and
+     * on the spawn path a persistent DVM's controller */
+    jdata = newjob();
+    rc = prte_hwloc_base_set_binding_policy(jdata, "core:");
+    CHECK("bindto core: (trailing colon): rc", PRTE_SUCCESS == rc);
+    CHECK("bindto core: (trailing colon): policy",
+          PRTE_BIND_TO_CORE == PRTE_GET_BINDING_POLICY(jdata->map->binding));
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_hwloc_base_set_binding_policy(jdata, ":");
+    CHECK("bindto \":\": rc", PRTE_SUCCESS == rc);
+    CHECK("bindto \":\": no policy", !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding));
+    PMIX_RELEASE(jdata);
+
     /* === the printer.  Every qualifier at once is the longest string it
      * can be asked to produce, and it has to come back whole === */
     {
