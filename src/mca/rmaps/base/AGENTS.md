@@ -244,6 +244,12 @@ per-group counts are exact — so ownership of every string moves with it.
   and `bind_generic()`/`bind_multiple()` narrow their candidates to it
   (`narrow_to_devices()`). It is a copy, owned by the options like
   `target`, because the context is released at the end of each node.
+- **"All devices equally close" is a statement about the devices.** The
+  degenerate-locality warning compares the devices' localities, not the
+  groups'. With `interleave` and `ndev` together every group spans the
+  packages and so resolves to the whole node, on a machine whose four GPUs
+  sit in four different NUMA domains - and comparing groups told the user
+  their machine hung every device off one PCI complex.
 - **`interleave=<level>` finds the level object by cpuset, never by walking
   up.** A device's locality is usually a Package or a Group, and in hwloc 2
   a NUMA node is a memory child — nobody's ancestor.
