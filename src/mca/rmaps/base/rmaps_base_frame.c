@@ -999,7 +999,18 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             break;
 
         case PRTE_MAPPER_RANKFILE:
-            /* check that the file was given */
+            /* The file naming the rank->host+cpuset assignments: from the
+             * FILE= qualifier parsed above or, failing that, the one the
+             * DVM was given as its default - which is what the per-app
+             * parser has always done.  This parser meant to as well, but
+             * refused a job without FILE= before it got that far, so a DVM
+             * started with a default rankfile could not use it for any
+             * job that asked for rankfile mapping by name. */
+            if (NULL != jdata && NULL != prte_rmaps_base.file &&
+                !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
+                                   prte_rmaps_base.file, PMIX_STRING);
+            }
             if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
                 (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rankfile-no-filename", true);

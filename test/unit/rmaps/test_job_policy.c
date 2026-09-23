@@ -276,6 +276,36 @@ int test_job_policy(void)
     free(sval);
     PMIX_RELEASE(jdata);
 
+    /* === a job that names rankfile mapping without a FILE= uses the
+     * DVM's default rankfile, as a per-app spec always has.  It was refused
+     * instead: the "no file" check ran before the fallback that was meant
+     * to supply one === */
+    {
+        char *saved = prte_rmaps_base.file;
+
+        prte_rmaps_base.file = strdup("/tmp/dvm-default-rf");
+        jdata = newjob();
+        rc = prte_rmaps_base_set_mapping_policy(jdata, "rankfile");
+        CHECK("job rankfile, DVM default: rc", PRTE_SUCCESS == rc);
+        sval = get_str(&jdata->attributes, PRTE_JOB_FILE);
+        CHECK("job rankfile, DVM default: path",
+              NULL != sval && 0 == strcmp(sval, "/tmp/dvm-default-rf"));
+        free(sval);
+        PMIX_RELEASE(jdata);
+
+        /* ...and a FILE= of its own still wins */
+        jdata = newjob();
+        rc = prte_rmaps_base_set_mapping_policy(jdata, "rankfile:FILE=/tmp/rf");
+        sval = get_str(&jdata->attributes, PRTE_JOB_FILE);
+        CHECK("job rankfile:FILE over the DVM default",
+              PRTE_SUCCESS == rc && NULL != sval && 0 == strcmp(sval, "/tmp/rf"));
+        free(sval);
+        PMIX_RELEASE(jdata);
+
+        free(prte_rmaps_base.file);
+        prte_rmaps_base.file = saved;
+    }
+
     /* === garbage is refused, not guessed at === */
     jdata = newjob();
     rc = prte_rmaps_base_set_mapping_policy(jdata, "banana");
