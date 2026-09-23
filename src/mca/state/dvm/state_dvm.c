@@ -747,6 +747,9 @@ static void check_complete(int fd, short args, void *cbdata)
     if (jdata->state < PRTE_JOB_STATE_UNTERMINATED) {
         jdata->state = PRTE_JOB_STATE_TERMINATED;
     }
+    /* ...and record that its termination has actually begun, which the state
+     * alone cannot say - see check_complete_resume() */
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TERMINATING);
 
     /* apply any reservation inheritance dispositions triggered by the
      * termination of this namespace */
@@ -898,7 +901,21 @@ static void check_complete_resume(int fd, short args, void *cbdata)
             if (PMIX_CHECK_NSPACE(jptr->nspace, PRTE_PROC_MY_NAME->nspace)) {
                 continue;
             }
-            if (jptr->state < PRTE_JOB_STATE_TERMINATED) {
+            /* A job's state is not enough to say it is over.  The errmgr
+             * records WHY a job is ending the moment its first proc fails -
+             * NON_ZERO_TERM, CALLED_ABORT, all above TERMINATED - and then
+             * kills the rest, so a job can sit in one of those states with
+             * procs still alive on other nodes.  Taking that for "done" shut
+             * the DVM down under it: its surviving procs were killed by the
+             * teardown, it never came through here, and its exit status was
+             * never recorded - a child job that exited 7 while its parent
+             * was finishing left prterun exiting 0.  A job is over once
+             * check_complete has begun its termination.  Tool job objects
+             * never reach check_complete, so for them the state still
+             * decides. */
+            if (jptr->state < PRTE_JOB_STATE_TERMINATED ||
+                (!PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL) &&
+                 !PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TERMINATING))) {
                 /* still alive - finish processing this job's termination */
                 goto release;
             }

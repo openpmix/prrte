@@ -137,6 +137,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAG_LAUNCH_PENDING    0x0002 // registered to launch, launch message not yet broadcast (master only)
 #define PRTE_JOB_FLAG_RESTARTED         0x0004 // some procs in this job are being restarted
 #define PRTE_JOB_FLAG_ABORTED           0x0008 // did this job abort?
+#define PRTE_JOB_FLAG_TERMINATING       0x0010 // check_complete has begun this job's termination (master only)
 #define PRTE_JOB_FLAG_FORWARD_OUTPUT    0x0020 // forward output from the apps
 #define PRTE_JOB_FLAG_DO_NOT_MONITOR    0x0040 // do not monitor apps for termination
 #define PRTE_JOB_FLAG_FORWARD_COMM      0x0080 //
