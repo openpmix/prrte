@@ -261,10 +261,14 @@ RELM dropped the very message it exists to deliver when the daemon
 holding it died; a rank that aborted -- the ordinary ``MPI_Abort`` case
 -- could, depending on whether its output drained before or after it
 was killed, never be retired by its daemon, so the master believed it
-alive for ever and ``prterun`` hung with every daemon still up; and a
-job held by the elastic launch fence was caught up to newly grown
-daemons as though it were already running, so its own launch message
-reached them as a duplicate and forked nothing.
+alive for ever and ``prterun`` hung with every daemon still up; a job
+held by the elastic launch fence was caught up to newly grown daemons as
+though it were already running, so its own launch message reached them
+as a duplicate and forked nothing; and a non-persistent DVM counted a
+job as over the moment the error manager recorded why it was ending,
+before its remaining procs had been killed, so a spawned child with a
+failed rank could be torn down with the DVM when its parent finished,
+and ``prterun`` exited 0 for a child that had exited non-zero.
 
 The values of ``--map-by``, ``--rank-by``, ``--bind-to``, ``--output``,
 ``--display``, and ``--rtos`` are now matched against each option's
@@ -368,6 +372,34 @@ comment rather than an app context, and an executable given alongside
 as its arguments. ``--display-topo`` and ``--rankfile`` are converted to
 directives the parser accepts, ``-N`` no longer warns as deprecated, and
 an empty ``--report-pid`` no longer closes ``prun``'s own stdin.
+
+``prun`` now behaves as ``prterun`` does in several places where it did
+not. It no longer strips a leading and trailing ``"`` from every
+argument, the application's included, so ``prun sh -c 'echo "$X"'``
+no longer hands the shell an unmatched quote. Under a persistent DVM,
+nothing a user exported -- ``PMIX_MCA_*``, and ``OMPI_MCA_*`` under the
+ompi personality -- reached a job, because ``prun`` asked PMIx to
+collect it under an identity a tool never has. It now asks in its own
+name, and if that collection fails, the launch fails rather than running
+the job without the settings. The same mistake made ``prun`` send the
+kill for an I/O forwarding failure to an empty namespace instead of to
+the job it launched. ``prun --personality ompi --dvm file:X`` now
+connects to the DVM it names instead of searching for one, and
+``prterun --dvm`` parses the same rewritten command line as the rest of
+``prterun``. Before, it refused ``--map-by`` as an unrecognized option
+and lost an ``--app`` file.
+
+A generic ``--mca`` parameter is handed to PRRTE or PMIx by the first
+segment of its name, and PMIx reads PRRTE's list of segments once, on
+its first check. The argv pre-scan made that check before PRRTE had
+published the list, so which list governed depended on the command line.
+The list is now published before the pre-scan routes anything. It also
+names every prefix PRRTE's parameters use, so ``--mca rml_base_radix 4``
+is recognized as PRRTE's. A generic ``if_*`` parameter was rewritten to
+a ``prteif_*`` parameter that nothing reads. It now reaches PMIx as
+``pif_*`` and is still forwarded to Open MPI under the ompi personality,
+and an ``OMPI_MCA_if_*`` value in the environment is no longer mapped to
+``prteif_*`` either.
 
 Every ``show_help`` message now names the job it is about. PMIx keys
 duplicate suppression on the job, and a DVM runs many jobs over its
