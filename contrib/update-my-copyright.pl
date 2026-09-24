@@ -4,6 +4,7 @@
 # Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
 # Copyright (c) 2017      IBM Corporation. All rights reserved.
 # Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 
@@ -21,8 +22,7 @@
 # More details:
 #
 # This is a simple script to traverse the tree looking for added and
-# changed files (via "svn st ." or "hg st .", depending on what meta
-# directory is found in this tree).  Note that the search starts in
+# changed files (via "git status").  Note that the search starts in
 # the current directory -- not the top-level directory.
 #
 # All added and changed files are examined.  If the special
@@ -69,6 +69,12 @@ my $HELP = 0;
 my $my_search_name = "Nanook";
 my $my_formal_name = "Nanook Consulting.  All rights reserved.";
 
+# Protected files: regular expressions matched against the names of
+# files that this script must never edit
+my @protected = qw(
+    contrib\\/update-my-copyright.pl
+);
+
 # Override the defaults if some values are set in the environment
 $my_search_name = $ENV{PRTE_COPYRIGHT_SEARCH_NAME}
     if (defined($ENV{PRTE_COPYRIGHT_SEARCH_NAME}));
@@ -81,7 +87,6 @@ GetOptions(
     "check-only" => \$CHECK_ONLY,
     "search-name=s" => \$my_search_name,
     "formal-name=s" => \$my_formal_name,
-    "manual-list=s" => \$my_manual_list,
 ) or die "unable to parse options, stopped";
 
 if ($HELP) {
@@ -92,8 +97,7 @@ $0 [options]
 --quiet | -q         Only output critical messages to stdout
 --check-only         exit(111) if there are files with copyrights to edit
 --search-name=NAME   Set search name to NAME
---formal-same=NAME   Set formal name to NAME
---manual-list=FNAME  Use specified file as list of files to mod copyright
+--formal-name=NAME   Set formal name to NAME
 EOT
     exit(0);
 }
