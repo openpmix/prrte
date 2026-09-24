@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2025      Jeffrey M. Squyres.  All rights reserved.
+# Copyright (c) 2025-2026 Jeffrey M. Squyres.  All rights reserved.
 # Copyright (c) 2025-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
@@ -32,6 +32,22 @@ def parse_cmd_line_options(path, verbose=False):
                     print("Found option: {n} = {o}".format(n=m.group(1), o=m.group(2)))
 
     return options
+
+def is_tool_path(path, root):
+    # A file belongs to a tool if it is under a "tools" directory, or
+    # the prte or ompi schizo component directory, within the source
+    # tree.  Compare whole directory names in the path relative to
+    # root: a substring test on the absolute path also matches the
+    # directories that the source tree itself lives in (e.g., a build
+    # workspace named ".../autotools-update/..."), which makes every
+    # help file in the tree look like a tool's.
+    dirs = os.path.dirname(os.path.relpath(path, root)).split(os.sep)
+    if "tools" in dirs:
+        return True
+    for i in range(len(dirs) - 1):
+        if dirs[i] == "schizo" and dirs[i+1] in ("prte", "ompi"):
+            return True
+    return False
 
 def find_files(root, verbose=False):
     # Check for existence of root directory - otherwise, we just
@@ -66,7 +82,7 @@ def find_files(root, verbose=False):
                         break
                 if not skipit:
                     full_path = os.path.join(root_dir, file)
-                    if "schizo/prte" in full_path or "schizo/ompi" in full_path or "tools" in full_path:
+                    if is_tool_path(full_path, root):
                         tool_help_files.append(full_path)
                         if verbose:
                             print("Found tool help: {full_path}".format(full_path=full_path))
@@ -76,7 +92,7 @@ def find_files(root, verbose=False):
                             print("Found help: {full_path}".format(full_path=full_path))
             elif file.endswith(".c") or file.endswith(".h"):
                 full_path = os.path.join(root_dir, file)
-                if "schizo/prte" in full_path or "schizo/ompi" in full_path or "tools" in full_path:
+                if is_tool_path(full_path, root):
                     tool_source_files.append(full_path)
                 else:
                     source_files.append(full_path)
