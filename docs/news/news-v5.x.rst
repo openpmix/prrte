@@ -74,24 +74,20 @@ Highlights
   composed by the user, and tools connected to a non-master daemon get
   working I/O.
 
-* **New hostfile and rankfile parsers.** One shared line reader replaces
-  the flex scanners, fixing CRLF files, dotted usernames, ``^user@host``
-  exclusions, and several silent drops. Errors name the line at fault.
-
 * **Data server.** Published data honors its requested lifetime and
   persistence, access is by permission and then range, per-user holdings
   are bounded, and an external data server is reached as a PMIx tool.
 
-* **Directive values are matched whole.** The values of ``--map-by``,
-  ``--rank-by``, ``--bind-to``, ``--output``, ``--display``, and
-  ``--rtos`` are resolved against each option's full vocabulary.
-  Ambiguous abbreviations and misplaced qualifier values are refused
-  with a message naming the candidates.
+* **Command-line parsing and mapper options.** Numerous fixes to how
+  the values of ``--map-by``, ``--rank-by``, ``--bind-to``, ``--output``,
+  ``--display``, and ``--rtos`` are parsed and applied, including
+  refusing ambiguous abbreviations. See the DIRECTIVES AND QUALIFIERS
+  section of :ref:`prterun(1) <man1-prterun>` and the
+  :doc:`/placement/index` documentation.
 
-* **Placement matches the documentation.** Hwthread jobs get hwthread
-  slots and bind to hwthreads, ``ndev`` processes bind near their
-  devices, each app of an MPMD job sees the cpus actually left to it,
-  and ``PMIX_NOTIFY_COMPLETION`` is honored.
+* **Hostfile and rankfile parsing.** Both are now read by one line
+  reader, with numerous fixes and error messages that name the line at
+  fault. See :doc:`/hosts/hostfiles` and :doc:`/placement/rankfiles`.
 
 * **Fewer hangs.** Races between kill and launch, late launch reports,
   daemons failing during DVM formation, ``MPI_Abort``, the elastic
