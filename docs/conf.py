@@ -59,6 +59,10 @@ automake_min_version = f"{prte_data['automake_min_version']}"
 autoconf_min_version = f"{prte_data['autoconf_min_version']}"
 libtool_min_version = f"{prte_data['libtool_min_version']}"
 python_min_version = f"{prte_data['python_min_version']}"
+m4_dist_version = f"{prte_data['m4_dist_version']}"
+autoconf_dist_version = f"{prte_data['autoconf_dist_version']}"
+automake_dist_version = f"{prte_data['automake_dist_version']}"
+libtool_dist_version = f"{prte_data['libtool_dist_version']}"
 
 # "release" is a sphinx config variable: assign it to the computed
 # PRRTE version number.  The prte_ver string begins with a "v"; the
@@ -239,6 +243,10 @@ rst_prolog = f"""
 .. |autoconf_min_version| replace:: {autoconf_min_version}
 .. |libtool_min_version| replace:: {libtool_min_version}
 .. |python_min_version| replace:: {python_min_version}
+.. |m4_dist_version| replace:: {m4_dist_version}
+.. |autoconf_dist_version| replace:: {autoconf_dist_version}
+.. |automake_dist_version| replace:: {automake_dist_version}
+.. |libtool_dist_version| replace:: {libtool_dist_version}
 
 """
 

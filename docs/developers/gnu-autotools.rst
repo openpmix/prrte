@@ -34,26 +34,26 @@ on the internals of PRRTE itself):
    :header-rows: 1
 
    * - Software package
-     - Notes
+     - Version
      - URL
 
    * - GNU m4
-     - See version chart below
+     - |m4_dist_version|
      - https://ftp.gnu.org/gnu/m4/
    * - GNU Autoconf
-     - See version chart below
+     - |autoconf_dist_version|
      - https://ftp.gnu.org/gnu/autoconf/
    * - GNU Automake
-     - See version chart below
+     - |automake_dist_version|
      - https://ftp.gnu.org/gnu/automake/
    * - GNU Libtool
-     - See version chart below
+     - |libtool_dist_version|
      - https://ftp.gnu.org/gnu/libtool/
 
-The table below lists the versions that are used to make nightly
-snapshot and official release PRRTE tarballs. Other versions of the
+The above table lists the versions that are used to make official
+release PRRTE tarballs. Other versions of the
 tools *may* work for some (but almost certainly not all) platforms;
-the ones listed below are the versions that we know work across an
+the ones listed above are the versions that we know work across an
 extremely wide variety of platforms and environments.
 
 To strengthen the above point: the core PRRTE developers typically
@@ -67,124 +67,20 @@ versions of Autoconf, for example).
 
 That being said, ``autogen.pl`` and ``configure.ac`` scripts tend to
 be a bit lenient and enforce slightly older minimum versions than the
-ones listed below. This is because such older versions still make
+ones listed above. This is because such older versions still make
 usable PRRTE builds on many platforms - especially Linux on x86_64
 with GNU compilers - and are convenient for developers whose Linux
-distribution may not have as recent as the versions listed below (but are
+distribution may not have as recent as the versions listed above (but are
 recent enough to produce a working version for their platform).
 
-To be clear: the versions listed below are required to support a wide
-variety of platforms and environments, and are used to make nightly
-and official release tarballs. When building PRRTE, YMMV when using
-versions older than those listed below |mdash| especially if you are
+To be clear: the versions listed above are required to support a wide
+variety of platforms and environments, and are used to make official
+release tarballs. When building PRRTE, YMMV when using
+versions older than those listed above |mdash| especially if you are
 not building on Linux x86_64 with the GNU compilers.
 
 Using older versions is unsupported. If you run into problems, upgrade
-to at least the versions listed below.
-
-.. note:: You may need to scroll right in the following table.
-
-.. admonition:: PRRTE Docs TODO
-   :class: error
-
-   The table below is almost certainly wrong; it has all the values
-   from PRRTE.  Need to update the table below with the appropriate
-   values for PRRTE.
-
-.. list-table::
-   :header-rows: 1
-
-   * - PRRTE
-     - M4
-     - Autoconf
-     - Automake
-     - Libtool
-     - Sphinx
-
-   * - v1.0.x
-     - NA
-     - 2.58 - 2.59
-     - 1.7 - 1.9.6
-     - 1.5.16 - 1.5.22
-     - NA
-   * - v1.1.x
-     - NA
-     - 2.59
-     - 1.9.6
-     - 1.5.16 - 1.5.22
-     - NA
-   * - v1.2.x
-     - NA
-     - 2.59
-     - 1.9.6
-     - 1.5.22 - 2.1a
-     - NA
-   * - v1.3.x
-     - 1.4.11
-     - 2.63
-     - 1.10.1
-     - 2.2.6b
-     - NA
-   * - v1.4.x
-     - 1.4.11
-     - 2.63
-     - 1.10.3
-     - 2.2.6b
-     - NA
-   * - v1.5.x for x=0-4
-     - 1.4.13
-     - 2.65
-     - 1.11.1
-     - 2.2.6b
-     - NA
-   * - v1.5.x for x>=5
-     - 1.4.16
-     - 2.68
-     - 1.11.3
-     - 2.4.2
-     - NA
-   * - v1.6.x
-     - 1.4.16
-     - 2.68
-     - 1.11.3
-     - 2.4.2
-     - NA
-   * - v1.7.x
-     - 1.4.16
-     - 2.69
-     - 1.12.2
-     - 2.4.2
-     - NA
-   * - v1.8.x
-     - 1.4.16
-     - 2.69
-     - 1.12.2
-     - 2.4.2
-     - NA
-   * - v1.10.x
-     - 1.4.16
-     - 2.69
-     - 1.12.2
-     - 2.4.2
-     - NA
-   * - v2.0.x through v4.y
-     - 1.4.17
-     - 2.69
-     - 1.15
-     - 2.4.6
-     - NA
-   * - v5.0.x
-     - 1.4.17
-     - 2.69
-     - 1.15
-     - 2.4.6
-     - 4.2.0
-   * - Git main
-     - 1.4.17
-     - 2.69
-     - 1.15
-     - 2.4.6
-     - 4.2.0
+to at least the versions listed above.
 
 Checking your versions
 ----------------------
