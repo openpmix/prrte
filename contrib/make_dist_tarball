@@ -44,6 +44,7 @@ DISTCHECK_MAKE_FLAGS=-j4
 # non-distribution tarballs.
 dirty_ok=0
 gnu_version_ignore=0
+mac=0
 dist_target=distcheck
 distcheck_flags="AM_MAKEFLAGS=$DISTCHECK_MAKE_FLAGS"
 greekonly=0
@@ -71,6 +72,7 @@ while test $# -gt 0; do
         -distdir=*|--distdir=*) distdir="${1#*=}" ;;
         --dirtyok) dirty_ok=1 ;;
         -verok|--verok) gnu_version_ignore=1 ;;
+        -macosx|--macosx) mac=1 ;;
         *)
             cat <<EOF
 Unrecognized argument: $1
@@ -84,12 +86,33 @@ Valid arguments:
   --distdir=<dir>        Move the tarball(s) to this directory when done
   --dirtyok              Ok if the source tree is dirty
   --verok                Ignore result of autotools version checking
+  --macosx               Allow execution on Mac OSX
 EOF
             exit 1
             ;;
     esac
     shift
 done
+
+# check for OS type - we do not allow building tarballs on
+# MacOSX by default as it can create problems when unpacking
+# the tarball on Linux.  This script is run by /bin/sh, which need
+# not be bash, so use "test" and uname rather than "[[" and $OSTYPE.
+if test $mac -ne 1 && test "`uname -s`" = "Darwin"; then
+    cat <<EOF
+
+*** Building a tarball on MacOSX results in a
+*** tarball that includes undesirable artifacts
+*** when unpacked on Linux systems. We therefore
+*** do not support this operation by default.
+
+*** If you do need to execute this on MacOSX, then
+*** you can override this warning by setting the
+*** --macosx option on the cmd line
+
+EOF
+    exit 1
+fi
 
 # PRRTE needs libevent to build.  If $LIBEVENT is set in the
 # environment, automatically add it to the config_args.
@@ -367,7 +390,9 @@ if test "$gnu_version_ignore" = "0"; then
     check_gnu_version m4 $M4_TARGET_VERSION
     check_gnu_version automake $AM_TARGET_VERSION
     check_gnu_version autoconf $AC_TARGET_VERSION
-    check_gnu_version libtool $LT_TARGET_VERSION
+    if test $mac -eq 0; then
+        check_gnu_version libtool $LT_TARGET_VERSION
+    fi
 fi
 
 echo "*** Getting git version..."
