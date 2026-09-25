@@ -721,6 +721,58 @@ static int test_attr_round_trip(void)
     CHECK("fetch of an absent key finds nothing",
           NULL == prte_fetch_attribute(&attrs, NULL, PRTE_JOB_TIMEOUT));
 
+    /* A scalar is copied into storage the caller provides, so asking for
+     * one without any must be refused - and must leave the caller's
+     * pointer as it was rather than write through it */
+    iptr = NULL;
+    kv = prte_fetch_attribute(&attrs, NULL, PRTE_JOB_ROOM_NUM);
+    CHECK("unloading a scalar with no storage is refused",
+          NULL != kv && PRTE_ERR_BAD_PARAM == prte_attr_unload(kv, (void **) &iptr, PMIX_INT));
+    CHECK("...and leaves the pointer alone", NULL == iptr);
+
+    /* byte object - unload allocates both the object and its bytes */
+    {
+        pmix_byte_object_t bo, *boout = NULL;
+        bo.bytes = "abcd";
+        bo.size = 4;
+        CHECK("set a byte object",
+              PRTE_SUCCESS == prte_set_attribute(&attrs, PRTE_JOB_APP_SETUP_DATA,
+                                                 PRTE_ATTR_GLOBAL, &bo, PMIX_BYTE_OBJECT));
+        CHECK("get a byte object",
+              prte_get_attribute(&attrs, PRTE_JOB_APP_SETUP_DATA, (void **) &boout,
+                                 PMIX_BYTE_OBJECT));
+        CHECK("byte object round trips",
+              NULL != boout && 4 == boout->size && NULL != boout->bytes
+                  && 0 == memcmp("abcd", boout->bytes, 4));
+        CHECK("...into storage of its own", NULL != boout && boout->bytes != bo.bytes);
+        if (NULL != boout) {
+            free(boout->bytes);
+            free(boout);
+        }
+    }
+
+    /* PMIX_POINTER hands back the stored pointer itself - and a NULL one
+     * can be stored, so "found" does not mean "non-NULL": every reader of
+     * a pointer attribute has to check both */
+    {
+        void *pout = NULL;
+        CHECK("set a pointer",
+              PRTE_SUCCESS == prte_set_attribute(&attrs, PRTE_JOB_TIMEOUT_EVENT,
+                                                 PRTE_ATTR_LOCAL, &ival, PMIX_POINTER));
+        CHECK("get a pointer",
+              prte_get_attribute(&attrs, PRTE_JOB_TIMEOUT_EVENT, &pout, PMIX_POINTER));
+        CHECK("the pointer itself round trips", (void *) &ival == pout);
+        CHECK("set a NULL pointer",
+              PRTE_SUCCESS == prte_set_attribute(&attrs, PRTE_JOB_TIMEOUT_EVENT,
+                                                 PRTE_ATTR_LOCAL, NULL, PMIX_POINTER));
+        pout = &ival;
+        CHECK("a NULL pointer is still found",
+              prte_get_attribute(&attrs, PRTE_JOB_TIMEOUT_EVENT, &pout, PMIX_POINTER));
+        CHECK("...and reads back NULL", NULL == pout);
+        /* not a timer - take it off before the list is destructed */
+        prte_remove_attribute(&attrs, PRTE_JOB_TIMEOUT_EVENT);
+    }
+
     /* remove */
     prte_remove_attribute(&attrs, PRTE_JOB_CPUSET);
     CHECK("a removed attribute is gone",

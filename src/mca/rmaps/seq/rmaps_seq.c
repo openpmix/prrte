@@ -268,9 +268,9 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
         apprank = 0;
 
         /* per-app map file trumps job-level file; fall back to job-level */
-        hosts = NULL;
-        if (!prte_get_attribute(&app->attributes, PRTE_APP_MAP_FILE, (void **) &hosts, PMIX_STRING)) {
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING);
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_MAP_FILE, (void **) &hosts, PMIX_STRING) &&
+            !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
+            hosts = NULL;
         }
         if (NULL != hosts) {
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,

@@ -339,10 +339,11 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 }
             }
             if (NULL == node) {
-                /* rfmap is NULL for a rank the file did not list, which the
-                 * fallback above placed on a node of its own choosing */
+                /* only a rank the file listed can get here - the fallback
+                 * for an unlisted one fails on its own above - but its
+                 * entry need not have named a node */
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-host", true,
-                               (NULL == rfmap) ? "N/A" : rfmap->node_name);
+                               (NULL == rfmap->node_name) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }

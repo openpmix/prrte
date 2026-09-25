@@ -571,10 +571,12 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, bool devices,
      * too. Both ends test the same condition, and the job's mapping policy
      * has already been packed by the time this runs. */
     if (devices) {
-        pmix_data_array_t *devs = NULL;
+        pmix_data_array_t *devs;
         uint16_t ndevs;
-        prte_get_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
-                           (void **) &devs, PMIX_DATA_ARRAY);
+        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
+                                (void **) &devs, PMIX_DATA_ARRAY)) {
+            devs = NULL;
+        }
         ndevs = (NULL == devs) ? 0 : (uint16_t) devs->size;
         rc = PMIx_Data_pack(NULL, bkt, &ndevs, 1, PMIX_UINT16);
         if (PMIX_SUCCESS == rc && 0 < ndevs) {

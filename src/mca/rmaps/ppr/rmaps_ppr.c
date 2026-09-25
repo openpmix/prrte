@@ -86,12 +86,14 @@ static int ppr_mapper(prte_job_t *jdata,
     if (0 <= options->app_idx) {
         myapp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps,
                                                                    options->app_idx);
-        if (NULL != myapp) {
-            prte_get_attribute(&myapp->attributes, PRTE_APP_PPR, (void **) &jobppr, PMIX_STRING);
+        if (NULL != myapp &&
+            !prte_get_attribute(&myapp->attributes, PRTE_APP_PPR, (void **) &jobppr, PMIX_STRING)) {
+            jobppr = NULL;
         }
     }
-    if (NULL == jobppr) {
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING);
+    if (NULL == jobppr &&
+        !prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING)) {
+        jobppr = NULL;
     }
     if (NULL == jobppr || PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(options->map)) {
         /* not for us */

@@ -2175,6 +2175,15 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
     }
     if (0 < cd->nfinal) {
         PMIX_PROC_CREATE(cd->finalmembership, cd->nfinal);
+        if (NULL == cd->finalmembership) {
+            /* keep the count honest: everything downstream sizes its walk
+             * of the membership by it */
+            PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+            cd->st = PMIX_ERR_NOMEM;
+            cd->nfinal = 0;
+            PMIX_INFO_LIST_RELEASE(ilist);
+            goto notify;
+        }
         cnt = cd->nfinal;
         rc = PMIx_Data_unpack(NULL, buffer, cd->finalmembership, &cnt, PMIX_PROC);
         if (PMIX_SUCCESS != rc) {
@@ -2366,10 +2375,14 @@ static void notify_members_lost(prte_grpcomm_release_caddy_t *cd)
     pmix_info_t info[4];
     pmix_status_t rc;
 
-    if (0 == cd->nfinal) {
+    if (0 == cd->nfinal || NULL == cd->finalmembership) {
         return;
     }
     PMIX_PROC_CREATE(targets, cd->nfinal);
+    if (NULL == targets) {
+        PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+        return;
+    }
     for (n = 0; n < cd->nfinal; n++) {
         if (PMIX_RANK_WILDCARD == cd->finalmembership[n].rank) {
             continue;

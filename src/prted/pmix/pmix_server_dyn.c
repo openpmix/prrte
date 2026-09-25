@@ -482,6 +482,10 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
              * apply this to the daemons */
             if (!prte_persistent) {
                 djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                if (NULL == djob) {
+                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                    return PRTE_ERR_NOT_FOUND;
+                }
                 prte_set_bool_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL, flag);
             }
 
