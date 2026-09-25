@@ -1136,6 +1136,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* setup the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto cleanup;
+    }
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;

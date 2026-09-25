@@ -74,14 +74,15 @@ static int parse_cidr(const char *token, int family, struct sockaddr_storage *ne
     unsigned long plen;
     int rc = PRTE_ERR_BAD_PARAM;
 
-    if (NULL == strchr(token, '/')) {
-        return PRTE_ERR_BAD_PARAM;
-    }
     copy = strdup(token);
     if (NULL == copy) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     slash = strchr(copy, '/');
+    if (NULL == slash) {
+        free(copy);
+        return PRTE_ERR_BAD_PARAM;
+    }
     *slash = '\0';
     /* The prefix length comes out of the configuration file, so it is user
      * input.  A bare strtoul answers 0 for anything unparsable, and 0 means

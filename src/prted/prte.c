@@ -1390,6 +1390,17 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     while (prte_event_base_active && lock.active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
+    if (lock.active) {
+        /* We are shutting down before the spawn answered, so there is no
+         * job to report or to push stdin to - and lock.status and lock.msg
+         * are still their constructed defaults, which read as a successful
+         * spawn of a job with no name. The callback still holds this lock,
+         * so leave it alone: destructing it, or constructing it again for
+         * the stdin push below, would hand that late wakeup a lock that no
+         * longer means the spawn. This frame never returns (DONE exits), so
+         * the storage stays valid for it. */
+        goto DONE;
+    }
     PMIX_ACQUIRE_OBJECT(&lock.lock);
     if (PMIX_SUCCESS != lock.status) {
         /* The request was accepted but the spawn itself failed - e.g., the

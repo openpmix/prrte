@@ -876,28 +876,31 @@ static void prte_job_destruct(prte_job_t *job)
 
     /* release any pointers in the attributes */
     evtimer = NULL;
-    if (prte_get_attribute(&job->attributes, PRTE_JOB_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER)) {
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER) &&
+        NULL != evtimer) {
         prte_event_evtimer_del(evtimer->ev);
         prte_remove_attribute(&job->attributes, PRTE_JOB_TIMEOUT_EVENT);
         /* the timer is a pointer to prte_timer_t */
         PMIX_RELEASE(evtimer);
     }
     evtimer = NULL;
-    if (prte_get_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER)) {
+    if (prte_get_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER) &&
+        NULL != evtimer) {
         prte_event_evtimer_del(evtimer->ev);
         prte_remove_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT);
         /* the timer is a pointer to prte_timer_t */
         PMIX_RELEASE(evtimer);
     }
     proc = NULL;
-    if (prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void **) &proc, PMIX_POINTER)) {
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void **) &proc, PMIX_POINTER) &&
+        NULL != proc) {
         prte_remove_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC);
         /* points to an prte_proc_t */
         PMIX_RELEASE(proc);
     }
 
-    if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache, PMIX_POINTER))
-    {
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache, PMIX_POINTER) &&
+        NULL != cache) {
         prte_remove_attribute(&job->attributes, PRTE_JOB_INFO_CACHE);
         PMIX_LIST_RELEASE(cache);
     }

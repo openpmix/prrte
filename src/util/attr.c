@@ -909,17 +909,6 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
     pmix_envar_t *envar;
     pmix_data_array_t *darray;
     pmix_status_t rc;
-    pmix_data_type_t pointers[] = {
-        PMIX_STRING,
-        PMIX_BYTE_OBJECT,
-        PMIX_POINTER,
-        PMIX_PROC_NSPACE,
-        PMIX_PROC,
-        PMIX_ENVAR,
-        PMIX_DATA_ARRAY,
-        PMIX_UNDEF};
-    int n;
-    bool found = false;
 
     if (type != kv->data.type) {
         return PRTE_ERR_TYPE_MISMATCH;
@@ -928,16 +917,91 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
-    /* if they didn't give us a storage address
-     * and the data type isn't one where we can
-     * create storage, then this is an error */
-    for (n = 0; PMIX_UNDEF != pointers[n]; n++) {
-        if (type == pointers[n]) {
-            found = true;
-            break;
+
+    /* The pointer types hand back storage of their own (or, for
+     * PMIX_POINTER, the stored pointer itself), so *data is an output and
+     * its incoming value is irrelevant. They are answered first so that
+     * everything below this switch can rely on the check after it. */
+    switch (type) {
+    case PMIX_STRING:
+        if (NULL != kv->data.data.string) {
+            *data = strdup(kv->data.data.string);
+        } else {
+            *data = NULL;
         }
+        return PRTE_SUCCESS;
+
+    case PMIX_BYTE_OBJECT:
+        boptr = (pmix_byte_object_t *) malloc(sizeof(pmix_byte_object_t));
+        if (NULL == boptr) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        if (NULL != kv->data.data.bo.bytes && 0 < kv->data.data.bo.size) {
+            boptr->bytes = (char *) malloc(kv->data.data.bo.size);
+            if (NULL == boptr->bytes) {
+                free(boptr);
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+            memcpy(boptr->bytes, kv->data.data.bo.bytes, kv->data.data.bo.size);
+            boptr->size = kv->data.data.bo.size;
+        } else {
+            boptr->bytes = NULL;
+            boptr->size = 0;
+        }
+        *data = boptr;
+        return PRTE_SUCCESS;
+
+    case PMIX_POINTER:
+        *data = kv->data.data.ptr;
+        return PRTE_SUCCESS;
+
+    case PMIX_PROC_NSPACE:
+        PMIX_PROC_CREATE(*data, 1);
+        if (NULL == *data) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        memcpy(*data, kv->data.data.proc->nspace, sizeof(pmix_nspace_t));
+        return PRTE_SUCCESS;
+
+    case PMIX_PROC:
+        PMIX_PROC_CREATE(*data, 1);
+        if (NULL == *data) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        memcpy(*data, kv->data.data.proc, sizeof(pmix_proc_t));
+        return PRTE_SUCCESS;
+
+    case PMIX_ENVAR:
+        PMIX_ENVAR_CREATE(envar, 1);
+        if (NULL == envar) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        if (NULL != kv->data.data.envar.envar) {
+            envar->envar = strdup(kv->data.data.envar.envar);
+        }
+        if (NULL != kv->data.data.envar.value) {
+            envar->value = strdup(kv->data.data.envar.value);
+        }
+        envar->separator = kv->data.data.envar.separator;
+        *data = envar;
+        return PRTE_SUCCESS;
+
+    case PMIX_DATA_ARRAY:
+        rc = PMIx_Data_copy((void**)&darray, kv->data.data.darray, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            *data = NULL;
+            return prte_pmix_convert_status(rc);
+        }
+        *data = darray;
+        return PRTE_SUCCESS;
+
+    default:
+        break;
     }
-    if (!found && NULL == *data) {
+
+    /* Everything else is copied into storage the caller provides, so *data
+     * must already point at it - see the note on scalars in AGENTS.md. */
+    if (NULL == *data) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -948,13 +1012,6 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         break;
     case PMIX_BYTE:
         memcpy(*data, &kv->data.data.byte, sizeof(uint8_t));
-        break;
-    case PMIX_STRING:
-        if (NULL != kv->data.data.string) {
-            *data = strdup(kv->data.data.string);
-        } else {
-            *data = NULL;
-        }
         break;
     case PMIX_SIZE:
         memcpy(*data, &kv->data.data.size, sizeof(size_t));
@@ -995,22 +1052,6 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         memcpy(*data, &kv->data.data.uint64, 8);
         break;
 
-    case PMIX_BYTE_OBJECT:
-        boptr = (pmix_byte_object_t *) malloc(sizeof(pmix_byte_object_t));
-        if (NULL == boptr) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-        if (NULL != kv->data.data.bo.bytes && 0 < kv->data.data.bo.size) {
-            boptr->bytes = (char *) malloc(kv->data.data.bo.size);
-            memcpy(boptr->bytes, kv->data.data.bo.bytes, kv->data.data.bo.size);
-            boptr->size = kv->data.data.bo.size;
-        } else {
-            boptr->bytes = NULL;
-            boptr->size = 0;
-        }
-        *data = boptr;
-        break;
-
     case PMIX_FLOAT:
         memcpy(*data, &kv->data.data.fval, sizeof(float));
         break;
@@ -1019,52 +1060,8 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         memcpy(*data, &kv->data.data.tv, sizeof(struct timeval));
         break;
 
-    case PMIX_POINTER:
-        *data = kv->data.data.ptr;
-        break;
-
     case PMIX_PROC_RANK:
         memcpy(*data, &kv->data.data.rank, sizeof(pmix_rank_t));
-        break;
-
-    case PMIX_PROC_NSPACE:
-        PMIX_PROC_CREATE(*data, 1);
-        if (NULL == *data) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-        memcpy(*data, kv->data.data.proc->nspace, sizeof(pmix_nspace_t));
-        break;
-
-    case PMIX_PROC:
-        PMIX_PROC_CREATE(*data, 1);
-        if (NULL == *data) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-        memcpy(*data, kv->data.data.proc, sizeof(pmix_proc_t));
-        break;
-
-    case PMIX_ENVAR:
-        PMIX_ENVAR_CREATE(envar, 1);
-        if (NULL == envar) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-        if (NULL != kv->data.data.envar.envar) {
-            envar->envar = strdup(kv->data.data.envar.envar);
-        }
-        if (NULL != kv->data.data.envar.value) {
-            envar->value = strdup(kv->data.data.envar.value);
-        }
-        envar->separator = kv->data.data.envar.separator;
-        *data = envar;
-        break;
-
-    case PMIX_DATA_ARRAY:
-        rc = PMIx_Data_copy((void**)&darray, kv->data.data.darray, PMIX_DATA_ARRAY);
-        if (PMIX_SUCCESS != rc) {
-            *data = NULL;
-            return prte_pmix_convert_status(rc);
-        }
-        *data = darray;
         break;
 
     default:

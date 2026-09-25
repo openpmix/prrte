@@ -334,14 +334,21 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
     int i, j;
     char *line, **lines;
     char **tokens, *tmp;
-    char cwd[PRTE_PATH_MAX];
+    char cwd[PRTE_PATH_MAX], *wrkdir = cwd;
 
     if (NULL == agent_list && NULL == prte_mca_plm_ssh_component.agent) {
         return NULL;
     }
 
     if (NULL == path) {
-        pmix_getcwd(cwd, PRTE_PATH_MAX);
+        /* the cwd is only where a relative agent path is resolved, so a
+         * cwd we cannot learn (it was removed from under us, or the path is
+         * too long) means there is nowhere to resolve one - not that the
+         * search cannot proceed. Ignoring the failure handed the path
+         * search whatever was on the stack. */
+        if (PMIX_SUCCESS != pmix_getcwd(cwd, PRTE_PATH_MAX)) {
+            wrkdir = NULL;
+        }
     } else {
         pmix_string_copy(cwd, path, PRTE_PATH_MAX);
     }
@@ -368,7 +375,7 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         tokens = PMIx_Argv_split(line, ' ');
 
         /* Look for the first token in the PATH */
-        tmp = pmix_path_findv(tokens[0], X_OK, environ, cwd);
+        tmp = pmix_path_findv(tokens[0], X_OK, environ, wrkdir);
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;

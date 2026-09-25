@@ -2967,15 +2967,10 @@ static int setup_virtual_machine(prte_job_t *jdata)
         goto process;
     }
 
-    /* if we are not working with a virtual machine, then we
-     * look across all jobs and ensure that the "VM" contains
-     * all nodes with application procs on them
-     */
+    /* simulating multiple daemons: put one on every usable node in the
+     * pool other than our own, whether or not it has procs mapped to it */
     multi_sim = PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM);
     if (multi_sim) {
-        /* loop across all nodes and include those that have
-         * num_procs > 0 && no daemon already on them
-         */
         for (i = 1; i < prte_node_pool->size; i++) {
             if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
                 continue;
@@ -2999,42 +2994,11 @@ static int setup_virtual_machine(prte_job_t *jdata)
                 /* not to be used */
                 continue;
             }
-            if (0 < node->num_procs || multi_sim) {
-                /* retain a copy for our use in case the item gets
-                 * destructed along the way
-                 */
-                PMIX_RETAIN(node);
-                pmix_list_append(&nodes, &node->super);
-            }
-        }
-        if (multi_sim) {
-            goto process;
-        }
-        /* see if anybody had procs */
-        if (0 == pmix_list_get_size(&nodes)) {
-            /* if the HNP has some procs, then we are still good */
-            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
-            if (NULL == node) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                PMIX_LIST_DESTRUCT(&nodes);
-                return PRTE_ERR_NOT_FOUND;
-            }
-            if (0 < node->num_procs) {
-                PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s plm:base:setup_vm only HNP in use",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                PMIX_LIST_DESTRUCT(&nodes);
-                map->num_nodes = 1;
-                /* mark that the daemons have reported so we can proceed */
-                daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
-                return PRTE_SUCCESS;
-            }
-            /* well, if the HNP doesn't have any procs, and neither did
-             * anyone else...then we have a big problem
+            /* retain a copy for our use in case the item gets
+             * destructed along the way
              */
-            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-            PMIX_LIST_DESTRUCT(&nodes);
-            return PRTE_ERR_FATAL;
+            PMIX_RETAIN(node);
+            pmix_list_append(&nodes, &node->super);
         }
         goto process;
     }

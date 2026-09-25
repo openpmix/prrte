@@ -248,7 +248,6 @@ size_t prte_ds_collect(prte_data_req_t *req, char **keys, pmix_list_t *answers,
                      * make that safe. */
                     if (0 == pmix_list_get_size(&data->info)) {
                         prte_ds_drop(data);
-                        data = NULL;
                     } else {
                         /* it shrank: recharge what is left of it */
                         prte_ds_charge(data);

@@ -226,6 +226,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* setup the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PMIX_RELEASE(state);
+        return;
+    }
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
