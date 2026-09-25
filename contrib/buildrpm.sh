@@ -4,6 +4,35 @@
 #                         University Research and Technology
 #                         Corporation.  All rights reserved.
 # Copyright (c) 2006-2016 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2026      Nanook Consulting  All rights reserved.
+#
+
+#
+# Note that you probably want to download the latest release of the SRPM
+# for any given PRRTE version.  The SRPM release number is the
+# version after the dash in the SRPM filename.  For example,
+# "prrte-3.0.0-2.src.rpm" is the 2nd release of the SRPM for PRRTE
+# v3.0.0.  Subsequent releases of SRPMs typically contain bug fixes for
+# the RPM packaging, but not PRRTE itself.
+#
+# This script takes a single mandatory argument -- a filename
+# pointing to a PRRTE tarball (may be either .gz or .bz2).  It will
+# create one or more RPMs from this tarball:
+#
+# 1. Source RPM
+# 2. "All in one" RPM, where all of PRRTE is put into a single RPM.
+# 3. "Multiple" RPM, where PRRTE is split into several sub-package
+#    RPMs:
+#    - prrte-runtime
+#    - prrte-devel
+#
+# Alternatively, you can build directly from the prrte.spec spec file
+# or SRPM directly.  Many options can be passed to the building process
+# via rpmbuild's --define option (there are older versions of rpmbuild
+# that do not seem to handle --define'd values properly in all cases,
+# but we generally don't care about those old versions of rpmbuild...).
+# The available options are described in the comments in the beginning
+# of the spec file.
 #
 
 #
@@ -229,7 +258,7 @@ echo "--> Found PRRTE version: $version"
 #
 
 if test $unpack_spec -eq 1; then
-    tar -xf $tarball --wildcards --no-anchored 'prrte.spec' --strip=4
+    tar -xf $tarball --wildcards --no-anchored 'prrte.spec' --strip=2
 fi
 
 #

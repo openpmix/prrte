@@ -17,7 +17,7 @@
 # Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -29,9 +29,10 @@ amca_paramdir = $(AMCA_PARAM_SETS_DIR)
 dist_amca_param_DATA = amca-param-sets/example.conf
 
 EXTRA_DIST = \
-	dist/make_dist_tarball \
-	dist/make-authors.pl \
-	dist/linux/prrte.spec \
+	make_dist_tarball \
+	make-authors.pl \
+	buildrpm.sh \
+	prrte.spec \
 	platform/optimized \
 	$(MULTINODE_HARNESS)
 
