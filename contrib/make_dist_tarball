@@ -42,16 +42,11 @@ DISTCHECK_MAKE_FLAGS=-j4
 # Default to requiring *exact* versions if we're making distribution
 # tarballs; but higher-than-expected versions are ok for
 # non-distribution tarballs.
-autogen_args=
-distdir=".."
-greekonly=0
-nogreek=0
 dirty_ok=0
 gnu_version_ignore=0
 dist_target=distcheck
 distcheck_flags="AM_MAKEFLAGS=$DISTCHECK_MAKE_FLAGS"
-git_update=1
-
+greekonly=0
 if test "`basename $0`" = "make_tarball"; then
     dist_target=dist
     distcheck_flags="AM_MAKEFLAGS=-j32"
@@ -62,37 +57,49 @@ else
     highok=0
 fi
 
-while test "$1" != ""; do
+nogreek=0
+autogen_args=
+config_args=
+distdir=".."
+while test $# -gt 0; do
     case $1 in
-        --greekonly) greekonly=1 ;;
-        --no-greek) nogreek=1 ;;
-        --highok) highok=1 ;;
-        --autogen-args) autogen_args=$2; shift ;;
-        --config-args=*) config_args="${i#*=}"; shift ;;
-        --distdir) distdir=$2; shift ;;
+        -greekonly|--greekonly) greekonly=1 ;;
+        --nogreek) nogreek=1 ;;
+        -highok|--highok) highok=1 ;;
+        -autogen-args=*|--autogen-args=*) autogen_args="${1#*=}" ;;
+        -config-args=*|--config-args=*) config_args="${1#*=}" ;;
+        -distdir=*|--distdir=*) distdir="${1#*=}" ;;
         --dirtyok) dirty_ok=1 ;;
-        --verok) gnu_version_ignore=1;;
-        --no-git-update) git_update=0;;
+        -verok|--verok) gnu_version_ignore=1 ;;
         *)
             cat <<EOF
 Unrecognized argument: $1
 
 Valid arguments:
-  --greekonly     Only build the greek tarball (vs. both tarballs)
-  --no-greek      Do not build the greek tarball
-  --highok        Ok if Autotools versions are too high
-  --autogen-args  Arguments to pass to autogen
-  --config-args  Arguments to pass to configure
-  --distdir       Move the tarball(s) to this directory when done
-  --dirtyok       Ok if the source tree is dirty
-  --verok         Ignore result of autotools version checking
-  --no-git-update Skip "git pull" part, assume local repo is updated already
+  --greekonly            Only build the greek tarball (vs. both tarballs)
+  --nogreek              Only build the non-greek tarball
+  --highok               Ok if Autotools versions are too high
+  --autogen-args=<args>  Arguments to pass to autogen
+  --config-args=<args>   Arguments to pass to configure (e.g., --with-pmix=<foo>)
+  --distdir=<dir>        Move the tarball(s) to this directory when done
+  --dirtyok              Ok if the source tree is dirty
+  --verok                Ignore result of autotools version checking
 EOF
             exit 1
             ;;
     esac
     shift
 done
+
+# PRRTE needs libevent to build.  If $LIBEVENT is set in the
+# environment, automatically add it to the config_args.
+if test "$LIBEVENT" != ""; then
+    echo "*** Found \$LIBEVENT: $LIBEVENT"
+    echo "*** Adding --with-libevent=$LIBEVENT to config_args"
+    config_args="--with-libevent=$LIBEVENT $config_args"
+fi
+
+export DISTCHECK_CONFIGURE_FLAGS=$config_args
 
 #
 # First things first -- check that the auto versions that we have are
@@ -249,7 +256,7 @@ make_tarball() {
     #
     echo "*** Running autogen $autogen_args..."
     rm -f success
-    (./autogen.pl --force $autogen_args 2>&1 && touch success) | tee auto.out
+    (./autogen.pl $autogen_args 2>&1 && touch success) | tee auto.out
     if test ! -f success; then
         echo "Autogen failed.  Aborting"
         exit 1
@@ -298,27 +305,14 @@ start=`date`
 echo "*** Start time: $start"
 
 #
-# Verify that we're in a top PRTE dir
+# Verify that we're in a top PRRTE dir
 #
-echo "*** Checking to ensure in top-level PMIx Reference RunTime Environment directory..."
+echo "*** Checking to ensure in top-level PRRTE directory..."
 if test -f VERSION -a -f configure.ac -a -f config/prte_get_version.m4 ; then
     happy=1
 else
-    echo "Do not appear to be in an PMIx Reference RunTime Environment top directory.  Abort!"
+    echo "Do not appear to be in a PRRTE top directory.  Abort!"
     exit 1
-fi
-
-if test $git_update -eq 1; then
-
-    #
-    # Get the latest
-    #
-    echo "*** Git pull to get the latest..."
-    git pull --rebase
-    if test $? -ne 0; then
-        echo "*** Git pull failed.  Cannot continue."
-        exit 1
-    fi
 fi
 
 #
@@ -347,7 +341,7 @@ fi
 echo "*** Removing old VERSION file..."
 rm -f VERSION
 echo "*** Restoring pristine VERSION file..."
-git checkout VERSION
+git checkout HEAD -- VERSION
 
 #
 # Read the versions of the GNU tools that we want from VERSION.  Do
@@ -422,7 +416,7 @@ done
 # tarball)
 #
 
-# First, if ! --no-greek, make greek tarball
+# First, if ! --nogreek, make greek tarball
 
 if test $nogreek -eq 0; then
     echo "*** Making greek tarball"
@@ -444,8 +438,7 @@ if test $greekonly -eq 0; then
 fi
 
 # Put the VERSION file back the way it was
-rm -f VERSION
-git checkout VERSION
+git checkout HEAD -- VERSION
 
 echo " "
 echo "*** Start time:  $start"
