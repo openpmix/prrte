@@ -1351,6 +1351,27 @@ here that can fail once and be skipped forever needs the same treatment.
 
 ---
 
+## Who may pull a job's output
+
+`pmix_server_iof_pull_fn` is how a tool (a debugger, `prun --attach`)
+asks for a job's stdout/stderr, and the job may be anyone's - pulling
+another namespace's output is the point. What decides it is the user: PMIx
+puts the requester's `PMIX_USERID` and `PMIX_GRPID` in the directives
+(`PMIX_CAP_REQUESTER_ID`), and `_iof_pull` refuses a request to start
+forwarding with `PMIX_ERR_NO_PERMISSIONS` unless the requester is root,
+is the user this DVM runs as, or is the recorded owner (`jdata->uid`) of
+every source job. A request to stop is always honored. PMIx forwards
+nothing for the pull until we answer, so a refusal leaves no output
+delivered.
+
+This is the minimum. `jdata->uid` is recorded only on the HNP (from the
+tool that launched the job, and inherited down the job tree) and is never
+packed, so a prted answers only for root and the DVM's user. The group id
+is not consulted: letting a group see a job's output should be something
+the job asks for, not a default. Against a PMIx without
+`PMIX_CAP_REQUESTER_ID` there is no requester identity to check, and the
+pull is allowed, as before.
+
 ## A tool's departure
 
 `_client_finalized()` is the **only** notice a daemon gets that a tool has
