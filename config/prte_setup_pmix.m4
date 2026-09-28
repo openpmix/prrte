@@ -242,6 +242,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_have_group_ft],
                        [Whether PMIx supports the group fault-tolerance feature set, including the PMIX_GROUP_CANCEL host operation])
 
+    AC_MSG_CHECKING([for PMIx requester identity on up-calls])
+    PRTE_CHECK_PMIX_CAP([REQUESTER_ID],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_have_requester_id=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_have_requester_id=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_REQUESTER_ID],
+                       [$prte_pmix_have_requester_id],
+                       [Whether PMIx passes the requester's PMIX_USERID and PMIX_GRPID to every up-call it makes for a client or tool])
+
     AC_MSG_CHECKING([for PMIx command-line qualifier value support])
     PRTE_CHECK_PMIX_CAP([CLI_QUAL_VALUE],
                         [AC_MSG_RESULT([yes])],

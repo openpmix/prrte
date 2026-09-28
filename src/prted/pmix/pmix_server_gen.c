@@ -1130,6 +1130,49 @@ static void record_interest(const pmix_proc_t *proc)
     }
 }
 
+/* May the process that asked for this pull receive the output of these
+ * sources? The PMIx server gives us the requester's uid in the directives.
+ * Root and the user this DVM runs as may pull the output of any job; anyone
+ * else only that of a job this daemon knows to be theirs. A job's owner is
+ * recorded on the HNP, from the tool that launched it, so a daemon that is
+ * not the HNP answers only for root and the DVM's own user. */
+static bool iof_pull_permitted(const pmix_info_t *dirs, size_t ndirs,
+                               const pmix_proc_t *procs, size_t nprocs)
+{
+    uint32_t uid = 0;
+    bool have_uid = false;
+    prte_job_t *jdata;
+    size_t n;
+
+    for (n = 0; n < ndirs; n++) {
+        if (PMIX_CHECK_KEY(&dirs[n], PMIX_USERID)) {
+            have_uid = (PMIX_SUCCESS == PMIx_Value_get_number(&dirs[n].value, &uid,
+                                                              PMIX_UINT32));
+            break;
+        }
+    }
+    if (!have_uid) {
+#if PRTE_PMIX_HAVE_REQUESTER_ID
+        /* this PMIx always says who is asking, so a request that does not
+         * is refused */
+        return false;
+#else
+        /* an older PMIx does not say who is asking */
+        return true;
+#endif
+    }
+    if (0 == uid || (uint32_t) prte_process_info.euid == uid) {
+        return true;
+    }
+    for (n = 0; n < nprocs; n++) {
+        jdata = prte_get_job_data_object(procs[n].nspace);
+        if (NULL == jdata || PRTE_INVALID_UID == jdata->uid || (uint32_t) jdata->uid != uid) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void _iof_pull(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -1138,6 +1181,19 @@ static void _iof_pull(int sd, short args, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
+
+    /* a request to start forwarding needs the requester to be allowed the
+     * output - a request to stop is always honored */
+    if (!cd->flag && !iof_pull_permitted(cd->directives, cd->ndirs, cd->procs, cd->nprocs)) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s IOF pull refused: requester may not receive this output",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        if (NULL != cd->cbfunc) {
+            cd->cbfunc(PMIX_ERR_NO_PERMISSIONS, cd->cbdata);
+        }
+        PMIX_RELEASE(cd);
+        return;
+    }
 
     /* Set up I/O forwarding sinks and handlers for stdout and stderr for each proc
      * requesting I/O forwarding */
@@ -1200,6 +1256,9 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
     cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     cd->procs = (pmix_proc_t *) procs;
     cd->nprocs = nprocs;
+    /* borrowed like the procs - PMIx keeps them valid until the callback */
+    cd->directives = (pmix_info_t *) directives;
+    cd->ndirs = ndirs;
     cd->channels = channels;
     cd->flag = stop;
     cd->cbfunc = cbfunc;
