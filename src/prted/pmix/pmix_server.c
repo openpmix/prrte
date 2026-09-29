@@ -1877,9 +1877,14 @@ static void dmdx_check(int sd, short args, void *cbdata)
         /* we do have it, so fetch payload */
     }
 
-    /* ask our local PMIx server for the data */
+    /* ask our local PMIx server for the data - naming the requester the
+     * requesting server named, so ours can check it may have the data */
     req->inprogress = true;
+#if PRTE_PMIX_HAVE_DMODEX_REQUEST2
+    rc = PMIx_server_dmodex_request2(&req->tproc, req->info, req->ninfo, modex_resp, req);
+#else
     rc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req);
+#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         req->inprogress = false;
@@ -2188,8 +2193,15 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     }
 
     /* ask our local PMIx server for the data */
+    /* naming the requester the requesting server named, so our PMIx
+     * server can check it may have the data. The info lives on the
+     * request until modex_resp */
     req->inprogress = true;
+#if PRTE_PMIX_HAVE_DMODEX_REQUEST2
+    prc = PMIx_server_dmodex_request2(&pproc, req->info, req->ninfo, modex_resp, req);
+#else
     prc = PMIx_server_dmodex_request(&pproc, modex_resp, req);
+#endif
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         if (req->event_active) {

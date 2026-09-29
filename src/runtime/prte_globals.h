@@ -537,11 +537,13 @@ typedef struct prte_job_t {
     pmix_list_t children;
     /* track the launcher of these jobs */
     pmix_nspace_t launcher;
-    /* The user this job belongs to. Recorded only for a TOOL job, from the
-     * PMIX_USERID/PMIX_GRPID the tool presented when it connected, and left
-     * PRTE_INVALID_UID/GID everywhere else - an application job's identity is
-     * its namespace, and nothing consults these for one. HNP-local; never
-     * packed. This is what lets a reservation be reached by a LATER tool the
+    /* The user this job belongs to. For a TOOL job, the PMIX_USERID/PMIX_GRPID
+     * the tool presented when it connected; a job launched on request inherits
+     * its parent's (plm_base_receive.c), so identity descends the job tree from
+     * the tool that started it. PRTE_INVALID_UID/GID when nobody presented one.
+     * HNP-local; never packed - a launched job's owner reaches the daemons as
+     * PRTE_JOB_OWNER_UID/GID, which they name to PMIx when they register it.
+     * This is also what lets a reservation be reached by a LATER tool the
      * same user ran: a tool namespace is minted per invocation, so namespace
      * identity alone would make an allocation unusable by everything except
      * the one command that asked for it. */

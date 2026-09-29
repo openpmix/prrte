@@ -322,6 +322,12 @@ typedef uint16_t prte_job_flags_t;
                                                                        // A job attribute - not a DVM-wide setting - because a persistent
                                                                        // DVM's daemons were started long before the job that asks for it
 
+#define PRTE_JOB_OWNER_UID                  (PRTE_JOB_START_KEY + 136) // uint32_t - the user the job belongs to, as recorded on the HNP
+                                                                       // (jdata->uid). Carried to every daemon so each can name the owner
+                                                                       // when it registers the job with PMIx - PMIx decides who may access
+                                                                       // a job's data by it
+#define PRTE_JOB_OWNER_GID                  (PRTE_JOB_START_KEY + 137) // uint32_t - that user's group, as recorded on the HNP (jdata->gid)
+
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
 /*** PROC FLAGS - never sent anywhere ***/

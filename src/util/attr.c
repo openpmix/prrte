@@ -592,6 +592,10 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-DOES-NOT-INHERIT-OUTPUT-FORWARDING";
         case PRTE_JOB_XTERM:
             return "XTERM";
+        case PRTE_JOB_OWNER_UID:
+            return "JOB-OWNER-UID";
+        case PRTE_JOB_OWNER_GID:
+            return "JOB-OWNER-GID";
         case PRTE_JOB_COLOCATE_PROCS:
             return "COLOCATE PROCS";
         case PRTE_JOB_COLOCATE_NPERPROC:
