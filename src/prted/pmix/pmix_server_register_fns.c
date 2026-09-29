@@ -218,6 +218,33 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         return rc;
     }
 
+    /* the job's owner, when the HNP knows it - PMIx decides who may access
+     * the job's data by it. Without one, PMIx falls back to the user the
+     * job's local clients are registered with, and on a node with none of
+     * them to our own user */
+    {
+        uint32_t ownid, *ownptr = &ownid;
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, (void **) &ownptr,
+                               PMIX_UINT32)) {
+            PMIX_INFO_LIST_ADD(ret, info, PMIX_USERID, &ownid, PMIX_UINT32);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_INFO_LIST_RELEASE(info);
+                return prte_pmix_convert_status(ret);
+            }
+        }
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, (void **) &ownptr,
+                               PMIX_UINT32)) {
+            PMIX_INFO_LIST_ADD(ret, info, PMIX_GRPID, &ownid, PMIX_UINT32);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_INFO_LIST_RELEASE(info);
+                return prte_pmix_convert_status(ret);
+            }
+        }
+    }
+
     /* offset */
     PMIX_INFO_LIST_ADD(ret, info, PMIX_NPROC_OFFSET, &jdata->offset, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != ret) {

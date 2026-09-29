@@ -1372,6 +1372,27 @@ the job asks for, not a default. Against a PMIx without
 `PMIX_CAP_REQUESTER_ID` there is no requester identity to check, and the
 pull is allowed, as before.
 
+## Who may have a job's data
+
+PMIx decides that itself, by the job's owner and access list, and for data
+held on another node the PMIx server holding it decides (PMIx's
+`docs/security-plan.rst`). PRRTE's part is to tell it who is involved:
+
+- **The owner, at registration.** `plm_base_receive.c` puts a launched job's
+  `jdata->uid`/`gid` (inherited from the tool that started it) into the
+  global attributes `PRTE_JOB_OWNER_UID`/`_GID`, so every daemon has them,
+  and `prte_pmix_server_register_nspace` passes them as `PMIX_USERID` and
+  `PMIX_GRPID`. A job with no recorded owner registers without them, and
+  PMIx falls back to the user its local clients were registered with -
+  which, for a DVM run as a service account, is not the job's user.
+- **The requester, on a direct modex.** PMIx names it in the `direct_modex`
+  up-call's info; `dmodex_req` already relays that info to the hosting
+  daemon, which passes it to `PMIx_server_dmodex_request2`
+  (`PRTE_PMIX_HAVE_DMODEX_REQUEST2`) so its PMIx server can refuse a
+  requester the owner has not allowed. The refusal travels back through
+  `modex_resp` like any other status. Keep the info alive on the request
+  until `modex_resp` fires - PMIx holds the pointer.
+
 ## A tool's departure
 
 `_client_finalized()` is the **only** notice a daemon gets that a tool has
