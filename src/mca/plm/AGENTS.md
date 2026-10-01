@@ -16,8 +16,8 @@ for daemon launch. It runs on the HNP (DVM master): the HNP orchestrates
 the launch, the daemons phone home, and the state machine advances. The
 components differ only in the *mechanism* used to start the remote
 daemons — `ssh` tree-spawn, `srun`, `lsb_launch`, `aprun` — and in
-whether the launcher (SLURM/LSF/PALS) or PRRTE itself decides which
-daemon lands on which node.
+whether the launcher (LSF/PALS) or PRRTE itself decides which daemon
+lands on which node.
 
 `plm` sits in the DVM/job-launch state machine at `LAUNCH_DAEMONS`:
 
@@ -534,7 +534,10 @@ captures the single biggest behavioral difference between the launchers:
 - **`ssh` → `true`.** We `ssh` to a *specific* host, so we know exactly
   which node each daemon vpid lands on at launch time; the node↔daemon
   binding is verified immediately (`PRTE_NODE_FLAG_LOC_VERIFIED`).
-- **`slurm` / `lsf` / `pals` → `false`.** The resource manager does its
+- **`slurm` → `true`.** `srun` starts the daemons in the order the
+  nodelist gives (`--distribution=arbitrary`), and the list is in vpid
+  order.
+- **`lsf` / `pals` → `false`.** The resource manager does its
   own proc→node placement, so PRRTE cannot know in advance which daemon
   vpid ends up on which node. The binding is resolved only when each
   daemon phones home in `prte_plm_base_daemon_callback` and reports its
