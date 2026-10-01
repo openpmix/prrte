@@ -50,6 +50,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
@@ -697,6 +698,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         cd = PMIX_NEW(prte_daemon_caddy_t);
         cd->what = PRTE_DAEMON_CONT_CLEANUP_JOB;
         PMIX_LOAD_NSPACE(cd->job, job);
+        prte_pmix_server_access_job_done(job);
         PMIx_server_deregister_nspace(job, _daemon_cont_cbfunc, cd);
 
         break;

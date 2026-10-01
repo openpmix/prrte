@@ -179,6 +179,20 @@ Supported values include:
   entire local environment in support of the application. This option
   defaults to a true value if the option is given without a value.
 
+* "USERS=<list>": names further users allowed to access the job - read
+  its data, pull its output, signal or terminate it, and so on - as a
+  list of user names or numbers separated by ':' (a comma ends the
+  directive). By default only the job's owner, root, and the user the
+  runtime runs as may access a job. For example,
+  "--rtos users=alice:bob".
+
+* "GROUPS=<list>": names groups whose members may access the job, as a
+  list of group names or numbers separated by ':'. A user belongs to a
+  group if it is the user's primary group or one of its supplementary
+  groups. For example, "--rtos users=alice,groups=research:admin".
+  Output files the job writes are made readable by the first group
+  listed.
+
 The "--rtos" command line option has no qualifiers.
 
 Note:

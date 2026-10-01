@@ -598,6 +598,7 @@ static void track_procs(int fd, short argc, void *cbdata)
              * take a reference of our own for it here. */
             caddy->jdata = jdata;
             PMIX_RETAIN(jdata);
+            prte_pmix_server_access_job_done(jdata->nspace);
             PMIx_server_deregister_nspace(jdata->nspace, dereg_complete, caddy);
             /* the continuation owns the caddy now */
             return;

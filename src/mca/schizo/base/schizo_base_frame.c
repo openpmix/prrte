@@ -452,6 +452,8 @@ static const char *valued_directives[] = {
     PRTE_CLI_TIMEOUT,
     PRTE_CLI_SPAWN_TIMEOUT,
     PRTE_CLI_OUTPUT_PROCTABLE,
+    PRTE_CLI_ACCESS_USERS,
+    PRTE_CLI_ACCESS_GROUPS,
     NULL
 };
 

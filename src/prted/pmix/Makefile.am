@@ -15,6 +15,7 @@ headers += \
 
 libprrte_la_SOURCES += \
           prted/pmix/pmix_server.c \
+          prted/pmix/pmix_server_access.c \
           prted/pmix/pmix_server_fence.c \
           prted/pmix/pmix_server_register_fns.c \
           prted/pmix/pmix_server_dyn.c \

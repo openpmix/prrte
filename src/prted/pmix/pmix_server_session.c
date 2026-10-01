@@ -550,12 +550,13 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
 
 /*****   OPERATIONS   *****/
 
-/* True if the requestor may operate on this session. prte_session_is_owned_by
- * is the whole answer: it admits the scheduler (when one is connected),
- * the namespaces recorded as owners, and - for a tool - the user the
- * reservation was granted to, which is what lets a second command from the
- * same person reach an allocation their first command created. */
-#define AUTHORIZED(s, r) prte_session_is_owned_by((s), (r)->nspace)
+/* True if the requester may operate on this session - grow, shrink,
+ * release, terminate it. Who is asking is the whole question: the
+ * scheduler, root, our own user, the session's owner or a member of its
+ * group (prte_pmix_server_session_permitted). Which jobs are using the
+ * session's resources has nothing to do with it. */
+#define AUTHORIZED(s, r) \
+    prte_pmix_server_session_permitted((s), &(r)->tproc, (r)->info, (r)->ninfo)
 
 static bool nspace_named(char **nspaces, const pmix_nspace_t nspace)
 {
@@ -1159,12 +1160,19 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     PMIX_LOAD_NSPACE(session->owner, ctl->requestor.nspace);
     PMIX_XFER_PROCID(&session->requestor, &ctl->requestor);
     prte_session_add_owner(session, ctl->requestor.nspace);
-    if (ctl->have_uid) {
-        session->owner_uid = ctl->uid;
-    } else {
+    {
         prte_job_t *reqjob = prte_get_job_data_object(ctl->requestor.nspace);
-        if (NULL != reqjob) {
+
+        if (ctl->have_uid) {
+            session->owner_uid = ctl->uid;
+        } else if (NULL != reqjob) {
             session->owner_uid = reqjob->uid;
+        }
+        /* the group recorded for the requester's job - the one its tool
+         * connected with. Not the up-call's PMIX_GRPID, which is whatever
+         * group the requester chose to name */
+        if (NULL != reqjob) {
+            session->owner_gid = reqjob->gid;
         }
     }
 
@@ -1250,7 +1258,7 @@ static pmix_status_t apply_to_session(prte_pmix_server_req_t *req,
 {
     pmix_status_t rc = PMIX_SUCCESS;
 
-    if (!AUTHORIZED(session, &ctl->requestor)) {
+    if (!AUTHORIZED(session, req)) {
         return PMIX_ERR_NO_PERMISSIONS;
     }
 
@@ -1361,7 +1369,7 @@ static pmix_status_t apply_to_all(prte_pmix_server_req_t *req,
         if (NULL == session || session == prte_default_session) {
             continue;
         }
-        if (!AUTHORIZED(session, &ctl->requestor)) {
+        if (!AUTHORIZED(session, req)) {
             continue;
         }
         /* Do NOT let the per-session call build the answer.  It may run many
@@ -1778,6 +1786,8 @@ static void pass_request(int sd, short args, void *cbdata)
         for (n=0; n < req->ninfo; n++) {
             PMIX_INFO_XFER(&xfer[n], &req->info[n]);
         }
+        /* the requester's identity is theirs, not ours */
+        prte_pmix_server_mark_relayed(xfer, req->ninfo);
         PMIX_INFO_LOAD(&xfer[req->ninfo], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
         // the current req object points to the caller's info array, so leave it alone
         req->copy = true;

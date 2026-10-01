@@ -1273,6 +1273,7 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
          * identified by namespace alone becomes unusable - by anyone - the
          * moment the requester exits. See prte_session_is_owned_by. */
         s->owner_uid = ownerjob->uid;
+        s->owner_gid = ownerjob->gid;
     }
     /* seed the owner set with the owning namespace */
     prte_session_add_owner(s, nspace);
@@ -1763,8 +1764,10 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
         if (NULL == dest && NULL != req_id) {
             dest = prte_get_session_object_from_refid(req_id);
         }
+        /* growing a reservation is an operation on it, decided by who is
+         * asking - see prte_pmix_server_session_permitted */
         if (NULL == dest ||
-            !prte_session_is_owned_by(dest, req->tproc.nspace)) {
+            !prte_pmix_server_session_permitted(dest, &req->tproc, req->info, req->ninfo)) {
             return (NULL == dest) ? PMIX_ERR_NOT_FOUND : PMIX_ERR_NO_PERMISSIONS;
         }
         /* a new inheritance value on EXTEND updates the disposition */

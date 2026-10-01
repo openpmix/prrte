@@ -68,6 +68,64 @@ static void mark_cancelled(prte_job_t *jdata)
     prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, PRTE_ATTR_LOCAL, true);
 }
 
+/* The jobs a request with no targets reaches when its requester may not
+ * act on every job: those it may access, leaving out our own daemon job
+ * and tools, which a DVM-wide request never meant */
+static bool untargeted_job(prte_job_t *jdata, const pmix_proc_t *requestor,
+                           const pmix_info_t directives[], size_t ndirs)
+{
+    return (NULL != jdata &&
+            !PMIX_CHECK_NSPACE_STRICT(jdata->nspace, PRTE_PROC_MY_NAME->nspace) &&
+            !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
+            prte_pmix_server_request_permitted(requestor, directives, ndirs, jdata));
+}
+
+/* every job a request names must be one its requester may act on */
+static bool targets_permitted(const pmix_proc_t *requestor, const pmix_proc_t targets[],
+                              size_t ntargets, const pmix_info_t directives[], size_t ndirs)
+{
+    size_t n;
+
+    for (n = 0; NULL != targets && n < ntargets; n++) {
+        if (!prte_pmix_server_request_permitted(requestor, directives, ndirs,
+                                                prte_get_job_data_object(targets[n].nspace))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* xcast a signal for the local procs of one job, or of every job when
+ * jobid is empty */
+static pmix_status_t send_signal(pmix_nspace_t jobid, int32_t signum)
+{
+    pmix_data_buffer_t *cmd;
+    prte_daemon_cmd_flag_t cmmnd = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
+    pmix_status_t rc;
+    int prc;
+
+    PMIX_DATA_BUFFER_CREATE(cmd);
+    rc = PMIx_Data_pack(NULL, cmd, &cmmnd, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, cmd, jobid, 1, PMIX_PROC_NSPACE);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, cmd, &signum, 1, PMIX_INT32);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
+        return rc;
+    }
+    prc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd);
+    PMIX_DATA_BUFFER_RELEASE(cmd);
+    if (PRTE_SUCCESS != prc) {
+        PRTE_ERROR_LOG(prc);
+        return prte_pmix_convert_rc(prc);
+    }
+    return PMIX_SUCCESS;
+}
+
 /* process a job control request - runs on the PRRTE progress
  * thread, since it accesses proc objects and drives the PLM
  * and daemon-command xcasts */
@@ -83,14 +141,40 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
     pmix_pointer_array_t parray, *ptrarray;
     pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t cmmnd;
-    pmix_proc_t *proct;
-    PRTE_HIDE_UNUSED_PARAMS(requestor);
+    prte_job_t *jdata;
+    bool all;
+
+    /* May the requester act on every job - root, our own user, or a
+     * request we made ourselves? If not, it may act only on the jobs it
+     * may access: a request naming others is refused, and one naming
+     * none reaches only those */
+    all = prte_pmix_server_request_permitted(requestor, directives, ndirs, NULL);
 
     for (m = 0; m < ndirs; m++) {
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_KILL)) {
+            if (!targets_permitted(requestor, targets, ntargets, directives, ndirs)) {
+                return PMIX_ERR_NO_PERMISSIONS;
+            }
             /* convert the list of targets to a pointer array */
-            if (NULL == targets) {
+            if (NULL == targets && all) {
                 ptrarray = NULL;
+            } else if (NULL == targets) {
+                /* every job the requester may access, whole */
+                PMIX_CONSTRUCT(&parray, pmix_pointer_array_t);
+                for (n = 0; n < (size_t) prte_job_data->size; n++) {
+                    jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, (int) n);
+                    if (!untargeted_job(jdata, requestor, directives, ndirs)) {
+                        continue;
+                    }
+                    mark_cancelled(jdata);
+                    proc = PMIX_NEW(prte_proc_t);
+                    if (NULL == proc) {
+                        continue;
+                    }
+                    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, PMIX_RANK_WILDCARD);
+                    pmix_pointer_array_add(&parray, proc);
+                }
+                ptrarray = &parray;
             } else {
                 PMIX_CONSTRUCT(&parray, pmix_pointer_array_t);
                 for (n = 0; n < ntargets; n++) {
@@ -136,6 +220,10 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
         }
 
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_TERMINATE)) {
+            if (NULL == targets && !all) {
+                /* halting the DVM is for root and our own user alone */
+                return PMIX_ERR_NO_PERMISSIONS;
+            }
             if (NULL == targets) {
                 /* terminate the daemons and all running jobs.  This is the
                  * pterm path - it sends exactly this directive with no
@@ -173,45 +261,33 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
         }
 
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_SIGNAL)) {
-            PMIX_DATA_BUFFER_CREATE(cmd);
-            cmmnd = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-            /* pack the command */
-            rc = PMIx_Data_pack(NULL, cmd, &cmmnd, 1, PMIX_UINT8);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(cmd);
-                return rc;
+            if (!targets_permitted(requestor, targets, ntargets, directives, ndirs)) {
+                return PMIX_ERR_NO_PERMISSIONS;
             }
-            /* pack the target jobid */
-            if (NULL == targets) {
-                PMIX_LOAD_NSPACE(jobid, NULL);
-            } else {
-                proct = (pmix_proc_t *) &targets[0];
-                PMIX_LOAD_NSPACE(jobid, proct->nspace);
-            }
-            rc = PMIx_Data_pack(NULL, cmd, &jobid, 1, PMIX_PROC_NSPACE);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(cmd);
-                return rc;
-            }
-            /* pack the signal */
             rc = PMIx_Value_get_number(&directives[m].value, &signum, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
-                PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
             }
-            rc = PMIx_Data_pack(NULL, cmd, &signum, 1, PMIX_INT32);
+            if (NULL != targets) {
+                /* the job of the first target */
+                PMIX_LOAD_NSPACE(jobid, targets[0].nspace);
+                rc = send_signal(jobid, signum);
+            } else if (all) {
+                /* every job */
+                PMIX_LOAD_NSPACE(jobid, NULL);
+                rc = send_signal(jobid, signum);
+            } else {
+                /* every job the requester may access */
+                rc = PMIX_SUCCESS;
+                for (n = 0; PMIX_SUCCESS == rc && n < (size_t) prte_job_data->size; n++) {
+                    jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, (int) n);
+                    if (untargeted_job(jdata, requestor, directives, ndirs)) {
+                        rc = send_signal(jdata->nspace, signum);
+                    }
+                }
+            }
             if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
-            }
-            prc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd);
-            PMIX_DATA_BUFFER_RELEASE(cmd);
-            if (PRTE_SUCCESS != prc) {
-                PRTE_ERROR_LOG(prc);
-                return prte_pmix_convert_rc(prc);
             }
             return PMIX_OPERATION_SUCCEEDED;
         }

@@ -193,20 +193,6 @@ typedef struct {
 } prte_pmix_server_op_caddy_t;
 PMIX_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
 
-#define PRTE_IO_OP(t, nt, b, fn, cfn, cbd)                                         \
-    do {                                                                           \
-        prte_pmix_server_op_caddy_t *_cd;                                          \
-        _cd = PMIX_NEW(prte_pmix_server_op_caddy_t);                               \
-        _cd->procs = (pmix_proc_t *) (t);                                          \
-        _cd->nprocs = (nt);                                                        \
-        _cd->server_object = (void *) (b);                                         \
-        _cd->cbfunc = (cfn);                                                       \
-        _cd->cbdata = (cbd);                                                       \
-        prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
-        PMIX_POST_OBJECT(_cd);                                                     \
-        prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
-    } while (0);
-
 #define PRTE_DMX_REQ(p, i, ni, cf, ocf, ocd)                                         \
     do {                                                                             \
         prte_pmix_server_req_t *_req;                                                \
@@ -688,9 +674,82 @@ typedef struct {
      * one of them can be told "not found" instead of waiting for a job
      * object that is never coming back - see prte_pmix_server_job_departed() */
     pmix_list_t departed_jobs;
+    /* the users we have had to judge - pmix_user_t, see
+     * pmix_server_access.c */
+    pmix_list_t users;
 } prte_pmix_server_globals_t;
 
 PRTE_EXPORT extern prte_pmix_server_globals_t prte_pmix_server_globals;
+
+/* Access to a job, or a session, by user and group - see
+ * pmix_server_access.c and PMIx's docs/security-plan.rst. All of these run
+ * on the PRRTE progress thread.
+ *
+ * prte_pmix_server_requester_uid: the requester's uid, as PMIx names it in
+ * an up-call's info (PMIX_USERID, from the identity it connected with).
+ * false when the info names none. */
+PRTE_EXPORT bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t *uid);
+
+/* root, or the user this DVM runs as */
+PRTE_EXPORT bool prte_pmix_server_privileged(uid_t uid);
+
+/* the user jdata belongs to - our own user when none is known */
+PRTE_EXPORT uid_t prte_pmix_server_job_owner(prte_job_t *jdata);
+
+/* May uid act on jdata? PMIx's rule (pmix_server_access_check) over our
+ * copy of the job's owner and access list and our record of the user;
+ * against a PMIx without it, root, our own user and the owner. A NULL
+ * jdata admits only root and our own user. */
+PRTE_EXPORT bool prte_pmix_server_job_permitted(uid_t uid, prte_job_t *jdata);
+
+/* The same for the requester an up-call's info names. A PMIx that names
+ * the requester of every client and tool request
+ * (PRTE_PMIX_HAVE_REQUESTER_ID) names none only for a request we made of
+ * it ourselves: that is allowed when requestor - the up-call's requesting
+ * process, NULL where it has none - is our own name, and anything else
+ * naming none is refused. Against an older PMIx, a request naming no
+ * requester is allowed. */
+PRTE_EXPORT bool prte_pmix_server_request_permitted(const pmix_proc_t *requestor,
+                                                    const pmix_info_t *info, size_t ninfo,
+                                                    prte_job_t *jdata);
+
+/* May the requester an up-call's info names operate on session - grow,
+ * shrink, release, terminate it? The scheduler, root, our own user, the
+ * session's owner, or a member of the owner's group. Who is asking is all
+ * that matters: which jobs use the session's resources does not. */
+PRTE_EXPORT bool prte_pmix_server_session_permitted(prte_session_t *session,
+                                                    const pmix_proc_t *requestor,
+                                                    const pmix_info_t *info, size_t ninfo);
+
+/* Add to a job's info the further users (or, with group, groups) the
+ * --rtos users= / groups= directives name - a ':'-separated list of names
+ * and numbers, resolved here - as a PMIX_ACCESS_PERMISSIONS, which travels
+ * with the job to every daemon. PRTE_ERR_NOT_SUPPORTED against a PMIx
+ * without the rule; PRTE_ERR_NOT_FOUND for a name nobody has. */
+PRTE_EXPORT int prte_pmix_server_access_parse(prte_job_t *jdata, bool group, const char *list);
+
+/* Keep our copy of a job's owner and access list, from the info we
+ * register it with, and release it */
+PRTE_EXPORT pmix_status_t prte_pmix_server_access_record(prte_job_t *jdata,
+                                                         const pmix_info_t *info, size_t ninfo);
+PRTE_EXPORT void prte_pmix_server_access_release_job(prte_job_t *jdata);
+
+/* Mark the PMIX_USERID and PMIX_GRPID in info - the identity PMIx gave us
+ * for the process that made a request - as relayed, before we pass the
+ * request on through a PMIx API (to the scheduler, to another DVM). The
+ * server it goes to then keeps them rather than putting ours in their
+ * place, and the operation is attributed to whoever asked for it. A no-op
+ * against a PMIx without PMIX_INFO_RELAYED */
+PRTE_EXPORT void prte_pmix_server_mark_relayed(pmix_info_t *info, size_t ninfo);
+
+/* A user we now know - a job's owner, a tool's user: make our record of it,
+ * its groups looked up, and register it with PMIx. Root and our own user
+ * are skipped */
+PRTE_EXPORT void prte_pmix_server_access_user(uid_t uid);
+
+/* The job named nspace is ending here. If nothing else of its owner's is
+ * left, drop our record of the user and deregister it from PMIx */
+PRTE_EXPORT void prte_pmix_server_access_job_done(const pmix_nspace_t nspace);
 
 END_C_DECLS
 

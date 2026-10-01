@@ -3,7 +3,7 @@
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -107,3 +107,22 @@ this daemon is running as.
 
 State logging has been disabled for this process; the DVM is otherwise
 proceeding normally.
+#
+[access-bad-list]
+The "%s" runtime option names who else may access the job, as a list of
+user or group names or numbers separated by ':' - for example,
+"--rtos users=alice:bob,groups=research". This one could not be used:
+
+    %s
+
+Every name must be one this system knows, and the list may not be empty.
+Please correct it and try again.
+#
+[access-not-supported]
+The "%s" runtime option names who else may access the job:
+
+    %s
+
+but the PMIx library this runtime was built with cannot apply an access
+list. The job can be accessed only by its owner. Please remove the option,
+or rebuild with a newer PMIx.

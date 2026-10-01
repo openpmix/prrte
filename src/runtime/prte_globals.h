@@ -332,6 +332,9 @@ typedef struct{
      * PRTE_INVALID_UID when the requester presented no identity, which
      * matches nothing. */
     uid_t owner_uid;
+    /* that user's group - its members may operate on the session too.
+     * PRTE_INVALID_GID when none is known */
+    gid_t owner_gid;
     /* Disposition recorded at creation, governing teardown when the owning
      * namespace (NONE/DEFAULT) or the last derived child (CHILD/CHILD_DEFAULT)
      * terminates. Stored as the uint8_t underlying pmix_alloc_inheritance_t so
@@ -549,6 +552,10 @@ typedef struct prte_job_t {
      * the one command that asked for it. */
     uid_t uid;
     gid_t gid;
+    /* Our copy of who may access the job - a pmix_access_t (void here, since
+     * an older PMIx has no such type), built from the info we register the
+     * job with. NULL until then. See prted/pmix/pmix_server_access.c */
+    void *access;
     /* Sessions this job may map onto, resolved from PRTE_JOB_SPAWN_TARGET on the
      * HNP after the ownership check. HNP-local; never packed (rebuilt from the
      * attribute if ever needed). Defaults to { jdata->session } when no spawn

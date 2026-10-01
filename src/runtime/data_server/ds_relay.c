@@ -305,6 +305,10 @@ pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
         PMIX_INFO_XFER(&(*out)[m], (pmix_info_t *) &info[n]);
         m++;
     }
+    /* the identity our PMIx gave us for the process is theirs, not ours -
+     * a PMIx that keeps a relayed one attributes the operation to them
+     * directly; the private keys below say the same to one that does not */
+    prte_pmix_server_mark_relayed(*out, m);
     PMIX_INFO_LOAD(&(*out)[m], PMIX_REQUESTOR, requestor, PMIX_PROC);
     PMIX_INFO_LOAD(&(*out)[m + 1], PRTE_PUBLISH_REQ_UID, &uid, PMIX_UINT32);
     PMIX_INFO_LOAD(&(*out)[m + 2], PRTE_PUBLISH_REQ_GID, &gid, PMIX_UINT32);

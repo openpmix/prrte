@@ -237,6 +237,10 @@ BEGIN_C_DECLS
 #define PRTE_CLI_REPORT_STATE       "report-state-on-timeout"       // optional arg
 #define PRTE_CLI_STACK_TRACES       "get-stack-traces"              // optional arg
 #define PRTE_CLI_REPORT_CHILD_SEP   "report-child-jobs-separately"  // optional arg
+// further users and groups allowed to access the job, each a ':'-separated
+// list of names or numbers
+#define PRTE_CLI_ACCESS_USERS       "users"                         // reqd arg
+#define PRTE_CLI_ACCESS_GROUPS      "groups"                        // reqd arg
 // the full name is what the runtime-options help text and the MCA param
 // description both document; the option matcher accepts any unambiguous
 // prefix, so the shorter "aggregate-help" still works. Naming the SHORT
@@ -460,7 +464,9 @@ typedef enum {
     PRTE_RTOS_AGG_HELP,
     PRTE_RTOS_NOTIFY_ERRORS,
     PRTE_RTOS_OUTPUT_PROCTABLE,
-    PRTE_RTOS_FWD_ENVIRON
+    PRTE_RTOS_FWD_ENVIRON,
+    PRTE_RTOS_ACCESS_USERS,
+    PRTE_RTOS_ACCESS_GROUPS
 } prte_cli_rtos_t;
 PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_rtos_directives[];
 

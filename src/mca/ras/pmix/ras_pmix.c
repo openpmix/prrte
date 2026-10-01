@@ -408,6 +408,8 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     for (n=0; n < req->ninfo; n++) {
         PMIX_INFO_XFER(&xfer[n], &req->info[n]);
     }
+    /* the requester's identity is theirs, not ours */
+    prte_pmix_server_mark_relayed(xfer, req->ninfo);
     PMIX_INFO_LOAD(&xfer[req->ninfo], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
     /* Repoint the request at our augmented copy. If it merely borrowed the
      * caller's array we leave that alone, but if it already OWNED one we have
