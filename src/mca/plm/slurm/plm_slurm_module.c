@@ -210,29 +210,15 @@ static bool srun_exit_expected(uint32_t job_id)
 static int plm_slurm_init(void)
 {
     int rc;
-    prte_job_t *jdata;
 
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
-    /* if we don't want to launch (e.g., someone just wants
-     * to test the mappers), then we assign vpids at "launch"
-     * so the mapper has something to work with
-     */
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH)) {
-        prte_plm_globals.daemon_nodes_assigned_at_launch = true;
-    } else {
-        /* we do NOT assign daemons to nodes at launch - we will
-         * determine that mapping when the daemon
-         * calls back. This is required because slurm does
-         * its own mapping of proc-to-node, and we cannot know
-         * in advance which daemon will wind up on which node
-         */
-        prte_plm_globals.daemon_nodes_assigned_at_launch = false;
-    }
+    /* we assign daemon nodes at launch: srun places the daemons in the
+     * order launch_daemons lists their nodes */
+    prte_plm_globals.daemon_nodes_assigned_at_launch = true;
 
     /* point to our launch command */
     if (PRTE_SUCCESS

@@ -13,9 +13,9 @@ referenced throughout.
 starts one daemon per node across the allocation. Priority **75**,
 selected when running inside a SLURM allocation. Unlike `ssh` it does
 **one** launcher invocation for the whole DVM — `srun` fans out to the
-nodes itself — and it lets SLURM decide proc→node placement, so PRRTE
-learns each daemon's node only when the daemon phones home
-(`daemon_nodes_assigned_at_launch = false`).
+nodes itself. It lists the nodes in vpid order and has `srun` start the
+daemons in that order, so each daemon's node is known at launch
+(`daemon_nodes_assigned_at_launch = true`).
 
 Built only when SLURM is detected at configure time (`PRTE_CHECK_SLURM`);
 PRRTE does **not** link against any SLURM library — it just execs `srun`.
@@ -199,8 +199,6 @@ not srun).
   gives. That order is what binds each vpid to its node: keep the file in
   vpid order and the distribution arbitrary, or daemons claim each
   other's vpids and `prted_report_launch` renames their nodes to match.
-  `daemon_nodes_assigned_at_launch` is still `false`; don't assume a
-  node↔daemon binding before the callback.
 - **Version gates are load-bearing.** `--external-launcher` (23.11+) and
   the `ancient`/`early` flags come straight from the version
   [`common/slurm`](../../common/slurm/AGENTS.md) parsed out of
