@@ -1699,27 +1699,6 @@ elastic_oversize_group() {
         || bad "a large but irrelevant member broke the extend: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
     drop_extra_jobs "$(ALLOC jobid --tag dvm | tr -d ' \r')"
 
-    # The same again with the bulk in the array PRRTE does read, so every one
-    # of those nodes is parsed, one at a time.
-    SHIM set fat_nodes 4000 >/dev/null 2>&1
-    out=$(SA 'timeout 180 elastic extend 1' 2>&1)
-    SHIM set fat_nodes 0 >/dev/null 2>&1
-    echo "$out" | grep -q 'ALLOC_ID\|REJECTED' \
-        && ok "a 4000-node allocation array was read to the end" \
-        || bad "a large allocation array broke the extend: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
-    drop_extra_jobs "$(ALLOC jobid --tag dvm | tr -d ' \r')"
-
-    # Peak RSS is what the whole branch is for: reading a record many times
-    # the size of the window must not move it.
-    after=$(SA "awk '/VmHWM/ {print \$2}' /proc/\$(pgrep -x prte)/status")
-    if [ -n "$before" ] && [ -n "$after" ]; then
-        [ "$((after - before))" -lt 65536 ] \
-            && ok "the HNP's peak memory held across both records (${before}kB to ${after}kB)" \
-            || bad "reading the records cost the HNP $((after - before))kB of peak memory"
-    else
-        skp "could not read the HNP's peak memory"
-    fi
-
     # A member PRRTE reads has to be held whole, so one past the window cannot
     # be read at all.  fat_field pads current_working_directory, which the
     # extend propagates, rather than the member fat_json adds -- that one is
@@ -1738,7 +1717,37 @@ elastic_oversize_group() {
     SA 'pgrep -x prte >/dev/null' && ok "HNP survived the oversized records" \
                                   || bad "HNP died reading an oversized record"
 
+    # Peak RSS is what the whole branch is for: reading a record many times
+    # the size of the window must not move it.
+    after=$(SA "awk '/VmHWM/ {print \$2}' /proc/\$(pgrep -x prte)/status")
+    if [ -n "$before" ] && [ -n "$after" ]; then
+        [ "$((after - before))" -lt 65536 ] \
+            && ok "the HNP's peak memory held across both records (${before}kB to ${after}kB)" \
+            || bad "reading the records cost the HNP $((after - before))kB of peak memory"
+    else
+        skp "could not read the HNP's peak memory"
+    fi
     dvm_stop
+
+    # The bulk in the array PRRTE does read, so every one of those nodes is
+    # parsed, one at a time.  The nodes are the shim's inventions, so the grant
+    # cannot be launched: srun refuses it, and a grow whose launch fails
+    # currently ends the DVM.  Last, on a DVM of its own, and asserting only
+    # the read.
+    cleanup_cluster
+    ALLOC new --tag dvm --nodes 2 --tasks-per-node 2 >/dev/null 2>&1
+    if dvm_start --prtemca prte_elastic_mode 1; then
+        SHIM set fat_nodes 4000 >/dev/null 2>&1
+        out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+        SHIM set fat_nodes 0 >/dev/null 2>&1
+        echo "$out" | grep -q 'ALLOC_ID\|REJECTED' \
+            && ok "a 4000-node allocation array was read to the end" \
+            || bad "a large allocation array broke the extend: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        dvm_stop
+    else
+        bad "no DVM came up under the recording shim for the 4000-node record"
+    fi
+
     DVM_SHIM=0
     cleanup_cluster
 }
