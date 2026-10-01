@@ -1021,6 +1021,136 @@ elastic_external_cancel_group() {
     cleanup_cluster
 }
 
+# Poll until every node in $1 (comma-separated) is grantable.  A released
+# job does not hand its nodes back at once; see grantable_nodes.
+wait_grantable() {
+    local want=$1 n g missing
+    for _ in $(seq 30); do
+        g=$(grantable_nodes)
+        missing=0
+        for n in $(echo "$want" | tr ',' ' '); do
+            echo "$g" | tr ',' '\n' | grep -qx "$n" || missing=1
+        done
+        [ "$missing" = 0 ] && return 0
+        sleep 1
+    done
+    return 1
+}
+
+# A grant where a regranted node comes before a new one in the DVM's node
+# pool and after it in Slurm's order.  vpids follow pool order, and a
+# regranted node keeps its pool place, so unless srun numbers the tasks in
+# that order the two daemons swap vpids, and the next grant of both nodes
+# gets one daemon.  Parking every other node forces the order: the first
+# extend can only land on the higher-numbered node, the second on both.
+#
+# Own DVM: it needs plm_base_verbose 5 and the free pool to itself.
+elastic_regrant_order_group() {
+    local out jid ajid bjid cjid pool lo hi others m
+
+    banner "plm/slurm: a re-grant in reverse pool order starts each daemon on its own node"
+    cleanup_cluster
+    ALLOC new --tag dvm --nodelist node1 --tasks-per-node 2 >/dev/null 2>&1
+    jid=$(ALLOC jobid --tag dvm | tr -d ' \r')
+    if ! dvm_start --prtemca prte_elastic_mode 1 --prtemca plm_base_verbose 5; then
+        bad "no DVM came up for the regrant-order case"
+        cleanup_cluster
+        return
+    fi
+    # the two lowest-numbered grantable nodes; Slurm's order here is numeric
+    pool=$(grantable_nodes)
+    lo=$(echo "$pool" | tr ',' '\n' | sort -t e -k2 -n | sed -n 1p)
+    hi=$(echo "$pool" | tr ',' '\n' | sort -t e -k2 -n | sed -n 2p)
+    if [ -z "$hi" ]; then
+        skp "SLURM can grant only '$pool' -- the regrant-order case needs two nodes"
+        dvm_stop; cleanup_cluster
+        return
+    fi
+
+    # first grant: everything but $hi parked
+    others=$(echo "$pool" | tr ',' '\n' | grep -vxF "$hi" | paste -sd, -)
+    ALLOC new --tag park --nodelist "$others" --timeout 30 >/dev/null 2>&1
+    out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+    ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$ajid" ] || [ "$(job_nodes "$ajid")" != "$hi" ]; then
+        skp "the first extend did not land on $hi alone (job '$ajid' on '$(job_nodes "$ajid" 2>/dev/null)')"
+        [ -n "$ajid" ] && SA "timeout 180 elastic release-id $ajid" >/dev/null 2>&1
+        ALLOC free --tag park >/dev/null 2>&1
+        dvm_stop; cleanup_cluster
+        return
+    fi
+    out=$(SA "timeout 180 elastic release-id $ajid" 2>&1)
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "$hi joined the DVM and was released again" \
+        || bad "releasing $hi never completed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # second grant: everything but $lo and $hi parked; $lo joins the pool
+    # after $hi, the reverse of Slurm's order
+    ALLOC free --tag park >/dev/null 2>&1
+    if ! wait_grantable "$lo,$hi"; then
+        skp "SLURM did not make $lo and $hi grantable again"
+        dvm_stop; cleanup_cluster
+        return
+    fi
+    others=$(grantable_nodes | tr ',' '\n' | grep -vxF -e "$lo" -e "$hi" | paste -sd, -)
+    [ -n "$others" ] && ALLOC new --tag park --nodelist "$others" --timeout 30 >/dev/null 2>&1
+    out=$(SA 'timeout 180 elastic extend 2' 2>&1)
+    bjid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$bjid" ] || [ "$(job_nodes "$bjid")" != "$lo,$hi" ]; then
+        skp "the second extend did not land on $lo,$hi (job '$bjid' on '$(job_nodes "$bjid" 2>/dev/null)')"
+        [ -n "$bjid" ] && SA "timeout 180 elastic release-id $bjid" >/dev/null 2>&1
+        ALLOC free --tag park >/dev/null 2>&1
+        dvm_stop; cleanup_cluster
+        return
+    fi
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the extend onto $lo and a regranted $hi completed" \
+        || bad "the extend onto $lo,$hi never completed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    m=$(daemon_node_mismatches)
+    [ -z "$m" ] \
+        && ok "each daemon reported in from the node it was assigned" \
+        || bad "daemons swapped nodes: $(echo "$m" | tr '\n' ';')"
+    sleep 6
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(idx_of "$lo,$hi"))" = 2 ] \
+        && ok "both granted nodes have a daemon" \
+        || bad "only $(prted_count $(idx_of "$lo,$hi"))/2 daemons on $lo,$hi"
+
+    # third grant of the same two: where swapped nodes would get one daemon
+    out=$(SA "timeout 180 elastic release-id $bjid" 2>&1)
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        || bad "releasing $lo,$hi never completed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    if ! wait_grantable "$lo,$hi"; then
+        skp "SLURM did not make $lo and $hi grantable a second time"
+        ALLOC free --tag park >/dev/null 2>&1
+        dvm_stop; cleanup_cluster
+        return
+    fi
+    out=$(SA 'timeout 180 elastic extend 2' 2>&1)
+    cjid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$cjid" ] || [ "$(job_nodes "$cjid")" != "$lo,$hi" ]; then
+        skp "the third extend did not land on $lo,$hi (job '$cjid' on '$(job_nodes "$cjid" 2>/dev/null)')"
+    else
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "granting $lo and $hi again completed" \
+            || bad "the re-grant of $lo,$hi never completed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        sleep 6
+        # shellcheck disable=SC2086
+        [ "$(prted_count $(idx_of "$lo,$hi"))" = 2 ] \
+            && ok "the re-grant started a daemon on each of $lo and $hi" \
+            || bad "the re-grant left $lo,$hi with $(prted_count $(idx_of "$lo,$hi"))/2 daemons"
+        out=$(SA "timeout 60 prun --host $lo:1,$hi:1 -n 2 hostname" 2>&1)
+        [ "$(echo "$out" | grep -E '^node[0-9]+$' | sort | paste -sd, -)" \
+          = "$(echo "$lo,$hi" | tr ',' '\n' | sort | paste -sd, -)" ] \
+            && ok "a job runs on both re-granted nodes" \
+            || bad "a job on $lo,$hi ran on: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        SA "timeout 180 elastic release-id $cjid" >/dev/null 2>&1
+    fi
+    ALLOC free --tag park >/dev/null 2>&1
+    dvm_stop
+    cleanup_cluster
+}
+
 # THE PHASE IS A SEQUENCE OF INDEPENDENT GROUPS, AND THAT IS DELIBERATE.
 #
 # Each group below is its own function so that a group which cannot proceed
@@ -1063,6 +1193,7 @@ test_elastic() {
     elastic_tainted_hostname_group
     dvm_stop
     elastic_external_cancel_group
+    elastic_regrant_order_group
     cleanup_cluster
 
     # The last two groups need the recording shim in front of the real SLURM
