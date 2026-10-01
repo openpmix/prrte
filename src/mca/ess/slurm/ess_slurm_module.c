@@ -112,8 +112,12 @@ static int slurm_set_name(void)
     PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm setting name"));
 
     /* SLURM gives every daemon it starts the same base vpid; each one adds
-     * its own index within the allocation to arrive at a unique rank */
-    rc = prte_ess_base_set_identity("SLURM_NODEID", 0);
+     * its task index in the step to arrive at a unique rank.  The task index
+     * follows the order srun was asked to start the tasks in, which the
+     * launcher controls; SLURM_NODEID is the node's place in SLURM's own
+     * order, which it does not.  With one task per node under srun's default
+     * distribution the two are equal */
+    rc = prte_ess_base_set_identity("SLURM_PROCID", 0);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }

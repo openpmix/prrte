@@ -63,7 +63,7 @@ PRTE_EXPORT int prte_ess_base_std_prolog(void);
  * The nspace is taken verbatim from prte_ess_base_nspace.  The rank is
  * prte_ess_base_vpid plus a per-node offset: an RM hands every daemon it
  * starts the same base vpid, and they tell themselves apart by the node index
- * that RM exports (@c offset_envar - SLURM_NODEID, PALS_NODEID, ...).  Pass
+ * that RM exports (@c offset_envar - SLURM_PROCID, PALS_NODEID, ...).  Pass
  * NULL for @c offset_envar when the launcher assigns each daemon its vpid
  * directly, as ssh does.  @c offset_adjust is added to that index, because LSF
  * numbers its tasks from one and everyone else from zero.

@@ -64,16 +64,21 @@ Identical three-step shape to every daemon module:
 
 ---
 
-## `slurm_set_name` — identity with a SLURM node offset
+## `slurm_set_name` — identity with a SLURM task offset
 
 The only SLURM-specific logic. It differs from `env` by adding a
-**per-node vpid offset** so that each `srun`-placed daemon lands on a
+**per-task vpid offset** so that each `srun`-placed daemon lands on a
 unique rank, and by correcting the nodename from SLURM's own value:
 
-1. **`prte_ess_base_set_identity("SLURM_NODEID", 0)`** — the base vpid
-   plus this node's SLURM node id. This is the crucial difference from
-   `env`: a single base vpid is broadcast to all daemons, and each adds
-   its `SLURM_NODEID` to get a distinct rank. The base helper does the
+1. **`prte_ess_base_set_identity("SLURM_PROCID", 0)`** — the base vpid
+   plus this daemon's task index in the step. This is the crucial
+   difference from `env`: a single base vpid is broadcast to all daemons,
+   and each adds its `SLURM_PROCID` to get a distinct rank. The task
+   index follows the order `srun` was asked to start the tasks in, which
+   [`plm/slurm`](../../plm/slurm/AGENTS.md) controls; `SLURM_NODEID` is
+   the node's place in SLURM's own order, which it does not. With one
+   task per node under `srun`'s default distribution the two are equal.
+   The base helper does the
    nspace load, both parses, the range check, and `num_daemons`; see the
    [framework guide](../AGENTS.md#daemon-identity-is-established-in-one-place).
 2. Replace `prte_process_info.nodename` with `getenv("SLURMD_NODENAME")`
@@ -92,11 +97,12 @@ order in the file now is getenv, then free, then replace. Keep it.
 
 ## Things to watch when editing
 
-- **The `SLURM_NODEID` offset is load-bearing.** Getting it wrong (or
+- **The `SLURM_PROCID` offset is load-bearing.** Getting it wrong (or
   dropping it) collides daemon ranks — a silent, miserable failure. The
-  base vpid is the same for every daemon; the node id is what
-  disambiguates.
-- **`SLURM_NODEID` is validated, not just `NULL`-guarded.**
+  base vpid is the same for every daemon; the task index is what
+  disambiguates, and it matches the vpid the HNP assigned only while
+  `srun` starts the tasks in vpid order.
+- **`SLURM_PROCID` is validated, not just `NULL`-guarded.**
   `prte_ess_base_set_identity()` refuses a missing variable
   (`PRTE_ERR_NOT_FOUND`) and also one holding anything that is not a
   plain non-negative number — the old `atoi` read every such value as 0,
