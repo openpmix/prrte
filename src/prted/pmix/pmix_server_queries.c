@@ -393,11 +393,14 @@ static void _query(int sd, short args, void *cbdata)
                                             "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
                                             nsq);
-                        /* A launch message goes only to the daemons that host
-                         * part of a job, so off the master "I have never heard
-                         * of this namespace" is a statement about this daemon,
-                         * not about the DVM - the same reason the proc-table
-                         * arm below defers rather than answering NOT_FOUND.
+                        /* Off the master "I have never heard of this namespace"
+                         * is a statement about this daemon, not about the DVM:
+                         * the launch message reaches every daemon, but a tool's
+                         * job lives only on the master and the daemon the tool
+                         * attached to, and a daemon may not have processed a
+                         * launch yet, or joined the DVM after it - the same
+                         * reason the proc-table arm below defers rather than
+                         * answering NOT_FOUND.
                          * Rejecting it here as a client error made the answer
                          * to one query depend on which node the client landed
                          * on, and did it before any key could reach the
@@ -832,10 +835,11 @@ static void _query(int sd, short args, void *cbdata)
                  * entries for each proc in the indicated job */
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata || 0 == jdata->num_procs) {
-                    /* a job's launch message goes only to the daemons that
-                     * host some of it, so "I have never heard of this job"
-                     * is a statement about this daemon, not about the DVM.
-                     * The master has heard of all of them. */
+                    /* "I have never heard of this job" is a statement about
+                     * this daemon, not about the DVM: a tool's job lives only
+                     * on the master and the daemon it attached to, and a
+                     * daemon may not have processed a launch yet, or joined
+                     * after it. The master has heard of all of them. */
                     if (!PRTE_PROC_IS_MASTER) {
                         goto defer;
                     }
