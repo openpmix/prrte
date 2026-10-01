@@ -262,7 +262,7 @@ is the **entire** body of all four daemon modules' `*_set_name`:
 | Component | Call |
 |-----------|------|
 | `env`   | `prte_ess_base_set_identity(NULL, 0)` |
-| `slurm` | `prte_ess_base_set_identity("SLURM_NODEID", 0)` |
+| `slurm` | `prte_ess_base_set_identity("SLURM_PROCID", 0)` |
 | `pals`  | `prte_ess_base_set_identity("PALS_NODEID", 0)` |
 | `lsf`   | `prte_ess_base_set_identity("LSF_PM_TASKID", -1)` |
 
@@ -434,7 +434,7 @@ trap for the next reader.
   RM-launched daemon environment, that is the ~40-line function you
   write; everything else is base.
 - **`set_name` derives the true vpid.** The base params give a starting
-  vpid; the RM module adds a per-node offset (`SLURM_NODEID`,
+  vpid; the RM module adds a per-node offset (`SLURM_PROCID`,
   `PALS_NODEID`, `LSF_PM_TASKID - 1`) so each daemon lands on a unique
   rank. `env` uses the param verbatim (ssh launch assigns the vpid
   directly). Getting this offset wrong collides daemon ranks — a nasty,
