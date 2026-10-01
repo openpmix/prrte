@@ -802,6 +802,8 @@ static void check_complete(int fd, short args, void *cbdata)
      * for as long as PMIx takes to tear the nspace down.  That is unbounded:
      * the deregistration runs each peer's filesystem epilog.  On a persistent
      * DVM it stalls every other job in flight. */
+    /* and let go of its owner, if nothing else of theirs is left */
+    prte_pmix_server_access_job_done(pname.nspace);
     PMIx_server_deregister_nspace(pname.nspace, dvm_dereg_complete, caddy);
     /* the continuation owns the caddy now */
     return;

@@ -1009,6 +1009,15 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         return prte_pmix_convert_status(ret);
     }
 
+    /* our own copy of the job's owner and access list, from exactly what
+     * PMIx is about to be told - see pmix_server_access.c */
+    ret = prte_pmix_server_access_record(jdata, (pmix_info_t *) darray.array, darray.size);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_ARRAY_DESTRUCT(&darray);
+        return prte_pmix_convert_status(ret);
+    }
+
     /* do not block waiting for the registration - the callback
      * chain will thread-shift and then invoke the caller's callback
      * on our progress thread */

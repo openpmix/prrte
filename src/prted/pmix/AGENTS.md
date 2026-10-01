@@ -1353,26 +1353,70 @@ here that can fail once and be skipped forever needs the same treatment.
 
 ---
 
-## Who may pull a job's output
+## Who may act on a job, or a session
 
-`pmix_server_iof_pull_fn` is how a tool (a debugger, `prun --attach`)
-asks for a job's stdout/stderr, and the job may be anyone's - pulling
-another namespace's output is the point. What decides it is the user: PMIx
-puts the requester's `PMIX_USERID` and `PMIX_GRPID` in the directives
-(`PMIX_CAP_REQUESTER_ID`), and `_iof_pull` refuses a request to start
-forwarding with `PMIX_ERR_NO_PERMISSIONS` unless the requester is root,
-is the user this DVM runs as, or is the recorded owner (`jdata->uid`) of
-every source job. A request to stop is always honored. PMIx forwards
-nothing for the pull until we answer, so a refusal leaves no output
-delivered.
+A job belongs to its owner, who may allow further users and groups; root and
+the user this DVM runs as may act on any job. That rule is PMIx's
+(`docs/security-plan.rst` in PMIx), and PRRTE applies exactly it: PMIx's
+`pmix_server_access_check(user, access)` touches nothing but its arguments,
+so `pmix_server_access.c` calls it on our own progress thread with **our own
+copies** of what it needs. PMIx keeps its own, on its own thread - no lock,
+no thread-shift, and no pointer from one side into the other.
 
-This is the minimum. `jdata->uid` is recorded only on the HNP (from the
-tool that launched the job, and inherited down the job tree) and is never
-packed, so a prted answers only for root and the DVM's user. The group id
-is not consulted: letting a group see a job's output should be something
-the job asks for, not a default. Against a PMIx without
-`PMIX_CAP_REQUESTER_ID` there is no requester identity to check, and the
-pull is allowed, as before.
+- **A job's rule** is `jdata->access` (a `pmix_access_t`, held as `void *`
+  because an older PMIx has no such type), loaded with
+  `pmix_server_access_load()` from exactly the info
+  `prte_pmix_server_register_nspace` hands PMIx. Every daemon registers
+  every job - the launch message is xcast to all - so every daemon has it.
+  Until the job is registered here, only its owner is known.
+- **A user** is a `pmix_user_t` on `prte_pmix_server_globals.users`, made
+  when we first meet it - a job it owns is registered, a tool of its
+  connects, or it makes a request - with its groups looked up then, and
+  registered with PMIx at the same moment (`PMIx_server_register_resources`
+  with `PMIX_USERID`). The check looks the groups up again whenever it would
+  otherwise refuse - there is no timeout. Root and our own user never get a
+  record: they pass before anything is looked up, which keeps a DVM of one
+  user, and prterun, exactly as before.
+  The groups go to PMIx with the uid (`PMIX_GRPID` as an array), so PMIx
+  looks nothing up itself.
+- **Letting a user go.** Where a job ends (the three
+  `PMIx_server_deregister_nspace` sites), `prte_pmix_server_access_job_done()`
+  drops our record of its owner if no other job or tool of theirs is left,
+  and deregisters the uid from PMIx (`PMIx_server_deregister_resources`
+  with `PMIX_USERID`) so both copies stay in step.
+- **Who is asking.** PMIx puts the requester's `PMIX_USERID` in the info of
+  every up-call a client or tool makes (`PMIX_CAP_REQUESTER_ID`), replacing
+  any it supplied. A request naming none is one we made of our own PMIx
+  server - prterun forwarding its stdin or a signal - and is allowed when its
+  requesting process is our own name. Never use the up-call's `PMIX_GRPID`
+  (the group the requester chose to charge the work to, unverified), nor a
+  `PMIX_REQUESTOR` the request carries (PMIx passes a client's own through)
+  as an identity.
+- **The access list** comes from `--rtos users=a:b,groups=c:d` (names
+  resolved on the HNP, into a `PMIX_ACCESS_PERMISSIONS` in the job's info
+  cache) and from a spawn's `PMIX_ACCESS_PERMISSIONS`, which is cached as it
+  is. Both reach every daemon with the job. A spawn's own `PMIX_USERID` /
+  `PMIX_GRPID` are the requester's identity and are dropped, not cached -
+  cached, they reached the registration after the owner's. A job prterun
+  launches itself is our user's (`plm_base_receive.c`).
+- **Where it is applied:** IOF pull (a stop is always honored), stdin,
+  job control (a halt of the DVM is for root and our user alone; SIGNAL and
+  KILL with no targets reach only the jobs the requester may access; named
+  targets it may not access refuse the request), abort (by the owner of the
+  calling process's job - the up-call names no identity - and always allowed
+  within its own job), and queries (naming another job is checked; job
+  listings and resolve leave out jobs the requester may not access).
+  Monitoring needs nothing here: the relayed directives carry the
+  requester's `PMIX_USERID`, and each node's PMIx applies the rule to it.
+- **Session operations** - grow, shrink, release, terminate
+  (`pmix_server_session.c`, and extending a reservation in
+  `ras_base_allocate.c`) - are decided by who is asking and nothing else
+  (`prte_pmix_server_session_permitted`): the scheduler (which identified
+  itself when it connected - matched against the requester PMIx names,
+  `req->tproc`, never a `PMIX_REQUESTOR` in the request's info), root, our
+  own user, the session's owner, or a member of the owner's group (`session->owner_gid`, from the requester job's recorded
+  gid). Which jobs use a session's *resources* - spawning onto it - is a
+  separate question, still answered by `prte_session_is_owned_by`.
 
 ## Who may have a job's data
 

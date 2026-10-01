@@ -742,6 +742,13 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             jdata->uid = parent->uid;
             jdata->gid = parent->gid;
         }
+        /* a job we launch ourselves - prterun's own - is our user's, and
+         * our daemon job records no identity to inherit */
+        if (PRTE_INVALID_UID == jdata->uid &&
+            PMIX_CHECK_NSPACE(nptr->nspace, PRTE_PROC_MY_NAME->nspace)) {
+            jdata->uid = prte_process_info.euid;
+            jdata->gid = prte_process_info.egid;
+        }
         /* and every daemon tells its PMIx server who owns the job when it
          * registers it - PMIx decides who may access a job's data by that */
         if (PRTE_INVALID_UID != jdata->uid) {
