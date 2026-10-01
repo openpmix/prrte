@@ -42,6 +42,13 @@
  *    owns on an error return -- it used to PMIX_RELEASE(jdata) on a getcwd
  *    failure, leaving the caller with a dangling pointer.
  *
+ *  - access to a job by user and group (pmix_server_access.c): the rule
+ *    PRRTE applies to what it does for clients and tools, a request we
+ *    make of our own PMIx server, the job's access list from "--rtos
+ *    users=,groups=" and from a spawn's PMIX_ACCESS_PERMISSIONS, what the
+ *    registration names to PMIx, and a tool reaching a session through
+ *    the access list of the job that owns it.
+ *
  *  - create_app()'s environment directives, reached through
  *    prte_parse_locals().  --set-env/--prepend-env/--append-env/--unset-env/-x
  *    edit each other, so the order the user gave them in is the value the
@@ -54,6 +61,7 @@
  */
 
 #include "prte_config.h"
+#include <pwd.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -77,6 +85,9 @@
 #include "src/util/prte_cmd_line.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
+#if PRTE_PMIX_HAVE_ACCESS_CHECK
+#    include "src/server/pmix_server_ops.h"
+#endif
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -2695,6 +2706,295 @@ static int test_common_cli(void)
     return failures;
 }
 
+/*
+ * Access to a job by user and group.
+ *
+ * ids no real account should have stand in for other users; "nobody", where
+ * the system has one, stands in for a user belonging to a group.
+ */
+#define ACC_OWNER    4242
+#define ACC_OWNGRP   4343
+#define ACC_LISTED   5151
+#define ACC_STRANGER 9999
+
+#if PRTE_PMIX_HAVE_ACCESS_CHECK
+/* what a daemon registers the job with, from what it has cached - its
+ * info cache, as the registration drains it */
+static pmix_status_t record_cached(prte_job_t *jdata)
+{
+    pmix_list_t *cache = NULL;
+    prte_info_item_t *kv;
+    pmix_info_t *info;
+    size_t n = 0, ninfo;
+    pmix_status_t rc;
+
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache,
+                            PMIX_POINTER) || NULL == cache) {
+        return prte_pmix_server_access_record(jdata, NULL, 0);
+    }
+    ninfo = pmix_list_get_size(cache);
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_LIST_FOREACH (kv, cache, prte_info_item_t) {
+        PMIX_INFO_XFER(&info[n], &kv->info);
+        ++n;
+    }
+    rc = prte_pmix_server_access_record(jdata, info, ninfo);
+    PMIX_INFO_FREE(info, ninfo);
+    return rc;
+}
+
+static bool cached(prte_job_t *jdata, const char *key)
+{
+    pmix_list_t *cache = NULL;
+    prte_info_item_t *kv;
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache,
+                           PMIX_POINTER) && NULL != cache) {
+        PMIX_LIST_FOREACH (kv, cache, prte_info_item_t) {
+            if (PMIX_CHECK_KEY(&kv->info, key)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+#endif
+
+static int test_access(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    pmix_info_t info[2];
+    pmix_proc_t other;
+    uint32_t id, owner = ACC_OWNER, grp = ACC_OWNGRP;
+    pmix_proc_t me;
+    pmix_info_t tinfo;
+    pmix_status_t prc;
+#if PRTE_PMIX_HAVE_ACCESS_CHECK
+    prte_job_t *tool, *sched;
+    prte_session_t *session;
+    pmix_info_t ents[2];
+    pmix_data_array_t da, *ids;
+    pmix_user_t *user;
+    struct passwd *pw;
+    char spec[128];
+    bool made_array = false, found;
+    pmix_proc_t savesched;
+#endif
+
+    /* an access list is kept as a data array, which PMIx copies - and
+     * will only once it has been initialized, as a daemon's always is */
+    PMIX_INFO_LOAD(&tinfo, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
+    prc = PMIx_tool_init(&me, &tinfo, 1);
+    PMIX_INFO_DESTRUCT(&tinfo);
+    if (PMIX_SUCCESS != prc) {
+        fprintf(stderr, "FAIL [access]: PMIx_tool_init: %s\n", PMIx_Error_string(prc));
+        return 1;
+    }
+    /* the users we judge, as the server's initialization would set up */
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.users, pmix_list_t);
+
+    jdata = fresh_job();
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL, &owner,
+                       PMIX_UINT32);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, PRTE_ATTR_GLOBAL, &grp,
+                       PMIX_UINT32);
+
+    /* the rule */
+    CHECK("access/owner", prte_pmix_server_job_permitted(ACC_OWNER, jdata));
+    CHECK("access/root", prte_pmix_server_job_permitted(0, jdata));
+    CHECK("access/our-user", prte_pmix_server_job_permitted(prte_process_info.euid, jdata));
+    CHECK("access/stranger", !prte_pmix_server_job_permitted(ACC_STRANGER, jdata));
+    CHECK("access/no-job-stranger", !prte_pmix_server_job_permitted(ACC_OWNER, NULL));
+    CHECK("access/no-job-root", prte_pmix_server_job_permitted(0, NULL));
+
+    /* who is asking */
+    PMIX_LOAD_PROCID(&other, "unit-test-access-tool", 0);
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &owner, PMIX_UINT32);
+    CHECK("access/request-owner", prte_pmix_server_request_permitted(&other, info, 1, jdata));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    id = ACC_STRANGER;
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+    CHECK("access/request-stranger",
+          !prte_pmix_server_request_permitted(PRTE_PROC_MY_NAME, info, 1, jdata));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    /* a request naming nobody: our own, when it comes from us */
+    CHECK("access/request-ourselves",
+          prte_pmix_server_request_permitted(PRTE_PROC_MY_NAME, NULL, 0, jdata));
+#if PRTE_PMIX_HAVE_REQUESTER_ID
+    CHECK("access/request-unnamed", !prte_pmix_server_request_permitted(&other, NULL, 0, jdata));
+#endif
+
+#if PRTE_PMIX_HAVE_ACCESS_CHECK
+    /* --rtos users= travels with the job's info, and a daemon keeps what it
+     * registers */
+    CHECK("access/rtos-users",
+          PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, "users=5151:9998"));
+    CHECK("access/rtos-cached", cached(jdata, PMIX_ACCESS_PERMISSIONS));
+    CHECK("access/not-yet-registered", !prte_pmix_server_job_permitted(ACC_LISTED, jdata));
+    CHECK("access/record", PMIX_SUCCESS == record_cached(jdata));
+    CHECK("access/listed", prte_pmix_server_job_permitted(ACC_LISTED, jdata));
+    CHECK("access/listed-second", prte_pmix_server_job_permitted(9998, jdata));
+    CHECK("access/still-stranger", !prte_pmix_server_job_permitted(ACC_STRANGER, jdata));
+    CHECK("access/still-owner", prte_pmix_server_job_permitted(ACC_OWNER, jdata));
+    CHECK("access/rtos-unknown-name",
+          PRTE_SUCCESS != prte_state_base_set_runtime_options(jdata,
+                                                              "users=prte-unit-no-such-user"));
+    CHECK("access/rtos-empty-list",
+          PRTE_SUCCESS != prte_state_base_set_runtime_options(jdata, "groups=:"));
+    pw = getpwnam("nobody");
+    if (NULL != pw && 0 != pw->pw_uid && prte_process_info.euid != pw->pw_uid) {
+        /* a user is in its own primary group */
+        CHECK("access/unlisted-member", !prte_pmix_server_job_permitted(pw->pw_uid, jdata));
+        snprintf(spec, sizeof(spec), "groups=%u", (unsigned) pw->pw_gid);
+        CHECK("access/rtos-groups", PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+        CHECK("access/record-groups", PMIX_SUCCESS == record_cached(jdata));
+        CHECK("access/group-member", prte_pmix_server_job_permitted(pw->pw_uid, jdata));
+        CHECK("access/users-kept", prte_pmix_server_job_permitted(ACC_LISTED, jdata));
+    } else {
+        pw = NULL;
+    }
+    PMIX_RELEASE(jdata);
+
+    /* a spawn's PMIX_ACCESS_PERMISSIONS travels with the job's info; the
+     * requester's own PMIX_USERID does not */
+    jdata = fresh_job();
+    PMIX_DATA_ARRAY_CREATE(ids, 1, PMIX_UINT32);
+    ((uint32_t *) ids->array)[0] = ACC_LISTED;
+    PMIX_INFO_LOAD(&ents[0], PMIX_ACCESS_USERIDS, ids, PMIX_DATA_ARRAY);
+    PMIX_DATA_ARRAY_FREE(ids);
+    PMIX_INFO_LOAD(&ents[1], PMIX_ACCESS_GRPIDS, "0", PMIX_STRING);
+    da.type = PMIX_INFO;
+    da.size = 2;
+    da.array = ents;
+    PMIX_INFO_LOAD(&info[0], PMIX_ACCESS_PERMISSIONS, &da, PMIX_DATA_ARRAY);
+    id = ACC_STRANGER;
+    PMIX_INFO_LOAD(&info[1], PMIX_USERID, &id, PMIX_UINT32);
+    CHECK("access/spawn", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 2));
+    CHECK("access/spawn-cached", cached(jdata, PMIX_ACCESS_PERMISSIONS));
+    CHECK("access/spawn-uid-not-cached", !cached(jdata, PMIX_USERID));
+    CHECK("access/spawn-record", PMIX_SUCCESS == record_cached(jdata));
+    CHECK("access/spawn-listed", prte_pmix_server_job_permitted(ACC_LISTED, jdata));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&ents[0]);
+    PMIX_INFO_DESTRUCT(&ents[1]);
+    PMIX_RELEASE(jdata);
+
+    /* session operations: who is asking, and nothing else */
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
+        made_array = true;
+    }
+    session = PMIX_NEW(prte_session_t);
+    session->owner_uid = ACC_OWNER;
+    session->owner_gid = (NULL != pw) ? pw->pw_gid : ACC_OWNGRP;
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &owner, PMIX_UINT32);
+    CHECK("session/owner", prte_pmix_server_session_permitted(session, &other, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    id = 0;
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+    CHECK("session/root", prte_pmix_server_session_permitted(session, &other, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    id = prte_process_info.euid;
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+    CHECK("session/our-user", prte_pmix_server_session_permitted(session, &other, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    id = ACC_STRANGER;
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+    CHECK("session/stranger", !prte_pmix_server_session_permitted(session, &other, info, 1));
+    /* naming the owner's namespace changes nothing - only who is asking */
+    PMIX_LOAD_PROCID(&other, "unit-test-access-owner-ns", 0);
+    prte_session_add_owner(session, other.nspace);
+    CHECK("session/namespace-irrelevant",
+          !prte_pmix_server_session_permitted(session, &other, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    if (NULL != pw) {
+        id = (uint32_t) pw->pw_uid;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+        CHECK("session/owner-group", prte_pmix_server_session_permitted(session, &other, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+    }
+    CHECK("session/ourselves",
+          prte_pmix_server_session_permitted(session, PRTE_PROC_MY_NAME, NULL, 0));
+    CHECK("session/unnamed", !prte_pmix_server_session_permitted(session, &other, NULL, 0));
+    /* the scheduler, which said so when it connected - whoever it runs as */
+    savesched = prte_pmix_server_globals.scheduler;
+    PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler, "unit-test-access-sched", 0);
+    id = ACC_STRANGER;
+    PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+    CHECK("session/scheduler",
+          prte_pmix_server_session_permitted(session, &prte_pmix_server_globals.scheduler, info,
+                                             1));
+    CHECK("session/not-scheduler", !prte_pmix_server_session_permitted(session, &other, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    prte_pmix_server_globals.scheduler = savesched;
+    PMIX_RELEASE(session);
+
+    /* a user is let go once nothing of theirs is left */
+    tool = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(tool->nspace, "unit-test-access-last");
+    PRTE_FLAG_SET(tool, PRTE_JOB_FLAG_TOOL);
+    tool->uid = ACC_LISTED;
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-access-first");
+    jdata->uid = ACC_LISTED;
+    /* judging the user against a job it does not own makes its record */
+    sched = fresh_job();
+    (void) prte_pmix_server_job_permitted(ACC_LISTED, sched);
+    PMIX_RELEASE(sched);
+    if (PRTE_SUCCESS == prte_set_job_data_object(tool) &&
+        PRTE_SUCCESS == prte_set_job_data_object(jdata)) {
+        prte_pmix_server_access_job_done(jdata->nspace);
+        found = false;
+        PMIX_LIST_FOREACH (user, &prte_pmix_server_globals.users, pmix_user_t) {
+            found = found || (ACC_LISTED == user->uid);
+        }
+        CHECK("access/user-kept-while-in-use", found);
+        pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+        prte_pmix_server_access_job_done(tool->nspace);
+        found = false;
+        PMIX_LIST_FOREACH (user, &prte_pmix_server_globals.users, pmix_user_t) {
+            found = found || (ACC_LISTED == user->uid);
+        }
+        CHECK("access/user-dropped-when-unused", !found);
+        pmix_pointer_array_set_item(prte_job_data, tool->index, NULL);
+    } else {
+        CHECK("access/user-fixture", false);
+    }
+    PMIX_RELEASE(tool);
+    if (made_array) {
+        PMIX_RELEASE(prte_job_data);
+        prte_job_data = NULL;
+    }
+#endif
+#if PRTE_PMIX_HAVE_INFO_RELAYED
+    /* relaying a request: the requester's identity is marked as theirs */
+    {
+        pmix_info_t rel[3];
+        uint32_t ruid = ACC_LISTED, rgid = ACC_OWNGRP;
+
+        PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);
+        PMIX_INFO_LOAD(&rel[1], "prte.unit.other", "x", PMIX_STRING);
+        PMIX_INFO_LOAD(&rel[2], PMIX_GRPID, &rgid, PMIX_UINT32);
+        prte_pmix_server_mark_relayed(rel, 3);
+        CHECK("relay/uid-marked", PMIx_Info_is_relayed(&rel[0]));
+        CHECK("relay/gid-marked", PMIx_Info_is_relayed(&rel[2]));
+        CHECK("relay/other-unmarked", !PMIx_Info_is_relayed(&rel[1]));
+        PMIX_INFO_DESTRUCT(&rel[0]);
+        PMIX_INFO_DESTRUCT(&rel[1]);
+        PMIX_INFO_DESTRUCT(&rel[2]);
+    }
+#endif
+    PMIX_RELEASE(jdata);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.users);
+    /* PMIx is finalized in main(), after the frameworks are closed: in an
+     * --enable-mca-dso build, finalizing it unloads the component code
+     * those frameworks still have to close */
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0, skipped = 0;
@@ -2778,11 +3078,17 @@ int main(void)
     failures += test_envar_order(&skipped);
     failures += test_envar_order_permutations(&skipped);
     failures += test_envar_order_mpmd(&skipped);
+    failures += test_access();
 
     (void) pmix_mca_base_framework_close(&prte_schizo_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
     (void) pmix_mca_base_framework_close(&prte_rmaps_base_framework);
     prte_event_base_close();
+    /* test_access() brought PMIx up as a tool - only now, with nothing of
+     * ours left to close, can it be taken down */
+    if (PMIx_Initialized()) {
+        (void) PMIx_tool_finalize();
+    }
     prte_finalize();
 
     if (0 < skipped) {

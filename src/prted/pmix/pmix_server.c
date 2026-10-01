@@ -904,6 +904,7 @@ int pmix_server_init(void)
     /* setup the server's state variables */
     PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.departed_jobs, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.users, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
@@ -1421,6 +1422,9 @@ void pmix_server_finalize(void)
 
     /* finalize our local data server */
     prte_data_server_finalize();
+
+    /* and the users we judged access for */
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.users);
 
     if (NULL != prte_pmix_server_globals.scheduler_directives) {
         PMIX_INFO_FREE(prte_pmix_server_globals.scheduler_directives,

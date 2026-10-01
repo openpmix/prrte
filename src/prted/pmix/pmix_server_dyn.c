@@ -835,6 +835,14 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             flag = PMIX_INFO_TRUE(info);
             prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL, flag);
 
+            /***   THE REQUESTER'S IDENTITY   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_USERID) ||
+                   PMIX_CHECK_KEY(info, PMIX_GRPID)) {
+            /* PMIx names the requester this way on every up-call. The
+             * job's owner is recorded on the HNP from the job that asked
+             * for it, and cached here the requester's id would reach the
+             * registration after the owner's */
+
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             pmix_server_cache_job_info(jdata, info);
