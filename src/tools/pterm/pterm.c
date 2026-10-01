@@ -107,13 +107,15 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
                    pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(info, ninfo, status);
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
 
     PMIX_ACQUIRE_OBJECT(lock);
 
     if (verbose) {
         pmix_output(0, "PTERM: INFOCB");
     }
+    /* the DVM's answer - it may have refused */
+    lock->status = status;
 
     if (NULL != release_fn) {
         release_fn(release_cbdata);
@@ -440,13 +442,22 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS == rc) {
         /* the callback will fire when the DVM acknowledges the order */
         PRTE_PMIX_WAIT_THREAD(&lock);
+        rc = lock.status;
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        /* wait for the connection to depart, which is how we know the
-         * DVM actually went away and not just that it heard us */
-        PRTE_PMIX_WAIT_THREAD(&rellock);
-        PRTE_PMIX_DESTRUCT_LOCK(&rellock);
-        fprintf(stderr, "DONE\n");
-        rc = PRTE_SUCCESS;
+        if (PMIX_SUCCESS == rc || PMIX_OPERATION_SUCCEEDED == rc) {
+            /* wait for the connection to depart, which is how we know the
+             * DVM actually went away and not just that it heard us */
+            PRTE_PMIX_WAIT_THREAD(&rellock);
+            PRTE_PMIX_DESTRUCT_LOCK(&rellock);
+            fprintf(stderr, "DONE\n");
+            rc = PRTE_SUCCESS;
+        } else {
+            /* the DVM refused - it is not going anywhere, so there is no
+             * departure to wait for */
+            PRTE_PMIX_DESTRUCT_LOCK(&rellock);
+            fprintf(stderr, "FAILED: %s (%d)\n", PMIx_Error_string(rc), rc);
+            rc = 1;
+        }
     } else {
         /* PMIx did not accept the request, so infocb will never be
          * called - waiting on that lock would hang here forever, which
