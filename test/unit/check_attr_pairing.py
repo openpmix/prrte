@@ -71,6 +71,8 @@ WRITERS = {
     "prte_add_attribute": 1,
     "prte_prepend_attribute": 1,
     "set_bool_option": 1,
+    # pmix_server_dyn.c: records a parsed "--membind" for a job or an app
+    "xfer_membind": 3,
 }
 
 # Keys that are legitimately one-ended.  Each needs a reason.

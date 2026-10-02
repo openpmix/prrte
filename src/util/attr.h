@@ -9,6 +9,7 @@
  *                         reserved.
  * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  *                         All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -100,6 +101,9 @@ typedef uint8_t prte_app_context_flags_t;
  * nodes the allocation already contains, and merely asks that a daemon be
  * started on them. */
 #define PRTE_APP_ACTIVATE_HOSTS     42 /* char* hosts to bring into the DVM */
+/* this app's "--membind": the prte_hwloc_base_memattr_t to bind its procs'
+ * memory by. Takes precedence over the job's PRTE_JOB_MEMBIND. */
+#define PRTE_APP_MEMBIND            43 /* uint16_t memory binding attribute */
 
 #define PRTE_APP_MAX_KEY 100
 
@@ -327,6 +331,10 @@ typedef uint16_t prte_job_flags_t;
                                                                        // when it registers the job with PMIx - PMIx decides who may access
                                                                        // a job's data by it
 #define PRTE_JOB_OWNER_GID                  (PRTE_JOB_START_KEY + 137) // uint32_t - that user's group, as recorded on the HNP (jdata->gid)
+#define PRTE_JOB_MEMBIND                    (PRTE_JOB_START_KEY + 138) // uint16_t - the job's "--membind": the prte_hwloc_base_memattr_t
+                                                                       // to bind its procs' memory by, unless an app gives its own
+                                                                       // (PRTE_APP_MEMBIND). Takes precedence over the
+                                                                       // hwloc_default_mem_bind_attribute MCA parameter
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

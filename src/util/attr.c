@@ -9,6 +9,7 @@
  *                         reserved.
  * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  *                         All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -312,6 +313,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "APP-ADD-HOST";
         case PRTE_APP_ACTIVATE_HOSTS:
             return "APP-ACTIVATE-HOSTS";
+        case PRTE_APP_MEMBIND:
+            return "APP-MEMBIND";
         case PRTE_APP_USER_CWD:
             return "APP-USER-CWD";
         case PRTE_APP_SSNDIR_CWD:
@@ -592,6 +595,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-DOES-NOT-INHERIT-OUTPUT-FORWARDING";
         case PRTE_JOB_XTERM:
             return "XTERM";
+        case PRTE_JOB_MEMBIND:
+            return "JOB-MEMBIND";
         case PRTE_JOB_OWNER_UID:
             return "JOB-OWNER-UID";
         case PRTE_JOB_OWNER_GID:

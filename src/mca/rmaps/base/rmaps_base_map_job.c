@@ -628,6 +628,41 @@ static void report_no_mapper(prte_job_t *jdata, prte_app_context_t *app,
     PMIx_Argv_free(names);
 }
 
+/* A memory binding by attribute is computed from the cpuset the mapper gave
+ * each process, whether its binding policy was asked for or derived. A
+ * process left without one - "--bind-to none", or a node the default
+ * binding was dropped on because it is oversubscribed - cannot have it.
+ * Say so here, once per app and on the HNP, rather than leave each daemon
+ * to skip it without a word: the daemons skip it on the same test (an
+ * empty proc->cpuset). */
+static void warn_membind_unbound(prte_job_t *jdata)
+{
+    prte_app_context_t *app;
+    prte_hwloc_base_memattr_t memattr;
+    int n, nunbound;
+    char nbuf[32], tbuf[32];
+
+    for (n = 0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
+            continue;
+        }
+        memattr = prte_hwloc_base_membind_resolve(jdata, app);
+        if (PRTE_HWLOC_BASE_MEMATTR_DISABLED == memattr) {
+            continue;
+        }
+        nunbound = prte_hwloc_base_membind_count_unbound(jdata, app->idx);
+        if (0 == nunbound) {
+            continue;
+        }
+        snprintf(nbuf, sizeof(nbuf), "%d", nunbound);
+        snprintf(tbuf, sizeof(tbuf), "%lu", (unsigned long) app->num_procs);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
+                       "membind-unbound", true,
+                       prte_hwloc_base_print_membind(memattr), app->app, nbuf, tbuf);
+    }
+}
+
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -1852,6 +1887,8 @@ ranking:
             parent->bookmark = jdata->bookmark;
         }
     }
+
+    warn_membind_unbound(jdata);
 
     if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_MAP) ||
         PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP)) {

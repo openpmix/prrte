@@ -48,6 +48,7 @@ dist_rst_DATA = \
     cli-leave-session-attached.rst \
     cli-map-by.rst \
     cli-max-restarts.rst \
+    cli-membind.rst \
     cli-memory-alloc-kinds.rst \
     cli-namespace.rst \
     cli-no-aggregate-help.rst \

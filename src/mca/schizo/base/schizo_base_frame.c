@@ -4,6 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -183,6 +184,7 @@ static const char *option_label(const char *key)
         {PRTE_CLI_MAPBY, "--map-by"},
         {PRTE_CLI_RANKBY, "--rank-by"},
         {PRTE_CLI_BINDTO, "--bind-to"},
+        {PRTE_CLI_MEMBIND, "--membind"},
         {PRTE_CLI_OUTPUT, "--output"},
         {PRTE_CLI_DISPLAY, "--display"},
         {PRTE_CLI_RTOS, "--rtos"},
@@ -796,6 +798,10 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "multi-instances", true, PRTE_CLI_BINDTO);
         return PRTE_ERR_SILENT;
     }
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MEMBIND)) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MEMBIND);
+        return PRTE_ERR_SILENT;
+    }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_DISPLAY)) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "multi-instances", true, PRTE_CLI_DISPLAY);
         return PRTE_ERR_SILENT;
@@ -849,6 +855,22 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         if (!prte_schizo_base_check_directives(PRTE_CLI_BINDTO, prte_cli_binders, prte_cli_bindquals,
                                                first_value(opt))) {
             return PRTE_ERR_SILENT;
+        }
+    }
+
+    /* --membind is checked by the parser the server and the MCA parameter
+     * use, rather than by check_directives(): its second field is a value
+     * of the first, not a qualifier, so only that parser can say whether
+     * "attr:bandwidth" means anything - and the front door must not accept
+     * what the server would then refuse */
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_MEMBIND);
+    if (NULL != opt) {
+        prte_hwloc_base_memattr_t memattr;
+
+        rc = prte_hwloc_base_parse_membind(PRTE_PROC_MY_NAME->nspace, "--membind",
+                                           first_value(opt), &memattr);
+        if (PRTE_SUCCESS != rc) {
+            return rc;
         }
     }
 

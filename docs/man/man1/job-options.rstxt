@@ -173,6 +173,11 @@ Synonym for ``--hostfile``.
 
 .. include:: /prrte-rst-content/cli-bind-to.rst
 
+``--membind <directive>``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-membind.rst
+
 .. rubric:: Input and output options
 
 ``--output <directives>``

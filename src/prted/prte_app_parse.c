@@ -734,6 +734,10 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     if (NULL != opt) {
         app->bindto = strdup(opt->values[0]);
     }
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MEMBIND);
+    if (NULL != opt) {
+        app->membind = strdup(opt->values[0]);
+    }
 
     // Hold the job-level directives this segment carried, for the same
     // reason: the tool's global parse of the cmd line stops at the first
@@ -774,8 +778,8 @@ cleanup:
 }
 
 /*
- * Hand out one class of directive (mapping, ranking or binding) once the
- * whole cmd line has been parsed.
+ * Hand out one class of directive (mapping, ranking, binding or memory
+ * binding) once the whole cmd line has been parsed.
  *
  * The first app segment is where a command line speaks for the job: it is
  * what a single-app line has, and it is what the reader sees first. So a
@@ -970,6 +974,11 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
     }
     rc = distribute_directive(jdata, jobdata,
                               offsetof(prte_pmix_app_t, bindto), PMIX_BINDTO);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = distribute_directive(jdata, jobdata,
+                              offsetof(prte_pmix_app_t, membind), PRTE_MEMBIND);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }

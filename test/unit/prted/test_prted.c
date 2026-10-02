@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,6 +50,12 @@
  *    registration names to PMIx, and a tool reaching a session through
  *    the access list of the job that owns it.
  *
+ *  - "--membind", end to end on the HNP side: held on the app by
+ *    create_app(), handed out by distribute_directive() under the same
+ *    first-app-means-the-job rule as --bindto, refused at the front door when
+ *    it is not one, and turned by the spawn translators into the job or app
+ *    attribute the odls reads - parsed, so no daemon parses it again.
+ *
  *  - create_app()'s environment directives, reached through
  *    prte_parse_locals().  --set-env/--prepend-env/--append-env/--unset-env/-x
  *    edit each other, so the order the user gave them in is the value the
@@ -83,6 +90,7 @@
 #include "src/mca/state/base/base.h"
 #include "src/prted/prted.h"
 #include "src/util/prte_cmd_line.h"
+#include "src/hwloc/hwloc-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #    include "src/server/pmix_server_ops.h"
@@ -1690,6 +1698,267 @@ static int test_directive_distribution(void)
     return failures;
 }
 
+/*
+ * --membind follows --bindto's rule exactly: written on the first app and
+ * nowhere else it is the job's; written anywhere else it belongs to the apps
+ * that carry it, and the others get the default rather than a neighbour's.
+ */
+static distrib_case_t membind_cases[] = {
+    {"membind on the first app only -> the job",
+     {"prterun", "--membind", "attr:bandwidth", "-n", "2", "app1", ":", "-n", "2", "app2", NULL},
+     true, false, false},
+    {"membind on the second app only -> that app alone",
+     {"prterun", "-n", "2", "app1", ":", "--membind", "attr:capacity", "-n", "2", "app2", NULL},
+     false, false, true},
+    {"membind on both apps -> each its own",
+     {"prterun", "--membind", "attr:bandwidth", "-n", "2", "app1", ":",
+      "--membind", "attr:capacity", "-n", "2", "app2", NULL},
+     false, true, true},
+    {"no membind at all",
+     {"prterun", "--bindto", "core", "-n", "2", "app1", ":", "-n", "2", "app2", NULL},
+     false, false, false},
+    {NULL, {NULL}, false, false, false},
+};
+
+/* refused before anything is sent: the front door uses the parser the
+ * server does, so it cannot pass what the server would refuse */
+static const struct {
+    const char *desc;
+    const char *argv[12];
+} membind_refusals[] = {
+    {"an unknown attribute", {"prterun", "--membind", "attr:fastest", "-n", "1", "app1", NULL}},
+    {"an ambiguous attribute", {"prterun", "--membind", "attr:l", "-n", "1", "app1", NULL}},
+    {"a bare attribute name", {"prterun", "--membind", "bandwidth", "-n", "1", "app1", NULL}},
+    {"attr without a name", {"prterun", "--membind", "attr", "-n", "1", "app1", NULL}},
+    {"two --membind in one segment",
+     {"prterun", "--membind", "attr:bandwidth", "--membind", "attr:capacity", "-n", "1", "app1", NULL}},
+    {NULL, {NULL}},
+};
+
+static int test_membind_distribution(void)
+{
+    prte_schizo_base_module_t *schizo;
+    distrib_case_t *c;
+    pmix_list_t apps, jobdata;
+    prte_pmix_app_t *app0, *app1;
+    int failures = 0, rc, n;
+
+    schizo = envar_test_schizo();
+    if (NULL == schizo) {
+        return 1;
+    }
+
+    for (c = membind_cases; NULL != c->desc; c++) {
+        PMIX_CONSTRUCT(&apps, pmix_list_t);
+        PMIX_CONSTRUCT(&jobdata, pmix_list_t);
+        rc = prte_parse_locals(schizo, &apps, (char **) c->argv, NULL, NULL,
+                               &jobdata, NULL);
+        if (PRTE_SUCCESS != rc) {
+            fprintf(stderr, "FAIL [%s]: parse failed: %s\n", c->desc, prte_strerror(rc));
+            ++failures;
+            goto next;
+        }
+        if (2 != pmix_list_get_size(&apps)) {
+            fprintf(stderr, "FAIL [%s]: %d apps, wanted 2\n", c->desc,
+                    (int) pmix_list_get_size(&apps));
+            ++failures;
+            goto next;
+        }
+        app0 = (prte_pmix_app_t *) pmix_list_get_first(&apps);
+        app1 = (prte_pmix_app_t *) pmix_list_get_next(&app0->super);
+        CHECK(c->desc, c->on_job == list_has_key(&jobdata, PRTE_MEMBIND));
+        CHECK(c->desc, c->on_app0 == app_has_key(app0, PRTE_MEMBIND));
+        CHECK(c->desc, c->on_app1 == app_has_key(app1, PRTE_MEMBIND));
+
+    next:
+        PMIX_LIST_DESTRUCT(&apps);
+        PMIX_LIST_DESTRUCT(&jobdata);
+    }
+
+    for (n = 0; NULL != membind_refusals[n].desc; n++) {
+        PMIX_CONSTRUCT(&apps, pmix_list_t);
+        PMIX_CONSTRUCT(&jobdata, pmix_list_t);
+        rc = prte_parse_locals(schizo, &apps, (char **) membind_refusals[n].argv, NULL, NULL,
+                               &jobdata, NULL);
+        CHECK(membind_refusals[n].desc, PRTE_SUCCESS != rc);
+        PMIX_LIST_DESTRUCT(&apps);
+        PMIX_LIST_DESTRUCT(&jobdata);
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "  PASS membind distribution\n");
+    }
+    return failures;
+}
+
+/*
+ * The spawn translators turn PRTE_MEMBIND into the attribute the odls reads:
+ * a job's into PRTE_JOB_MEMBIND, an app's into PRTE_APP_MEMBIND, either way
+ * already parsed.  The key is PRRTE's own but any tool can send it, so a bad
+ * value or a wrong type is refused with the request, not carried to a daemon.
+ */
+static int test_xfer_membind(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+    pmix_app_t papp;
+    pmix_info_t info[1];
+    uint16_t u16 = UINT16_MAX, *u16ptr = &u16;
+    uint32_t u32 = 1;
+
+    /* job level */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "ATTR:BANDWIDTH", PMIX_STRING);
+    CHECK("membind/job-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+    CHECK("membind/job-set",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
+    CHECK("membind/job-value", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH == u16);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* "none" is a real answer, recorded as such: it overrides an MCA default */
+    jdata = fresh_job();
+    u16 = UINT16_MAX;
+    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "none", PMIX_STRING);
+    CHECK("membind/none-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+    CHECK("membind/none-set",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
+    CHECK("membind/none-value", PRTE_HWLOC_BASE_MEMATTR_DISABLED == u16);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* a value the parser refuses is refused with the request */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "attr:fastest", PMIX_STRING);
+    CHECK("membind/bad-value-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    CHECK("membind/bad-value-records-nothing",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* a second one for the same job is a conflict, not an overwrite */
+    jdata = fresh_job();
+    {
+        pmix_info_t two[2];
+
+        PMIX_INFO_LOAD(&two[0], PRTE_MEMBIND, "attr:bandwidth", PMIX_STRING);
+        PMIX_INFO_LOAD(&two[1], PRTE_MEMBIND, "attr:capacity", PMIX_STRING);
+        CHECK("membind/redefined-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, two, 2));
+        PMIX_INFO_DESTRUCT(&two[0]);
+        PMIX_INFO_DESTRUCT(&two[1]);
+    }
+    PMIX_RELEASE(jdata);
+
+    /* so is a value of the wrong type, rather than read as a string */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, &u32, PMIX_UINT32);
+    CHECK("membind/bad-type-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* app level: lands on the app, and not on the job */
+    jdata = fresh_job();
+    PMIX_APP_CONSTRUCT(&papp);
+    papp.cmd = strdup("/bin/hostname");
+    PMIx_Argv_append_nosize(&papp.argv, "hostname");
+    papp.maxprocs = 1;
+    PMIX_INFO_CREATE(papp.info, 1);
+    papp.ninfo = 1;
+    PMIX_INFO_LOAD(&papp.info[0], PRTE_MEMBIND, "a:cap", PMIX_STRING);
+    CHECK("membind/app-rc", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+    CHECK("membind/app-present", NULL != app);
+    if (NULL != app) {
+        u16 = UINT16_MAX;
+        CHECK("membind/app-set",
+              prte_get_attribute(&app->attributes, PRTE_APP_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
+        CHECK("membind/app-value", PRTE_HWLOC_BASE_MEMATTR_CAPACITY == u16);
+    }
+    CHECK("membind/app-not-on-job",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
+    PMIX_APP_DESTRUCT(&papp);
+    PMIX_RELEASE(jdata);
+
+    if (0 == failures) {
+        fprintf(stdout, "  PASS membind transfer\n");
+    }
+    return failures;
+}
+
+
+/*
+ * A memory binding by attribute hangs off the cpuset the mapper gave each
+ * process, explicit or derived. prte_hwloc_base_membind_resolve() picks the
+ * request (app, then job, then MCA default) and
+ * prte_hwloc_base_membind_count_unbound() counts the procs of an app that
+ * have no cpuset: the HNP warns on that count, and the daemons skip the
+ * binding on the very same test.
+ */
+static prte_proc_t *add_proc(prte_job_t *jdata, int app_idx, const char *cpuset)
+{
+    prte_proc_t *proc = PMIX_NEW(prte_proc_t);
+
+    proc->app_idx = app_idx;
+    proc->cpuset = (NULL == cpuset) ? NULL : strdup(cpuset);
+    pmix_pointer_array_add(jdata->procs, proc);
+    return proc;
+}
+
+static int test_membind_unbound(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+    uint16_t u16;
+    prte_hwloc_base_memattr_t saved = prte_hwloc_base_memattr;
+
+    jdata = fresh_job();
+    app = PMIX_NEW(prte_app_context_t);
+
+    /* resolution order: app, else job, else the MCA default */
+    prte_hwloc_base_memattr = PRTE_HWLOC_BASE_MEMATTR_LATENCY;
+    CHECK("membind-resolve/mca", PRTE_HWLOC_BASE_MEMATTR_LATENCY ==
+                                 prte_hwloc_base_membind_resolve(jdata, app));
+    u16 = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
+    CHECK("membind-resolve/job", PRTE_HWLOC_BASE_MEMATTR_CAPACITY ==
+                                 prte_hwloc_base_membind_resolve(jdata, app));
+    u16 = PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH;
+    prte_set_attribute(&app->attributes, PRTE_APP_MEMBIND, PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
+    CHECK("membind-resolve/app", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH ==
+                                 prte_hwloc_base_membind_resolve(jdata, app));
+    CHECK("membind-resolve/no-app", PRTE_HWLOC_BASE_MEMATTR_CAPACITY ==
+                                    prte_hwloc_base_membind_resolve(jdata, NULL));
+    prte_hwloc_base_memattr = saved;
+
+    /* no procs mapped: nothing unbound */
+    CHECK("membind-unbound/empty", 0 == prte_hwloc_base_membind_count_unbound(jdata, 0));
+
+    /* app 0: bound - by --bind-to core, or by the binding --map-by or the
+     * default derives; the binding word does not matter, the cpuset does */
+    add_proc(jdata, 0, "0");
+    add_proc(jdata, 0, "1");
+    CHECK("membind-unbound/all-bound", 0 == prte_hwloc_base_membind_count_unbound(jdata, 0));
+
+    /* app 1: --bind-to none, or the default dropped on oversubscription,
+     * leaves the cpuset NULL or empty */
+    add_proc(jdata, 1, NULL);
+    add_proc(jdata, 1, "");
+    add_proc(jdata, 1, "2-3");
+    CHECK("membind-unbound/some-unbound", 2 == prte_hwloc_base_membind_count_unbound(jdata, 1));
+    CHECK("membind-unbound/other-app-untouched",
+          0 == prte_hwloc_base_membind_count_unbound(jdata, 0));
+    CHECK("membind-unbound/no-such-app", 0 == prte_hwloc_base_membind_count_unbound(jdata, 7));
+    CHECK("membind-unbound/null-job", 0 == prte_hwloc_base_membind_count_unbound(NULL, 0));
+
+    PMIX_RELEASE(app);
+    PMIX_RELEASE(jdata);
+    if (0 == failures) {
+        fprintf(stdout, "  PASS membind and unbound procs\n");
+    }
+    return failures;
+}
 
 /*
  * A scheduler's session time limit (PMIX_ALLOC_TIME) is the one directive
@@ -3325,6 +3594,9 @@ int main(void)
     failures += test_job_info_cache();
     failures += test_session_time();
     failures += test_directive_distribution();
+    failures += test_membind_distribution();
+    failures += test_xfer_membind();
+    failures += test_membind_unbound();
     failures += test_prefix_conflicts();
     failures += test_nprocs();
     failures += test_uint_option();

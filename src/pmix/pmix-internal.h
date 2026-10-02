@@ -47,7 +47,8 @@ typedef struct {
     pmix_list_item_t super;
     pmix_app_t app;
     void *info;
-    /* The mapping/ranking/binding directives this app segment carried, held
+    /* The mapping/ranking/binding directives this app segment carried -
+     * memory binding (--membind) included - held
      * aside until the whole cmd line has been parsed. Only then is it known
      * whether they are per-app at all: a directive written on the first app
      * and nowhere else speaks for the whole job, however many apps there
@@ -57,6 +58,7 @@ typedef struct {
     char *mapby;
     char *rankby;
     char *bindto;
+    char *membind;
     /* The job-level directives this app segment carried. Unlike the three
      * above these are never per-app - there is no such thing as one app
      * being displayed, or one app not launching - but the global parse of
