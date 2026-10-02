@@ -120,6 +120,11 @@ prte_plm_base_module_1_0_0_t prte_plm_slurm_module = {
  */
 static pid_t primary_srun_pid = 0;
 static bool primary_pid_set = false;
+
+/* What srun_wait_cb needs to know about the srun it is reaping */
+typedef struct {
+    uint32_t job_id; /* Slurm job the daemons were launched into */
+} plm_slurm_srun_t;
 static void launch_daemons(int fd, short args, void *cbdata);
 
 /* Remove allocation-shape values inherited from the Slurm job containing the
@@ -633,11 +638,18 @@ static int plm_slurm_finalize(void)
     return PRTE_SUCCESS;
 }
 
+/* Free a reaped srun's tracker and the state it carries */
+static void srun_release(prte_wait_tracker_t *t2)
+{
+    free(t2->cbdata);
+    PMIX_RELEASE(t2);
+}
+
 static void srun_wait_cb(int sd, short fd, void *cbdata)
 {
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
     prte_proc_t *proc = t2->child;
-    uint32_t *job_id = (uint32_t *) t2->cbdata;
+    plm_slurm_srun_t *srun = (plm_slurm_srun_t *) t2->cbdata;
     prte_job_t *jdata;
     const prte_common_slurm_version_t *slurm;
     PRTE_HIDE_UNUSED_PARAMS(sd, fd);
@@ -650,8 +662,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-slurm.txt", "ancient-version", true,
                        slurm->major, slurm->minor);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
-        free(job_id);
-        PMIX_RELEASE(t2);
+        srun_release(t2);
         return;
     }
 
@@ -680,14 +691,13 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
      * the orteds exited with an error
      */
     if (0 != proc->exit_code) {
-        if (NULL != job_id && srun_exit_expected(*job_id)) {
+        if (NULL != srun && srun_exit_expected(srun->job_id)) {
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: srun for elastic job %" PRIu32
                                  " exited with status %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 *job_id, proc->exit_code));
-            free(job_id);
-            PMIX_RELEASE(t2);
+                                 srun->job_id, proc->exit_code));
+            srun_release(t2);
             return;
         }
 
@@ -715,13 +725,12 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
              * it. Without this the release of a node belonging to the
              * primary step reads as the DVM ending and takes the whole DVM
              * down with it. */
-            if (NULL != job_id && srun_exit_expected(*job_id)) {
+            if (NULL != srun && srun_exit_expected(srun->job_id)) {
                 PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:slurm: srun for elastic job %" PRIu32
                                      " exited cleanly after its daemons were released",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), *job_id));
-                free(job_id);
-                PMIX_RELEASE(t2);
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), srun->job_id));
+                srun_release(t2);
                 return;
             }
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -734,8 +743,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     }
 
     /* done with this dummy */
-    free(job_id);
-    PMIX_RELEASE(t2);
+    srun_release(t2);
 }
 
 static int plm_slurm_start_proc(int argc, char **argv,
@@ -749,7 +757,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
     char *exec_argv = pmix_path_findv(argv[0], 0, environ, NULL);
     prte_proc_t *dummy;
     char *oldenv, *newenv;
-    uint32_t *tracked_job_id;
+    plm_slurm_srun_t *tracked;
     PRTE_HIDE_UNUSED_PARAMS(argc);
 
     if (NULL == exec_argv) {
@@ -779,19 +787,19 @@ static int plm_slurm_start_proc(int argc, char **argv,
             free(exec_argv);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        tracked_job_id = malloc(sizeof(*tracked_job_id));
-        if (NULL == tracked_job_id) {
+        tracked = malloc(sizeof(*tracked));
+        if (NULL == tracked) {
             kill(srun_pid, SIGTERM);
             PMIX_RELEASE(dummy);
             free(exec_argv);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        *tracked_job_id = job_id;
+        tracked->job_id = job_id;
         dummy->pid = srun_pid;
         /* be sure to mark it as alive so we don't instantly fire */
         PRTE_FLAG_SET(dummy, PRTE_PROC_FLAG_ALIVE);
         /* setup the waitpid so we can find out if srun succeeds! */
-        prte_wait_cb(dummy, srun_wait_cb, tracked_job_id);
+        prte_wait_cb(dummy, srun_wait_cb, tracked);
     }
 
     if (0 == srun_pid) { /* child */
