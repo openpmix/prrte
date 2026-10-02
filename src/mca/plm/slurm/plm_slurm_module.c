@@ -508,10 +508,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PMIx_Argv_free(custom_strings);
     }
 
-    /* create the nodelist from this launch's daemons, which setup_vm gave
-     * the consecutive vpids from daemon_vpid_start.  The daemon map also
-     * holds the nodes of an earlier launch whose daemons have not reported
-     * yet, which a walk of the map would include. */
+    /* create the nodelist, in vpid order, from this launch's daemons, which
+     * setup_vm gave the consecutive vpids from daemon_vpid_start.  The
+     * daemon map also holds the nodes of an earlier launch whose daemons
+     * have not reported yet, which a walk of the map would include. */
     node = NULL;
     for (n = 0; n < map->num_new_daemons; n++) {
         prte_proc_t *daemon = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
@@ -563,9 +563,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
         goto cleanup;
     }
 
-    pmix_asprintf(&tmp, "--nodes=%lu", (unsigned long) map->num_new_daemons);
-    pmix_argv_append(&argc, &argv, tmp);
-    free(tmp);
+    /* Each daemon takes the base vpid plus its task index in this step, so
+     * the tasks must be numbered in vpid order, the order of the file.
+     * Slurm's own node order is not that order once a node released earlier
+     * is granted again: the node keeps its old place in the pool.  The
+     * arbitrary distribution numbers the tasks in the order the file lists
+     * the nodes.  It takes the node count from the file and refuses
+     * --nodes. */
+    pmix_argv_append(&argc, &argv, "--distribution=arbitrary");
 
     pmix_asprintf(&tmp, "--nodelist=%s", nodefile);
     pmix_argv_append(&argc, &argv, tmp);
