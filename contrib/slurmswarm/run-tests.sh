@@ -1040,6 +1040,7 @@ test_elastic() {
     elastic_argv_group
     elastic_fault_group
     elastic_oversize_group
+    elastic_launch_arg_limit_group
 }
 
 # The first extend, and everything that can only be asserted about a grant
@@ -1774,6 +1775,44 @@ elastic_oversize_group() {
         bad "no DVM came up under the recording shim for the 4000-node record"
     fi
 
+    DVM_SHIM=0
+    cleanup_cluster
+}
+
+# plm/slurm passes srun its nodes in a file.  As one argument, a list past
+# the kernel's 128 KiB per-argument limit (MAX_ARG_STRLEN) makes the exec of
+# srun fail with E2BIG, so srun never starts.  The shim invents the nodes:
+# 10000 names of about 17 bytes, some 170 KB.  srun refuses them and the
+# failed grow ends the DVM, so this runs on a DVM of its own and asserts only
+# that srun started with every one of them.
+elastic_launch_arg_limit_group() {
+    local lines bytes
+
+    banner "plm/slurm: a launch past the 128 KiB argument limit starts srun"
+    cleanup_cluster
+    if ! ON 1 "test -x $SHIM_BIN/srun"; then
+        skp "the recording shim does not wrap srun -- rerun ./build.sh"
+        return
+    fi
+    SHIM reset >/dev/null 2>&1
+    ALLOC new --tag dvm --nodes 2 --tasks-per-node 2 >/dev/null 2>&1
+    DVM_SHIM=1
+    if ! dvm_start --prtemca prte_elastic_mode 1; then
+        DVM_SHIM=0
+        bad "no DVM came up under the recording shim"
+        cleanup_cluster
+        return
+    fi
+    SHIM set fat_nodes 10000 >/dev/null 2>&1
+    SA 'timeout 180 elastic extend 1' >/dev/null 2>&1
+    SHIM set fat_nodes 0 >/dev/null 2>&1
+    read -r lines bytes <<< "$(SHIM nodefile | tr -d '\r')"
+    if [ "${lines:-0}" -eq 10000 ] 2>/dev/null && [ "${bytes:-0}" -gt 131072 ] 2>/dev/null; then
+        ok "srun started with all $lines nodes, a $bytes-byte node file past the 128 KiB argument limit"
+    else
+        bad "srun never started with the 10000 nodes (last node file: ${lines:-no} lines, ${bytes:-no} bytes)"
+    fi
+    dvm_stop
     DVM_SHIM=0
     cleanup_cluster
 }

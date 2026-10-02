@@ -352,7 +352,7 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/elastic.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
-            # The recording wrapper around salloc/scontrol/scancel.  It goes
+            # The recording wrapper around salloc/scontrol/scancel/srun.  It goes
             # under its OWN prefix rather than into the install bin/ that the
             # node entrypoint puts on every PATH: a case has to opt in by
             # putting this directory first, so nothing else in the suite can
@@ -361,7 +361,7 @@ build_linux() {
             mkdir -p /opt/prte/slurmshim/bin
             install -m 0755 /prrte-src/contrib/slurmswarm/slurm-shim.py \
                 /opt/prte/slurmshim/bin/slurm-shim
-            for t in salloc scontrol scancel; do
+            for t in salloc scontrol scancel srun; do
                 ln -sf slurm-shim /opt/prte/slurmshim/bin/$t
             done
 
