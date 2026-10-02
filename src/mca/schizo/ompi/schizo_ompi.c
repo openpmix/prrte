@@ -21,6 +21,7 @@
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022-2024 Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -182,6 +183,7 @@ static struct option ompioptions[] = {
 
     /* Binding options */
     PMIX_OPTION_DEFINE(PRTE_CLI_BINDTO, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_MEMBIND, PMIX_ARG_REQD),
 
     /* display options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),

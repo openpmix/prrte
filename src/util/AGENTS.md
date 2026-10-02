@@ -359,8 +359,8 @@ elastic grow/shrink/grow case in `contrib/dockerswarm/run-tests.sh`.
 
 ## Directive vocabularies
 
-`--map-by`, `--rank-by`, `--bind-to`, `--output`, `--display` and `--rtos`
-take values that are a small language of their own -
+`--map-by`, `--rank-by`, `--bind-to`, `--membind`, `--output`, `--display`
+and `--rtos` take values that are a small language of their own -
 `package:span:pe=2`, `tag,file=out:nocopy` - and each set of words a user
 chooses from is one `pmix_cli_choice_t` table in `prte_cmd_line.c`, with an
 enum of tags beside it in `prte_cmd_line.h`. Two rules:

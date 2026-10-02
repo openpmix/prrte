@@ -13,6 +13,7 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,6 +43,18 @@
 #include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/odls/odls.h"
+#include <errno.h>
+
+/* The errno recorded in membind_prep_errno when a memory binding by
+ * attribute found no node to bind to - no local, allowed NUMA node with a
+ * value for the attribute. Neither set_mempolicy() nor sched_setaffinity()
+ * returns it, so bind_errmsg() can name the cause instead of printing
+ * strerror(). */
+#ifdef ENODATA
+#define PRTE_ODLS_MEMATTR_NODATA ENODATA
+#else
+#define PRTE_ODLS_MEMATTR_NODATA ENOENT
+#endif
 
 BEGIN_C_DECLS
 
@@ -161,6 +174,10 @@ typedef struct {
     hwloc_cpuset_t bind_cpuset;         /* target cpu set, NULL if no binding */
     bool bind_fatal;                    /* preparation hit a required-binding error */
     bool do_membind;                    /* also apply the memory binding policy */
+    prte_hwloc_base_memattr_t membind_memattr; /* --membind for this child's app,
+                                                  else its job's, else the MCA
+                                                  default - resolved on the
+                                                  progress thread with the rest */
     hwloc_membind_policy_t membind_policy;
     int membind_flags;
     int membind_prep_errno;             /* nonzero: report this instead of

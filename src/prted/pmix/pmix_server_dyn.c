@@ -19,6 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -325,6 +326,38 @@ static int directive_refuse(prte_job_t *jdata, const pmix_info_t *info, pmix_dat
     prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-runtime.txt", "spawn-directive-type", true,
                    info->key, PMIx_Data_type_string(want), PMIx_Data_type_string(info->value.type));
     return PRTE_ERR_BAD_PARAM;
+}
+
+/* "--membind", whichever level it was given at: parsed here, where a bad
+ * value can still be refused with the whole request, and recorded as the
+ * attribute the odls reads - the parsed value, so no daemon parses it again.
+ * The key is PRRTE's own, but nothing stops a tool from sending it, so its
+ * type is checked rather than assumed; and like a second --bindto, a second
+ * one for the same job or app is a conflict, never an overwrite. */
+static int xfer_membind(prte_job_t *jdata, pmix_info_t *info,
+                        pmix_list_t *attributes, prte_attribute_key_t key)
+{
+    prte_hwloc_base_memattr_t memattr;
+    uint16_t u16, prior = 0, *priorptr = &prior;
+    int rc;
+
+    if (PMIX_STRING != info->value.type || NULL == info->value.data.string) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    rc = prte_hwloc_base_parse_membind(PRTE_JOB_NSPACE(jdata), "--membind",
+                                       info->value.data.string, &memattr);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    if (prte_get_attribute(attributes, key, (void **) &priorptr, PMIX_UINT16)) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true,
+                       "memory binding", info->value.data.string,
+                       prte_hwloc_base_print_membind((prte_hwloc_base_memattr_t) prior));
+        return PRTE_ERR_BAD_PARAM;
+    }
+    u16 = (uint16_t) memattr;
+    prte_set_attribute(attributes, key, PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
+    return PRTE_SUCCESS;
 }
 
 int prte_pmix_xfer_job_info(prte_job_t *jdata,
@@ -641,6 +674,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PRTE_XTERM_RANKS)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_XTERM, PRTE_ATTR_GLOBAL,
                                info->value.data.string, PMIX_STRING);
+
+            /***   MEMBIND   ***/
+        } else if (PMIX_CHECK_KEY(info, PRTE_MEMBIND)) {
+            rc = xfer_membind(jdata, info, &jdata->attributes, PRTE_JOB_MEMBIND);
+            if (PRTE_SUCCESS != rc) {
+                return rc;
+            }
 
             /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
@@ -1178,6 +1218,13 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 /***   BIND-TO (per-app)   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
                 rc = prte_rmaps_base_set_app_binding_policy(app, info->value.data.string);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
+
+                /***   MEMBIND (per-app)   ***/
+            } else if (PMIX_CHECK_KEY(info, PRTE_MEMBIND)) {
+                rc = xfer_membind(jdata, info, &app->attributes, PRTE_APP_MEMBIND);
                 if (PRTE_SUCCESS != rc) {
                     return rc;
                 }
