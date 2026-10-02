@@ -76,8 +76,8 @@ If no Slurm command can be run, or the version cannot be parsed
      `PRTE_NODE_ALLOC_ID` attribute and the matching session; lets PRRTE
      launch into another allocation than the one it's in. Errors if no
      job id / session.
-   - `--nodes=N --nodelist=...` (only when not using the whole
-     allocation) and `--ntasks=N` where `N = num_new_daemons`.
+   - `--nodes=N --nodelist=<node file>` and `--ntasks=N`, where
+     `N = num_new_daemons`, on every launch. See "The node file" below.
 3. **Build the `prted` argv** appended after srun's:
    `prte_plm_base_setup_prted_cmd`, then
    `prte_plm_base_prted_append_basic_args(..., "slurm", &proc_vpid_index)`.
@@ -94,11 +94,41 @@ If no Slurm command can be run, or the version cannot be parsed
    `plm_slurm_start_proc`. Set state `DAEMONS_LAUNCHED`. On any error jump
    to `cleanup:` and activate `FAILED_TO_LAUNCH`.
 
+### The node file
+
+srun gets the node list in a file, never inline: as one `--nodelist`
+argument the list hits the kernel's per-argument limit (`MAX_ARG_STRLEN`,
+128 KiB, around 13k nodes). srun reads a `--nodelist` value containing
+`/` as a file (`slurm_read_hostfile`), on the HNP's host, so no shared
+file system is needed. An explicit `--nodelist` also overrides an
+inherited `SLURM_HOSTFILE`.
+
+- **Where:** `<daemon job session_dir>/srun-nodes.<daemon_vpid_start>`,
+  one name per line. `session_dir.c` refuses a session directory the
+  user does not own or that group or others can write.
+- **How:** `O_CREAT|O_EXCL`, mode 0600, so anything already at the path
+  fails the launch. A failed write fails it too, with a plain error.
+- **Names:** `slurm_read_hostfile` ends a name at a newline, splits it at
+  a comma, reads `*N` as N copies, and reads `#` as a comment unless
+  written `\#`. `#` is escaped; a name with a newline, a comma, or a `*`
+  followed by a number fails the launch. Nothing else is restricted. A
+  name Slurm does not know is no error to srun, from a file or inline: it
+  starts the task on another node of the job.
+- **Lifetime:** the srun's tracker owns the path once `start_proc`
+  succeeds, and `srun_release` unlinks it when srun exits. If the launch
+  fails before that, `launch_daemons` unlinks it. Session-dir teardown
+  removes anything left.
+- **Logging:** the srun command line shows only the path, so the node
+  list is logged at the verbosity the command line is (`plm_base_verbose`
+  1 and up).
+
 ### `plm_slurm_start_proc` — fork/exec srun
 
 `fork()`s; the parent records the srun pid (the first one becomes the
 `primary_srun_pid`) and registers a `prte_wait_cb` (`srun_wait_cb`) on a
-dummy proc so it notices srun's exit. The child:
+dummy proc so it notices srun's exit. The wait callback's data is a
+`plm_slurm_srun_t` (the Slurm job id and the node file), freed by
+`srun_release` on every path. The child:
 
 - **Purges `PMIX_*`/`PRTE_*` from the environment** — SLURM forwards the
   whole environment to the daemons, which we must not do (it could carry
