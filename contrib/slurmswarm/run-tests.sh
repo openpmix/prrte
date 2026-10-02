@@ -711,6 +711,32 @@ test_plm() {
     echo "$out" | grep -q -- "--jobid=$jid" \
         && ok "srun was told to run inside the allocation (--jobid=$jid)" \
         || bad "srun did not carry --jobid=$jid: $(echo "$out" | tail -c 200)"
+    # The nodes go to srun in a file: as one --nodelist argument the list
+    # hits the kernel's 128 KiB per-argument limit at scale.  PRRTE removes
+    # the file only when srun exits, so it is still there to read.
+    local nf; nf=$(echo "$out" | grep -o -- '--nodelist=[^ ]*' | head -1 | cut -d= -f2)
+    case "$nf" in
+        */srun-nodes.*)
+            ok "srun reads its nodes from a file ($nf)" ;;
+        *)
+            bad "srun was not given a node file: $(echo "$out" | tail -c 200)" ;;
+    esac
+    echo "$out" | grep -q -- '--nodes=3 ' \
+        && ok "srun was told to start 3 daemons (--nodes=3)" \
+        || bad "srun did not carry --nodes=3: $(echo "$out" | tail -c 200)"
+    if [ -n "$nf" ]; then
+        n=$(SA "stat -c %a '$nf'" 2>/dev/null | tr -d ' \r')
+        [ "$n" = 600 ] && ok "the node file is mode 0600" \
+                       || bad "the node file is mode '$n', not 0600"
+        n=$(SA "sort '$nf'" 2>/dev/null | tr -d '\r' | tr '\n' ' ')
+        [ "$n" = "node2 node3 node4 " ] \
+            && ok "the node file lists the three non-head nodes, one per line" \
+            || bad "the node file reads '$n', not 'node2 node3 node4'"
+    fi
+    # The argv shows only the path, so the list itself is logged.
+    SA 'grep -q "plm:slurm: launching on nodes node[234],node[234],node[234]$" /tmp/prte.out' \
+        && ok "the HNP logged the node list it put in the file" \
+        || bad "no 'launching on nodes' line with the three nodes in the HNP's log"
     [ "$(prted_count 2 3 4)" = 3 ] \
         && ok "a daemon is running on each non-head allocated node" \
         || bad "only $(prted_count 2 3 4)/3 daemons came up"
