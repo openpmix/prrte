@@ -149,6 +149,24 @@ prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/nu
 # "node2,node4" -> "2 4"
 idx_of() { echo "$1" | tr ',' '\n' | sed 's/^node//' | tr '\n' ' '; }
 
+# Daemons that reported from a node other than the one setup_vm assigned
+# them, one per line.  Reads the HNP's plm_base_verbose 5 log: nothing else
+# shows a swap at launch, since prted_report_launch renames the nodes to match.
+daemon_node_mismatches() {
+    SA 'cat /tmp/prte.out' 2>/dev/null | tr -d '\r' | awk '
+        /setup_vm assigning new daemon/ { want[$(NF-3)] = $NF }
+        /prted_report_launch from daemon .* on node/ {
+            d = $(NF-3)
+            if ((d in want) && want[d] != $NF) {
+                print d " assigned " want[d] ", reported from " $NF
+            }
+        }'
+}
+# Daemon reports in the HNP's log, so an empty mismatch list is not vacuous.
+daemon_reports_logged() {
+    SA 'grep -c "prted_report_launch from daemon .* on node" /tmp/prte.out' 2>/dev/null | tr -d ' \r'
+}
+
 ########################################################################
 # starting a DVM inside an allocation
 ########################################################################
@@ -721,9 +739,14 @@ test_plm() {
         *)
             bad "srun was not given a node file: $(echo "$out" | tail -c 200)" ;;
     esac
-    echo "$out" | grep -q -- '--nodes=3 ' \
-        && ok "srun was told to start 3 daemons (--nodes=3)" \
-        || bad "srun did not carry --nodes=3: $(echo "$out" | tail -c 200)"
+    # Each daemon adds its task index to the base vpid, so srun must number
+    # the tasks in file order, which is vpid order.
+    echo "$out" | grep -q -- '--distribution=arbitrary' \
+        && ok "srun numbers the daemons in the order PRRTE lists them (--distribution=arbitrary)" \
+        || bad "srun was not told to keep the node file's order: $(echo "$out" | tail -c 200)"
+    echo "$out" | grep -q -- '--nodes=' \
+        && bad "srun was given --nodes, which it refuses alongside --distribution=arbitrary" \
+        || ok "no --nodes beside the arbitrary distribution"
     if [ -n "$nf" ]; then
         n=$(SA "stat -c %a '$nf'" 2>/dev/null | tr -d ' \r')
         [ "$n" = 600 ] && ok "the node file is mode 0600" \
@@ -740,6 +763,14 @@ test_plm() {
     [ "$(prted_count 2 3 4)" = 3 ] \
         && ok "a daemon is running on each non-head allocated node" \
         || bad "only $(prted_count 2 3 4)/3 daemons came up"
+    out=$(daemon_node_mismatches)
+    if [ "$(daemon_reports_logged)" != 3 ]; then
+        bad "expected 3 daemon reports in the HNP's log, found $(daemon_reports_logged)"
+    elif [ -z "$out" ]; then
+        ok "every daemon reported in from the node it was assigned"
+    else
+        bad "daemons reported from nodes other than their own: $(echo "$out" | tr '\n' ';')"
+    fi
 
     banner "plm/slurm: the daemons stay inside the step srun launched them in"
     #

@@ -228,8 +228,11 @@ the ras was told. The cases assert that `plm/slurm` won
 selection, that the command really is `srun`, that it carried
 `--jobid=<the allocation>` (a launcher that omitted it would work on an idle
 cluster and queue a second job on a busy one), that the nodes went to `srun`
-in a node file (`--nodes=3 --nodelist=<session dir>/srun-nodes.<vpid>`, mode
-0600, one name per line, the list itself in the HNP's verbose log), that PRRTE read the srun exit
+in a node file (`--nodelist=<session dir>/srun-nodes.<vpid>`, mode 0600, one
+name per line, the list itself in the HNP's verbose log) with
+`--distribution=arbitrary` and no `--nodes`, so the daemons are numbered in
+vpid order, that each daemon reported from its assigned node, that PRRTE read
+the srun exit
 as a **hand-off** rather than a failure once `prted` daemonized, that SLURM
 is left with no dangling job step, that `pterm` does not cancel the user's
 allocation, and — the other side of the gate — that with no allocation in the
