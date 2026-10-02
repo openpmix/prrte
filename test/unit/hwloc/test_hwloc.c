@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -81,6 +82,26 @@
  *    as well as the normal hierarchy, because binding attaches placement
  *    counters to NUMA nodes and hwloc 2.x does not carry them in the depth
  *    hierarchy.
+ *
+ *  - prte_hwloc_base_get_membind_nodeset() picks the NUMA node(s) a process is
+ *    memory-bound to from an hwloc memory attribute, as seen from the
+ *    process' cpuset. It has to choose among the nodes local to that
+ *    cpuset - a single core or PU included - and never across the machine,
+ *    reach a node that has no cpus of its own (HBM), drop the nodes the
+ *    process may not use before choosing, keep nodes tied for best, and
+ *    return an EMPTY set rather than a half-built one on every error.
+ *    test_membind_nodeset() pins that down, on a two-node DDR shape and on
+ *    a DDR+HBM-per-package shape. It needs hwloc 2.3, and drives bandwidth
+ *    and latency by writing values into the synthetic topology, since hwloc
+ *    cannot discover them from one.
+ *
+ *  - prte_hwloc_base_parse_membind() is the one grammar behind --membind,
+ *    the hwloc_default_mem_bind_attribute MCA parameter and the spawn key,
+ *    matched through prte_cli_match() like every other directive: case
+ *    insensitive, any unique abbreviation, an ambiguous one refused, and a
+ *    refusal leaves the caller's value alone. test_membind_parse() holds it
+ *    to that, and to reading back what prte_hwloc_base_print_membind()
+ *    writes.
  *
  * What is deliberately NOT here: prte_hwloc_base_get_topology() (senses the
  * real machine), prte_hwloc_print() against a machine wide enough to reach
@@ -1572,6 +1593,391 @@ static int test_hwloc_print(void)
 /* ------------------------------------------------------------------ */
 
 
+/* ------------------------------------------------------------------ */
+/* memory binding by memory attribute                                 */
+/* ------------------------------------------------------------------ */
+
+/* --membind's grammar: "none" | "attr:<name>". It does not depend on the
+ * hwloc version - an old hwloc refuses the binding later, not the spelling. */
+static int test_membind_parse(void)
+{
+    static const struct {
+        const char *spec;
+        prte_hwloc_base_memattr_t want;
+    } good[] = {
+        {"none", PRTE_HWLOC_BASE_MEMATTR_DISABLED},
+        {"NONE", PRTE_HWLOC_BASE_MEMATTR_DISABLED},
+        {"n", PRTE_HWLOC_BASE_MEMATTR_DISABLED},
+        {"attr:bandwidth", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"ATTR:BANDWIDTH", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"Attr:BandWidth", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"a:b", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"attr:capacity", PRTE_HWLOC_BASE_MEMATTR_CAPACITY},
+        {"attr:cap", PRTE_HWLOC_BASE_MEMATTR_CAPACITY},
+        {"attr:locality", PRTE_HWLOC_BASE_MEMATTR_LOCALITY},
+        {"attr:lo", PRTE_HWLOC_BASE_MEMATTR_LOCALITY},
+        {"attr:latency", PRTE_HWLOC_BASE_MEMATTR_LATENCY},
+        {"attr:la", PRTE_HWLOC_BASE_MEMATTR_LATENCY},
+    };
+    static const char *bad[] = {
+        "attr:l",                   /* locality or latency - refused, not guessed */
+        "bandwidth",                /* a name needs its directive */
+        "disabled",                 /* not a word of this vocabulary */
+        "attr",                     /* attr names exactly one attribute */
+        "attr:",
+        ":bandwidth",
+        "attr::bandwidth",          /* an empty field is not ignorable */
+        "attr:bandwidth:",
+        "attr:bandwidth:latency",
+        "none:bandwidth",           /* none takes nothing */
+        "attr:fastest",
+        "attr=bandwidth",           /* attr takes no value */
+        "",
+        NULL
+    };
+    const char *nspace = PRTE_PROC_MY_NAME->nspace;
+    prte_hwloc_base_memattr_t attr;
+    int failures = 0;
+    size_t n;
+    char label[128];
+
+    for (n = 0; n < sizeof(good) / sizeof(good[0]); n++) {
+        attr = PRTE_HWLOC_BASE_MEMATTR_MAX;
+        snprintf(label, sizeof(label), "\"%s\" parses", good[n].spec);
+        CHECK(label, PRTE_SUCCESS == prte_hwloc_base_parse_membind(nspace, "--membind",
+                                                                   good[n].spec, &attr));
+        snprintf(label, sizeof(label), "\"%s\" maps", good[n].spec);
+        CHECK(label, good[n].want == attr);
+    }
+
+    /* every refusal leaves the caller's value exactly as it was */
+    for (n = 0; NULL != bad[n]; n++) {
+        attr = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
+        snprintf(label, sizeof(label), "\"%s\" is refused", bad[n]);
+        CHECK(label, PRTE_SUCCESS != prte_hwloc_base_parse_membind(nspace, "--membind",
+                                                                   bad[n], &attr));
+        snprintf(label, sizeof(label), "\"%s\" leaves the value alone", bad[n]);
+        CHECK(label, PRTE_HWLOC_BASE_MEMATTR_CAPACITY == attr);
+    }
+    attr = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
+    CHECK("a NULL spec is refused",
+          PRTE_SUCCESS != prte_hwloc_base_parse_membind(nspace, "--membind", NULL, &attr));
+    CHECK("a NULL spec leaves the value alone", PRTE_HWLOC_BASE_MEMATTR_CAPACITY == attr);
+    CHECK("a NULL result is refused",
+          PRTE_SUCCESS != prte_hwloc_base_parse_membind(nspace, "--membind", "none", NULL));
+
+    /* what the printer writes, the parser reads back as the same value */
+    for (attr = PRTE_HWLOC_BASE_MEMATTR_DISABLED; attr < PRTE_HWLOC_BASE_MEMATTR_MAX; attr++) {
+        prte_hwloc_base_memattr_t back = PRTE_HWLOC_BASE_MEMATTR_MAX;
+        const char *s = prte_hwloc_base_print_membind(attr);
+
+        snprintf(label, sizeof(label), "\"%s\" reads back", s);
+        CHECK(label, PRTE_SUCCESS == prte_hwloc_base_parse_membind(nspace, "--membind", s, &back) &&
+                     attr == back);
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_membind_parse\n");
+    }
+    return failures;
+}
+
+
+/* hwloc_memattr_*() only exist since hwloc 2.3 */
+#if HWLOC_API_VERSION >= 0x00020300
+
+/* Give "target" a value of "memattr" as seen from "initiator". Returns 0
+ * on success. */
+static int set_memattr_value(hwloc_topology_t topo, hwloc_memattr_id_t memattr,
+                             hwloc_obj_t target, hwloc_obj_t initiator, hwloc_uint64_t value)
+{
+    struct hwloc_location loc;
+
+    loc.type = HWLOC_LOCATION_TYPE_CPUSET;
+    loc.location.cpuset = initiator->cpuset;
+    return hwloc_memattr_set_value(topo, memattr, target, &loc, 0, value);
+}
+
+/* nodeset == the union of the given nodes' nodesets */
+static bool is_nodes(hwloc_const_nodeset_t set, hwloc_obj_t a, hwloc_obj_t b)
+{
+    hwloc_bitmap_t want = hwloc_bitmap_dup(a->nodeset);
+    bool eq;
+
+    if (NULL != b) {
+        hwloc_bitmap_or(want, want, b->nodeset);
+    }
+    eq = hwloc_bitmap_isequal(set, want);
+    hwloc_bitmap_free(want);
+    return eq;
+}
+
+/*
+ * Two NUMA nodes, each with cores of its own: the shape of a two-socket (or
+ * two-SNC-domain) DDR machine. What matters here is that every attribute
+ * chooses among the nodes LOCAL to the process' cpuset, however narrow that
+ * cpuset is - a single core or PU, the common --bind-to case, included.
+ */
+static int test_membind_nodeset_cpu_nodes(void)
+{
+    int failures = 0;
+    int rc;
+    hwloc_topology_t topo;
+    hwloc_obj_t numa0, numa1, core0, core2, pu0;
+    hwloc_nodeset_t nodeset, allowed;
+    hwloc_const_cpuset_t all;
+
+    topo = make_topo("package:1 numa:2 core:2 pu:2");
+    if (NULL == topo) {
+        fprintf(stdout, "  SKIP membind-nodeset (no synthetic topology support)\n");
+        return 0;
+    }
+    numa0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 0);
+    numa1 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 1);
+    core0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0);     /* in node 0 */
+    core2 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 2);     /* in node 1 */
+    pu0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PU, 0);         /* in node 0 */
+    if (NULL == numa0 || NULL == numa1 || NULL == core0 || NULL == core2 || NULL == pu0) {
+        fprintf(stderr, "FAIL [membind_nodeset]: unexpected synthetic topology\n");
+        free_topo(topo);
+        return 1;
+    }
+    all = hwloc_topology_get_topology_cpuset(topo);
+    nodeset = hwloc_bitmap_alloc();
+    allowed = hwloc_bitmap_alloc();
+
+    /* arguments that cannot be answered are refused, not crashed on */
+    rc = prte_hwloc_base_get_membind_nodeset(NULL, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             numa0->cpuset, NULL, nodeset);
+    CHECK("NULL topology is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             numa0->cpuset, NULL, NULL);
+    CHECK("NULL nodeset is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_MAX,
+                                             numa0->cpuset, NULL, nodeset);
+    CHECK("an attribute past the end is refused", PRTE_SUCCESS != rc);
+
+    /* disabled selects nothing - and must clear whatever the caller left */
+    hwloc_bitmap_fill(nodeset);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_DISABLED,
+                                             numa0->cpuset, NULL, nodeset);
+    CHECK("disabled succeeds", PRTE_SUCCESS == rc);
+    CHECK("disabled leaves the nodeset empty", hwloc_bitmap_iszero(nodeset));
+
+    /* locality: the nodes local to the cpuset, at any width */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             numa1->cpuset, NULL, nodeset);
+    CHECK("locality of node 1's cpus succeeds", PRTE_SUCCESS == rc);
+    CHECK("locality of node 1's cpus is node 1", is_nodes(nodeset, numa1, NULL));
+
+    /* --bind-to core: the core sits inside its node, which no flag but
+     * LARGER_LOCALITY finds */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             core2->cpuset, NULL, nodeset);
+    CHECK("locality of one core succeeds", PRTE_SUCCESS == rc);
+    CHECK("locality of a core in node 1 is node 1", is_nodes(nodeset, numa1, NULL));
+
+    /* --bind-to hwthread: narrower still */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             pu0->cpuset, NULL, nodeset);
+    CHECK("locality of one PU succeeds", PRTE_SUCCESS == rc);
+    CHECK("locality of a PU in node 0 is node 0", is_nodes(nodeset, numa0, NULL));
+
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             all, NULL, nodeset);
+    CHECK("locality over every cpu succeeds", PRTE_SUCCESS == rc);
+    CHECK("locality over every cpu takes both nodes", is_nodes(nodeset, numa0, numa1));
+
+    /* a NULL cpuset is an unbound process: it may run anywhere */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             NULL, NULL, nodeset);
+    CHECK("an unbound process succeeds", PRTE_SUCCESS == rc);
+    CHECK("an unbound process takes both nodes", is_nodes(nodeset, numa0, numa1));
+
+    /* the result is restricted to the nodes the process may use */
+    hwloc_bitmap_copy(allowed, numa0->nodeset);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             all, allowed, nodeset);
+    CHECK("an allowed set succeeds", PRTE_SUCCESS == rc);
+    CHECK("the result stays inside the allowed set", is_nodes(nodeset, numa0, NULL));
+
+    /* ...and when no local node is allowed there is nothing to bind to,
+     * which is reported, with an empty set */
+    hwloc_bitmap_fill(nodeset);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             core2->cpuset, allowed, nodeset);
+    CHECK("no allowed local node is not-found", PRTE_ERR_NOT_FOUND == rc);
+    CHECK("no allowed local node leaves the set empty", hwloc_bitmap_iszero(nodeset));
+
+    /* capacity: hwloc defines it without an initiator, so a global choice
+     * would send every process to the largest node in the machine. It must
+     * be chosen among the local nodes only. */
+    numa0->attr->numanode.local_memory = 1ULL << 30;
+    numa1->attr->numanode.local_memory = 2ULL << 30;
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_CAPACITY,
+                                             core0->cpuset, NULL, nodeset);
+    CHECK("capacity from a core succeeds", PRTE_SUCCESS == rc);
+    CHECK("capacity from a core in node 0 stays on node 0, though node 1 is larger",
+          is_nodes(nodeset, numa0, NULL));
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_CAPACITY,
+                                             all, NULL, nodeset);
+    CHECK("capacity over both nodes succeeds", PRTE_SUCCESS == rc);
+    CHECK("capacity over both nodes picks the larger", is_nodes(nodeset, numa1, NULL));
+
+    /* nodes tied for best are all kept, rather than the first one hwloc
+     * happens to list */
+    numa0->attr->numanode.local_memory = 2ULL << 30;
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_CAPACITY,
+                                             all, NULL, nodeset);
+    CHECK("tied capacity succeeds", PRTE_SUCCESS == rc);
+    CHECK("tied capacity keeps both nodes", is_nodes(nodeset, numa0, numa1));
+
+    hwloc_bitmap_free(nodeset);
+    hwloc_bitmap_free(allowed);
+    free_topo(topo);
+    return failures;
+}
+
+/*
+ * Two packages, each holding two NUMA nodes with the same locality: the
+ * shape of a processor with on-package HBM next to its DDR (Sapphire Rapids
+ * in flat mode), where the HBM node holds no cores of its own. Bandwidth
+ * and latency are written in, since hwloc cannot discover them from a
+ * synthetic topology.
+ */
+static int test_membind_nodeset_hbm(void)
+{
+    int failures = 0;
+    int rc;
+    hwloc_topology_t topo;
+    hwloc_obj_t pkg0, ddr0, hbm0, ddr1, hbm1, core0, core2;
+    hwloc_nodeset_t nodeset, allowed;
+
+    topo = make_topo("package:2 [numa] [numa] core:2 pu:1");
+    if (NULL == topo) {
+        fprintf(stdout, "  SKIP membind-nodeset-hbm (no synthetic memory children)\n");
+        return 0;
+    }
+    pkg0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0);
+    ddr0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 0);
+    hbm0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 1);
+    ddr1 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 2);
+    hbm1 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 3);
+    core0 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0);     /* package 0 */
+    core2 = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 2);     /* package 1 */
+    if (NULL == pkg0 || NULL == hbm1 || NULL == core0 || NULL == core2 ||
+        !hwloc_bitmap_isequal(ddr0->cpuset, hbm0->cpuset)) {
+        fprintf(stderr, "FAIL [membind_nodeset_hbm]: unexpected synthetic topology\n");
+        free_topo(topo);
+        return 1;
+    }
+    nodeset = hwloc_bitmap_alloc();
+    allowed = hwloc_bitmap_alloc();
+
+    /* package 0's view: the HBM node has more bandwidth, and more latency */
+    CHECK("set bandwidth ddr0", 0 == set_memattr_value(topo, HWLOC_MEMATTR_ID_BANDWIDTH, ddr0, pkg0, 10));
+    CHECK("set bandwidth hbm0", 0 == set_memattr_value(topo, HWLOC_MEMATTR_ID_BANDWIDTH, hbm0, pkg0, 100));
+    CHECK("set latency ddr0", 0 == set_memattr_value(topo, HWLOC_MEMATTR_ID_LATENCY, ddr0, pkg0, 5));
+    CHECK("set latency hbm0", 0 == set_memattr_value(topo, HWLOC_MEMATTR_ID_LATENCY, hbm0, pkg0, 50));
+
+    /* locality from a core takes both nodes of its package */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+                                             core0->cpuset, NULL, nodeset);
+    CHECK("hbm: locality from a core succeeds", PRTE_SUCCESS == rc);
+    CHECK("hbm: locality from a core is its package's ddr and hbm", is_nodes(nodeset, ddr0, hbm0));
+
+    /* bandwidth: higher is better, and the initiator recorded for the
+     * package covers a core inside it */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH,
+                                             core0->cpuset, NULL, nodeset);
+    CHECK("hbm: bandwidth from a core succeeds", PRTE_SUCCESS == rc);
+    CHECK("hbm: bandwidth from a core picks the hbm node", is_nodes(nodeset, hbm0, NULL));
+
+    /* latency: lower is better */
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_LATENCY,
+                                             core0->cpuset, NULL, nodeset);
+    CHECK("hbm: latency from a core succeeds", PRTE_SUCCESS == rc);
+    CHECK("hbm: latency from a core picks the ddr node", is_nodes(nodeset, ddr0, NULL));
+
+    /* a forbidden best node yields the best permitted one, not nothing */
+    hwloc_bitmap_copy(allowed, hwloc_topology_get_topology_nodeset(topo));
+    hwloc_bitmap_andnot(allowed, allowed, hbm0->nodeset);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH,
+                                             core0->cpuset, allowed, nodeset);
+    CHECK("hbm: bandwidth without the hbm node succeeds", PRTE_SUCCESS == rc);
+    CHECK("hbm: bandwidth without the hbm node falls back to ddr", is_nodes(nodeset, ddr0, NULL));
+
+    /* package 1 has no bandwidth recorded for its cpus: an error, with an
+     * empty set - never a half-built one, and never package 0's nodes */
+    hwloc_bitmap_fill(nodeset);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH,
+                                             core2->cpuset, NULL, nodeset);
+    CHECK("hbm: bandwidth without data is not-found", PRTE_ERR_NOT_FOUND == rc);
+    CHECK("hbm: bandwidth without data leaves the set empty", hwloc_bitmap_iszero(nodeset));
+
+    /* capacity never crosses to the other package, however large it is */
+    ddr0->attr->numanode.local_memory = 64ULL << 30;
+    hbm0->attr->numanode.local_memory = 16ULL << 30;
+    ddr1->attr->numanode.local_memory = 32ULL << 30;
+    hbm1->attr->numanode.local_memory = 16ULL << 30;
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_CAPACITY,
+                                             core2->cpuset, NULL, nodeset);
+    CHECK("hbm: capacity from package 1 succeeds", PRTE_SUCCESS == rc);
+    CHECK("hbm: capacity from package 1 picks its own ddr, not package 0's larger one",
+          is_nodes(nodeset, ddr1, NULL));
+
+    hwloc_bitmap_free(nodeset);
+    hwloc_bitmap_free(allowed);
+    free_topo(topo);
+    return failures;
+}
+
+static int test_membind_nodeset(void)
+{
+    int failures = test_membind_nodeset_cpu_nodes() + test_membind_nodeset_hbm();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_membind_nodeset\n");
+    }
+    return failures;
+}
+
+#else /* HWLOC_API_VERSION < 0x00020300 */
+
+/* Without the memory attribute interface the function must say so rather
+ * than quietly select nothing. */
+static int test_membind_nodeset(void)
+{
+    int failures = 0;
+    int rc;
+    hwloc_topology_t topo;
+    hwloc_nodeset_t nodeset;
+
+    topo = make_topo("package:1 numa:2 core:2 pu:2");
+    if (NULL == topo) {
+        fprintf(stdout, "  SKIP membind-nodeset (no synthetic topology support)\n");
+        return 0;
+    }
+    nodeset = hwloc_bitmap_alloc();
+
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_DISABLED,
+                                             NULL, NULL, nodeset);
+    CHECK("disabled succeeds without hwloc 2.3", PRTE_SUCCESS == rc);
+    rc = prte_hwloc_base_get_membind_nodeset(topo, PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH,
+                                             NULL, NULL, nodeset);
+    CHECK("an attribute is refused without hwloc 2.3", PRTE_ERR_NOT_SUPPORTED == rc);
+    CHECK("a refusal leaves the nodeset empty", hwloc_bitmap_iszero(nodeset));
+
+    hwloc_bitmap_free(nodeset);
+    free_topo(topo);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_membind_nodeset\n");
+    }
+    return failures;
+}
+
+#endif /* HWLOC_API_VERSION */
+
 /*
  * prte_hwloc_base_close() releases the hwloc base's OWN state and nothing
  * else.  In particular it must not destroy prte_hwloc_topology: the only two
@@ -1662,6 +2068,8 @@ int main(void)
     failures += test_userdata();
     failures += test_reset_counters();
     failures += test_hwloc_print();
+    failures += test_membind_parse();
+    failures += test_membind_nodeset();
     failures += test_base_close();
 
     prte_finalize();

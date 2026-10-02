@@ -166,6 +166,12 @@ PRTE_EXPORT extern int prte_exit_status;
  * The value is a string in prte_parse_xterm_option() syntax. */
 #define PRTE_XTERM_RANKS "prte.xterm.ranks"
 
+/* Spawn directive carrying the "--membind" value, for the whole job or for
+ * one app exactly as "--bind-to" is (see distribute_directive()).  PMIx
+ * has no attribute for binding memory by hwloc memory attribute.  The value
+ * is a string in prte_hwloc_base_parse_membind() syntax. */
+#define PRTE_MEMBIND "prte.membind"
+
 /* State Machine lists */
 PRTE_EXPORT extern pmix_list_t prte_job_states;
 PRTE_EXPORT extern pmix_list_t prte_proc_states;

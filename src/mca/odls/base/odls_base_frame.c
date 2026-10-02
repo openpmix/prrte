@@ -17,6 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -217,6 +218,7 @@ static void sccon(prte_odls_spawn_caddy_t *p)
     p->bind_cpuset = NULL;
     p->bind_fatal = false;
     p->do_membind = false;
+    p->membind_memattr = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
     p->membind_prep_errno = 0;
     p->membind_mode = 0;
     p->membind_nodemask = NULL;

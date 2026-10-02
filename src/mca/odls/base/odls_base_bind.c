@@ -20,6 +20,7 @@
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -169,6 +170,14 @@ static bool membind_supported(void)
    precisely why it cannot happen in the child; what is left for the child is
    one syscall with no arguments to compute.
 
+   The nodeset normally comes from the process' cpuset: the nodes local to
+   it.  With a memory attribute requested (--membind, or
+   hwloc_default_mem_bind_attribute) it comes instead from
+   prte_hwloc_base_get_membind_nodeset() - the local node(s) with the best
+   value of that attribute as seen from the cpuset - which is how a process
+   reaches memory that no cpu is local to.  Either way the child receives a
+   finished nodemask and cannot tell the difference.
+
    On failure this records the errno hwloc would have produced in
    cd->membind_prep_errno, and the child reports it exactly as if the call had
    been made and failed. */
@@ -180,7 +189,7 @@ void prte_odls_base_prepare_mempolicy(prte_odls_spawn_caddy_t *cd)
     hwloc_nodeset_t nodeset;
     unsigned max_os_index, i;
     unsigned long *mask;
-    int last;
+    int last, rc;
 
     if (HWLOC_MEMBIND_DEFAULT == cd->membind_policy) {
         /* hwloc issues set_mempolicy(MPOL_DEFAULT, NULL, 0) - some kernels
@@ -214,7 +223,33 @@ void prte_odls_base_prepare_mempolicy(prte_odls_spawn_caddy_t *cd)
         cd->membind_prep_errno = ENOMEM;
         return;
     }
-    if (hwloc_bitmap_isincluded(topo_cpuset, cd->bind_cpuset)) {
+    if (PRTE_HWLOC_BASE_MEMATTR_DISABLED != cd->membind_memattr) {
+        /* The local node(s) with the best value of the requested attribute,
+           as seen from this cpuset, among the nodes this daemon may use -
+           those its topology was allowed (a cgroup's cpuset.mems), which the
+           child inherits. */
+        rc = prte_hwloc_base_get_membind_nodeset(topo, cd->membind_memattr, cd->bind_cpuset,
+                                                 hwloc_topology_get_allowed_nodeset(topo),
+                                                 nodeset);
+        if (PRTE_SUCCESS != rc) {
+            /* reported by the child according to mem_bind_failure_action,
+               exactly like a set_mempolicy() that was made and failed */
+            switch (rc) {
+            case PRTE_ERR_NOT_SUPPORTED:
+                cd->membind_prep_errno = ENOSYS;
+                break;
+            case PRTE_ERR_NOT_FOUND:
+                /* nothing usable to bind to: rendered by bind_errmsg() */
+                cd->membind_prep_errno = PRTE_ODLS_MEMATTR_NODATA;
+                break;
+            default:
+                cd->membind_prep_errno = EINVAL;
+                break;
+            }
+            hwloc_bitmap_free(nodeset);
+            return;
+        }
+    } else if (hwloc_bitmap_isincluded(topo_cpuset, cd->bind_cpuset)) {
         /* the cpuset covers the whole topology - take every node */
         hwloc_bitmap_copy(nodeset, complete_nodeset);
     } else {
@@ -337,8 +372,9 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
         if (report) {
             report_binding(cd, child->name.rank, cd->bind_cpuset);
         }
-        /* precompute the memory-binding policy from prte_hwloc_base_map so
-           the child need not read any MCA state */
+        /* precompute the memory-binding policy from prte_hwloc_base_map and
+           this child's resolved --membind (cd->membind_memattr) so the child
+           need not read any MCA or job state */
         cd->do_membind = true;
         switch (prte_hwloc_base_map) {
         case PRTE_HWLOC_BASE_MAP_LOCAL_ONLY:
@@ -350,6 +386,12 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
             cd->membind_policy = HWLOC_MEMBIND_DEFAULT;
             cd->membind_flags = 0;
             break;
+        }
+        if (PRTE_HWLOC_BASE_MEMATTR_DISABLED != cd->membind_memattr) {
+            /* an explicit memory attribute is an explicit binding, and takes
+               precedence over mem_alloc_policy */
+            cd->membind_policy = HWLOC_MEMBIND_BIND;
+            cd->membind_flags = HWLOC_MEMBIND_STRICT;
         }
         /* settle here what the child will be able to do, so that all it has
            left is to issue the call */
@@ -365,6 +407,12 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
         } else {
 #if PRTE_HAVE_SET_MEMPOLICY
             prte_odls_base_prepare_mempolicy(cd);
+#else
+            if (PRTE_HWLOC_BASE_MEMATTR_DISABLED != cd->membind_memattr) {
+                /* the fallback in the child can only bind to the nodes local
+                   to a cpuset, not to the node set a memory attribute picks */
+                cd->membind_prep_errno = ENOSYS;
+            }
 #endif
         }
     }
@@ -459,20 +507,26 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
             }
 #endif
         }
-        if (0 != err && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            /* With mem_alloc_policy=none - the default - the job asked for no
-               memory policy at all, and the call just made was a reset to the
-               system default rather than a binding. Failing it leaves nothing
-               bound to the wrong place and degrades nothing, so there is
-               nothing to report: mem_bind_failure_action governs an explicit
-               memory binding, and says so. The rule used to be narrower
-               (ENOSYS alone), which covered the platform that cannot bind
-               memory but not the one that refuses to - a container whose
-               seccomp policy denies set_mempolicy, which is the default under
-               Docker, answers EPERM, and every bound launch inside one
-               announced that "the memory was left unbound" (and aborted the
-               job outright under mem_bind_failure_action=error). */
-            if (PRTE_HWLOC_BASE_MAP_NONE == prte_hwloc_base_map) {
+        /* A memory binding by attribute is an explicit request, whether the
+           cpu binding under it was asked for or derived (from --map-by, or
+           the default), so its failures are always reported - not only when
+           the job-level binding word says the cpu binding was given. */
+        if (0 != err && (PRTE_HWLOC_BASE_MEMATTR_DISABLED != cd->membind_memattr ||
+                         PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding))) {
+            /* With mem_alloc_policy=none - the default - and no memory
+               attribute, the job asked for no memory policy at all, and the
+               call just made was a reset to the system default rather than a
+               binding. Failing it leaves nothing bound to the wrong place and
+               degrades nothing, so there is nothing to report:
+               mem_bind_failure_action governs an explicit memory binding, and
+               says so. The rule used to be narrower (ENOSYS alone), which
+               covered the platform that cannot bind memory but not the one
+               that refuses to - a container whose seccomp policy denies
+               set_mempolicy, which is the default under Docker, answers
+               EPERM, and every bound launch inside one announced that "the
+               memory was left unbound" (and aborted the job outright under
+               mem_bind_failure_action=error). */
+            if (HWLOC_MEMBIND_DEFAULT == cd->membind_policy) {
                 return;
             }
             if (PRTE_HWLOC_BASE_MBFA_SILENT == prte_hwloc_base_mbfa) {

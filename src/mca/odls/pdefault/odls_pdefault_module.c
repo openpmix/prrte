@@ -441,6 +441,9 @@ static const char *bind_errmsg(int errnum)
         return "hwloc indicates binding is not supported on this system";
     case EXDEV:
         return "hwloc indicates binding cannot be enforced on this system";
+    case PRTE_ODLS_MEMATTR_NODATA:
+        return "no NUMA node local to the process' CPUs, and usable by it, has a value "
+               "for the requested memory attribute";
     default:
         return strerror(errnum);
     }

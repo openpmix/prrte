@@ -19,4 +19,5 @@ The sections below describe these controls in more detail.
    limits
    diagnostics
    rankfiles
+   memory-binding
    deprecated
