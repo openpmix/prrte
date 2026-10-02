@@ -20,13 +20,6 @@
 # $HEADER$
 #
 #
-[no-hosts-in-list]
-The SLURM process starter for PRTE didn't find any hosts in
-the map for this application. This can be caused by a lack of
-an allocation, or by an error in the PRTE code. Please check
-to ensure you have a SLURM allocation. If you do, then please pass
-the error to the PRTE user's mailing list for assistance.
-#
 [no-srun]
 The SLURM process starter for OpenMPI was unable to locate a
 usable "srun" command in its path. Please check your path

@@ -279,6 +279,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     uint32_t job_id = UINT32_MAX;
+    uint32_t node_job_id;
+    void *data = &node_job_id;
     prte_session_t *session = NULL;
     int32_t num_session_nodes;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -396,53 +398,35 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PMIx_Argv_free(custom_strings);
     }
 
-    /* create nodelist */
+    /* create the nodelist from this launch's daemons, which setup_vm gave
+     * the consecutive vpids from daemon_vpid_start.  The daemon map also
+     * holds the nodes of an earlier launch whose daemons have not reported
+     * yet, which a walk of the map would include. */
     nodelist_argv = NULL;
-
-    for (n = 0; n < map->nodes->size; n++) {
-        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, n))) {
-            continue;
+    node = NULL;
+    for (n = 0; n < map->num_new_daemons; n++) {
+        prte_proc_t *daemon = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
+                                                    (int) (map->daemon_vpid_start + (pmix_rank_t) n));
+        if (NULL == daemon || NULL == daemon->node) {
+            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(rc);
+            PMIx_Argv_free(nodelist_argv);
+            goto cleanup;
         }
-        /* if the daemon already exists on this node, then
-         * don't include it
-         */
-        if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
-            continue;
+        PMIx_Argv_append_nosize(&nodelist_argv, daemon->node->name);
+        if (0 == n) {
+            node = daemon->node;
         }
-
-        /* otherwise, add it to the list of nodes upon which
-         * we need to launch a daemon
-         */
-        PMIx_Argv_append_nosize(&nodelist_argv, node->name);
-    }
-    if (0 == PMIx_Argv_count(nodelist_argv)) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-slurm.txt", "no-hosts-in-list", true);
-        rc = PRTE_ERR_FAILED_TO_START;
-        goto cleanup;
     }
 
     nodelist_flat = PMIx_Argv_join(nodelist_argv, ',');
     PMIx_Argv_free(nodelist_argv);
     nodelist_argv = NULL;
 
-    /* find job ID of first node to launch; we make the assumption here that
-     * all other nodes in the launch share that job ID */
-    for (n = 0; n < map->nodes->size; n++) {
-        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, n))) {
-            continue;
-        }
-        if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
-            continue;
-        }
-
-        uint32_t node_job_id;
-        void *data = &node_job_id;
-        if(prte_get_attribute(&node->attributes, PRTE_NODE_ALLOC_ID, &data, PMIX_UINT32)) {
-            job_id = node_job_id;
-            break;
-        }
-
-        break;
+    /* find job ID of the first node to launch on; we make the assumption
+     * here that all other nodes in the launch share that job ID */
+    if (prte_get_attribute(&node->attributes, PRTE_NODE_ALLOC_ID, &data, PMIX_UINT32)) {
+        job_id = node_job_id;
     }
 
     /* could not find job ID of nodes to launch */
