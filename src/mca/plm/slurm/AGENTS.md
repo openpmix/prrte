@@ -27,7 +27,7 @@ Files:
 | `plm_slurm_component.c` | Registration (`plm_slurm_args`), `query` (SLURM detection + version check via [`common/slurm`](../../common/slurm/AGENTS.md) → priority 75). |
 | `plm_slurm_module.c` | `plm_slurm_init`, `plm_slurm_launch_job` (spawn), `launch_daemons` (build & exec srun), `plm_slurm_start_proc` (fork/exec), `srun_wait_cb`, terminate/signal/finalize. |
 | `plm_slurm.h` | `prte_mca_plm_slurm_component_t` (`custom_args` — the version state lives in `common/slurm`, not here). |
-| `help-plm-slurm.txt` | Error text (no-srun, srun-failed, ancient-version, no-hosts-in-list). |
+| `help-plm-slurm.txt` | Error text (no-srun, srun-failed, ancient-version). |
 
 ---
 
@@ -67,11 +67,15 @@ If no Slurm command can be run, or the version cannot be parsed
    - `--mpi=none` (daemons aren't MPI tasks), `--cpu-bind=none` (don't
      let TaskAffinity pin the prted to one core).
    - any `plm_slurm_args`.
-   - a **nodelist**: the map's new-daemon nodes (skipping ones that
-     already have a daemon); errors `no-hosts-in-list` if empty.
-   - `--jobid=<id>` — taken from the first node's `PRTE_NODE_ALLOC_ID`
-     attribute and the matching session; lets PRRTE launch into another
-     allocation than the one it's in. Errors if no job id / session.
+   - a **nodelist**: the nodes of this launch's daemons, the vpids
+     `daemon_vpid_start` to `daemon_vpid_start + num_new_daemons - 1`.
+     Not a walk of the daemon map, which also holds an earlier launch's
+     nodes until their daemons report: under two overlapping grows that
+     walk gave the second srun the first grow's node and job id.
+   - `--jobid=<id>` — taken from the first of those nodes'
+     `PRTE_NODE_ALLOC_ID` attribute and the matching session; lets PRRTE
+     launch into another allocation than the one it's in. Errors if no
+     job id / session.
    - `--nodes=N --nodelist=...` (only when not using the whole
      allocation) and `--ntasks=N` where `N = num_new_daemons`.
 3. **Build the `prted` argv** appended after srun's:
