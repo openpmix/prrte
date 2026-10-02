@@ -8,10 +8,10 @@
 # $HEADER$
 #
 # A recording, optionally misbehaving, wrapper around the real salloc,
-# scontrol and scancel.  Dispatches on argv[0], the way the tools it wraps are
-# reached: build.sh installs it as
+# scontrol, scancel and srun.  Dispatches on argv[0], the way the tools it
+# wraps are reached: build.sh installs it as
 #
-#     /opt/prte/slurmshim/bin/{salloc,scontrol,scancel}
+#     /opt/prte/slurmshim/bin/{salloc,scontrol,scancel,srun}
 #
 # deliberately NOT into the install bin/ that every node has on its PATH -- a
 # case has to opt in by putting that directory first, so nothing else in the
@@ -38,6 +38,8 @@
 #   slurm-shim reset                 # clear the state (argv records, faults)
 #   slurm-shim argv                  # the argv of the most recent salloc
 #   slurm-shim audit                 # every wrapped command, in order
+#   slurm-shim nodefile              # "<lines> <bytes>" of the node file the
+#                                    # most recent srun was given
 #   slurm-shim set <key> <value>     # arm/disarm a fault
 #
 # Faults:
@@ -61,7 +63,7 @@ import subprocess
 import sys
 
 STATE = os.environ.get("SLURM_SHIM_STATE", "/tmp/slurm-shim")
-WRAPPED = ("salloc", "scontrol", "scancel")
+WRAPPED = ("salloc", "scontrol", "scancel", "srun")
 
 
 def state_path(*parts):
@@ -96,6 +98,27 @@ def record(name, argv):
     if "salloc" == name:
         with open(state_path("argv.last"), "w") as f:
             f.write("\n".join(argv) + "\n")
+
+
+def record_nodefile(argv):
+    """Count the lines and bytes of the node file srun was given.
+
+    That srun ran at all is the point: as one argument a node list past the
+    kernel's 128 KiB per-argument limit makes the exec fail with E2BIG, so a
+    large list reaches this record only in a file.
+    """
+    for arg in argv:
+        if arg.startswith("--nodelist=") and "/" in arg:
+            path = arg[len("--nodelist="):]
+            try:
+                with open(path, "rb") as f:
+                    data = f.read()
+            except OSError:
+                return
+            ensure_state()
+            with open(state_path("nodefile.last"), "w") as f:
+                f.write("%d %d\n" % (data.count(b"\n"), len(data)))
+            return
 
 
 def real_command(name):
@@ -138,6 +161,8 @@ def main():
         return control(argv)
 
     record(name, [name] + argv)
+    if "srun" == name:
+        record_nodefile(argv)
 
     if "scontrol" == name and "--json" in argv and "1" == flag("bad_json"):
         # Exit 0 with unparsable output on purpose: a non-zero status would be
@@ -216,7 +241,7 @@ def main():
 
 def control(argv):
     if not argv:
-        sys.stderr.write(__doc__ or "usage: slurm-shim <reset|argv|audit|set>\n")
+        sys.stderr.write(__doc__ or "usage: slurm-shim <reset|argv|audit|nodefile|set>\n")
         return 2
     cmd = argv[0]
     if "reset" == cmd:
@@ -227,6 +252,13 @@ def control(argv):
     if "argv" == cmd:
         try:
             with open(state_path("argv.last")) as f:
+                sys.stdout.write(f.read())
+        except OSError:
+            return 1
+        return 0
+    if "nodefile" == cmd:
+        try:
+            with open(state_path("nodefile.last")) as f:
                 sys.stdout.write(f.read())
         except OSError:
             return 1

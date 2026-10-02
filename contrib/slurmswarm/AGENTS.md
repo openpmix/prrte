@@ -676,17 +676,24 @@ answer these two:
   exist for precisely that.
 
 `slurm-shim.py` is installed by `build.sh` as
-`/opt/prte/slurmshim/bin/{salloc,scontrol,scancel}` — dispatching on
+`/opt/prte/slurmshim/bin/{salloc,scontrol,scancel,srun}` — dispatching on
 `argv[0]`, and deliberately **not** into the install `bin/` that the node
 entrypoint puts on every PATH. A case opts in by starting its DVM with that
 directory first (`DVM_SHIM=1` in `run-tests.sh`), so nothing else in the
 suite can be perturbed by it. It is the **HNP** that needs it: the HNP is
 what shells out, the tools never do.
 
+It wraps `srun` for one assertion, that a launch past the kernel's 128 KiB
+per-argument limit still starts it: as one argument such a node list makes
+the exec fail with `E2BIG`. For each `srun` it records the line and byte
+count of the `--nodelist` file, and `elastic_launch_arg_limit_group` checks
+them after an extend onto 10000 invented nodes.
+
 ```sh
 slurm-shim reset                 # clear argv records and faults
 slurm-shim argv                  # argv of the most recent salloc
 slurm-shim audit                 # every wrapped command, in order
+slurm-shim nodefile              # lines and bytes of the last srun's node file
 slurm-shim set bad_json 1        # scontrol --json prints garbage, exits 0
 slurm-shim set scancel_fail 1    # scancel fails, verbosely
 ```
