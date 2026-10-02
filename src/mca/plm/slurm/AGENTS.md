@@ -67,8 +67,8 @@ If no Slurm command can be run, or the version cannot be parsed
    - `--mpi=none` (daemons aren't MPI tasks), `--cpu-bind=none` (don't
      let TaskAffinity pin the prted to one core).
    - any `plm_slurm_args`.
-   - a **nodelist**: the nodes of this launch's daemons, the vpids
-     `daemon_vpid_start` to `daemon_vpid_start + num_new_daemons - 1`.
+   - a **nodelist**: the nodes of this launch's daemons, in vpid order,
+     the vpids `daemon_vpid_start` to `daemon_vpid_start + num_new_daemons - 1`.
      Not a walk of the daemon map, which also holds an earlier launch's
      nodes until their daemons report: under two overlapping grows that
      walk gave the second srun the first grow's node and job id.
@@ -76,14 +76,22 @@ If no Slurm command can be run, or the version cannot be parsed
      `PRTE_NODE_ALLOC_ID` attribute and the matching session; lets PRRTE
      launch into another allocation than the one it's in. Errors if no
      job id / session.
-   - `--nodes=N --nodelist=<node file>` and `--ntasks=N`, where
-     `N = num_new_daemons`, on every launch. See "The node file" below.
+   - `--distribution=arbitrary --nodelist=<node file>` and `--ntasks=N`,
+     where `N = num_new_daemons`, on every launch. See "The node file"
+     below. The arbitrary distribution numbers the tasks in file order,
+     which is vpid order. Slurm's own node order need not be: a node
+     granted again after a release keeps its old place in the pool, which
+     is the order `setup_vm` hands out vpids in. `srun` takes the node
+     count from the file and refuses `--nodes` alongside this
+     distribution.
 3. **Build the `prted` argv** appended after srun's:
    `prte_plm_base_setup_prted_cmd`, then
    `prte_plm_base_prted_append_basic_args(..., "slurm", &proc_vpid_index)`.
    Substitute `map->daemon_vpid_start` into the vpid slot — SLURM starts
-   the tasks and each daemon offsets from this base to compute its own
-   vpid. That base is recomputed by `setup_virtual_machine` on **every**
+   the tasks and each daemon offsets from this base by its task index
+   (`SLURM_PROCID`, see [`ess/slurm`](../../ess/slurm/AGENTS.md)) to
+   compute its own vpid. That base is recomputed by
+   `setup_virtual_machine` on **every**
    launch, and this component is one of the three reasons it must be: a
    stale base (left over from DVM formation) tells the daemons of a later
    `--add-host` launch to claim ranks that live daemons already own. `ssh`
@@ -186,10 +194,13 @@ not srun).
 
 ## Things to watch when editing
 
-- **One srun, RM-driven placement.** There is no per-node launch loop
-  like ssh — srun places the daemons. Hence
-  `daemon_nodes_assigned_at_launch = false`; don't assume a node↔daemon
-  binding before the callback.
+- **One srun, placement in list order.** There is no per-node launch
+  loop like ssh — srun places the daemons, in the order the node file
+  gives. That order is what binds each vpid to its node: keep the file in
+  vpid order and the distribution arbitrary, or daemons claim each
+  other's vpids and `prted_report_launch` renames their nodes to match.
+  `daemon_nodes_assigned_at_launch` is still `false`; don't assume a
+  node↔daemon binding before the callback.
 - **Version gates are load-bearing.** `--external-launcher` (23.11+) and
   the `ancient`/`early` flags come straight from the version
   [`common/slurm`](../../common/slurm/AGENTS.md) parsed out of
