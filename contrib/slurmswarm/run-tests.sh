@@ -810,6 +810,33 @@ test_plm() {
     else
         bad "no prted on node2 to check against the step"
     fi
+
+    banner "plm/slurm: the DVM key reaches the daemons through srun's environment only"
+    # Every daemon must prove it holds the DVM key before another will talk
+    # to it, and plm/slurm delivers the key in the environment srun hands
+    # each task - a channel private to the DVM's user.  The command line
+    # is not: anything on the node can see it.  That
+    # the DVM formed at all says the key arrived; what is asserted here is
+    # that it went nowhere else, and did not stay where it arrived.  (The
+    # variable's NAME may linger in /proc/<pid>/environ, which shows the
+    # environment the process started with; the prted wipes the value in
+    # place, so it is the value that is looked for.)
+    out=$(SA 'grep -A2 "final top-level argv" /tmp/prte.out' 2>/dev/null | tr '\n' ' ')
+    echo "$out" | grep -qE '[0-9a-fA-F]{64}' \
+        && bad "a 64-digit hex string - a DVM key - is on the srun command line" \
+        || ok "the DVM key is not on the srun command line"
+    out=$(ON 2 'p=$(pgrep -x prted | head -1); [ -n "$p" ] && { tr "\0" " " < /proc/$p/cmdline; echo; tr "\0" "\n" < /proc/$p/environ | grep -c "^PRTE_DVM_KEY=[0-9a-fA-F]"; }' 2>/dev/null)
+    if [ -z "$out" ]; then
+        bad "no prted on node2 to examine"
+    else
+        echo "$out" | head -1 | grep -qE '[0-9a-fA-F]{64}' \
+            && bad "a DVM key is on node2's prted command line" \
+            || ok "...nor on the prted's"
+        [ "$(echo "$out" | tail -1 | tr -d ' \r')" = 0 ] \
+            && ok "...and the prted wiped it from its environment once read" \
+            || bad "node2's prted kept PRTE_DVM_KEY in its environment"
+    fi
+
     out=$(SA 'timeout 60 prun -n 4 --map-by node hostname' 2>&1)
     n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
     [ "$n" = 4 ] && ok "a job runs across the srun-launched DVM" \

@@ -258,3 +258,81 @@ assertion does not hold and the other nodes have been described wrongly -
 their processes would be placed and bound against hardware they do not have.
 
 Remove the option and let PRRTE discover each node's hardware for itself.
+#
+[dvm-key-no-random]
+PRRTE could not obtain random data, which it needs to create the key that
+daemons of a DVM use to prove to one another that they belong to it:
+
+  node:   %s
+  source: %s
+  error:  %s
+
+Without that key a daemon cannot tell its own peers from anything else that
+connects to its port, so the DVM cannot be started on this node.
+#
+[dvm-key-not-delivered]
+A PRRTE daemon did not receive its DVM key:
+
+  node:      %s
+  expected:  %s
+  problem:   %s
+
+Every daemon of a DVM holds a key, created by the DVM controller
+and delivered to each daemon as it is launched, and a daemon proves it
+holds the key before any other daemon will talk to it. The key is never
+put on a command line, where anything on the node could see it: the ssh
+launcher writes it to the daemon's standard input, and the resource-manager
+launchers (Slurm, LSF, PALS) pass it in the daemon's environment.
+
+If the remote-launch agent in use does not forward standard input to the
+command it runs, it cannot deliver the key. Use an agent that does (ssh,
+rsh and "qrsh -inherit" all do), or launch through the resource manager.
+As a last resort the check can be turned off with
+"--prtemca prte_oob_authenticate 0" - but understand what that means:
+daemons can then no longer tell their own peers from any other process
+that connects to their ports.
+#
+[dvm-key-malformed]
+A PRRTE daemon received a DVM key it cannot use:
+
+  node:    %s
+  source:  %s
+
+A key is exactly 64 hexadecimal digits. This usually means something other
+than the DVM controller wrote to the daemon's standard input or set the
+variable - a login script that prints to its output, for example.
+#
+[dvm-key-file]
+A PRRTE daemon could not read its DVM key from the file the bootstrap
+configuration names in DVMKeyFile:
+
+  node:    %s
+  file:    %s
+  problem: %s
+
+Every daemon of a bootstrapped DVM must hold the same key, so that
+daemons can prove to one another that they belong to the DVM. The file
+must be a regular file (not a symbolic link) owned by the user the daemon
+runs as, readable by no one else (mode 0600 or 0400), and contain exactly
+64 hexadecimal digits. One way to create it:
+
+  umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > prte.key
+#
+[dvm-key-bootstrap-missing]
+A bootstrapped PRRTE DVM was configured without a DVM key:
+
+  node:   %s
+  file:   %s
+
+Every daemon of a DVM must prove to the others that it belongs to the
+DVM, and in a bootstrapped DVM that proof is a key held in a file that
+the configuration names with the DVMKeyFile entry. Create one, copy it to
+every node (or place it on a file system they share), and add
+
+  DVMKeyFile=<path to the key file>
+
+to the configuration. The file must be a regular file owned by the user
+the daemons run as, readable by no one else (mode 0600 or 0400), and hold
+exactly 64 hexadecimal digits. One way to create it:
+
+  umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > prte.key

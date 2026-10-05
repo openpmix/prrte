@@ -40,6 +40,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_net.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
@@ -47,6 +48,8 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_bootstrap.h"
+#include "src/util/prte_dvm_key.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -380,6 +383,30 @@ int prte_ess_base_bootstrap_params(void)
      * facility. */
 
     return PRTE_SUCCESS;
+}
+
+int prte_ess_base_bootstrap_key(void)
+{
+    char *path;
+    int rc;
+
+    if (!bootstrap_cfg_valid) {
+        rc = prte_ess_base_bootstrap_params();
+        if (PRTE_SUCCESS != rc) {
+            return rc;
+        }
+    }
+    if (NULL == bootstrap_cfg.keyfile) {
+        path = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte.conf", NULL);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                       "dvm-key-bootstrap-missing", true, prte_process_info.nodename,
+                       (NULL == path) ? "prte.conf" : path);
+        if (NULL != path) {
+            free(path);
+        }
+        return PRTE_ERR_SILENT;
+    }
+    return prte_dvm_key_from_file(bootstrap_cfg.keyfile);
 }
 
 /* Phase 2: resolve this node's identity and publish it.

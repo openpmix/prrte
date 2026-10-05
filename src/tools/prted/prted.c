@@ -69,6 +69,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/daemon_init.h"
+#include "src/util/prte_dvm_key.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
@@ -353,6 +354,25 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n",
                 prte_process_info.nodename);
     }
+
+    /* Take the DVM key before anything can separate us from our launcher:
+     * plm/ssh writes it down our stdin, which detaching below replaces.
+     * Without it no other daemon will talk to us, so a daemon that cannot
+     * get it stops here and says why. */
+    if (prte_oob_authenticate) {
+        if (prte_bootstrap_setup) {
+            ret = prte_ess_base_bootstrap_key();
+        } else if (prte_dvm_key_stdin) {
+            ret = prte_dvm_key_from_fd(STDIN_FILENO, PRTE_DVM_KEY_STDIN_TIMEOUT);
+        } else {
+            ret = prte_dvm_key_from_env();
+        }
+        if (PRTE_SUCCESS != ret) {
+            return 1;
+        }
+    }
+    /* whatever delivered it, nothing we start may inherit it */
+    prte_dvm_key_scrub_env();
 
     /* Detach from the controlling terminal - but ONLY if our launcher said
      * to.  Forking and calling setsid() leaves the process the launcher is

@@ -34,15 +34,30 @@
 
 #include "types.h"
 
-/* Message types carried in the TCP header. IDENT and PROBE are used
- * during the connection handshake; USER marks a normal RML message,
- * whether it is destined for us or is being relayed on to the next hop.
+/* Message types carried in the TCP header. The three AUTH types, then IDENT
+ * (and PROBE), make up the connection handshake; USER marks a normal RML
+ * message, whether it is destined for us or is being relayed on to the next
+ * hop.
  */
 typedef uint8_t prte_oob_tcp_msg_type_t;
 
 #define MCA_OOB_TCP_IDENT 1
 #define MCA_OOB_TCP_PROBE 2
 #define MCA_OOB_TCP_USER  4
+/* Before anything else crosses a new connection, each end proves it holds the
+ * DVM key (src/util/prte_dvm_key.h).  The dialer sends HELLO with a fresh
+ * nonce; the listener answers CHALLENGE with its own nonce and its proof; the
+ * dialer checks that proof and answers RESPONSE with its own.  Each proof is
+ * an HMAC, under the key, of both nonces, both ranks and the namespace, with
+ * a byte saying which end made it (prte_oob_tcp_auth_mac) - so neither end's
+ * proof can be replayed, reflected back at it, or presented on another
+ * connection.  Only then does the IDENT exchange that has always opened a
+ * connection take place, untouched: everything it decides - including which
+ * of two simultaneous connections survives - is decided between daemons that
+ * have already shown they belong to the DVM. */
+#define MCA_OOB_TCP_AUTH_HELLO     8
+#define MCA_OOB_TCP_AUTH_CHALLENGE 16
+#define MCA_OOB_TCP_AUTH_RESPONSE  32
 
 /* header for tcp msgs
  *
@@ -114,10 +129,32 @@ typedef struct {
     char nspace[PMIX_MAX_NSLEN + 1];
 } prte_oob_tcp_hdr_t;
 
+/* How far a connection has got in proving that the far end holds the DVM
+ * key.  A dialer goes NONE -> HELLO_SENT -> DONE, a listener NONE ->
+ * CHALLENGE_SENT -> DONE; nothing but the next authentication message is
+ * accepted on a connection until it reads DONE. */
+#define PRTE_OOB_TCP_AUTH_NONE           0
+#define PRTE_OOB_TCP_AUTH_HELLO_SENT     1
+#define PRTE_OOB_TCP_AUTH_CHALLENGE_SENT 2
+#define PRTE_OOB_TCP_AUTH_DONE           3
+
+/* the length of a nonce and of a proof - both are HMAC-SHA256 outputs */
+#define PRTE_OOB_TCP_AUTH_LEN 32
+
+typedef struct {
+    int phase;
+    /* the far end's rank: the one we dialed, or the one a dialer claimed in
+     * its HELLO.  Once phase is DONE this is the rank the far end has proved
+     * it may speak for, and its IDENT must name the same one. */
+    pmix_rank_t rank;
+    uint8_t dialer_nonce[PRTE_OOB_TCP_AUTH_LEN];
+    uint8_t listener_nonce[PRTE_OOB_TCP_AUTH_LEN];
+} prte_oob_tcp_auth_t;
+
 /* A connect handshake part way through being read.
  *
- * A handshake is the fixed header, the nspace it names and a small ack and
- * version payload, and nothing promises the three arrive together - or at
+ * A handshake message is the fixed header, the nspace it names and a small
+ * payload, and nothing promises the three arrive together - or at
  * all, since the listening port answers anyone who connects to it.  It is
  * read on the progress thread, so it is read as the bytes arrive: each read
  * event takes what the socket has and records here how far it got, and the
@@ -127,13 +164,19 @@ typedef struct {
  * `hdr` holds network byte order until `sized` is set, which happens once the
  * header and its nspace are complete and have been checked; from then on it is
  * host order and `payload` is allocated.  prte_oob_tcp_handshake_reset()
- * returns one of these to empty. */
+ * readies one of these for the next message of the same handshake;
+ * prte_oob_tcp_handshake_clear() empties it for a new connection. */
 typedef struct {
     prte_oob_tcp_hdr_t hdr;
     size_t hdr_rcvd;     // bytes of hdr - fixed part, then nspace - read so far
     bool sized;          // header complete, checked, converted; payload allocated
     char *payload;       // hdr.nbytes long, plus a terminator the reader adds
     size_t payload_rcvd;
+    /* Spans the several messages of one connection's handshake, so it
+     * survives prte_oob_tcp_handshake_reset() - which readies the record for
+     * the next message - and is emptied only by prte_oob_tcp_handshake_clear()
+     * when the connection itself is new or gone. */
+    prte_oob_tcp_auth_t auth;
 } prte_oob_tcp_handshake_t;
 
 /* the part of the header that is always present, and the length of a

@@ -228,6 +228,12 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
             }
             cfg->dvmtmpdir = strdup(ptr);
 
+        } else if (0 == strcmp(line, "DVMKeyFile")) {
+            if (NULL != cfg->keyfile) {
+                free(cfg->keyfile);
+            }
+            cfg->keyfile = strdup(ptr);
+
         } else if (0 == strcmp(line, "SessionTmpDir")) {
             if (NULL != cfg->sessiontmpdir) {
                 free(cfg->sessiontmpdir);
@@ -334,6 +340,9 @@ void prte_bootstrap_config_free(prte_bootstrap_config_t *cfg)
     }
     if (NULL != cfg->sessiontmpdir) {
         free(cfg->sessiontmpdir);
+    }
+    if (NULL != cfg->keyfile) {
+        free(cfg->keyfile);
     }
     memset(cfg, 0, sizeof(*cfg));
 }

@@ -47,8 +47,30 @@ typedef struct {
     /* an inbound connection's handshake, as far as it has arrived: the
      * accept path's one-shot read event is re-armed until it is all in */
     prte_oob_tcp_handshake_t hshake;
+    /* An inbound connection still in its handshake holds a descriptor for
+     * something that may never complete it - so it is counted
+     * against the limits on how many may (`pending`, with the address it came
+     * from), and given until `deadline` fires to finish.  The destructor
+     * undoes both. */
+    int sd;
+    bool pending;
+    struct sockaddr_storage from;
+    prte_event_t deadline;
+    bool deadline_active;
 } prte_oob_tcp_conn_op_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
+
+/* how many inbound handshakes are in progress from one address */
+typedef struct {
+    pmix_list_item_t super;
+    struct sockaddr_storage addr;
+    int count;
+} prte_oob_tcp_pending_host_t;
+PMIX_CLASS_DECLARATION(prte_oob_tcp_pending_host_t);
+
+/* Stop counting an inbound connection against the pending-handshake limits
+ * (oob_tcp.c) - called once its handshake is over, however it ended. */
+PRTE_EXPORT void prte_oob_tcp_pending_release(prte_oob_tcp_conn_op_t *op);
 
 /* PMIx's src/mca/ptl/ptl_types.h defines this too, and every file here
  * reaches that header first, so it is PMIx's definition that is used.  Keep
@@ -73,15 +95,6 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
         cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                             \
         cop->peer = (p);                                                                    \
         PRTE_PMIX_THREADSHIFT(cop, prte_event_base, (cbfunc));                              \
-    } while (0);
-
-#define PRTE_ACTIVATE_TCP_ACCEPT_STATE(s, a, cbfunc)                               \
-    do {                                                                           \
-        prte_oob_tcp_conn_op_t *cop;                                               \
-        cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                    \
-        prte_event_set(prte_event_base, &cop->ev, s, PRTE_EV_READ, (cbfunc), cop); \
-        PMIX_POST_OBJECT(cop);                                                     \
-        prte_event_add(&cop->ev, 0);                                               \
     } while (0);
 
 #define PRTE_RETRY_TCP_CONN_STATE(p, cbfunc, tv)                                                  \
@@ -118,8 +131,18 @@ PRTE_EXPORT void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer);
 PRTE_EXPORT int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *peer, int sd,
                                                    prte_oob_tcp_handshake_t *hs,
                                                    prte_oob_tcp_hdr_t *dhdr);
-/* return a handshake record to empty, freeing any payload it holds */
+/* ready a handshake record for the next message of the same handshake,
+ * freeing any payload it holds - how far authentication has got is kept */
 PRTE_EXPORT void prte_oob_tcp_handshake_reset(prte_oob_tcp_handshake_t *hs);
+/* empty a handshake record entirely, for a new connection or a finished one */
+PRTE_EXPORT void prte_oob_tcp_handshake_clear(prte_oob_tcp_handshake_t *hs);
+/* The proof one end of a connection gives that it holds the DVM key: an HMAC,
+ * under the key, of who made it (`role`, 'D' for the dialer or 'L' for the
+ * listener), the namespace, both ranks and both nonces.  Exported for the
+ * unit tests, which have to speak the handshake. */
+PRTE_EXPORT void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer,
+                                       pmix_rank_t listener, const uint8_t *dialer_nonce,
+                                       const uint8_t *listener_nonce, uint8_t *mac);
 PRTE_EXPORT void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer);
 
 #endif /* _MCA_OOB_TCP_CONNECTION_H_ */

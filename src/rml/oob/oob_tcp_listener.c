@@ -486,6 +486,45 @@ static void unadvertise(char ***conns, char ***masks)
 }
 
 /*
+ * Has accept() failed because the process or the system is out of something
+ * - descriptors, or memory - rather than because of the connection or the
+ * listener?  That passes: connections finish their handshakes or reach their
+ * deadline and give their descriptors back.  So the listener pauses and tries
+ * again, where it used to close for good - which, once enough idle or
+ * stalled connections had used up the descriptors, left the daemon unable to
+ * accept any connection again.
+ */
+static bool accept_error_is_exhaustion(int err)
+{
+    switch (err) {
+    case EMFILE:
+    case ENFILE:
+    case ENOBUFS:
+    case ENOMEM:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/* say so once per episode of running out, not once per failed accept */
+static void report_exhaustion(int err)
+{
+    static bool reported = false;
+
+    if (reported) {
+        return;
+    }
+    reported = true;
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
+                   prte_process_info.nodename, err, strerror(err),
+                   "Out of resources; new connections are paused and will be retried");
+}
+
+/* the pause between accepts while resources are exhausted */
+#define PRTE_OOB_TCP_ACCEPT_BACKOFF_SECS 1
+
+/*
  * Is this accept() failure about the one connection being accepted, rather
  * than about the listening socket?  A client that resets before we accept it
  * yields ECONNABORTED, and Linux also hands back the pending network error of
@@ -532,6 +571,7 @@ static void *listen_thread(pmix_object_t *obj)
     struct timeval timeout;
     fd_set readfds;
     prte_oob_tcp_listener_t *listener;
+    bool starved = false;
     PRTE_HIDE_UNUSED_PARAMS(obj);
 
     /* only execute during the initial VM startup stage - once
@@ -542,6 +582,16 @@ static void *listen_thread(pmix_object_t *obj)
     while (prte_oob_base.listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
+        if (starved) {
+            /* out of descriptors or memory: listen only for the order to
+             * stop, for a while, and then try accepting again */
+            starved = false;
+            FD_SET(prte_oob_base.stop_thread[0], &readfds);
+            timeout.tv_sec = PRTE_OOB_TCP_ACCEPT_BACKOFF_SECS;
+            timeout.tv_usec = 0;
+            (void) select(prte_oob_base.stop_thread[0] + 1, &readfds, NULL, NULL, &timeout);
+            continue;
+        }
         PMIX_LIST_FOREACH(listener, &prte_oob_base.listeners, prte_oob_tcp_listener_t)
         {
             FD_SET(listener->sd, &readfds);
@@ -616,17 +666,12 @@ static void *listen_thread(pmix_object_t *obj)
                         continue;
                     }
 
-                    /* If we run out of file descriptors, log an extra
-                       warning (so that the user can know to fix this
-                       problem) and abandon all hope. */
-                    else if (EMFILE == prte_socket_errno) {
-                        CLOSE_THE_SOCKET(sd);
-                        listener->sd = -1;
-                        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
-                                       prte_process_info.nodename, prte_socket_errno,
-                                       strerror(prte_socket_errno), "Out of file descriptors");
-                        goto done;
+                    /* Out of descriptors or memory: pause, and try again
+                     * once some have been given back */
+                    else if (accept_error_is_exhaustion(prte_socket_errno)) {
+                        report_exhaustion(prte_socket_errno);
+                        starved = true;
+                        break;
                     }
 
                     /* For all other cases, print a
@@ -675,10 +720,9 @@ static void *listen_thread(pmix_object_t *obj)
                 prte_event_active(&pending_connection->ev, PRTE_EV_WRITE, 1);
                 accepted_connections++;
             }
-        } while (accepted_connections > 0);
+        } while (accepted_connections > 0 && !starved);
     }
 
-done:
     return NULL;
 }
 
@@ -708,6 +752,19 @@ static void connection_handler(int sd, short flags, void *cbdata)
     PMIX_RELEASE(new_connection);
 }
 
+/* the pause after running out of resources is over: watch the socket again */
+static void listener_resume(int fd, short flags, void *cbdata)
+{
+    prte_oob_tcp_listener_t *listener = (prte_oob_tcp_listener_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
+
+    listener->backoff_active = false;
+    if (0 <= listener->sd && !listener->ev_active) {
+        listener->ev_active = true;
+        prte_event_add(&listener->event, 0);
+    }
+}
+
 /*
  * Handler for accepting connections from the event library
  */
@@ -727,29 +784,33 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
             return;
         }
 
+        /* Out of descriptors or memory: stop watching the socket for a
+         * while - it would only fire again at once - and then resume */
+        err = prte_socket_errno;
+        if (accept_error_is_exhaustion(err)) {
+            struct timeval tv = {PRTE_OOB_TCP_ACCEPT_BACKOFF_SECS, 0};
+            report_exhaustion(err);
+            prte_event_del(&listener->event);
+            listener->ev_active = false;
+            prte_event_evtimer_set(prte_event_base, &listener->backoff, listener_resume,
+                                   listener);
+            prte_event_evtimer_add(&listener->backoff, &tv);
+            listener->backoff_active = true;
+            return;
+        }
+
         /* Give up on this listener.  Its event is persistent, so it has to
          * come off the base before the socket is closed - left armed on a
          * dead descriptor it would fire, or watch whatever next reuses the
          * number - and the destructor must not close it a second time. */
-        err = prte_socket_errno;
         prte_event_del(&listener->event);
         listener->ev_active = false;
         CLOSE_THE_SOCKET(incoming_sd);
         listener->sd = -1;
 
-        /* If we run out of file descriptors, log an extra warning (so
-           that the user can know to fix this problem) and abandon all
-           hope. */
-        if (EMFILE == err) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
-                           prte_process_info.nodename, err, strerror(err),
-                           "Out of file descriptors");
-        } else {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
-                           prte_process_info.nodename, err, strerror(err),
-                           "Unknown cause; job will try to continue");
-        }
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "accept failed", true,
+                       prte_process_info.nodename, err, strerror(err),
+                       "Unknown cause; job will try to continue");
         return;
     }
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
@@ -769,6 +830,8 @@ static void tcp_ev_cons(prte_oob_tcp_listener_t *event)
     event->tcp6 = false;
     event->sd = -1;
     event->port = 0;
+    memset(&event->backoff, 0, sizeof(event->backoff));
+    event->backoff_active = false;
 }
 static void tcp_ev_des(prte_oob_tcp_listener_t *event)
 {
@@ -776,6 +839,10 @@ static void tcp_ev_des(prte_oob_tcp_listener_t *event)
         prte_event_del(&event->event);
     }
     event->ev_active = false;
+    if (event->backoff_active) {
+        prte_event_del(&event->backoff);
+        event->backoff_active = false;
+    }
     if (0 <= event->sd) {
         CLOSE_THE_SOCKET(event->sd);
         event->sd = -1;

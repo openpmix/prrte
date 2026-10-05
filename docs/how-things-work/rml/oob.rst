@@ -45,7 +45,8 @@ Every message on the wire is preceded by a ``prte_oob_tcp_hdr_t``
 (``oob_tcp_hdr.h``): the ``origin``, the final ``dst``, the ``tag``, a sequence
 number, the payload length, and a message ``type``:
 
-* ``IDENT`` / ``PROBE`` — the connection handshake, and
+* ``AUTH_HELLO`` / ``AUTH_CHALLENGE`` / ``AUTH_RESPONSE`` and ``IDENT`` /
+  ``PROBE`` — the connection handshake, and
 * ``USER`` — a normal message.
 
 ``origin`` and ``dst`` are **ranks**, not full process identifiers, and a data
@@ -120,17 +121,60 @@ Once the socket is up and the IDENT handshake has completed, the send handler in
 The connection state machine
 ----------------------------
 
-``oob_tcp_connection.c`` drives a peer from unconnected to usable.  The daemon
-that initiates a connection sends an ``IDENT`` naming itself; the acceptor
-(``recv_handler`` in ``oob_tcp.c``, plus ``oob_tcp_listener.c`` for the accept
-socket) checks the identity and either acks or nacks.  Because two daemons can
-try to connect to each other simultaneously, the handshake resolves which socket
-survives so a pair of peers does not end up with two half-open connections.
+``oob_tcp_connection.c`` drives a peer from unconnected to usable.
+
+Authentication comes first.  A daemon's port answers whatever connects to it,
+and a connected daemon is trusted with launch commands, so before anything
+else each end proves it holds the *DVM key* - a 256-bit value every daemon of
+one DVM shares and nothing else has.  The dialer sends ``AUTH_HELLO`` carrying
+a fresh nonce; the acceptor answers ``AUTH_CHALLENGE`` with its own nonce and
+its proof; the dialer checks that proof and answers ``AUTH_RESPONSE`` with its
+own.  Each proof is an HMAC-SHA256, under the key, of both nonces, both ranks,
+the namespace and which end made it, so no proof can be replayed, reflected
+back, or presented on another connection, and the key itself never crosses the
+wire.  Nothing outside the handshake is touched until a peer has proved
+itself: no peer object is created and no existing connection is disturbed.
+
+The key travels to each daemon by a channel private to the DVM's user - never
+on a command line, where the namespace and the HNP's contact address already
+are.
+``prte`` generates it; ``plm/ssh`` writes it down the stdin of each ``ssh`` it
+starts; ``plm/slurm``, ``plm/lsf`` and ``plm/pals`` put it in the launcher's
+environment, which the resource manager hands to every daemon; and a
+bootstrapped DVM reads it from the file ``DVMKeyFile`` names in ``prte.conf``.
+A daemon removes it from its environment as soon as it has it, so nothing the
+daemon starts inherits it.  ``prte_oob_authenticate`` (default ``true``) turns
+the check off for a launch agent that cannot forward stdin; daemons then
+cannot tell their own peers from any other process that connects to their
+ports.
+
+Authentication establishes who is at the other end of a connection; it does
+not encrypt or sign the traffic that follows.
+
+Then the ``IDENT`` exchange that has always opened a connection: the daemon
+that initiated it names itself (and must name the rank it proved); the
+acceptor (``recv_handler`` in ``oob_tcp.c``, plus ``oob_tcp_listener.c`` for
+the accept socket) checks the identity and either acks or nacks.  Because two
+daemons can try to connect to each other simultaneously, the handshake resolves
+which socket survives so a pair of peers does not end up with two half-open
+connections.
 
 The handshake runs on the progress thread, and the listening port answers
 anything that connects to it, so the handshake is read as its bytes arrive
 rather than by waiting for them.  A connection that sends part of one and
-stops costs its socket, not the daemon.
+stops costs its socket, not the daemon - and only for so long, and only so
+many of them:
+
+* ``prte_oob_handshake_timeout`` (default 30 seconds) is how long an inbound
+  connection has to finish its handshake before it is dropped;
+* ``prte_oob_max_pending`` (default: half the process's file-descriptor limit)
+  bounds how many inbound connections may be part way through their handshake
+  at once, and ``prte_oob_max_pending_per_host`` (default 64) how many of
+  those may come from any one address.
+
+Should ``accept()`` nonetheless run out of descriptors or memory, the listener
+pauses for a second and tries again; it used to close for good, after which
+no daemon could ever join, rejoin or reconnect.
 
 Retry and backoff.  When a connect attempt finds no listener yet — a common race
 during startup — ``prte_oob_tcp_peer_try_connect`` schedules a retry.  The base

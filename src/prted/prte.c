@@ -105,6 +105,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
+#include "src/util/prte_dvm_key.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -512,6 +513,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                            "prte register params",
                            PRTE_ERROR_NAME(rc), rc);
         }
+        return 1;
+    }
+
+    /* Create the DVM key.  Each daemon we launch is handed it, privately,
+     * and must prove it holds it before any other daemon will talk to it -
+     * see src/util/prte_dvm_key.h.  It is created before we might detach,
+     * so the DVM has one key however it is started. */
+    if (PRTE_SUCCESS != prte_dvm_key_generate()) {
         return 1;
     }
 

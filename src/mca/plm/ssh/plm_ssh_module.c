@@ -99,6 +99,8 @@
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/ssh/plm_ssh.h"
+#include "src/util/prte_dvm_key.h"
+#include "src/util/prte_hmac.h"
 
 static int ssh_init(void);
 static int ssh_launch(prte_job_t *jdata);
@@ -160,7 +162,7 @@ static const char *prte_plm_ssh_shell_name[7]
 static void set_handler_default(int sig);
 static prte_plm_ssh_shell_t find_shell(char *shell);
 static int launch_agent_setup(const char *agent, char *path);
-static void ssh_child(int argc, char **argv) __prte_attribute_noreturn__;
+static void ssh_child(int argc, char **argv, int keyfd) __prte_attribute_noreturn__;
 static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell);
 static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshell, char *nodename,
                        int *argc, char ***argv);
@@ -756,6 +758,14 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     pmix_argv_append(&argc, &argv, "plm");
     pmix_argv_append(&argc, &argv, "ssh");
 
+    /* the daemon's key comes down its stdin (see process_launch_list) - the
+     * one channel to it that is private to the DVM's user */
+    if (prte_oob_authenticate) {
+        pmix_argv_append(&argc, &argv, "--prtemca");
+        pmix_argv_append(&argc, &argv, "prte_dvm_key_stdin");
+        pmix_argv_append(&argc, &argv, "1");
+    }
+
     /* if we are tree-spawning, tell our child daemons the
      * uri of their parent (me) */
     if (!prte_mca_plm_ssh_component.no_tree_spawn) {
@@ -798,7 +808,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 }
 
 /* actually ssh the child */
-static void ssh_child(int argc, char **argv)
+static void ssh_child(int argc, char **argv, int keyfd)
 {
     char **env;
     char *var;
@@ -825,14 +835,23 @@ static void ssh_child(int argc, char **argv)
     exec_argv = argv;
     exec_path = strdup(ssh_agent_path);
 
-    /* Don't let ssh slurp all of our stdin! */
-    fdin = open("/dev/null", O_RDWR);
-    if (0 > fdin) {
-        pmix_output(0, "plm:ssh: open of /dev/null failed with errno=%s(%d)", strerror(errno), errno);
-        exit(-1);
+    /* Don't let ssh slurp all of our stdin!  What it gets instead is the
+     * pipe the DVM key is written into, which ssh carries to the remote
+     * daemon's stdin over its encrypted channel - or nothing at all. */
+    if (0 <= keyfd) {
+        fdin = keyfd;
+    } else {
+        fdin = open("/dev/null", O_RDWR);
+        if (0 > fdin) {
+            pmix_output(0, "plm:ssh: open of /dev/null failed with errno=%s(%d)", strerror(errno),
+                        errno);
+            exit(-1);
+        }
     }
     dup2(fdin, 0);
-    close(fdin);
+    if (0 != fdin) {
+        close(fdin);
+    }
 
     /* close all file descriptors w/ exception of stdin/stdout/stderr */
     pmix_close_open_file_descriptors(-1);
@@ -1034,6 +1053,8 @@ static void process_launch_list(int fd, short args, void *cbdata)
     pmix_list_item_t *item;
     pid_t pid;
     prte_plm_ssh_caddy_t *caddy;
+    int keypipe[2];
+    char keyhex[PRTE_DVM_KEY_HEXLEN + 2];
     PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
 
     while (num_in_progress < prte_mca_plm_ssh_component.num_concurrent) {
@@ -1047,10 +1068,31 @@ static void process_launch_list(int fd, short args, void *cbdata)
         PRTE_FLAG_SET(caddy->daemon, PRTE_PROC_FLAG_ALIVE);
         prte_wait_cb(caddy->daemon, ssh_wait_daemon, (void *) caddy);
 
+        /* The daemon's key travels down the stdin of the ssh we start,
+         * which ssh delivers to the daemon's stdin - so the pipe is made
+         * before the fork, and the key written once the child has it. */
+        keypipe[0] = keypipe[1] = -1;
+        if (prte_oob_authenticate) {
+            /* close-on-exec, so no other child this process starts meanwhile
+             * can hold either end - dup2() onto the ssh's stdin clears it */
+            if (0 != pipe(keypipe)) {
+                PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+                prte_wait_cb_cancel(caddy->daemon);
+                PMIX_RELEASE(caddy);
+                continue;
+            }
+            (void) pmix_fd_set_cloexec(keypipe[0]);
+            (void) pmix_fd_set_cloexec(keypipe[1]);
+        }
+
         /* fork a child to exec the ssh/ssh session */
         pid = fork();
         if (pid < 0) {
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
+            if (0 <= keypipe[0]) {
+                close(keypipe[0]);
+                close(keypipe[1]);
+            }
             prte_wait_cb_cancel(caddy->daemon);
             /* the callback that would have released this caddy will now
              * never fire */
@@ -1086,7 +1128,10 @@ static void process_launch_list(int fd, short args, void *cbdata)
 #endif
 
             /* do the ssh launch - this will exit if it fails */
-            ssh_child(caddy->argc, caddy->argv);
+            if (0 <= keypipe[1]) {
+                close(keypipe[1]);
+            }
+            ssh_child(caddy->argc, caddy->argv, keypipe[0]);
         } else { /* father */
                  // Put the child in a separate progress group
                  // - see comment in child section.
@@ -1099,6 +1144,32 @@ static void process_launch_list(int fd, short args, void *cbdata)
                 // We still need to track it.
             }
 #endif
+
+            /* Hand the child its key.  It is one short line, which a
+             * fresh pipe takes without blocking, and our end of the read
+             * side is still open while we write - so the write cannot fail
+             * with EPIPE however quickly the child goes away.  Closing the
+             * write side then gives the daemon the end of its stdin. */
+            if (0 <= keypipe[1]) {
+                ssize_t n = 0, len;
+                prte_dvm_key_to_hex(prte_dvm_key, keyhex);
+                keyhex[PRTE_DVM_KEY_HEXLEN] = '\n';
+                len = PRTE_DVM_KEY_HEXLEN + 1;
+                while (n < len) {
+                    ssize_t w = write(keypipe[1], keyhex + n, len - n);
+                    if (0 > w) {
+                        if (EINTR == errno) {
+                            continue;
+                        }
+                        /* the daemon will say it never got its key */
+                        break;
+                    }
+                    n += w;
+                }
+                prte_secure_zero(keyhex, sizeof(keyhex));
+                close(keypipe[1]);
+                close(keypipe[0]);
+            }
 
             /* indicate this daemon has been launched */
             caddy->daemon->state = PRTE_PROC_STATE_RUNNING;

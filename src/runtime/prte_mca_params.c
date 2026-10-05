@@ -663,6 +663,31 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_persistent);
 
+    /* A daemon's OOB port accepts a connection from anything that can reach
+     * it, and a connected daemon is trusted with launch commands - so every
+     * connection begins with each end proving it holds the DVM key.  Turning
+     * that off is for a launch agent that cannot deliver the key (one that
+     * does not forward stdin to the command it runs), and hands control of
+     * leaves daemons unable to tell their own peers from any other process
+     * that connects to their ports.  The HNP passes an "off"
+     * down to its daemons explicitly, so it has to be set only where prte
+     * runs. */
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_authenticate",
+                                      "Require every daemon to prove it holds the DVM's key before "
+                                      "other daemons will talk to it (default: true). Turning this "
+                                      "off leaves daemons unable to tell their own peers from any "
+                                      "other process that connects to their ports",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_oob_authenticate);
+
+    /* how a daemon launched by plm/ssh learns to read its key from stdin */
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "dvm_key_stdin",
+                                      "Read the DVM key from standard input at startup "
+                                      "(default: false). Set by the ssh launcher on the daemon "
+                                      "command line; not intended to be set by users",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_dvm_key_stdin);
+
     (void) pmix_mca_base_var_register("prte", "prte", "elastic", "mode",
                                       "Allow DVM to expand and contract as directed (default: false)",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
