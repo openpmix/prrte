@@ -208,7 +208,7 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
         PMIX_RELEASE(peer->send_msg);
     }
     PMIX_LIST_DESTRUCT(&peer->send_queue);
-    prte_oob_tcp_handshake_reset(&peer->hshake);
+    prte_oob_tcp_handshake_clear(&peer->hshake);
     PMIX_DESTRUCT(&peer->lock);
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_t, pmix_list_item_t, peer_cons, peer_des);
@@ -241,12 +241,30 @@ static void cop_cons(prte_oob_tcp_conn_op_t *cop)
 {
     cop->peer = NULL;
     memset(&cop->hshake, 0, sizeof(cop->hshake));
+    cop->sd = -1;
+    cop->pending = false;
+    memset(&cop->from, 0, sizeof(cop->from));
+    /* set only for an inbound connection, and armed only then */
+    memset(&cop->deadline, 0, sizeof(cop->deadline));
+    cop->deadline_active = false;
 }
 static void cop_des(prte_oob_tcp_conn_op_t *cop)
 {
-    prte_oob_tcp_handshake_reset(&cop->hshake);
+    if (cop->deadline_active) {
+        prte_event_del(&cop->deadline);
+        cop->deadline_active = false;
+    }
+    prte_oob_tcp_pending_release(cop);
+    prte_oob_tcp_handshake_clear(&cop->hshake);
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, pmix_object_t, cop_cons, cop_des);
+
+static void phost_cons(prte_oob_tcp_pending_host_t *ph)
+{
+    memset(&ph->addr, 0, sizeof(ph->addr));
+    ph->count = 0;
+}
+PMIX_CLASS_INSTANCE(prte_oob_tcp_pending_host_t, pmix_list_item_t, phost_cons, NULL);
 
 static void nicaddr_cons(prte_oob_tcp_nicaddr_t *ptr)
 {

@@ -49,6 +49,10 @@ struct prte_oob_tcp_listener_t {
     int sd;
     uint16_t port;
     struct sockaddr_storage addr; // the address this socket is bound to
+    /* event mode: re-arms `event` after a pause when accept() has run out
+     * of descriptors or memory - see accept_error_is_exhaustion() */
+    prte_event_t backoff;
+    bool backoff_active;
 };
 typedef struct prte_oob_tcp_listener_t prte_oob_tcp_listener_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_listener_t);

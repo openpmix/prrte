@@ -95,6 +95,11 @@ PRTE_EXPORT int prte_ess_base_bootstrap(bool *is_controller);
  * is a malloc'd string the caller frees. */
 PRTE_EXPORT int prte_ess_base_bootstrap_peer_uri(pmix_rank_t rank, char **uri);
 
+/* Read the DVM key from the file the bootstrap configuration names
+ * (DVMKeyFile).  Every daemon of a bootstrapped DVM does this: with no
+ * launcher, nothing else can hand it the key. */
+PRTE_EXPORT int prte_ess_base_bootstrap_key(void);
+
 typedef struct {
     pmix_list_item_t super;
     char *signame;

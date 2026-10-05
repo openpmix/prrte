@@ -109,6 +109,17 @@ typedef struct {
                                pretend not to have noticed, so that the next message for it goes
                                through a fresh connection attempt instead of being short-circuited
                                by the node already being marked down (-1 => nobody) */
+
+    /* Inbound connections that have not yet completed the connect handshake.
+     * The listening port answers anything that can reach it, and each such
+     * connection holds a descriptor until the handshake ends - so the number
+     * held, and the time each may hold one, are bounded; otherwise idle
+     * connections alone exhaust the daemon's descriptors. */
+    int handshake_timeout;    /**< seconds an inbound connection has to finish its handshake */
+    int max_pending;          /**< inbound handshakes held at once (0 => from the fd limit) */
+    int max_pending_per_host; /**< ... of which from any one source address */
+    int num_pending;          /**< inbound handshakes in progress now */
+    pmix_list_t pending_hosts; /**< prte_oob_tcp_pending_host_t: per-source counts */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 

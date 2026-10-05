@@ -49,10 +49,13 @@
 #    include <netdb.h>
 #endif
 #include <ctype.h>
+#include <limits.h>
+#include <sys/resource.h>
 
 #include "src/include/prte_socket_errno.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
@@ -108,7 +111,12 @@ prte_oob_base_t prte_oob_base = {
     .keepalive_time = 0,
     .keepalive_intvl = 0,
     .retry_delay = 0,
-    .max_recon_attempts = 0
+    .max_recon_attempts = 0,
+    .handshake_timeout = 30,
+    .max_pending = 0,
+    .max_pending_per_host = 64,
+    .num_pending = 0,
+    .pending_hosts = PMIX_LIST_STATIC_INIT(prte_oob_base.pending_hosts)
 };
 
 /* Does @c intf survive the address-family, virtual-interface and
@@ -373,6 +381,17 @@ void prte_oob_close(void)
      * is kept valgrind-clean, so tear down everything prte_oob_open and
      * prte_oob_register built */
     PMIX_LIST_DESTRUCT(&prte_oob_base.listeners);
+    /* the per-address handshake counts; an accept still in flight (there
+     * should be none by now) finds no entry and decrements nothing */
+    {
+        prte_oob_tcp_pending_host_t *ph, *next;
+        PMIX_LIST_FOREACH_SAFE(ph, next, &prte_oob_base.pending_hosts,
+                               prte_oob_tcp_pending_host_t) {
+            pmix_list_remove_item(&prte_oob_base.pending_hosts, &ph->super);
+            PMIX_RELEASE(ph);
+        }
+    }
+    prte_oob_base.num_pending = 0;
 
     if (NULL != prte_oob_base.tcp_static_ports) {
         PMIx_Argv_free(prte_oob_base.tcp_static_ports);
@@ -644,6 +663,33 @@ int prte_oob_register(void)
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.silent_loss_vpid);
 
+    /* An inbound connection is given this long to prove it belongs to the
+     * DVM.  A daemon's own handshake takes a few round trips; the bound is
+     * generous because the handshake is serviced by the progress thread,
+     * which may be busy with a launch when a connection arrives. */
+    prte_oob_base.handshake_timeout = 30;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_handshake_timeout",
+                                        "Seconds an inbound daemon connection has to complete its "
+                                        "connect handshake before it is dropped (default: 30)",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.handshake_timeout);
+
+    prte_oob_base.max_pending = 0;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_max_pending",
+                                        "Maximum number of inbound daemon connections that may be "
+                                        "part way through their connect handshake at once "
+                                        "(default: 0 => half the process's file-descriptor limit)",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.max_pending);
+
+    prte_oob_base.max_pending_per_host = 64;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_max_pending_per_host",
+                                        "Maximum number of inbound daemon connections from any one "
+                                        "address that may be part way through their connect "
+                                        "handshake at once (default: 64; 0 => no per-address limit)",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.max_pending_per_host);
+
     prte_oob_base.max_msg_size = 100;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
                                         "Max size of an OOB message in Megabytes(default = 100)",
@@ -686,6 +732,140 @@ void prte_oob_simulate_node_failure(void)
  */
 static void recv_handler(int sd, short flags, void *user);
 
+/* Do two socket addresses name the same host?  The port is not part of the
+ * question: every connection from a host comes from a different one. */
+static bool same_host(const struct sockaddr_storage *a, const struct sockaddr_storage *b)
+{
+    if (a->ss_family != b->ss_family) {
+        return false;
+    }
+    if (AF_INET == a->ss_family) {
+        return 0 == memcmp(&((const struct sockaddr_in *) a)->sin_addr,
+                           &((const struct sockaddr_in *) b)->sin_addr, sizeof(struct in_addr));
+    }
+#if PRTE_ENABLE_IPV6
+    if (AF_INET6 == a->ss_family) {
+        return 0 == memcmp(&((const struct sockaddr_in6 *) a)->sin6_addr,
+                           &((const struct sockaddr_in6 *) b)->sin6_addr,
+                           sizeof(struct in6_addr));
+    }
+#endif
+    return false;
+}
+
+/* The most inbound handshakes held at once.  Each holds a descriptor, and
+ * running out of descriptors breaks everything else the daemon does, so the
+ * default leaves half the process's allowance for everything else. */
+static int max_pending(void)
+{
+    struct rlimit rl;
+
+    if (0 < prte_oob_base.max_pending) {
+        return prte_oob_base.max_pending;
+    }
+    if (0 == getrlimit(RLIMIT_NOFILE, &rl) && RLIM_INFINITY != rl.rlim_cur
+        && 0 < rl.rlim_cur) {
+        if ((rlim_t) INT_MAX < rl.rlim_cur / 2) {
+            return INT_MAX;
+        }
+        return (rl.rlim_cur < 128) ? 64 : (int) (rl.rlim_cur / 2);
+    }
+    return 4096;
+}
+
+/* Count an inbound connection against the limits on handshakes in progress,
+ * or say it may not be taken on.  Running out of room is reported once per
+ * episode, not once per connection: a backlog is exactly when there would be a
+ * great many of them. */
+static bool pending_admit(prte_oob_tcp_conn_op_t *op, const struct sockaddr *addr)
+{
+    static bool warned = false;
+    prte_oob_tcp_pending_host_t *ph, *found = NULL;
+    size_t alen;
+
+    alen = (AF_INET6 == addr->sa_family) ? sizeof(struct sockaddr_in6)
+                                         : sizeof(struct sockaddr_in);
+    memcpy(&op->from, addr, alen);
+
+    PMIX_LIST_FOREACH(ph, &prte_oob_base.pending_hosts, prte_oob_tcp_pending_host_t) {
+        if (same_host(&ph->addr, &op->from)) {
+            found = ph;
+            break;
+        }
+    }
+    if (prte_oob_base.num_pending >= max_pending()
+        || (0 < prte_oob_base.max_pending_per_host && NULL != found
+            && found->count >= prte_oob_base.max_pending_per_host)) {
+        if (!warned) {
+            warned = true;
+            pmix_output(0, "%s refusing connections: too many are part way through their "
+                        "handshake (%d in all, at most %d allowed; at most %d from one "
+                        "address, latest from %s). The next refusal is reported only once "
+                        "this has cleared.",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_oob_base.num_pending,
+                        max_pending(), prte_oob_base.max_pending_per_host,
+                        pmix_net_get_hostname(addr));
+        }
+        return false;
+    }
+    if (0 == prte_oob_base.num_pending) {
+        warned = false;
+    }
+    if (NULL == found) {
+        found = PMIX_NEW(prte_oob_tcp_pending_host_t);
+        memcpy(&found->addr, &op->from, sizeof(found->addr));
+        pmix_list_append(&prte_oob_base.pending_hosts, &found->super);
+    }
+    ++found->count;
+    ++prte_oob_base.num_pending;
+    op->pending = true;
+    return true;
+}
+
+void prte_oob_tcp_pending_release(prte_oob_tcp_conn_op_t *op)
+{
+    prte_oob_tcp_pending_host_t *ph;
+
+    if (!op->pending) {
+        return;
+    }
+    op->pending = false;
+    if (0 < prte_oob_base.num_pending) {
+        --prte_oob_base.num_pending;
+    }
+    PMIX_LIST_FOREACH(ph, &prte_oob_base.pending_hosts, prte_oob_tcp_pending_host_t) {
+        if (same_host(&ph->addr, &op->from)) {
+            if (0 >= --ph->count) {
+                pmix_list_remove_item(&prte_oob_base.pending_hosts, &ph->super);
+                PMIX_RELEASE(ph);
+            }
+            break;
+        }
+    }
+}
+
+/* An inbound connection has had its time to complete the handshake and has
+ * not.  The handshake is read on the progress thread, as is this, so the
+ * read event is not running - take it off the base, then drop the
+ * connection. */
+static void handshake_expired(int fd, short flags, void *cbdata)
+{
+    prte_oob_tcp_conn_op_t *op = (prte_oob_tcp_conn_op_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
+
+    PMIX_ACQUIRE_OBJECT(op);
+    op->deadline_active = false;
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                        "%s dropping a connection from %s: its handshake did not complete "
+                        "within %d seconds",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        pmix_net_get_hostname((struct sockaddr *) &op->from),
+                        prte_oob_base.handshake_timeout);
+    prte_event_del(&op->ev);
+    CLOSE_THE_SOCKET(op->sd);
+    PMIX_RELEASE(op);
+}
+
 /* Called by prte_oob_tcp_accept() and connection_handler() on
  * a socket that has been accepted.  This call finishes processing the
  * socket, including setting socket options and registering for the
@@ -694,11 +874,27 @@ static void recv_handler(int sd, short flags, void *user);
  */
 void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *addr)
 {
+    prte_oob_tcp_conn_op_t *op;
+    struct timeval tv;
     int flags;
 
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s accept_connection: %s:%d\n", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         pmix_net_get_hostname(addr), pmix_net_get_port(addr));
+
+    /* Until it has proved it belongs to this DVM, a connection is a
+     * descriptor held for something that may never complete.  So there
+     * is a bound on how many are held at once - overall, and from any one
+     * address - and a deadline for each to finish its handshake.  Without
+     * them idle connections alone used up every descriptor, and the listener
+     * that met EMFILE shut itself down for good. */
+    op = PMIX_NEW(prte_oob_tcp_conn_op_t);
+    if (!pending_admit(op, addr)) {
+        PMIX_RELEASE(op);
+        shutdown(accepted_fd, 2);
+        close(accepted_fd);
+        return;
+    }
 
     /* setup socket options */
     prte_oob_tcp_set_socket_options(accepted_fd);
@@ -708,12 +904,15 @@ void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *ad
      * inherit the listener's non-blocking flag (on Linux it never does).  A
      * blocking one would park the progress thread in recv() until the far end
      * sent the rest, which anything able to reach the port could simply never
-     * do.  So a socket that cannot be made non-blocking is not used at all. */
+     * do.  So a socket that cannot be made non-blocking is not used at all.
+     * Nor is one that would leak into the programs this daemon starts. */
     flags = fcntl(accepted_fd, F_GETFL, 0);
-    if (0 > flags || 0 > fcntl(accepted_fd, F_SETFL, flags | O_NONBLOCK)) {
-        pmix_output(0, "%s accept_connection: unable to make socket %d non-blocking: %s (%d)",
+    if (0 > flags || 0 > fcntl(accepted_fd, F_SETFL, flags | O_NONBLOCK)
+        || PMIX_SUCCESS != pmix_fd_set_cloexec(accepted_fd)) {
+        pmix_output(0, "%s accept_connection: unable to set up socket %d: %s (%d)",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), accepted_fd,
                     strerror(prte_socket_errno), prte_socket_errno);
+        PMIX_RELEASE(op);
         shutdown(accepted_fd, 2);
         close(accepted_fd);
         return;
@@ -722,7 +921,17 @@ void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *ad
     /* use a one-time event to wait for receipt of peer's
      *  process ident message to complete this connection
      */
-    PRTE_ACTIVATE_TCP_ACCEPT_STATE(accepted_fd, addr, recv_handler);
+    op->sd = accepted_fd;
+    prte_event_set(prte_event_base, &op->ev, accepted_fd, PRTE_EV_READ, recv_handler, op);
+    if (0 < prte_oob_base.handshake_timeout) {
+        tv.tv_sec = prte_oob_base.handshake_timeout;
+        tv.tv_usec = 0;
+        prte_event_evtimer_set(prte_event_base, &op->deadline, handshake_expired, op);
+        prte_event_evtimer_add(&op->deadline, &tv);
+        op->deadline_active = true;
+    }
+    PMIX_POST_OBJECT(op);
+    prte_event_add(&op->ev, 0);
 }
 
 /*

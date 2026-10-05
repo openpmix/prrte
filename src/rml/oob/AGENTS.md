@@ -111,6 +111,83 @@ Five rules that are not obvious from the struct:
   field (or the padding) undefined ships uninitialized bytes and trips every
   memory checker.
 
+## A connection proves it holds the DVM key before anything else
+
+**GOLDEN RULE: nothing outside the handshake record may change at the word of
+a connection that has not finished authenticating.** No peer is created,
+looked up for modification, adopted by `retry()`, or nacked into giving up its
+own attempt until the far end has proved it holds the DVM key
+(`src/util/prte_dvm_key.h`). The listening port answers whatever connects to
+it, and before this existed all it took to become "connected daemon of rank
+N" - which is then trusted with launch commands - was naming the DVM's
+namespace and version, both of which are plainly visible (the namespace and
+the HNP's contact are on every prted's command line, the version is what
+`prte --version` prints). A daemon of a different DVM, a leftover process
+from an earlier one, or anything else that connected could be taken for a
+peer, and the connection-race handling below could then replace a working
+connection on its say-so.
+
+The exchange, ahead of the IDENT exchange it leaves untouched
+(`tcp_peer_auth_step()` in `oob_tcp_connection.c`):
+
+| | dialer | listener |
+|---|---|---|
+| 1 | `AUTH_HELLO` (its nonce) | |
+| 2 | | `AUTH_CHALLENGE` (its nonce, its proof) |
+| 3 | checks the proof, then `AUTH_RESPONSE` (its proof) **and the IDENT** | |
+| 4 | | checks the proof; only now reads the IDENT |
+
+Rules that are easy to break:
+
+- **A proof covers both nonces, both ranks, the namespace and a role byte**
+  (`prte_oob_tcp_auth_mac()`). Drop the role byte and a listener's proof can be
+  sent back to it as a dialer's; drop the ranks and a daemon's own proof,
+  carried between two of its connections, could pass for another's.
+  If what goes into a proof changes, change `PRTE_OOB_TCP_AUTH_LABEL` too.
+- **The dialer gives its proof only after checking the listener's.** Whatever
+  answers at a dead daemon's address learns nothing.
+- **The proven rank is the identity.** The IDENT must name the rank the HELLO
+  claimed and the RESPONSE proved (`hs->auth.rank`), and a HELLO claiming a
+  sentinel rank (above `PMIX_RANK_VALID`) or our own is refused - a sentinel
+  matches other ranks in a non-strict comparison.
+- **Authentication messages have exact sizes**, checked on the header before
+  anything is allocated (`tcp_peer_read_handshake`), like everything else an
+  unproven peer says.
+- **`prte_oob_tcp_handshake_reset()` keeps `hs->auth`; `_clear()` wipes it.**
+  The handshake is now several messages on one connection, so the per-message
+  reset must not forget how far authentication got. A new socket
+  (`tcp_peer_create_socket`) and a destructor clear.
+- **Refusals are rate-limited** (`auth_refuse()`): a misconfigured process
+  can produce them endlessly, so only the first few reach
+  `pmix_output(0, ...)`.
+- `prte_oob_authenticate=0` makes every connection start out proven and sends
+  the bare IDENT, as before. It exists for launch agents that cannot forward
+  stdin; the HNP passes it to its daemons explicitly
+  (`prte_plm_base_prted_append_basic_args`).
+
+This authenticates endpoints; it does not encrypt or sign the stream after
+it, and every daemon of the DVM holds the key.
+
+## An inbound connection may hold a descriptor only so long, and only so many may
+
+Every inbound connection that has not finished its handshake holds a
+descriptor for something that may never complete it. So
+`prte_oob_accept_connection()` counts it (`pending_admit()`: overall against
+`prte_oob_max_pending`, default half the fd limit, and per source address
+against `prte_oob_max_pending_per_host`, default 64), refuses it when either
+is full, and arms a deadline (`prte_oob_handshake_timeout`, default 30 s,
+`handshake_expired()`). The conn op's destructor undoes both - it is the one
+place every ending passes through - so a new exit path needs no bookkeeping
+of its own.
+
+And when `accept()` still fails for want of descriptors or memory
+(`accept_error_is_exhaustion()`: `EMFILE`, `ENFILE`, `ENOBUFS`, `ENOMEM`), the
+listener **pauses and resumes** - the listen thread sleeps a second watching
+only its stop pipe, the event listener takes its event off the base and
+re-adds it from `listener->backoff`. It used to close for good, and idle
+connections alone got it there; after that no daemon could ever join, rejoin
+or reconnect. Do not "simplify" that back into a close.
+
 ## The connect handshake is read without waiting
 
 The listening port accepts a connection from anything that can reach it, and
@@ -499,7 +576,14 @@ only loopback is refused on the master too). Those two must run before
 interface list down for the rest of the binary. Also covered: the
 handshake reader (`test_handshake_never_waits`, over a `socketpair`: a valid
 IDENT one byte at a time, a lone byte, a foreign namespace, a payload too
-short for its ack flag), the dial guard (`test_stale_attempt_does_not_dial`),
+short for its ack flag), authentication (`test_handshake_authenticates`: an
+IDENT with no proof, a wrong proof, a reflected proof, an IDENT for a rank
+other than the one proved, sentinel and self ranks, a mis-sized message, a
+listener with the wrong key; `test_dialer_checks_listener`: an honest
+challenge gets the proof and the IDENT, a listener without the key gets
+nothing), the
+pending-handshake bounds and deadline (`test_pending_handshakes_bounded`, over
+real loopback TCP), the dial guard (`test_stale_attempt_does_not_dial`),
 and the
 queued-send drain above (`test_queued_sends_complete_on_close`), driven through
 `prte_oob_tcp_peer_close()` because that is the one give-up path reachable
@@ -513,4 +597,10 @@ DVM at the default radix 64 is flat), a payload large enough to force partial
 writes and reads, the message-size guard, interface include/exclude actually
 binding (and binding *only* the selected interface, on both the HNP and a
 prted, checked with `ss`), a loopback-only single-node job, and the teardown
-path when a daemon dies under a live DVM.
+path when a daemon dies under a live DVM. `test_rml_auth`, at the end of that
+phase, connects to the HNP with `contrib/dockerswarm/oobpoke.py` from a node
+outside the DVM, using what `ps` shows on one inside it: an IDENT with the
+right namespace and version but no key is turned away, 500 idle connections
+do not keep a growing daemon out, and an HNP run out of descriptors takes a
+new daemon once they come back. Against the code before authentication, the
+first and last of those fail.

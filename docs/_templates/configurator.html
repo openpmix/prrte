@@ -101,6 +101,7 @@ function displayfile()
    get_field("DVMControllerHost",document.config.controller_host) + "<br>" +
    get_field("DVMPort",document.config.dvm_port) + "<br>" +
    get_field("DVMNodes",document.config.dvm_nodes) + "<br>" +
+   get_field("DVMKeyFile",document.config.dvm_keyfile) + "<br>" +
    get_field("DVMNetworks",document.config.dvm_networks) + "<br>" +
    get_field("DVMNetmask",document.config.dvm_netmask) + "<br>" +
    get_field("DVMIPVersion",document.config.dvm_ipversion) + "<br>" +
@@ -191,6 +192,16 @@ and will initialize itself accordingly.
 The single well-known TCP port upon which every DVM process listens for its
 peers - the controller for connections from its <I>prted</I> daemons, and each
 <I>prted</I> for connections from its peer daemons.
+<BR>
+<BR>
+
+<b>DVMKeyFile</b>: <input type="text" name="dvm_keyfile" value="">
+<BR>
+Required. The file holding the DVM's key - 64 hexadecimal digits,
+the same on every node - which each daemon must prove it holds before the
+others will treat it as a daemon. It must be owned by the user the daemons
+run as and readable by nobody else (mode 0600 or 0400). Create one with
+<I>umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' &gt; prte.key</I>
 <BR>
 <BR>
 

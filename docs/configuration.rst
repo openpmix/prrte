@@ -68,6 +68,25 @@ be provided in place of hostnames if desired. The regular expression can consist
 a simple comma-delimited list of hostnames, or a comma-delimited list of hostname
 ranges (e.g., "linux0,linux[2-10]"), or a PMIx "native" regular expression.
 
+``DVMKeyFile=<path> (required)`` names the file holding the DVM's key.
+Every daemon of a DVM must prove to the others that it holds this key before
+they will treat it as a daemon, which is how a daemon tells its own peers
+from any other process that connects to ``DVMPort`` - a daemon of a
+different DVM, a leftover process from an earlier one, or anything else
+that reaches the port. A ``prte``-started DVM
+creates its key afresh and hands it to each daemon privately; a bootstrapped
+DVM has no launcher to do that, so every node reads the key from this file.
+The file must hold exactly 64 hexadecimal digits (a 256-bit key), be the same
+on every node, be a regular file rather than a symbolic link, be owned by the
+user the daemons run as, and be readable by nobody else (mode ``0600`` or
+``0400``). A daemon refuses to start if the entry is missing or the file does
+not meet these requirements. One way to create a key::
+
+   umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /etc/prte/prte.key
+
+Distribute it to the nodes so that it stays private to that user - not on a
+world-readable shared file system.
+
 ``DVMNetworks=<comma-delimited list> (default: all)`` restricts the networks
 the runtime uses for inter-node (daemon-to-daemon) communication. Entries may be
 interface names or CIDR subnets (e.g., "eth0,10.0.0.0/8"). When omitted, the

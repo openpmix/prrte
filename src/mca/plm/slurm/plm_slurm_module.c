@@ -64,6 +64,7 @@
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/prte_dvm_key.h"
 #include "src/util/pmix_fd.h"
 
 #include "constants.h"
@@ -926,6 +927,14 @@ static int plm_slurm_start_proc(int argc, char **argv,
                 unsetenv(tmp[n]);
             }
             PMIx_Argv_free(tmp);
+        }
+
+        /* ...except the DVM key, which goes nowhere else: srun hands its
+         * environment to every daemon it starts, and an environment is
+         * private to its own user and root - unlike the command line we
+         * put everything else on */
+        if (prte_oob_authenticate) {
+            prte_dvm_key_setenv(&environ);
         }
 
         /* Figure out the basenames for the libdir and bindir.  There

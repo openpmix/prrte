@@ -2435,6 +2435,17 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         pmix_argv_append(argc, argv, "1");
     }
 
+    /* Tell the daemon if connections between daemons are NOT to be
+     * authenticated - it would otherwise wait for a key nobody sends it, and
+     * refuse every peer that does not prove it holds one.  The key itself
+     * never goes here: a command line is visible to anything on the node
+     * (see src/util/prte_dvm_key.h for how it does travel). */
+    if (!prte_oob_authenticate) {
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "prte_oob_authenticate");
+        pmix_argv_append(argc, argv, "0");
+    }
+
     /* look for any envars that relate to us and pass
      * them along on the cmd line - unless we were told not to */
     offset = strlen("PRTE_MCA_");

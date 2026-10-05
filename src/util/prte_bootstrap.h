@@ -47,6 +47,7 @@ typedef struct {
     uint32_t retry_max_delay; /* DVMRetryMaxDelay seconds (default 5) */
     char *dvmtmpdir;       /* DVMTempDir */
     char *sessiontmpdir;   /* SessionTmpDir */
+    char *keyfile;         /* DVMKeyFile: where every daemon reads the DVM key */
 } prte_bootstrap_config_t;
 
 /**
