@@ -67,6 +67,7 @@ MULTINODE_HARNESS = \
 	dockerswarm/groupinv.c \
 	dockerswarm/jobinfo.c \
 	dockerswarm/mpinoop.c \
+	dockerswarm/oobpoke.py \
 	dockerswarm/peerinfo.c \
 	dockerswarm/pmixloop.c \
 	dockerswarm/proctable.c \

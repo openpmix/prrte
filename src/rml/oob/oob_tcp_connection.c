@@ -76,6 +76,8 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
+#include "src/util/prte_dvm_key.h"
+#include "src/util/prte_hmac.h"
 
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_common.h"
@@ -85,6 +87,9 @@
 static void tcp_peer_event_init(prte_oob_tcp_peer_t *peer);
 static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer);
 static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name);
+static int tcp_peer_send_hello(prte_oob_tcp_peer_t *peer);
+static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_handshake_t *hs,
+                              prte_oob_tcp_hdr_t *hdr, char *msg);
 static int tcp_peer_send_blocking(int sd, void *data, size_t size);
 static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs);
 static void tcp_peer_connected(prte_oob_tcp_peer_t *peer);
@@ -120,8 +125,8 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
     prte_oob_tcp_set_socket_options(peer->sd);
 
     /* a new socket gets a new handshake - forget whatever part of a reply
-     * the last one had received */
-    prte_oob_tcp_handshake_reset(&peer->hshake);
+     * the last one had received, and how far it had got proving who it was */
+    prte_oob_tcp_handshake_clear(&peer->hshake);
 
     /* setup event callbacks */
     tcp_peer_event_init(peer);
@@ -681,8 +686,8 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         peer->recv_ev_active = true;
     }
 
-    /* send our globally unique process identifier to the peer */
-    if (PRTE_SUCCESS == (rc = tcp_peer_send_connect_ack(peer))) {
+    /* open the handshake: prove ourselves, and ask the peer to */
+    if (PRTE_SUCCESS == (rc = tcp_peer_send_hello(peer))) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
     } else {
         /* The connection came up and died before it would take a few hundred
@@ -696,7 +701,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * first's socket out from under its armed events. */
         pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s prte_tcp_peer_try_connect: "
-                            "tcp_peer_send_connect_ack to proc %s on %s:%d failed: %s (%d)",
+                            "handshake to proc %s on %s:%d failed: %s (%d)",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                             pmix_net_get_hostname((struct sockaddr *) &addr->addr),
                             pmix_net_get_port((struct sockaddr *) &addr->addr), prte_strerror(rc), rc);
@@ -833,6 +838,268 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     }
     free(msg);
     return rc;
+}
+
+/* The label every proof starts with.  Changing what goes into a proof means
+ * changing this too, so that two builds which disagree about it fail the
+ * handshake visibly rather than by coincidence. */
+#define PRTE_OOB_TCP_AUTH_LABEL "prte-oob-auth-1"
+
+/* how many refused connections are reported before the rest go quiet */
+#define PRTE_OOB_TCP_AUTH_REFUSALS_REPORTED 8
+
+static void store_be32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t) (v >> 24);
+    p[1] = (uint8_t) (v >> 16);
+    p[2] = (uint8_t) (v >> 8);
+    p[3] = (uint8_t) v;
+}
+
+void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer, pmix_rank_t listener,
+                           const uint8_t *dialer_nonce, const uint8_t *listener_nonce, uint8_t *mac)
+{
+    uint8_t buf[1 + sizeof(PRTE_OOB_TCP_AUTH_LABEL) + 1 + PMIX_MAX_NSLEN + 8
+                + 2 * PRTE_OOB_TCP_AUTH_LEN];
+    size_t n = 0, len;
+
+    /* Which end made the proof comes first.  The two ends' proofs are
+     * otherwise over identical inputs, and without it the listener's proof
+     * could simply be sent back to it as the dialer's. */
+    buf[n++] = (uint8_t) role;
+    len = sizeof(PRTE_OOB_TCP_AUTH_LABEL) - 1;
+    memcpy(buf + n, PRTE_OOB_TCP_AUTH_LABEL, len);
+    n += len;
+    /* length-prefixed, so that no namespace and rank can be made to look
+     * like another */
+    len = strnlen(nspace, PMIX_MAX_NSLEN);
+    buf[n++] = (uint8_t) len;
+    memcpy(buf + n, nspace, len);
+    n += len;
+    /* Both ranks.  A daemon only ever dials a rank other than its own, so a
+     * proof made by a daemon dialing out can never pass for one made by
+     * a connection dialing in to that same daemon - which, with the ranks
+     * left out, two connections carrying a daemon's own nonces back to it
+     * could otherwise produce. */
+    store_be32(buf + n, dialer);
+    n += 4;
+    store_be32(buf + n, listener);
+    n += 4;
+    memcpy(buf + n, dialer_nonce, PRTE_OOB_TCP_AUTH_LEN);
+    n += PRTE_OOB_TCP_AUTH_LEN;
+    memcpy(buf + n, listener_nonce, PRTE_OOB_TCP_AUTH_LEN);
+    n += PRTE_OOB_TCP_AUTH_LEN;
+
+    prte_hmac_sha256(prte_dvm_key, sizeof(prte_dvm_key), buf, n, mac);
+}
+
+/* send one authentication message: a header and one or two 32-byte fields */
+static int tcp_peer_send_auth(int sd, prte_oob_tcp_msg_type_t type, pmix_rank_t dst,
+                              const uint8_t *first, const uint8_t *second)
+{
+    prte_oob_tcp_hdr_t hdr;
+    char msg[sizeof(prte_oob_tcp_hdr_t) + 2 * PRTE_OOB_TCP_AUTH_LEN];
+    size_t hdrsize, plen;
+
+    plen = (NULL == second) ? PRTE_OOB_TCP_AUTH_LEN : 2 * PRTE_OOB_TCP_AUTH_LEN;
+    /* zeroed - see the note in tcp_peer_send_connect_ack */
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.origin = PRTE_PROC_MY_NAME->rank;
+    hdr.dst = dst;
+    PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, PRTE_PROC_MY_NAME->nspace);
+    hdr.type = type;
+    hdr.epoch = prte_rml_boot_epoch;
+    hdr.nbytes = (uint32_t) plen;
+    hdrsize = PRTE_OOB_TCP_HDR_LEN(&hdr);
+    MCA_OOB_TCP_HDR_HTON(&hdr);
+
+    memcpy(msg, &hdr, hdrsize);
+    memcpy(msg + hdrsize, first, PRTE_OOB_TCP_AUTH_LEN);
+    if (NULL != second) {
+        memcpy(msg + hdrsize + PRTE_OOB_TCP_AUTH_LEN, second, PRTE_OOB_TCP_AUTH_LEN);
+    }
+    return tcp_peer_send_blocking(sd, msg, hdrsize + plen);
+}
+
+/* Open the handshake on a connection we dialed.  With authentication off
+ * this is the IDENT the handshake has always started with; otherwise it is
+ * a HELLO carrying our nonce, and the IDENT follows once the peer has
+ * proved itself (tcp_peer_auth_step). */
+static int tcp_peer_send_hello(prte_oob_tcp_peer_t *peer)
+{
+    prte_oob_tcp_auth_t *au = &peer->hshake.auth;
+    int rc;
+
+    au->rank = peer->name.rank;
+    if (!prte_oob_authenticate) {
+        au->phase = PRTE_OOB_TCP_AUTH_DONE;
+        return tcp_peer_send_connect_ack(peer);
+    }
+    if (!prte_dvm_key_ready) {
+        /* every path that starts a daemon establishes the key first, so
+         * this is a defect - but fail closed rather than prove nothing */
+        pmix_output(0, "%s cannot connect to %s: this process holds no DVM key",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
+        return PRTE_ERR_AUTHENTICATION_FAILED;
+    }
+    rc = prte_dvm_key_nonce(au->dialer_nonce);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = tcp_peer_send_auth(peer->sd, MCA_OOB_TCP_AUTH_HELLO, peer->name.rank,
+                            au->dialer_nonce, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    au->phase = PRTE_OOB_TCP_AUTH_HELLO_SENT;
+    return PRTE_SUCCESS;
+}
+
+/* Refuse a connection that failed to authenticate, and say so once.
+ *
+ * Disposes of the connection the way every failure of
+ * prte_oob_tcp_peer_recv_connect_ack does: the peer when we dialed it - which
+ * moves it on to its next address, or reports it unreachable - and the bare
+ * socket when it dialed us. */
+static int auth_refuse(prte_oob_tcp_peer_t *peer, int sd, const char *why)
+{
+    /* Any process that reaches the port by mistake produces one of these,
+     * and a misconfigured one may keep doing so, so only the first few are
+     * reported out loud. */
+    static unsigned int refusals = 0;
+    const char *who = (NULL == peer) ? pmix_fd_get_peer_name(sd) : PRTE_NAME_PRINT(&peer->name);
+
+    if (PRTE_OOB_TCP_AUTH_REFUSALS_REPORTED > refusals) {
+        ++refusals;
+        pmix_output(0, "%s refusing a daemon connection %s %s: %s%s",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == peer) ? "from" : "to", who, why,
+                    (PRTE_OOB_TCP_AUTH_REFUSALS_REPORTED == refusals)
+                        ? " (any more are reported only at verbose level)"
+                        : "");
+    } else {
+        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                            "%s refusing a daemon connection %s %s: %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == peer) ? "from" : "to",
+                            who, why);
+    }
+    if (NULL != peer) {
+        peer->state = MCA_OOB_TCP_FAILED;
+        prte_oob_tcp_peer_close(peer);
+    } else {
+        CLOSE_THE_SOCKET(sd);
+    }
+    return PRTE_ERR_AUTHENTICATION_FAILED;
+}
+
+/* Take one authentication message off a connection that has not finished
+ * proving itself.  `msg` is the payload the reader handed over, and this
+ * frees it.
+ *
+ * PRTE_ERR_WOULD_BLOCK means the step went through and the next message is
+ * awaited - including, once both ends are proven, the IDENT, which may well
+ * be sitting in the socket already; the caller is called again for it when
+ * the socket is next readable, which it will be at once if so.  Any other
+ * result has disposed of the connection.
+ *
+ * Nothing is changed outside the handshake record until the far end has
+ * proved itself: no peer is created, looked up for changing, or disturbed.
+ * That is the point - the connection-race handling that follows the IDENT
+ * can close a working connection, and must never do so at the word of
+ * somebody who does not hold the key. */
+static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_handshake_t *hs,
+                              prte_oob_tcp_hdr_t *hdr, char *msg)
+{
+    prte_oob_tcp_auth_t *au = &hs->auth;
+    uint8_t mine[PRTE_SHA256_DIGEST_LEN], theirs[PRTE_SHA256_DIGEST_LEN];
+    int rc;
+
+    if (NULL == peer) {
+        /* a connection somebody dialed to us */
+        if (PRTE_OOB_TCP_AUTH_NONE == au->phase) {
+            if (MCA_OOB_TCP_AUTH_HELLO != hdr->type) {
+                free(msg);
+                return auth_refuse(NULL, sd, "it did not begin by authenticating");
+            }
+            /* A rank it may claim.  The sentinels match other ranks in a
+             * non-strict comparison, and a daemon never dials itself. */
+            if (PMIX_RANK_VALID < hdr->origin || PRTE_PROC_MY_NAME->rank == hdr->origin
+                || PRTE_PROC_MY_NAME->rank != hdr->dst) {
+                free(msg);
+                return auth_refuse(NULL, sd, "it named ranks no daemon of this DVM would");
+            }
+            au->rank = hdr->origin;
+            memcpy(au->dialer_nonce, msg, PRTE_OOB_TCP_AUTH_LEN);
+            free(msg);
+            rc = prte_dvm_key_nonce(au->listener_nonce);
+            if (PRTE_SUCCESS != rc) {
+                CLOSE_THE_SOCKET(sd);
+                return rc;
+            }
+            prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, au->rank,
+                                  PRTE_PROC_MY_NAME->rank, au->dialer_nonce, au->listener_nonce,
+                                  mine);
+            rc = tcp_peer_send_auth(sd, MCA_OOB_TCP_AUTH_CHALLENGE, au->rank, au->listener_nonce,
+                                    mine);
+            if (PRTE_SUCCESS != rc) {
+                CLOSE_THE_SOCKET(sd);
+                return rc;
+            }
+            au->phase = PRTE_OOB_TCP_AUTH_CHALLENGE_SENT;
+            return PRTE_ERR_WOULD_BLOCK;
+        }
+        if (PRTE_OOB_TCP_AUTH_CHALLENGE_SENT == au->phase) {
+            if (MCA_OOB_TCP_AUTH_RESPONSE != hdr->type || au->rank != hdr->origin) {
+                free(msg);
+                return auth_refuse(NULL, sd, "it did not answer the challenge");
+            }
+            prte_oob_tcp_auth_mac('D', PRTE_PROC_MY_NAME->nspace, au->rank,
+                                  PRTE_PROC_MY_NAME->rank, au->dialer_nonce, au->listener_nonce,
+                                  mine);
+            memcpy(theirs, msg, sizeof(theirs));
+            free(msg);
+            if (!prte_secure_equal(mine, theirs, sizeof(mine))) {
+                return auth_refuse(NULL, sd, "it does not hold this DVM's key");
+            }
+            au->phase = PRTE_OOB_TCP_AUTH_DONE;
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                                "%s connection from rank %u authenticated",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) au->rank);
+            return PRTE_ERR_WOULD_BLOCK;
+        }
+        free(msg);
+        return auth_refuse(NULL, sd, "its handshake is out of order");
+    }
+
+    /* a connection we dialed: the only thing to await is the challenge */
+    if (PRTE_OOB_TCP_AUTH_HELLO_SENT != au->phase || MCA_OOB_TCP_AUTH_CHALLENGE != hdr->type
+        || peer->name.rank != hdr->origin) {
+        free(msg);
+        return auth_refuse(peer, sd, "the peer did not answer with a challenge");
+    }
+    memcpy(au->listener_nonce, msg, PRTE_OOB_TCP_AUTH_LEN);
+    memcpy(theirs, msg + PRTE_OOB_TCP_AUTH_LEN, sizeof(theirs));
+    free(msg);
+    prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank,
+                          peer->name.rank, au->dialer_nonce, au->listener_nonce, mine);
+    if (!prte_secure_equal(mine, theirs, sizeof(mine))) {
+        /* Whatever answered at this daemon's address is not one of ours.
+         * Nothing of the key has been given away: our proof is sent only
+         * after theirs checks out. */
+        return auth_refuse(peer, sd, "whatever answered does not hold this DVM's key");
+    }
+    prte_oob_tcp_auth_mac('D', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank,
+                          peer->name.rank, au->dialer_nonce, au->listener_nonce, mine);
+    /* our proof, and straight behind it the IDENT - the peer reads them in
+     * that order, and acts on the IDENT only once the proof has checked out */
+    if (PRTE_SUCCESS != tcp_peer_send_auth(sd, MCA_OOB_TCP_AUTH_RESPONSE, peer->name.rank, mine,
+                                           NULL)
+        || PRTE_SUCCESS != tcp_peer_send_connect_ack(peer)) {
+        peer->state = MCA_OOB_TCP_FAILED;
+        prte_oob_tcp_peer_close(peer);
+        return PRTE_ERR_UNREACH;
+    }
+    au->phase = PRTE_OOB_TCP_AUTH_DONE;
+    return PRTE_ERR_WOULD_BLOCK;
 }
 
 /*
@@ -998,10 +1265,10 @@ void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer)
 
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s tcp_peer_complete_connect: "
-                        "sending ack to %s",
+                        "opening handshake with %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)));
 
-    if (tcp_peer_send_connect_ack(peer) == PRTE_SUCCESS) {
+    if (tcp_peer_send_hello(peer) == PRTE_SUCCESS) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
         pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s tcp_peer_complete_connect: "
@@ -1014,7 +1281,7 @@ void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer)
             prte_event_add(&peer->recv_event, 0);
         }
     } else {
-        pmix_output(0, "%s tcp_peer_complete_connect: unable to send connect ack to %s",
+        pmix_output(0, "%s tcp_peer_complete_connect: unable to open handshake with %s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)));
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);
@@ -1150,6 +1417,10 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
                         (NULL == pr) ? "UNKNOWN" : PRTE_NAME_PRINT(&pr->name), sd);
 
     peer = pr;
+    /* with authentication off, every connection starts out as proven */
+    if (!prte_oob_authenticate) {
+        hs->auth.phase = PRTE_OOB_TCP_AUTH_DONE;
+    }
     /* a reply is only expected on a connection we dialed and are waiting on */
     if (NULL != peer && MCA_OOB_TCP_CONNECT_ACK != peer->state) {
         /* handshake broke down - abort this connection */
@@ -1187,6 +1458,22 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
     msg = hs->payload;
     hs->payload = NULL;
     prte_oob_tcp_handshake_reset(hs);
+
+    /* Until the far end has proved it holds the DVM key, the only thing it
+     * can send that is acted on is the next step of that proof. */
+    if (PRTE_OOB_TCP_AUTH_DONE != hs->auth.phase) {
+        return tcp_peer_auth_step(peer, sd, hs, &hdr, msg);
+    }
+    /* Once it has, it speaks for the rank it proved and no other - and an
+     * authentication message from here on is out of order. */
+    if (MCA_OOB_TCP_IDENT != hdr.type && MCA_OOB_TCP_PROBE != hdr.type) {
+        free(msg);
+        return auth_refuse(peer, sd, "its handshake is out of order");
+    }
+    if (prte_oob_authenticate && hs->auth.rank != hdr.origin) {
+        free(msg);
+        return auth_refuse(peer, sd, "it named a rank other than the one it proved");
+    }
 
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s connect-ack recvd from %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -1567,10 +1854,19 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
 
 void prte_oob_tcp_handshake_reset(prte_oob_tcp_handshake_t *hs)
 {
+    prte_oob_tcp_auth_t auth = hs->auth;
+
     if (NULL != hs->payload) {
         free(hs->payload);
     }
     memset(hs, 0, sizeof(*hs));
+    hs->auth = auth;
+}
+
+void prte_oob_tcp_handshake_clear(prte_oob_tcp_handshake_t *hs)
+{
+    prte_oob_tcp_handshake_reset(hs);
+    prte_secure_zero(&hs->auth, sizeof(hs->auth));
 }
 
 /*
@@ -1675,6 +1971,25 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
             hs->sized = true;
             return PRTE_SUCCESS;
         }
+        nbytes = hs->hdr.nbytes;
+        /* an authentication message is one or two nonce/proof-sized fields,
+         * exactly - and an exact size is all the checking a length from an
+         * unproven peer gets before it sizes an allocation */
+        if (MCA_OOB_TCP_AUTH_HELLO == hs->hdr.type || MCA_OOB_TCP_AUTH_RESPONSE == hs->hdr.type
+            || MCA_OOB_TCP_AUTH_CHALLENGE == hs->hdr.type) {
+            if (((MCA_OOB_TCP_AUTH_CHALLENGE == hs->hdr.type) ? 2 : 1) * PRTE_OOB_TCP_AUTH_LEN
+                != nbytes) {
+                pmix_output(0, "%s tcp_peer_recv_connect_ack: an authentication message of "
+                            "%" PRIsize_t " bytes is malformed",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nbytes);
+                return PRTE_ERR_COMM_FAILURE;
+            }
+            if (NULL == (hs->payload = (char *) malloc(nbytes + 1))) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+            hs->sized = true;
+            goto payload;
+        }
         if (MCA_OOB_TCP_IDENT != hs->hdr.type) {
             pmix_output(0, "tcp_peer_recv_connect_ack: invalid header type: %d\n",
                         hs->hdr.type);
@@ -1683,7 +1998,6 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
 
         /* an ident's payload is the ack flag followed by a version string,
          * and everything after this reads the flag */
-        nbytes = hs->hdr.nbytes;
         if (sizeof(uint16_t) > nbytes) {
             pmix_output(0, "%s tcp_peer_recv_connect_ack: a handshake of %" PRIsize_t
                         " bytes is too short to carry an acknowledgement",
@@ -1705,6 +2019,7 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
         hs->sized = true;
     }
 
+payload:
     if (NULL == hs->payload) {
         /* a probe */
         return PRTE_SUCCESS;

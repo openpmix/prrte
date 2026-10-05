@@ -71,6 +71,7 @@ int lsberrno;
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/prte_dvm_key.h"
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -394,6 +395,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
         free(lib_base);
     }
 
+    /* The DVM key rides in the daemons' environment, the one channel to
+     * them that is private to the DVM's user - unlike the command line above. */
+    if (prte_oob_authenticate) {
+        prte_dvm_key_setenv(&env);
+    }
+
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.
      * So, we disable the SIGCHLD handler of libevent for the duration of
@@ -432,6 +439,7 @@ cleanup:
         PMIx_Argv_free(argv);
     }
     if (NULL != env) {
+        prte_dvm_key_scrub_array(env);
         PMIx_Argv_free(env);
     }
     if (NULL != nodelist_argv) {

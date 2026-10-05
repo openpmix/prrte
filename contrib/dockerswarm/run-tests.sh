@@ -413,14 +413,22 @@ else
     bootstrap_vol() { docker run --rm -v "$VOLUME":/opt/prte "$IMAGE" sh -c "$1" 2>/dev/null; }
 fi
 
-bootstrap_write_conf() {   # $1 = controller host, $2 = DVMNodes list
+# Every daemon of a bootstrapped DVM proves it belongs with a key it reads from
+# the file DVMKeyFile names - there is no launcher to hand it one - so the
+# configuration carries one, made fresh each time, beside prte.conf (whose
+# location the cluster preflight may change, so it is not fixed here).
+# $3 = "nokey" leaves it out.
+bootstrap_write_conf() {   # $1 = controller host, $2 = DVMNodes list, [$3 = nokey]
+    local keyline="DVMKeyFile=$BOOT_CONF.key\\n"
+    [ "${3:-}" = nokey ] && keyline=""
     bootstrap_vol "[ -f $BOOT_CONF.testsave ] || cp $BOOT_CONF $BOOT_CONF.testsave;
-                   printf 'ClusterName=swarm\nDVMControllerHost=%s\nDVMPort=7817\nDVMNodes=%s\nDVMRadix=64\n' \
+                   (umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n' > $BOOT_CONF.key);
+                   printf 'ClusterName=swarm\nDVMControllerHost=%s\nDVMPort=7817\nDVMNodes=%s\nDVMRadix=64\n$keyline' \
                        '$1' '$2' > $BOOT_CONF" || return 1
     return 0
 }
 bootstrap_restore_conf() {
-    bootstrap_vol "[ -f $BOOT_CONF.testsave ] && mv $BOOT_CONF.testsave $BOOT_CONF; true"
+    bootstrap_vol "[ -f $BOOT_CONF.testsave ] && mv $BOOT_CONF.testsave $BOOT_CONF; rm -f $BOOT_CONF.key; true"
 }
 # start prted --bootstrap on the given nodes, controller first (it has to be
 # listening before the others try to reach it)
@@ -6438,8 +6446,14 @@ test_ess() {
     # stderr goes nowhere and the message -- which the code does emit --
     # cannot be read from here. The flag changes nothing about the path
     # under test, only whether we can see what it wrote.
+    #
+    # A daemon also needs its DVM key before it gets as far as its identity,
+    # and here no launcher is handing it one, so the case hands it a key the
+    # way plm/slurm does - in PRTE_DVM_KEY.  Any well-formed key will do: the
+    # daemon is refused long before it could try one on a peer.
     cleanup_swarm
-    out=$(ONT 2 'timeout -k 5 20 prted --leave-session-attached \
+    out=$(ONT 2 'PRTE_DVM_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n") \
+                 timeout -k 5 20 prted --leave-session-attached \
                      --prtemca ess_base_nspace bogus-dvm \
                      --prtemca ess_base_vpid not-a-number \
                      --prtemca prte_hnp_uri "bogus-dvm.0;tcp://127.0.0.1:1" 2>&1' 2>&1)
@@ -7731,6 +7745,146 @@ test_rml() {
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
+    cleanup_swarm
+
+    test_rml_auth
+}
+
+# The DVM's OOB port answers whatever connects to it, and a connected daemon
+# is trusted with launch commands.  It used to be enough to name the DVM's
+# namespace - which, with the HNP's contact URI, is on every prted's command
+# line.  Each daemon now proves it holds a per-DVM key before another will
+# treat it as a daemon, and the listener no longer gives way under
+# connections that never get that far.
+#
+# The foreign connection here is oobpoke.py, run from a node that is not in
+# the DVM and given exactly what `ps` shows on one that is.
+OOBPOKE=/tmp/oobpoke.py
+# the HNP's OOB contact, read off a running prted's command line on node $1
+hnp_uri_from_ps() {
+    ON "$1" 'p=$(pgrep -x prted | head -1); [ -n "$p" ] && tr "\0" "\n" < /proc/$p/cmdline | grep -A1 "^prte_hnp_uri\$" | tail -1' 2>/dev/null | tr -d '\r'
+}
+# wait for a foreground prte writing to $1 to say it is ready
+wait_dvm_ready() {
+    local n=0
+    while [ "$n" -lt 30 ]; do
+        RUN "grep -q 'DVM ready' $1" >/dev/null 2>&1 && return 0
+        sleep 1; n=$((n+1))
+    done
+    return 1
+}
+test_rml_auth() {
+    local out uri n fds ver
+
+    banner "rml/oob: a connection that cannot prove it holds the DVM key is refused"
+    if ! ON 5 'command -v python3' >/dev/null 2>&1; then
+        skp "oob authentication cases (no python3 on node5 to run the test client)"
+        return
+    fi
+    COPY_IN "$PRTE_ROOT/contrib/dockerswarm/oobpoke.py" 5 "$OOBPOKE" >/dev/null 2>&1
+    cleanup_swarm
+    RUN 'rm -f /tmp/oobauth.out /tmp/oobauth.uri' >/dev/null 2>&1
+    RUN_BG /tmp/oobauth.out 'prte --host node1:1,node2:1,node3:1 --report-uri /tmp/oobauth.uri --prtemca prte_elastic_mode 1'
+    if ! wait_dvm_ready /tmp/oobauth.out; then
+        bad "no DVM came up for the oob authentication cases: $(RUN 'tail -3 /tmp/oobauth.out' 2>&1 | tr '\n' ' ' | tail -c 200)"
+        cleanup_swarm
+        return
+    fi
+    uri=$(hnp_uri_from_ps 2)
+    if [ -z "$uri" ]; then
+        bad "could not read prte_hnp_uri off node2's prted command line"
+    else
+        ok "the HNP's contact is on node2's prted command line, as it always was"
+        # ...and the key is not: not on the command line, not in the
+        # environment, where any user of the node - or a process the daemon
+        # starts - could read it
+        out=$(ON 2 'p=$(pgrep -x prted | head -1); tr "\0" " " < /proc/$p/cmdline; echo; tr "\0" "\n" < /proc/$p/environ | grep -c "^PRTE_DVM_KEY=[0-9a-fA-F]"' 2>/dev/null)
+        echo "$out" | head -1 | grep -qE '[0-9a-fA-F]{64}' \
+            && bad "a 64-digit hex string - a DVM key - is on the prted command line" \
+            || ok "the DVM key is not on the prted command line"
+        [ "$(echo "$out" | tail -1 | tr -d ' \r')" = 0 ] \
+            && ok "...nor in the prted's environment" \
+            || bad "the prted kept PRTE_DVM_KEY in its environment"
+
+        # The version string the handshake used to check is just as
+        # visible: it is what `prte --version` prints.
+        ver=$(RUN 'prte --version 2>&1' 2>/dev/null | grep -m1 'PRRTE' | awk '{print $NF}' | tr -d '\r')
+        ON 5 "echo '$uri' > /tmp/hnp.uri" >/dev/null 2>&1
+        out=$(ON 5 "timeout 30 python3 $OOBPOKE ident /tmp/hnp.uri '$ver'" 2>&1)
+        echo "$out" | grep -q '^REPLY_BYTES=0$' && ! echo "$out" | grep -q '^OPEN$' \
+            && ok "a connection with the namespace, address and version but no key is turned away" \
+            || bad "the HNP took an unauthenticated IDENT ($ver): $(echo "$out" | tr '\n' ' ')"
+        RUN 'grep -q "did not begin by authenticating" /tmp/oobauth.out' \
+            && ok "...and the HNP says why it refused" \
+            || bad "the HNP did not report the refusal: $(RUN 'tail -3 /tmp/oobauth.out' 2>&1 | tr '\n' ' ' | tail -c 200)"
+        out=$(PRUN_URI /tmp/oobauth.uri -n 3 --map-by node hostname 2>&1)
+        [ "$(echo "$out" | grep -cE '^node[1-3]$')" = 3 ] \
+            && ok "the DVM is unaffected" \
+            || bad "the DVM stopped working after the refusal: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        banner "rml/oob: idle connections cannot keep a new daemon out"
+        # Hold far more idle connections than any one address may have in
+        # their handshake at once, and grow the DVM while they are held: the
+        # new daemon has to get through the same listener.
+        EXEC_SH_BG 5 "python3 $OOBPOKE hold /tmp/hnp.uri 500 40 > /tmp/hold.out 2>&1"
+        sleep 6
+        out=$(ON 5 'cat /tmp/hold.out' 2>/dev/null)
+        echo "$out" | grep -q '^HELD=' \
+            && ok "a client holds $(echo "$out" | sed -n 's/^HELD=//p') idle connections" \
+            || bad "the idle connections were not opened: $out"
+        out=$(RUN "timeout -k 5 60 elastic grow node4:1" 2>&1)
+        echo "$out" | grep -q 'SUCCESS' \
+            && ok "a new daemon joined while they were held" \
+            || bad "the DVM could not grow with the idle connections held: $(echo "$out" | tail -3 | tr '\n' ' ' | tail -c 250)"
+        RUN 'grep -q "part way through their handshake" /tmp/oobauth.out' \
+            && ok "...because the HNP bounded what any one address may hold" \
+            || bad "the HNP did not report bounding the idle connections"
+        out=$(PRUN_URI /tmp/oobauth.uri -n 4 --map-by node hostname 2>&1)
+        [ "$(echo "$out" | grep -cE '^node[1-4]$')" = 4 ] \
+            && ok "a job runs on all four nodes, the new one included" \
+            || bad "job after the idle connections: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        ON 5 'pkill -f oobpoke' >/dev/null 2>&1
+    fi
+    RUN 'timeout -k 5 30 pterm --dvm-uri file:/tmp/oobauth.uri' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "rml/oob: running out of descriptors pauses the listener, not closes it"
+    # The listener used to close itself for good at EMFILE, and idle
+    # connections were enough to get it there - after which no daemon could
+    # ever join, rejoin or reconnect.  Give the HNP a small descriptor
+    # allowance, lift the handshake limits that would otherwise prevent it,
+    # hold idle connections until accept() fails, and then ask a new daemon
+    # to join once they have gone.
+    RUN 'rm -f /tmp/oobfd.out /tmp/oobfd.uri' >/dev/null 2>&1
+    RUN_BG /tmp/oobfd.out 'ulimit -n 200; prte --host node1:1,node2:1 --report-uri /tmp/oobfd.uri --prtemca prte_elastic_mode 1 --prtemca prte_oob_max_pending 100000 --prtemca prte_oob_max_pending_per_host 0 --prtemca prte_oob_handshake_timeout 0'
+    if ! wait_dvm_ready /tmp/oobfd.out; then
+        bad "no DVM came up for the descriptor case: $(RUN 'tail -3 /tmp/oobfd.out' 2>&1 | tr '\n' ' ' | tail -c 200)"
+    else
+        uri=$(hnp_uri_from_ps 2)
+        ON 5 "echo '$uri' > /tmp/hnp.uri" >/dev/null 2>&1
+        EXEC_SH_BG 5 "python3 $OOBPOKE hold /tmp/hnp.uri 400 15 > /tmp/hold.out 2>&1"
+        sleep 6
+        fds=$(ON 1 'ls /proc/$(pgrep -x prte | head -1)/fd 2>/dev/null | wc -l' 2>/dev/null | tr -d ' \r')
+        if [ -n "$fds" ] && [ "$fds" -ge 195 ]; then
+            ok "the idle connections ran the HNP out of descriptors ($fds open)"
+        else
+            skp "the idle connections did not exhaust the HNP's descriptors ($fds open) - EMFILE not reached"
+        fi
+        n=0
+        while [ "$n" -lt 30 ] && ON 5 'pgrep -f "oobpoke.py hold"' >/dev/null 2>&1; do
+            sleep 1; n=$((n+1))
+        done
+        out=$(RUN "timeout -k 5 60 elastic grow node3:1" 2>&1)
+        echo "$out" | grep -q 'SUCCESS' \
+            && ok "a new daemon joined once the descriptors came back" \
+            || bad "the listener did not recover from EMFILE: $(echo "$out" | tail -3 | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN_URI /tmp/oobfd.uri -n 3 --map-by node hostname 2>&1)
+        [ "$(echo "$out" | grep -cE '^node[1-3]$')" = 3 ] \
+            && ok "a job runs on all three nodes" \
+            || bad "job after the descriptors ran out: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN 'timeout -k 5 30 pterm --dvm-uri file:/tmp/oobfd.uri' >/dev/null 2>&1
+    fi
+    ON 5 "pkill -f oobpoke; rm -f $OOBPOKE /tmp/hnp.uri /tmp/hold.out" >/dev/null 2>&1
     cleanup_swarm
 }
 
@@ -10470,6 +10624,19 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             [ "$(prted_count 1)" = 0 ] \
                 && ok "the controller refused to start on the bad config" \
                 || bad "controller started anyway on a config that cannot form a DVM"
+        fi
+
+        # Without a key the daemons could not tell each other from anything
+        # else that reaches the DVM port, so a configuration that names none
+        # must be refused - up front, on every node, with the remedy.
+        if bootstrap_write_conf "node1" "node2,node3,node4" nokey; then
+            out=$(RUN 'timeout 40 prted --bootstrap 2>&1' || true)
+            echo "$out" | grep -q "without a DVM key" \
+                && ok "a bootstrap config with no DVMKeyFile is rejected with a diagnostic" \
+                || bad "missing DVMKeyFile not reported: $(echo "$out" | tr '\n' ' ' | head -c 200)"
+            [ "$(prted_count 1)" = 0 ] \
+                && ok "the controller refused to start without a key" \
+                || bad "controller started without a DVM key"
         fi
         bootstrap_restore_conf
         cleanup_swarm

@@ -811,6 +811,8 @@ PRTE_EXPORT extern bool prte_dvm_ready;
 PRTE_EXPORT extern bool prte_dvm_started;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
+PRTE_EXPORT extern bool prte_oob_authenticate;
+PRTE_EXPORT extern bool prte_dvm_key_stdin;
 
 /* --- DVM launch fence --- */
 

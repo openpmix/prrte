@@ -135,8 +135,18 @@ This is the intricate part. It assembles the argv passed to the agent:
 Drains `launch_list` up to `num_concurrent` (default **128**) at a time.
 For each caddy it registers a `prte_wait_cb` (SIGCHLD → `ssh_wait_daemon`)
 on the daemon proc, then `fork()`s. The child calls **`ssh_child`**:
-redirect stdin from `/dev/null`, close inherited fds, reset signal
-handlers to default and unblock signals, then `execve` the agent. Both
+make stdin the read end of a pipe (or `/dev/null` with
+`prte_oob_authenticate` off), close inherited fds, reset signal
+handlers to default and unblock signals, then `execve` the agent. The
+parent writes the **DVM key** down that pipe and closes it: ssh carries
+it, over its encrypted channel, to the remote prted's stdin, which the
+prted reads before it daemonizes (`setup_launch` adds
+`--prtemca prte_dvm_key_stdin 1` to tell it to). That is the one route to
+the remote daemon that stays private to the DVM's user - the remote
+command is the ssh process's argv here and the shell's there, both
+visible to `ps` - so do not move the key onto the command line, and an
+agent that cannot forward stdin cannot launch an authenticated DVM. See
+`src/util/prte_dvm_key.h`. Both
 sides `setpgid` the child into its own process group so a `Ctrl-C` to
 the HNP doesn't `SIGINT` the ssh processes (which would litter the
 session dir and lose orted diagnostics). The parent records the ssh

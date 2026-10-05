@@ -71,8 +71,11 @@
 #include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_if.h"
+#include "src/util/prte_dvm_key.h"
+#include "src/util/prte_hmac.h"
 
 #include "src/pmix/pmix-internal.h"
+#include "src/event/event-internal.h"
 #include "src/rml/rml.h"
 #include "src/rml/oob/oob.h"
 #include "src/rml/oob/oob_tcp.h"
@@ -758,6 +761,125 @@ static bool fd_is_open(int fd)
     return (-1 != fcntl(fd, F_GETFD) || EBADF != errno);
 }
 
+/* an authentication message from `origin`: a header and one or two fields */
+static size_t build_auth(char *out, prte_oob_tcp_msg_type_t type, pmix_rank_t origin,
+                         pmix_rank_t dst, const uint8_t *first, const uint8_t *second)
+{
+    prte_oob_tcp_hdr_t hdr;
+    size_t hlen, len;
+
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.origin = origin;
+    hdr.dst = dst;
+    hdr.type = type;
+    hdr.epoch = 1;
+    PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, PRTE_PROC_MY_NAME->nspace);
+    hdr.nbytes = (NULL == second) ? PRTE_OOB_TCP_AUTH_LEN : 2 * PRTE_OOB_TCP_AUTH_LEN;
+    hlen = PRTE_OOB_TCP_HDR_LEN(&hdr);
+    MCA_OOB_TCP_HDR_HTON(&hdr);
+    memcpy(out, &hdr, hlen);
+    len = hlen;
+    memcpy(out + len, first, PRTE_OOB_TCP_AUTH_LEN);
+    len += PRTE_OOB_TCP_AUTH_LEN;
+    if (NULL != second) {
+        memcpy(out + len, second, PRTE_OOB_TCP_AUTH_LEN);
+        len += PRTE_OOB_TCP_AUTH_LEN;
+    }
+    return len;
+}
+
+/* read one handshake message off the blocking end of a pair: its header in
+ * host order, and its payload into `payload` (at most `max` bytes) */
+static bool read_message(int fd, prte_oob_tcp_hdr_t *hdr, uint8_t *payload, size_t max)
+{
+    size_t have = 0, want;
+    ssize_t n;
+
+    memset(hdr, 0, sizeof(*hdr));
+    want = PRTE_OOB_TCP_HDR_FIXED;
+    while (have < want) {
+        n = read(fd, (char *) hdr + have, want - have);
+        if (0 >= n) {
+            return false;
+        }
+        have += (size_t) n;
+        if (PRTE_OOB_TCP_HDR_FIXED == have) {
+            want = PRTE_OOB_TCP_HDR_LEN(hdr);
+        }
+    }
+    MCA_OOB_TCP_HDR_NTOH(hdr);
+    if (hdr->nbytes > max) {
+        return false;
+    }
+    for (have = 0; have < hdr->nbytes; have += (size_t) n) {
+        n = read(fd, payload + have, hdr->nbytes - have);
+        if (0 >= n) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* How a test dialer answers the listener's challenge */
+#define ANSWER_HONEST  0
+#define ANSWER_WRONG   1   // a proof made with the wrong key
+#define ANSWER_REFLECT 2   // the listener's own proof, sent back to it
+
+/* Act as a dialer claiming `rank` against the listener reading sv[0]:
+ * HELLO, take the CHALLENGE, check the listener's proof, and answer as told.
+ * Returns what the listener made of the answer. */
+static int authenticate(int sv[2], prte_oob_tcp_handshake_t *hs, pmix_rank_t rank, int how,
+                        bool *listener_proved)
+{
+    uint8_t dnonce[PRTE_OOB_TCP_AUTH_LEN], payload[2 * PRTE_OOB_TCP_AUTH_LEN];
+    uint8_t expect[PRTE_SHA256_DIGEST_LEN], proof[PRTE_SHA256_DIGEST_LEN];
+    char wire[PMIX_MAX_NSLEN + 512];
+    prte_oob_tcp_hdr_t hdr;
+    size_t len;
+    int rc;
+
+    *listener_proved = false;
+    memset(dnonce, 0x5a, sizeof(dnonce));
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_HELLO, rank, PRTE_PROC_MY_NAME->rank, dnonce, NULL);
+    if ((ssize_t) len != write(sv[1], wire, len)) {
+        return PRTE_ERROR;
+    }
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], hs, &hdr);
+    if (PRTE_ERR_WOULD_BLOCK != rc) {
+        return rc;
+    }
+    if (!read_message(sv[1], &hdr, payload, sizeof(payload))
+        || MCA_OOB_TCP_AUTH_CHALLENGE != hdr.type || 2 * PRTE_OOB_TCP_AUTH_LEN != hdr.nbytes) {
+        return PRTE_ERROR;
+    }
+    prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, rank, PRTE_PROC_MY_NAME->rank, dnonce,
+                          payload, expect);
+    *listener_proved = (0 == memcmp(expect, payload + PRTE_OOB_TCP_AUTH_LEN, sizeof(expect)));
+
+    if (ANSWER_REFLECT == how) {
+        memcpy(proof, payload + PRTE_OOB_TCP_AUTH_LEN, sizeof(proof));
+    } else {
+        prte_oob_tcp_auth_mac('D', PRTE_PROC_MY_NAME->nspace, rank, PRTE_PROC_MY_NAME->rank,
+                              dnonce, payload, proof);
+        if (ANSWER_WRONG == how) {
+            proof[0] ^= 0x01;
+        }
+    }
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_RESPONSE, rank, PRTE_PROC_MY_NAME->rank, proof, NULL);
+    if ((ssize_t) len != write(sv[1], wire, len)) {
+        return PRTE_ERROR;
+    }
+    return prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], hs, &hdr);
+}
+
+static bool peer_recorded(pmix_rank_t rank)
+{
+    pmix_proc_t p;
+
+    PMIX_LOAD_PROCID(&p, PRTE_PROC_MY_NAME->nspace, rank);
+    return (NULL != prte_oob_tcp_peer_lookup(&p));
+}
+
 static int test_handshake_never_waits(void)
 {
     int failures = 0, sv[2], rc = PRTE_ERROR;
@@ -766,14 +888,18 @@ static int test_handshake_never_waits(void)
     prte_oob_tcp_handshake_t hs;
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
-    bool early = false;
+    bool early = false, proved = false;
 
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
     PRTE_PROC_MY_NAME->rank = 0;
     memset(&hs, 0, sizeof(hs));
 
-    /* a well-formed ident, one byte at a time */
+    /* a well-formed ident, one byte at a time - once the dialer has proved
+     * itself, which is the only time an ident is listened to */
     CHECK("socketpair", make_pair(sv));
+    CHECK("the dialer authenticated",
+          PRTE_ERR_WOULD_BLOCK == authenticate(sv, &hs, 3, ANSWER_HONEST, &proved));
+    CHECK("and so did the listener", proved);
     len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 0);
     for (i = 0; i < len; i++) {
         CHECK("wrote a byte", 1 == write(sv[1], wire + i, 1));
@@ -787,7 +913,9 @@ static int test_handshake_never_waits(void)
     CHECK("every partial handshake answered 'not yet'", !early);
     CHECK("the complete handshake was accepted", PRTE_SUCCESS == rc);
     CHECK("and names its sender", 3 == hdr.origin && MCA_OOB_TCP_IDENT == hdr.type);
-    CHECK("the record was left empty", NULL == hs.payload && 0 == hs.hdr_rcvd && !hs.sized);
+    CHECK("the record was left ready for another message",
+          NULL == hs.payload && 0 == hs.hdr_rcvd && !hs.sized);
+    prte_oob_tcp_handshake_clear(&hs);
     peer = prte_oob_tcp_peer_lookup(&(pmix_proc_t){.nspace = "prte-test-dvm", .rank = 3});
     CHECK("a peer was recorded for the sender", NULL != peer);
     if (NULL != peer) {
@@ -804,7 +932,7 @@ static int test_handshake_never_waits(void)
           PRTE_ERR_WOULD_BLOCK == prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr));
     CHECK("nor does a second look with nothing new",
           PRTE_ERR_WOULD_BLOCK == prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr));
-    prte_oob_tcp_handshake_reset(&hs);
+    prte_oob_tcp_handshake_clear(&hs);
     close(sv[0]);
     close(sv[1]);
 
@@ -816,7 +944,7 @@ static int test_handshake_never_waits(void)
     CHECK("a foreign namespace is refused", PRTE_ERR_CONNECTION_REFUSED == rc);
     CHECK("and the connection disposed of", !fd_is_open(sv[0]));
     CHECK("with nothing allocated for it", NULL == hs.payload);
-    prte_oob_tcp_handshake_reset(&hs);
+    prte_oob_tcp_handshake_clear(&hs);
     close(sv[1]);
 
     /* a payload too short to hold the ack flag is refused, not over-read */
@@ -826,11 +954,356 @@ static int test_handshake_never_waits(void)
     rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
     CHECK("a one-byte ident payload is refused", PRTE_SUCCESS != rc && PRTE_ERR_WOULD_BLOCK != rc);
     CHECK("and the connection disposed of", !fd_is_open(sv[0]));
-    prte_oob_tcp_handshake_reset(&hs);
+    prte_oob_tcp_handshake_clear(&hs);
     close(sv[1]);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_handshake_never_waits\n");
+    }
+    return failures;
+}
+
+/* Nothing that cannot prove it holds the DVM key is treated as a daemon.
+ *
+ * The listening port answers whatever connects to it, and before
+ * authentication the only thing that told a daemon of this DVM from any other
+ * connection was the DVM's namespace - which is on every prted's command
+ * line.  Each case here is a way of not proving it, and each must be refused
+ * with the connection closed and no peer recorded: recording one, or letting
+ * an unproven IDENT reach the connection-race handling, is what let a foreign
+ * connection stand in for a daemon or knock a real one off its connection.
+ */
+static int test_handshake_authenticates(void)
+{
+    int failures = 0, sv[2], rc;
+    char wire[PMIX_MAX_NSLEN + 512];
+    uint8_t nonce[PRTE_OOB_TCP_AUTH_LEN], key[PRTE_DVM_KEY_LEN];
+    prte_oob_tcp_handshake_t hs;
+    prte_oob_tcp_hdr_t hdr;
+    size_t len;
+    bool proved;
+
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+    memset(&hs, 0, sizeof(hs));
+    memset(nonce, 0x33, sizeof(nonce));
+
+    /* an IDENT straight away - right namespace, right version: everything
+     * that used to be enough */
+    CHECK("socketpair", make_pair(sv));
+    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 0);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("an ident before authenticating is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    CHECK("with no peer recorded", !peer_recorded(3));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* a proof made with some other key */
+    CHECK("socketpair", make_pair(sv));
+    rc = authenticate(sv, &hs, 3, ANSWER_WRONG, &proved);
+    CHECK("the listener proved itself to an honest check", proved);
+    CHECK("a wrong proof is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    CHECK("with no peer recorded", !peer_recorded(3));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* the listener's own proof, handed back as the dialer's */
+    CHECK("socketpair", make_pair(sv));
+    rc = authenticate(sv, &hs, 3, ANSWER_REFLECT, &proved);
+    CHECK("a reflected proof is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* proved as rank 4, then claims to be rank 5 */
+    CHECK("socketpair", make_pair(sv));
+    rc = authenticate(sv, &hs, 4, ANSWER_HONEST, &proved);
+    CHECK("an honest proof is accepted", PRTE_ERR_WOULD_BLOCK == rc);
+    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 0);
+    ((prte_oob_tcp_hdr_t *) wire)->origin = htonl(5);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("an ident for another rank than the one proved is refused",
+          PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    CHECK("with no peer recorded for either rank", !peer_recorded(4) && !peer_recorded(5));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* ranks no daemon of this DVM would claim */
+    CHECK("socketpair", make_pair(sv));
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_HELLO, PMIX_RANK_WILDCARD, PRTE_PROC_MY_NAME->rank,
+                     nonce, NULL);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("the wildcard rank is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    CHECK("socketpair", make_pair(sv));
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_HELLO, PRTE_PROC_MY_NAME->rank,
+                     PRTE_PROC_MY_NAME->rank, nonce, NULL);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("our own rank is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* an authentication message of the wrong size is turned away on its
+     * header, before anything is allocated for it */
+    CHECK("socketpair", make_pair(sv));
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_HELLO, 3, PRTE_PROC_MY_NAME->rank, nonce, nonce);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("a HELLO of the wrong size is refused",
+          PRTE_SUCCESS != rc && PRTE_ERR_WOULD_BLOCK != rc);
+    CHECK("and the connection closed", !fd_is_open(sv[0]));
+    CHECK("with nothing allocated for it", NULL == hs.payload);
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* a listener holding a different key cannot prove itself */
+    memcpy(key, prte_dvm_key, sizeof(key));
+    CHECK("socketpair", make_pair(sv));
+    prte_dvm_key[0] ^= 0xff;
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_HELLO, 3, PRTE_PROC_MY_NAME->rank, nonce, NULL);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("the listener answered", PRTE_ERR_WOULD_BLOCK == rc);
+    memcpy(prte_dvm_key, key, sizeof(key));
+    {
+        uint8_t payload[2 * PRTE_OOB_TCP_AUTH_LEN], expect[PRTE_SHA256_DIGEST_LEN];
+        CHECK("its challenge arrived",
+              read_message(sv[1], &hdr, payload, sizeof(payload))
+                  && MCA_OOB_TCP_AUTH_CHALLENGE == hdr.type);
+        prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, 3, PRTE_PROC_MY_NAME->rank, nonce,
+                              payload, expect);
+        CHECK("and its proof fails against the real key",
+              0 != memcmp(expect, payload + PRTE_OOB_TCP_AUTH_LEN, sizeof(expect)));
+    }
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[0]);
+    close(sv[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_handshake_authenticates\n");
+    }
+    return failures;
+}
+
+/* A dialer gives its proof only to a listener that has given its own.
+ *
+ * Whatever answers at a daemon's address - some other process now on a port
+ * a dead daemon left behind, say - gets nothing from a dialer that checks the
+ * challenge first, and an honest challenge gets the proof and, straight
+ * behind it, the IDENT the connection has always opened with.
+ */
+static int test_dialer_checks_listener(void)
+{
+    int failures = 0, sv[2], rc;
+    char wire[PMIX_MAX_NSLEN + 512];
+    uint8_t lnonce[PRTE_OOB_TCP_AUTH_LEN], proof[PRTE_SHA256_DIGEST_LEN];
+    uint8_t payload[PMIX_MAX_NSLEN + 256], expect[PRTE_SHA256_DIGEST_LEN];
+    prte_oob_tcp_peer_t *peer;
+    prte_oob_tcp_hdr_t hdr;
+    size_t len;
+    ssize_t n;
+    char byte;
+
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+    memset(lnonce, 0x77, sizeof(lnonce));
+
+    /* an honest listener */
+    CHECK("socketpair", make_pair(sv));
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 6);
+    peer->sd = sv[0];
+    peer->state = MCA_OOB_TCP_CONNECT_ACK;
+    peer->hshake.auth.phase = PRTE_OOB_TCP_AUTH_HELLO_SENT;
+    peer->hshake.auth.rank = 6;
+    memset(peer->hshake.auth.dialer_nonce, 0x44, PRTE_OOB_TCP_AUTH_LEN);
+    prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank, 6,
+                          peer->hshake.auth.dialer_nonce, lnonce, proof);
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_CHALLENGE, 6, PRTE_PROC_MY_NAME->rank, lnonce, proof);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(peer, sv[0], &peer->hshake, NULL);
+    CHECK("an honest challenge is answered", PRTE_ERR_WOULD_BLOCK == rc);
+    CHECK("and authentication is done", PRTE_OOB_TCP_AUTH_DONE == peer->hshake.auth.phase);
+    CHECK("the response arrived",
+          read_message(sv[1], &hdr, payload, sizeof(payload))
+              && MCA_OOB_TCP_AUTH_RESPONSE == hdr.type);
+    prte_oob_tcp_auth_mac('D', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank, 6,
+                          peer->hshake.auth.dialer_nonce, lnonce, expect);
+    CHECK("carrying the dialer's proof", 0 == memcmp(expect, payload, sizeof(expect)));
+    CHECK("followed by the ident",
+          read_message(sv[1], &hdr, payload, sizeof(payload)) && MCA_OOB_TCP_IDENT == hdr.type
+              && PRTE_PROC_MY_NAME->rank == hdr.origin);
+    peer->sd = -1;
+    PMIX_RELEASE(peer);
+    close(sv[0]);
+    close(sv[1]);
+
+    /* something at the peer's address that does not hold the key */
+    CHECK("socketpair", make_pair(sv));
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 6);
+    peer->sd = sv[0];
+    peer->state = MCA_OOB_TCP_CONNECT_ACK;
+    peer->established = true;
+    peer->hshake.auth.phase = PRTE_OOB_TCP_AUTH_HELLO_SENT;
+    peer->hshake.auth.rank = 6;
+    memset(peer->hshake.auth.dialer_nonce, 0x44, PRTE_OOB_TCP_AUTH_LEN);
+    memset(proof, 0x99, sizeof(proof));
+    len = build_auth(wire, MCA_OOB_TCP_AUTH_CHALLENGE, 6, PRTE_PROC_MY_NAME->rank, lnonce, proof);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(peer, sv[0], &peer->hshake, NULL);
+    CHECK("a challenge without a valid proof is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+    CHECK("and the connection closed", 0 > peer->sd && !fd_is_open(sv[0]));
+    n = read(sv[1], &byte, 1);
+    CHECK("having sent it nothing", 0 == n);
+    PMIX_RELEASE(peer);
+    close(sv[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_dialer_checks_listener\n");
+    }
+    return failures;
+}
+
+/* An inbound connection cannot hold a descriptor for long, nor can many.
+ *
+ * Every connection that has not finished its handshake holds a descriptor,
+ * and anything able to reach the port can open them.  With nothing to bound
+ * that, idle connections used up every descriptor the daemon had - and the
+ * listener that met EMFILE closed itself for good.  Now each is counted
+ * against a limit overall and per address, and given a deadline.
+ */
+/* run the event loop until nothing is pending, for at most `secs` */
+static void run_until_none_pending(int secs)
+{
+    int i;
+
+    for (i = 0; i < secs * 100 && 0 < prte_oob_base.num_pending; i++) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_NONBLOCK);
+        if (0 < prte_oob_base.num_pending) {
+            usleep(10000);
+        }
+    }
+}
+
+/* a connected pair of loopback TCP sockets - what accept() really hands
+ * over, socket options and all */
+static bool tcp_pair(int sv[2])
+{
+    struct sockaddr_in sa;
+    socklen_t slen = sizeof(sa);
+    int ls;
+
+    sv[0] = sv[1] = -1;
+    ls = socket(AF_INET, SOCK_STREAM, 0);
+    if (0 > ls) {
+        return false;
+    }
+    memset(&sa, 0, sizeof(sa));
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (0 != bind(ls, (struct sockaddr *) &sa, sizeof(sa)) || 0 != listen(ls, 4)
+        || 0 != getsockname(ls, (struct sockaddr *) &sa, &slen)) {
+        close(ls);
+        return false;
+    }
+    sv[1] = socket(AF_INET, SOCK_STREAM, 0);
+    if (0 > sv[1] || 0 != connect(sv[1], (struct sockaddr *) &sa, sizeof(sa))) {
+        close(ls);
+        return false;
+    }
+    sv[0] = accept(ls, NULL, NULL);
+    close(ls);
+    return (0 <= sv[0]);
+}
+
+static int test_pending_handshakes_bounded(void)
+{
+    int failures = 0, sv[4][2], i;
+    struct sockaddr_in a, b;
+    int save_max = prte_oob_base.max_pending;
+    int save_host = prte_oob_base.max_pending_per_host;
+    int save_tmo = prte_oob_base.handshake_timeout;
+    prte_event_base_t *save_base = prte_event_base;
+
+    /* The accept path arms its events on the main base, and this test runs
+     * that base.  Give it one of its own, so that what it runs is only what
+     * it armed - not whatever an earlier test left queued there. */
+    prte_event_base = prte_event_base_create();
+    CHECK("event base", NULL != prte_event_base);
+
+    memset(&a, 0, sizeof(a));
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(0x7f000001);
+    a.sin_port = htons(40000);
+    b = a;
+    b.sin_addr.s_addr = htonl(0x7f000002);
+
+    CHECK("nothing pending to begin with", 0 == prte_oob_base.num_pending);
+
+    /* at most three in all, and two from any one address */
+    prte_oob_base.max_pending = 3;
+    prte_oob_base.max_pending_per_host = 2;
+    prte_oob_base.handshake_timeout = 0;
+    for (i = 0; i < 4; i++) {
+        CHECK("tcp pair", tcp_pair(sv[i]));
+    }
+    prte_oob_accept_connection(sv[0][0], (struct sockaddr *) &a);
+    prte_oob_accept_connection(sv[1][0], (struct sockaddr *) &a);
+    CHECK("two from one address are taken", 2 == prte_oob_base.num_pending
+          && fd_is_open(sv[0][0]) && fd_is_open(sv[1][0]));
+    fprintf(stdout, "-- the next case is refused; the message it prints is expected --\n");
+    prte_oob_accept_connection(sv[2][0], (struct sockaddr *) &a);
+    CHECK("a third from the same address is not", 2 == prte_oob_base.num_pending
+          && !fd_is_open(sv[2][0]));
+    prte_oob_accept_connection(sv[3][0], (struct sockaddr *) &b);
+    CHECK("one from another address is", 3 == prte_oob_base.num_pending && fd_is_open(sv[3][0]));
+    close(sv[2][1]);
+    CHECK("tcp pair", tcp_pair(sv[2]));
+    prte_oob_accept_connection(sv[2][0], (struct sockaddr *) &b);
+    CHECK("and none past the overall limit", 3 == prte_oob_base.num_pending
+          && !fd_is_open(sv[2][0]));
+    close(sv[2][1]);
+
+    /* a connection that goes away gives its place back */
+    for (i = 0; i < 4; i++) {
+        if (2 != i) {
+            close(sv[i][1]);
+        }
+    }
+    run_until_none_pending(5);
+    CHECK("closed connections are released", 0 == prte_oob_base.num_pending
+          && 0 == pmix_list_get_size(&prte_oob_base.pending_hosts));
+
+    /* and one that just sits there is dropped at its deadline */
+    prte_oob_base.handshake_timeout = 1;
+    CHECK("tcp pair", tcp_pair(sv[0]));
+    prte_oob_accept_connection(sv[0][0], (struct sockaddr *) &a);
+    CHECK("an idle connection is taken", 1 == prte_oob_base.num_pending);
+    run_until_none_pending(5);
+    CHECK("and dropped at its deadline", 0 == prte_oob_base.num_pending
+          && !fd_is_open(sv[0][0]));
+    close(sv[0][1]);
+
+    prte_oob_base.max_pending = save_max;
+    prte_oob_base.max_pending_per_host = save_host;
+    prte_oob_base.handshake_timeout = save_tmo;
+    prte_event_base_free(prte_event_base);
+    prte_event_base = save_base;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_pending_handshakes_bounded\n");
     }
     return failures;
 }
@@ -1098,6 +1571,11 @@ int main(void)
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
         return 1;
     }
+    /* daemons prove to each other that they hold the DVM key */
+    if (PRTE_SUCCESS != prte_dvm_key_generate()) {
+        fprintf(stderr, "prte_dvm_key_generate failed\n");
+        return 1;
+    }
 
     failures += test_names_collected();
     failures += test_duplicate_names_collapse();
@@ -1109,6 +1587,9 @@ int main(void)
     failures += test_subnet_resolves_and_dedupes();
     failures += test_listeners_bound_to_selection();
     failures += test_loopback_include_honored();
+    /* reports refusals with pmix_net_get_hostname(), so it too has to run
+     * before PMIx is finalized below */
+    failures += test_pending_handshakes_bounded();
     /* PMIx_server_finalize, at the end of this one, takes PMIx's utility
      * layer down with it - the interface list included - so anything that
      * needs a local interface has to run before it */
@@ -1117,6 +1598,10 @@ int main(void)
     failures += test_queued_sends_complete_on_close();
     failures += test_wire_header();
     failures += test_handshake_never_waits();
+    fprintf(stdout, "-- the next two tests drive refused connections; the messages they print "
+                    "are expected --\n");
+    failures += test_handshake_authenticates();
+    failures += test_dialer_checks_listener();
     failures += test_stale_attempt_does_not_dial();
 
     prte_finalize();
