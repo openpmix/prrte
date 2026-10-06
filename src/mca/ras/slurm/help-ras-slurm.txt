@@ -57,3 +57,39 @@ The variable was found, but a length check has failed, indicating that
 the envar is more than %d characters long. This indicates that the envar
 may be tainted. We will therefore not print it out. However, if you check
 and feel it is valid, then please adjust the length limit and try again.
+#
+[propagate-extra-bad-entry]
+The ras_slurm_propagate_extra parameter names further members of the job
+record to copy into an expander job, as comma-separated json_key:--option
+pairs, for example:
+
+    comment:--comment
+
+This entry cannot be used:
+
+    %s
+
+because %s.
+
+Requests for more resources are refused until the DVM is restarted with
+the entry corrected or removed.
+#
+[propagate-extra-refused]
+A request for more resources was refused. The ras_slurm_propagate_extra
+parameter has an entry that cannot be used:
+
+    %s
+
+because %s.
+
+Correct or remove the entry, then restart the DVM.
+#
+[propagate-extra-bad-member]
+The ras_slurm_propagate_extra parameter asks for the job record member
+
+    %s
+
+to be copied into the expander job, but %s.
+
+The request for more resources failed. Correct or remove the entry, then
+restart the DVM.

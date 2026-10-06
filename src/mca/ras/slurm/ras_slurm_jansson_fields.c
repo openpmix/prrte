@@ -32,6 +32,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/pmix_output.h"
+#include "src/util/prte_show_help.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_json_window.h"
@@ -188,6 +189,64 @@ static int prte_ras_slurm_read_job_times(json_t *job, time_t *start_time, time_t
 }
 
 /*
+ * Read a string member of the job into a hash table.
+ *
+ * Returns PRTE_ERR_NOT_FOUND for a member that is absent, null or empty, so
+ * optional job attributes can be omitted. A member that is present must be a
+ * string free of control characters.
+ *
+ * @param[in]  job           JSON job object.
+ * @param[in]  key           Field name to extract.
+ * @param[out] values_table  Destination hash table.
+ */
+static int prte_ras_slurm_get_json_str_field(json_t *job, const char *key, pmix_hash_table_t *values_table)
+{
+    json_t *str_field = json_object_get(job, key);
+    bool has_control_chars;
+    int err;
+
+    if(NULL == str_field || json_is_null(str_field)) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    if(!json_is_string(str_field)) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    const char *str = json_string_value(str_field);
+    size_t str_len = json_string_length(str_field);
+
+    if (0 == str_len) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    /* Do not accept string if contains control characters */
+    err = prte_ras_slurm_token_has_control_chars(str, str_len, &has_control_chars);
+
+    if(PRTE_SUCCESS == err && has_control_chars) {
+        err = PRTE_ERR_BAD_PARAM;
+    }
+
+    if(PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    char *str_dup = strdup(str);
+
+    if(NULL == str_dup) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    int pmix_err = pmix_hash_table_set_value_ptr(values_table, key, strlen(key), str_dup);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        free(str_dup);
+        return prte_pmix_convert_status(pmix_err);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
  * Extract selected Slurm job fields using JSON and populate a PMIx hash table.
  *
  * Retrieves the SLURM job ID from the environment, queries job information,
@@ -210,7 +269,6 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *s
     }
 
     int err = PRTE_SUCCESS;
-    int pmix_err = PMIX_SUCCESS;
 
     json_t *job = NULL;
 
@@ -221,8 +279,14 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *s
     }
 
     /* Built from the tables the loops below walk, so the two cannot drift. */
-    const char *keys[STR_FIELD_COUNT + NUM_OBJ_FIELD_COUNT + 3];
+    const char **keys = (const char **) calloc(STR_FIELD_COUNT + NUM_OBJ_FIELD_COUNT
+                                               + prte_ras_slurm_num_extra_fields + 3,
+                                               sizeof(*keys));
     size_t nkeys = 0;
+
+    if (NULL == keys) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
 
     for(size_t i = 0; i < NUM_OBJ_FIELD_COUNT; i++) {
         keys[nkeys++] = num_obj_fields[i];
@@ -230,6 +294,10 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *s
 
     for(size_t i = 0; i < STR_FIELD_COUNT; i++) {
         keys[nkeys++] = str_fields[i];
+    }
+
+    for(size_t i = 0; i < prte_ras_slurm_num_extra_fields; i++) {
+        keys[nkeys++] = prte_ras_slurm_extra_fields[i].key;
     }
 
     keys[nkeys++] = "start_time";
@@ -259,56 +327,54 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *s
     /* Find the string fields and add them to our values table */
 
     for(size_t i = 0; i < STR_FIELD_COUNT; i++) {
-
-        json_t *str_field = json_object_get(job, str_fields[i]);
-
-        if(NULL == str_field || json_is_null(str_field)) {
+        err = prte_ras_slurm_get_json_str_field(job, str_fields[i], values_table);
+        if (PRTE_ERR_NOT_FOUND == err) {
+            err = PRTE_SUCCESS;
             continue;
         }
-        if(!json_is_string(str_field)) {
-            err = PRTE_ERR_JSON_PARSE_FAILURE;
+        if (PRTE_SUCCESS != err) {
             PRTE_ERROR_LOG(err);
             goto cleanup;
         }
+    }
 
-        const char *str = json_string_value(str_field);
-        size_t str_len = json_string_length(str_field);
-        bool has_control_chars;
+    /* And the members ras_slurm_propagate_extra names, which take either shape */
+    for(size_t i = 0; i < prte_ras_slurm_num_extra_fields; i++) {
+        const char *key = prte_ras_slurm_extra_fields[i].key;
+        void *have = NULL;
+        json_t *member;
 
-        if (0 == str_len) {
+        /* A member a built-in reads is in the table already */
+        if (PMIX_SUCCESS == pmix_hash_table_get_value_ptr(values_table, key, strlen(key), &have)) {
             continue;
         }
 
-        /* Do not accept string if contains control characters */
-        err = prte_ras_slurm_token_has_control_chars(str, str_len, &has_control_chars);
-
-        if(PRTE_SUCCESS == err && has_control_chars) {
+        member = json_object_get(job, key);
+        if (NULL == member) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "propagate-extra-bad-member",
+                           true, key, "the job record has no member by that name");
             err = PRTE_ERR_BAD_PARAM;
+            goto cleanup;
         }
-
-        if(PRTE_SUCCESS != err) {
+        if (json_is_string(member) || json_is_null(member)) {
+            err = prte_ras_slurm_get_json_str_field(job, key, values_table);
+        } else {
+            err = prte_ras_slurm_get_json_numobj_field(job, key, values_table);
+            if (PRTE_ERR_JSON_PARSE_FAILURE == err) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "propagate-extra-bad-member",
+                               true, key, "it is neither a string nor a whole number Slurm can leave unset");
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+        }
+        if (PRTE_ERR_NOT_FOUND == err) {
+            err = PRTE_SUCCESS;
+            continue;
+        }
+        if (PRTE_SUCCESS != err) {
             PRTE_ERROR_LOG(err);
             goto cleanup;
         }
-
-        char *str_dup = strdup(str);
-
-        if(NULL == str_dup) {
-            err = PRTE_ERR_OUT_OF_RESOURCE;
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        pmix_err = pmix_hash_table_set_value_ptr(values_table, str_fields[i],
-                    strlen(str_fields[i]), str_dup);
-
-        if(PMIX_SUCCESS != pmix_err) {
-            free(str_dup);
-            err = prte_pmix_convert_status(pmix_err);
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
     }
 
     /* Record the job end time so we know what to trim the job to without
@@ -321,6 +387,8 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table, time_t *s
     }
 
     cleanup:
+
+    free(keys);
 
     if(NULL != job) {
         json_decref(job);
