@@ -14,6 +14,7 @@
 #include "types.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -32,6 +33,11 @@
 #include "src/util/proc_info.h"
 
 #include "src/util/prte_bootstrap.h"
+
+/* the widest field a node number can be padded to - the digits of the
+ * largest unsigned long - and the most names one range may produce */
+#define PRTE_BOOTSTRAP_MAX_DIGITS 20
+#define PRTE_BOOTSTRAP_MAX_RANGE  (1UL << 20)
 
 /*
  * Local functions
@@ -530,7 +536,20 @@ static pmix_status_t regex_extract_nodes(char *regexp, char ***names)
                 free(orig);
                 return PMIX_ERR_BAD_PARAM;
             }
-            num_digits = strtol(&base[i], NULL, 10);
+            /* a field width: digits only, and a width a number can have */
+            {
+                char *endp = NULL;
+                long nd;
+
+                errno = 0;
+                nd = strtol(&base[i], &endp, 10);
+                if (0 != errno || endp == &base[i] || '\0' != *endp ||
+                    0 > nd || PRTE_BOOTSTRAP_MAX_DIGITS < nd) {
+                    free(orig);
+                    return PMIX_ERR_BAD_PARAM;
+                }
+                num_digits = (int) nd;
+            }
             i = j + 1; /* step over the : */
             /* now find the end of the range */
             for (j = i; j < len; ++j) {
@@ -629,99 +648,71 @@ static pmix_status_t regex_parse_value_ranges(char *base, char *ranges, int num_
 }
 
 /*
- * Parse a single range in a set and add the full names of the values
- * found to the names argv
+ * Read one number of a range: digits only, starting at *p, leaving *p just
+ * past them
+ */
+static bool range_number(const char **p, unsigned long *value)
+{
+    const char *s = *p;
+    char *endp = NULL;
+
+    if (!isdigit((unsigned char) *s)) {
+        return false;
+    }
+    errno = 0;
+    *value = strtoul(s, &endp, 10);
+    if (0 != errno || endp == s) {
+        return false;
+    }
+    *p = endp;
+    return true;
+}
+
+/*
+ * Parse a single range in a set - "N" or "N-M" - and add the full names of
+ * the values found to the names argv
  */
 static pmix_status_t regex_parse_value_range(char *base, char *range, int num_digits,
                                              char *suffix, char ***names)
 {
-    char *str, tmp[132];
-    size_t i, k, start, end;
-    size_t base_len, len;
-    bool found;
+    const char *p;
+    char *str;
+    unsigned long start, end, i;
 
     if (NULL == base || NULL == range) {
         return PMIX_ERROR;
     }
 
-    len = strlen(range);
-    base_len = strlen(base);
-    /* Silence compiler warnings; start and end are always assigned
-     properly, below */
-    start = end = 0;
+    p = range;
+    if (!range_number(&p, &start)) {
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
+    }
+    if ('\0' == *p) {
+        end = start;
+    } else if ('-' != *p++ || !range_number(&p, &end) || '\0' != *p) {
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
+    }
+    if (end < start || PRTE_BOOTSTRAP_MAX_RANGE <= end - start) {
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
+    }
 
-    /* Look for the beginning of the first number */
-    for (found = false, i = 0; i < len; ++i) {
-        if (isdigit((int) range[i])) {
-            if (!found) {
-                start = strtol(range + i, NULL, 10);
-                found = true;
-                break;
-            }
+    /* make a name for each value in the range, zero-padded to the width
+     * the regex gave */
+    for (i = start;; ++i) {
+        if (0 > pmix_asprintf(&str, "%s%0*lu%s", base, num_digits, i,
+                              (NULL == suffix) ? "" : suffix) || NULL == str) {
+            PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
-    }
-    if (!found) {
-        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-        return PMIX_ERR_NOT_FOUND;
-    }
-
-    /* Look for the end of the first number */
-    for (found = false; i < len; ++i) {
-        if (!isdigit(range[i])) {
+        PMIx_Argv_append_nosize(names, str);
+        free(str);
+        if (i == end) {
             break;
         }
     }
-
-    /* Was there no range, just a single number? */
-    if (i >= len) {
-        end = start;
-        found = true;
-    } else {
-        /* Nope, there was a range.  Look for the beginning of the second
-         * number
-         */
-        for (; i < len; ++i) {
-            if (isdigit(range[i])) {
-                end = strtol(range + i, NULL, 10);
-                found = true;
-                break;
-            }
-        }
-    }
-    if (!found) {
-        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-        return PMIX_ERR_NOT_FOUND;
-    }
-
-    /* Make strings for all values in the range */
-    len = base_len + num_digits + 32;
-    if (NULL != suffix) {
-        len += strlen(suffix);
-    }
-    str = (char *) malloc(len);
-    if (NULL == str) {
-        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
-        return PMIX_ERR_OUT_OF_RESOURCE;
-    }
-    for (i = start; i <= end; ++i) {
-        memset(str, 0, len);
-        strcpy(str, base);
-        /* we need to zero-pad the digits */
-        for (k = 0; k < (size_t) num_digits; k++) {
-            str[k + base_len] = '0';
-        }
-        memset(tmp, 0, 132);
-        pmix_snprintf(tmp, 132, "%lu", (unsigned long) i);
-        for (k = 0; k < strlen(tmp); k++) {
-            str[base_len + num_digits - k - 1] = tmp[strlen(tmp) - k - 1];
-        }
-        /* if there is a suffix, add it */
-        if (NULL != suffix) {
-            strcat(str, suffix);
-        }
-        PMIx_Argv_append_nosize(names, str);
-    }
-    free(str);
 
     /* All done */
     return PMIX_SUCCESS;
