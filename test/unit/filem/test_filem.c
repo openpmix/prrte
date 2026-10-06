@@ -250,6 +250,95 @@ static int test_path_rules(void)
 }
 
 /*
+ * The directory a placed file goes into is reached one component at a time,
+ * never through a symlink, and only through directories that are ours or
+ * our group's.
+ */
+static int test_open_dir_under(void)
+{
+    int failures = 0, fd;
+    char base[] = "/tmp/prte_filem_dir_XXXXXX";
+    char *p = NULL;
+    struct stat st;
+
+    if (NULL == mkdtemp(base)) {
+        fprintf(stderr, "FAIL [mkdtemp]: %s\n", strerror(errno));
+        return 1;
+    }
+
+    fd = prte_filem_base_open_dir_under(base, NULL, 0755);
+    CHECK("no subdirectory opens the root", 0 <= fd);
+    if (0 <= fd) {
+        close(fd);
+    }
+
+    fd = prte_filem_base_open_dir_under(base, "a/b", 0755);
+    CHECK("missing directories are created", 0 <= fd);
+    if (0 <= fd) {
+        close(fd);
+    }
+    CHECK("asprintf", 0 <= pmix_asprintf(&p, "%s/a/b", base));
+    CHECK("...where the name says", 0 == lstat(p, &st) && S_ISDIR(st.st_mode));
+    free(p);
+
+    fd = prte_filem_base_open_dir_under(base, "./a/b", 0755);
+    CHECK("an existing directory of ours is used", 0 <= fd);
+    if (0 <= fd) {
+        close(fd);
+    }
+
+    /* a symlink anywhere in the path is not followed */
+    CHECK("asprintf", 0 <= pmix_asprintf(&p, "%s/link", base));
+    CHECK("symlink", 0 == symlink("a", p));
+    free(p);
+    fd = prte_filem_base_open_dir_under(base, "link/c", 0755);
+    CHECK("a symlink in the path is refused", 0 > fd && (ELOOP == errno || ENOTDIR == errno));
+    CHECK("asprintf", 0 <= pmix_asprintf(&p, "%s/a/c", base));
+    CHECK("...and nothing is made through it", 0 != lstat(p, &st));
+    free(p);
+
+    /* nor is a file */
+    CHECK("asprintf", 0 <= pmix_asprintf(&p, "%s/file", base));
+    fd = open(p, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    CHECK("create file", 0 <= fd);
+    if (0 <= fd) {
+        close(fd);
+    }
+    free(p);
+    fd = prte_filem_base_open_dir_under(base, "file/c", 0755);
+    CHECK("a file in the path is refused", 0 > fd && ENOTDIR == errno);
+
+    fd = prte_filem_base_open_dir_under(base, "a/../a", 0755);
+    CHECK("'..' is refused", 0 > fd && EINVAL == errno);
+
+    /* a directory someone else owns: refused unless its group is ours.
+     * Only root can make one. */
+    if (0 == geteuid()) {
+        CHECK("asprintf", 0 <= pmix_asprintf(&p, "%s/theirs", base));
+        CHECK("mkdir theirs", 0 == mkdir(p, 0777));
+        CHECK("chown theirs", 0 == chown(p, 65534, 65534));
+        fd = prte_filem_base_open_dir_under(base, "theirs/c", 0755);
+        CHECK("another user's directory in another group is refused", 0 > fd && EACCES == errno);
+        CHECK("chgrp theirs", 0 == chown(p, 65534, getegid()));
+        fd = prte_filem_base_open_dir_under(base, "theirs/c", 0755);
+        CHECK("another user's directory in our group is used", 0 <= fd);
+        if (0 <= fd) {
+            close(fd);
+        }
+        free(p);
+    }
+
+    CHECK("asprintf", 0 <= pmix_asprintf(&p, "rm -rf '%s'", base));
+    CHECK("cleanup", 0 == system(p));
+    free(p);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_open_dir_under\n");
+    }
+    return failures;
+}
+
+/*
  * The temporary a placed file is written to before it is renamed into
  * place: always a new file, under a name of its own, with the mode it was
  * asked for whatever the umask, and not inherited by anything this process
@@ -257,9 +346,9 @@ static int test_path_rules(void)
  */
 static int test_open_temp(void)
 {
-    int failures = 0, fd1, fd2, fl;
+    int failures = 0, dfd, fd1, fd2, fl;
     char base[] = "/tmp/prte_filem_test_XXXXXX";
-    char *dest = NULL, *t1 = NULL, *t2 = NULL, *bad = NULL;
+    char *t1 = NULL, *t2 = NULL;
     struct stat st;
     mode_t old;
 
@@ -267,20 +356,21 @@ static int test_open_temp(void)
         fprintf(stderr, "FAIL [mkdtemp]: %s\n", strerror(errno));
         return 1;
     }
-    CHECK("asprintf", 0 <= pmix_asprintf(&dest, "%s/data.bin", base));
+    dfd = open(base, O_RDONLY | O_DIRECTORY);
+    CHECK("open dir", 0 <= dfd);
 
     old = umask(077);
-    fd1 = prte_filem_base_open_temp(dest, 0755, &t1);
-    fd2 = prte_filem_base_open_temp(dest, 0644, &t2);
+    fd1 = prte_filem_base_open_temp_at(dfd, "data.bin", 0755, &t1);
+    fd2 = prte_filem_base_open_temp_at(dfd, "data.bin", 0644, &t2);
     umask(old);
     CHECK("a temporary is created", 0 <= fd1 && NULL != t1);
-    CHECK("beside the destination, under its name",
-          NULL != t1 && 0 == strncmp(t1, dest, strlen(dest))
-              && 0 == strncmp(t1 + strlen(dest), ".prte-tmp.", 10));
+    CHECK("named for the destination",
+          NULL != t1 && 0 == strncmp(t1, "data.bin.prte-tmp.", 18) && 24 == strlen(t1));
     CHECK("a second is created", 0 <= fd2 && NULL != t2);
     CHECK("under a different name", NULL != t1 && NULL != t2 && 0 != strcmp(t1, t2));
     CHECK("the mode asked for, whatever the umask",
-          NULL != t1 && 0 == stat(t1, &st) && 0755 == (st.st_mode & 07777) && 0 == st.st_size);
+          NULL != t1 && 0 == fstatat(dfd, t1, &st, AT_SYMLINK_NOFOLLOW)
+              && 0755 == (st.st_mode & 07777) && 0 == st.st_size);
     fl = (0 <= fd1) ? fcntl(fd1, F_GETFD) : -1;
     CHECK("close-on-exec", 0 <= fl && 0 != (fl & FD_CLOEXEC));
     if (0 <= fd1) {
@@ -290,23 +380,21 @@ static int test_open_temp(void)
         close(fd2);
     }
     if (NULL != t1) {
-        unlink(t1);
+        unlinkat(dfd, t1, 0);
     }
     if (NULL != t2) {
-        unlink(t2);
+        unlinkat(dfd, t2, 0);
     }
     free(t1);
     free(t2);
 
     /* nowhere to put it: an error, and nothing to clean up */
-    CHECK("asprintf", 0 <= pmix_asprintf(&bad, "%s/missing/data.bin", base));
     t1 = (char *) 1;
-    fd1 = prte_filem_base_open_temp(bad, 0644, &t1);
-    CHECK("a missing directory is an error", 0 > fd1 && NULL == t1);
-    free(bad);
+    fd1 = prte_filem_base_open_temp_at(-1, "data.bin", 0644, &t1);
+    CHECK("no directory is an error", 0 > fd1 && NULL == t1);
 
+    close(dfd);
     rmdir(base);
-    free(dest);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_open_temp\n");
@@ -340,6 +428,7 @@ int main(void)
     failures += test_classes();
     failures += test_none_module();
     failures += test_path_rules();
+    failures += test_open_dir_under();
     failures += test_open_temp();
 
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
