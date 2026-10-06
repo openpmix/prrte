@@ -112,13 +112,13 @@ static int ras_slurm_register(void)
 
     prte_mca_ras_slurm_component.propagate_mem_per_cpu = true;
     (void) pmix_mca_base_component_var_register(component, "propagate_mem_per_cpu",
-                                                "Propagate Slurm memory per CPU information when requesting additional resources",
+                                                "Propagate the original job's --mem-per-cpu, read from SLURM_MEM_PER_CPU, when requesting additional resources",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_ras_slurm_component.propagate_mem_per_cpu);
 
     prte_mca_ras_slurm_component.propagate_mem_per_node = true;
     (void) pmix_mca_base_component_var_register(component, "propagate_mem_per_node",
-                                                "Propagate Slurm memory per node information when requesting additional resources",
+                                                "Propagate the original job's --mem, read from SLURM_MEM_PER_NODE, when requesting additional resources",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_ras_slurm_component.propagate_mem_per_node);
 
