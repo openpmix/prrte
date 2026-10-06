@@ -99,6 +99,7 @@ extern int test_hostfile_corpus(void);
 extern int test_rankfile_corpus(void);
 extern int test_textfile(void);
 extern int test_dvm_key(void);
+extern int test_session_dir(void);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -1973,6 +1974,7 @@ int main(void)
     failures += test_rankfile_corpus();
     failures += test_sys_limits();
     failures += test_dvm_key();
+    failures += test_session_dir();
 
     prte_finalize();
 

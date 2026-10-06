@@ -769,10 +769,11 @@ int prun_common(pmix_cli_result_t *results,
     pmix_asprintf(&sessdir, "%s/%s.session.%s.%lu.%lu", pmix_tmp_directory(), prte_tool_basename,
                   prte_process_info.nodename, (unsigned long) geteuid(), (unsigned long) getpid());
     /* PMIx trusts the directory it is given, so this name - which anyone
-     * could predict - has to be seen to be ours before it is handed over.
-     * We then own its removal: PMIx only removes a directory it made */
+     * could predict - has to be seen to be ours before it is handed over;
+     * if it is taken, we are given another beside it.  We then own its
+     * removal: PMIx only removes a directory it made */
     if (NULL == sessdir ||
-        PRTE_SUCCESS != prte_session_dir_create(sessdir, &sessdir_created)) {
+        PRTE_SUCCESS != prte_session_dir_create(&sessdir, &sessdir_created)) {
         free(sessdir);
         PMIX_INFO_LIST_RELEASE(tinfo);
         (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
