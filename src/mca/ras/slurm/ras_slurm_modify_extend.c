@@ -106,6 +106,7 @@ static void ssc_con(prte_slurm_salloc_child_t *p);
 static void ssc_des(prte_slurm_salloc_child_t *p);
 static void salloc_wait_cb(int fd, short args, void *cbdata);
 static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, char ***argv);
+static int prte_ras_slurm_make_count_envar_arg(const char *envar, const char *field_format, char ***argv);
 static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
 static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
@@ -135,8 +136,6 @@ const char *const str_fields[STR_FIELD_COUNT] = {
 
 /* Numberic object fields to read from "parent" Slurm job JSON */
 const char *const num_obj_fields[NUM_OBJ_FIELD_COUNT] = {
-    [NUM_OBJ_MEMORY_PER_CPU]   = "memory_per_cpu",
-    [NUM_OBJ_MEMORY_PER_NODE]  = "memory_per_node",
     [NUM_OBJ_TIME_LIMIT]       = "time_limit",
     [NUM_OBJ_THREADS_PER_CORE] = "threads_per_core",
 };
@@ -166,6 +165,14 @@ static const char *qos_format       = "--qos=%s";
 static const char *cwd_format       = "--chdir=%s";
 static const char *mem_per_cpu_format  = "--mem-per-cpu=%s";
 static const char *mem_per_node_format = "--mem=%s";
+
+/* The parent's memory request, as Slurm settled it: a batch job's carries
+ * the default too, as though asked for (see AGENTS.md).
+ * The job record cannot stand in for these: once a job has GPUs and the
+ * partition a DefMemPerGPU, Slurm keeps the per-GPU default in the record's
+ * one memory slot, which then reads as memory_per_node whatever was asked. */
+static const char *mem_per_cpu_envar  = "SLURM_MEM_PER_CPU";
+static const char *mem_per_node_envar = "SLURM_MEM_PER_NODE";
 static const char *time_format = "--time=%s";
 static const char *nodes_format = "--nodes=%s";
 static const char *nodelist_format = "--nodelist=%s";
@@ -431,6 +438,51 @@ static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields,
     char *arg = NULL;
 
     if(0 > asprintf(&arg, field_format, stored_val)) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    int pmix_rc = PMIx_Argv_append_nosize(argv, arg);
+    free(arg);
+
+    return prte_pmix_convert_status(pmix_rc);
+}
+
+/*
+ * Append a formatted salloc argument from a count in this job's environment.
+ *
+ * For the attributes the job record cannot report faithfully. Unset and empty
+ * variables return PRTE_ERR_NOT_FOUND, so the attribute is omitted and the
+ * expander gets the same default the parent did. Slurm writes each of these as
+ * a plain count; anything else is refused rather than passed on.
+ *
+ * @param[in] envar
+ *     Name of the environment variable to read, which must hold a plain count.
+ * @param[in] field_format
+ *     printf-style format string used to construct the salloc argument.
+ * @param[in,out] argv
+ *     NULL-terminated argument vector to append to.
+ */
+static int prte_ras_slurm_make_count_envar_arg(const char *envar, const char *field_format, char ***argv)
+{
+    if(NULL == envar || NULL == field_format || NULL == argv) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    const char *value = getenv(envar);
+
+    if(NULL == value || '\0' == value[0]) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    if(strlen(value) != strspn(value, "0123456789")) {
+        pmix_output(0, "ras:slurm:extend: %s=\"%s\" is not a plain count;"
+                       " not asking Slurm for it.", envar, value);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    char *arg = NULL;
+
+    if(0 > asprintf(&arg, field_format, value)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
@@ -837,8 +889,6 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     char **argv = NULL;
 
-    bool have_mem_per_cpu = false;
-
     char job_id[PRTE_SLURM_JOB_ID_MAX_LEN+1] = {0};
     char *job_id_dyn = NULL;
 
@@ -912,23 +962,18 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
         }
     }
 
+    /* Slurm takes one memory option per job, so at most one of these is set */
     if(prte_mca_ras_slurm_component.propagate_mem_per_cpu) {
-        err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_MEMORY_PER_CPU], 
-                                            mem_per_cpu_format, true, &argv);
+        err = prte_ras_slurm_make_count_envar_arg(mem_per_cpu_envar, mem_per_cpu_format, &argv);
 
-        if(PRTE_SUCCESS == err) {
-            have_mem_per_cpu = true;
-        }
-        else if(PRTE_ERR_NOT_FOUND != err) {
+        if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
             goto cleanup;
         }
     }
 
-    /* Mem per node; only if mem per CPU not already set */
-    if(!have_mem_per_cpu && prte_mca_ras_slurm_component.propagate_mem_per_node) {
-        err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_MEMORY_PER_NODE], 
-                                            mem_per_node_format, true, &argv);
+    if(prte_mca_ras_slurm_component.propagate_mem_per_node) {
+        err = prte_ras_slurm_make_count_envar_arg(mem_per_node_envar, mem_per_node_format, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
