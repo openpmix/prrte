@@ -134,7 +134,8 @@ RUN install -d -o munge -g munge -m 0700 /etc/munge /var/lib/munge /var/log/mung
 # each container-specific setting is there.
 COPY slurm.conf /etc/slurm/slurm.conf
 COPY cgroup.conf /etc/slurm/cgroup.conf
-RUN chmod 0644 /etc/slurm/slurm.conf /etc/slurm/cgroup.conf \
+COPY gres.conf /etc/slurm/gres.conf
+RUN chmod 0644 /etc/slurm/slurm.conf /etc/slurm/cgroup.conf /etc/slurm/gres.conf \
     && install -d -o slurm -g slurm -m 0755 /var/spool/slurmctld /var/log/slurm \
     && install -d -m 0755 /var/spool/slurmd /var/lib/slurm
 

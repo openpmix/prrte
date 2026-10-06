@@ -1227,6 +1227,7 @@ test_elastic() {
     # commands, and one of them needs different MCA parameters, so each brings
     # up a DVM of its own.
     elastic_argv_group
+    elastic_propagate_group
     elastic_fault_group
     elastic_oversize_group
     elastic_launch_arg_limit_group
@@ -1870,6 +1871,225 @@ elastic_argv_group() {
     [ -n "$ajid" ] && SA "timeout 120 elastic release-id $ajid" >/dev/null 2>&1
     dvm_stop
     DVM_SHIM=0
+    cleanup_cluster
+}
+
+# What an expander job inherits from its parent beyond partition and time.
+#
+# Each case needs a parent allocated with the attribute under test, so each
+# brings up a DVM of its own under the recording shim, extends it by one node,
+# and asserts what PRRTE asked (the argv) and, where SLURM can show it, what
+# was granted (the expander's nodes and record).  A case about placement puts
+# its parent so that the lowest free node, which SLURM would otherwise hand
+# out, is the wrong one.  The node shape -- the feature "fast" on node[7-10],
+# two GPUs each on node[9-10] -- is in slurm.conf.
+#
+# The HNP runs on node1, outside the parent's allocation; a real one runs
+# inside it, where SLURM cannot grant its node again.  node1 is parked so an
+# expander cannot land there either: PRRTE already holds it, and rightly
+# refuses the grant (PMIX_ERR_EXISTS).
+PROP_ARGS= PROP_AJID= PROP_NODES= PROP_REC= PROP_PREC=
+
+# $1 = case name, then slurm-alloc "new" options; prte options after "--".
+# Fills PROP_*; the caller asserts, then calls propagate_case_end.
+propagate_case() {
+    local name=$1 out; shift
+    local alloc=()
+    while [ $# -gt 0 ] && [ "$1" != -- ]; do alloc+=("$1"); shift; done
+    [ "${1:-}" = -- ] && shift
+    PROP_ARGS= PROP_AJID= PROP_NODES= PROP_REC= PROP_PREC=
+    cleanup_cluster
+    SHIM reset >/dev/null 2>&1
+    if ! out=$(ALLOC new --tag dvm --nodes 1 "${alloc[@]}"); then
+        bad "$name: the parent allocation was refused: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        return 1
+    fi
+    if ! out=$(ALLOC new --tag park --nodelist node1 --timeout 30); then
+        bad "$name: could not park node1: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        return 1
+    fi
+    PROP_PREC=$(SQ "scontrol show job $(ALLOC jobid --tag dvm | tr -d '\r') -o" | tr -d '\r')
+    DVM_SHIM=1
+    if ! dvm_start --prtemca prte_elastic_mode 1 "$@"; then
+        bad "$name: no DVM came up under the recording shim"
+        return 1
+    fi
+    out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+    PROP_AJID=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    PROP_ARGS=$(shim_argv)
+    if [ -z "$PROP_AJID" ]; then
+        bad "$name: the extend was refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        return 1
+    fi
+    PROP_NODES=$(job_nodes "$PROP_AJID")
+    PROP_REC=$(SQ "scontrol show job $PROP_AJID -o" | tr -d '\r')
+    return 0
+}
+
+propagate_case_end() {
+    [ -n "$PROP_AJID" ] && SA "timeout 120 elastic release-id $PROP_AJID" >/dev/null 2>&1
+    dvm_stop
+    DVM_SHIM=0
+    cleanup_cluster
+}
+
+# $1 = an argument the salloc line must carry, exactly
+argv_has() {
+    echo "$PROP_ARGS" | grep -qxF -- "$1" \
+        && ok "salloc carried $1" \
+        || bad "salloc missing $1 (got: $(echo "$PROP_ARGS" | tr '\n' ' '))"
+}
+
+# $1 = an option the salloc line must not carry, in any form
+argv_lacks() {
+    echo "$PROP_ARGS" | grep -q -- "^$1\(=\|$\)" \
+        && bad "salloc carried $1 (got: $(echo "$PROP_ARGS" | tr '\n' ' '))" \
+        || ok "salloc carried no $1"
+}
+
+# $@ = fields of `scontrol show job -o` the expander must share with its
+# parent, unset in both counting as shared.  At least one must be set.
+record_matches() {
+    local k p e set=0
+    for k in "$@"; do
+        p=$(echo "$PROP_PREC" | tr ' ' '\n' | sed -n "s/^$k=//p")
+        e=$(echo "$PROP_REC" | tr ' ' '\n' | sed -n "s/^$k=//p")
+        [ -n "$p" ] && set=1
+        [ "$p" = "$e" ] \
+            && ok "the expander's $k matches the parent's (${p:-unset})" \
+            || bad "the expander's $k is ${e:-unset}, the parent's ${p:-unset}"
+    done
+    [ "$set" = 1 ] || bad "the parent's record has none of: $*"
+}
+
+elastic_propagate_group() {
+    if ! ON 1 "test -x $SHIM_BIN/slurm-shim"; then
+        skp "the propagation cases need the recording shim -- rerun ./build.sh"
+        return
+    fi
+
+    banner "ras/slurm: the expander gets the parent's GPUs and per-GPU options"
+    # node9 and node10 are the only nodes with GPUs.
+    if propagate_case gres --nodelist node9 --salloc-arg=--gres=gpu:1 \
+                      --salloc-arg=--cpus-per-gpu=1 --salloc-arg=--mem-per-gpu=10; then
+        [ "$PROP_NODES" = node10 ] \
+            && ok "the expander was granted the other GPU node" \
+            || bad "the expander landed on $PROP_NODES, not the GPU node node10"
+        record_matches TresPerNode CpusPerTres MemPerTres
+    fi
+    propagate_case_end
+
+    banner "ras/slurm: the expander gets the parent's memory"
+    if propagate_case memory --nodelist node3 --salloc-arg=--mem-per-cpu=20; then
+        record_matches MinMemoryCPU MinMemoryNode
+    fi
+    propagate_case_end
+
+    banner "ras/slurm: the expander asks for the parent's node features"
+    # Without the constraint the lowest free node, node2, would do.
+    if propagate_case features --nodelist node7 --salloc-arg=--constraint=fast; then
+        argv_has --constraint=fast
+        case $PROP_NODES in
+        node8|node9|node10) ok "the expander was granted a fast node ($PROP_NODES)" ;;
+        *) bad "the expander landed on $PROP_NODES, which lacks the feature" ;;
+        esac
+    fi
+    propagate_case_end
+
+    banner "ras/slurm: the expander avoids the parent's excluded nodes"
+    if propagate_case exclude --nodelist node3 '--salloc-arg=--exclude=node[1-2,4-6]'; then
+        argv_has '--exclude=node[1-2,4-6]'
+        case $PROP_NODES in
+        node[1-6]) bad "the expander landed on $PROP_NODES, which the parent excluded" ;;
+        "") bad "no nodes recorded for the expander" ;;
+        *) ok "the expander avoided the excluded nodes ($PROP_NODES)" ;;
+        esac
+    fi
+    propagate_case_end
+
+    banner "ras/slurm: the expander joins the parent's reservation"
+    # Outside the reservation node2 is free, so a grant in it shows the flag
+    # reached the scheduler.
+    if SQ "scontrol create reservation ReservationName=prte_prop Nodes=node[5-6] StartTime=now Duration=30 Users=root" \
+            | grep -q 'Reservation created'; then
+        if propagate_case reservation --nodelist node5 --salloc-arg=--reservation=prte_prop; then
+            argv_has --reservation=prte_prop
+            [ "$PROP_NODES" = node6 ] \
+                && ok "the expander was granted the other reserved node" \
+                || bad "the expander landed on $PROP_NODES, outside the reservation"
+            echo "$PROP_REC" | grep -q 'Reservation=prte_prop' \
+                && ok "SLURM recorded the expander in the reservation" \
+                || bad "the expander is not in the reservation: $(echo "$PROP_REC" | tr ' ' '\n' | grep -m1 Reservation)"
+        fi
+        propagate_case_end
+        SQ "scontrol delete ReservationName=prte_prop" >/dev/null
+    else
+        bad "could not create the reservation the case needs"
+    fi
+
+    banner "ras/slurm: ras_slurm_propagate_extra copies a member the site names"
+    if propagate_case extra --nodelist node3 --salloc-arg=--comment=prrte-x \
+                      -- --prtemca ras_slurm_propagate_extra comment:--comment; then
+        argv_has --comment=prrte-x
+        echo "$PROP_REC" | grep -q 'Comment=prrte-x' \
+            && ok "SLURM recorded the propagated comment" \
+            || bad "no comment on the expander: $(echo "$PROP_REC" | tr ' ' '\n' | grep -m1 Comment)"
+    fi
+    propagate_case_end
+
+    banner "ras/slurm: each new propagate_* switch drops its own arguments"
+    if propagate_case off --nodelist node9 --salloc-arg=--gres=gpu:1 \
+                      --salloc-arg=--mem-per-gpu=10 --salloc-arg=--constraint=fast \
+                      --salloc-arg=--exclude=node1 \
+                      -- --prtemca ras_slurm_propagate_gres 0 \
+                         --prtemca ras_slurm_propagate_features 0 \
+                         --prtemca ras_slurm_propagate_exclude 0; then
+        for o in --gres --mem-per-gpu --constraint --exclude; do
+            argv_lacks "$o"
+        done
+        argv_has --no-shell
+    fi
+    propagate_case_end
+
+    banner "ras/slurm: a bad ras_slurm_propagate_extra refuses extends, not the DVM"
+    cleanup_cluster
+    ALLOC new --tag dvm --nodes 1 >/dev/null 2>&1
+    if dvm_start --prtemca prte_elastic_mode 1 \
+                 --prtemca ras_slurm_propagate_extra comment:--nodes; then
+        ok "the DVM came up with propagate_extra naming --nodes"
+        SA 'grep -q "PRRTE sets --nodes itself" /tmp/prte.out' \
+            && ok "the bad entry was reported at startup" \
+            || bad "no startup report naming the entry: $(SA 'tail -5 /tmp/prte.out' | tr '\n' ' ')"
+        out=$(SA 'timeout 120 elastic extend 1' 2>&1)
+        echo "$out" | grep -q 'ALLOC_ID' \
+            && bad "an extend went through despite the bad entry" \
+            || ok "the extend was refused"
+        echo "$out" | grep -q "PRRTE sets --nodes itself" \
+            && ok "the refusal named the entry and why" \
+            || bad "the refusal did not name the entry: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        dvm_stop
+    else
+        bad "no DVM came up with propagate_extra naming --nodes"
+    fi
+    cleanup_cluster
+
+    banner "ras/slurm: an extend outside elastic mode is refused"
+    ALLOC new --tag dvm --nodes 1 >/dev/null 2>&1
+    if dvm_start; then
+        out=$(SA 'timeout 120 elastic extend 1' 2>&1)
+        echo "$out" | grep -q 'ALLOC_ID' \
+            && bad "an extend went through without prte_elastic_mode" \
+            || ok "the extend was refused"
+        echo "$out" | grep -q 'was not started in elastic mode' \
+            && ok "the refusal said elastic mode is needed" \
+            || bad "the refusal did not name elastic mode: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(SQ "squeue -h -o %i" | grep -c .)" = 1 ] \
+            && ok "nothing was submitted to SLURM" \
+            || bad "an expander job exists: $(SQ 'squeue -h -o "%i %j"' | tr '\n' ' ')"
+        dvm_stop
+    else
+        bad "no DVM came up"
+    fi
     cleanup_cluster
 }
 
