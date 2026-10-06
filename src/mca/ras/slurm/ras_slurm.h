@@ -135,8 +135,6 @@ extern const char *const str_fields[STR_FIELD_COUNT];
    add corresponding entries in ras_slurm_modify_utils.c */
 
 enum slurm_num_obj_field {
-    NUM_OBJ_MEMORY_PER_CPU,
-    NUM_OBJ_MEMORY_PER_NODE,
     NUM_OBJ_TIME_LIMIT,
     NUM_OBJ_THREADS_PER_CORE,
     NUM_OBJ_FIELD_COUNT
