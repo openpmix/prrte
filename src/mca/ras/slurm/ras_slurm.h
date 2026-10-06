@@ -116,6 +116,7 @@ typedef struct {
     bool propagate_gres;
     bool propagate_reservation;
     bool propagate_features;
+    bool propagate_exclude;
 } prte_mca_ras_slurm_component_t;
 PRTE_EXPORT extern prte_mca_ras_slurm_component_t prte_mca_ras_slurm_component;
 
@@ -132,6 +133,7 @@ enum slurm_str_field {
     STR_TRES_PER_NODE,
     STR_RESV_NAME,
     STR_FEATURES,
+    STR_EXCLUDED_NODES,
     STR_FIELD_COUNT
 };
 

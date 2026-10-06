@@ -84,12 +84,12 @@ deviation* and the framework guide.
 
 - **`PMIX_ALLOC_EXTEND`** → `serve_extend_req`: propagates the original
   job's SLURM attributes (account, partition, qos, cwd, time,
-  threads-per-core, per-node GRES, reservation, node features, and the
-  memory and per-GPU options read as described below — each gated by a
-  `propagate_*` MCA param, all default true), builds `salloc` args, launches
-  an **expander job**, waits for its `salloc` to exit, trims its time limit
-  to the parent's end, then adds the modified resources. Answers in two
-  phases — see below.
+  threads-per-core, per-node GRES, reservation, node features, excluded
+  nodes, and the memory and per-GPU options read as described below — each
+  gated by a `propagate_*` MCA param, all default true), builds `salloc`
+  args, launches an **expander job**, waits for its `salloc` to exit, trims
+  its time limit to the parent's end, then adds the modified resources.
+  Answers in two phases — see below.
 - **`PMIX_ALLOC_NEW`** → the same request; see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count or by name while
@@ -111,6 +111,16 @@ and queues until it can — including for a node the DVM already holds, which
 is submitted: no per-node slot counts, since Slurm sizes the node. A grow
 naming neither selector is refused, not passed on — inside a Slurm allocation
 no other module could legitimately serve it.
+
+A name the parent excluded is refused by Slurm at submit ("Invalid node name
+specified"), since the parent's `--exclude` goes to the expander too.
+
+### The expander continues the parent
+
+An extend makes the new nodes a continuation of the parent allocation. The
+request picks how many nodes or which; everything else the expander is,
+it takes from the parent through the `propagate_*` parameters, and a request
+cannot override them.
 
 ### Memory and per-GPU options come from the environment, not the record
 
