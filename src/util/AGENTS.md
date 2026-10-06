@@ -485,6 +485,18 @@ make
 This is a top-level golden rule; it is repeated here because three of the
 tree's `help-*.txt` files live under this directory.
 
+`prte-convert-help.py --check-only` (run by `make check`, and by the
+generation rule under `--purge`) checks the calls against the help files:
+
+| Check | Fails on |
+|-------|----------|
+| `purge()` | a topic no call shows |
+| `check_citation_files()` | a call naming one of our help files with the name mangled |
+| `check_citation_topics()` | a call naming a topic its help file does not have - the user would get PMIx's "couldn't find that topic" placeholder |
+
+Only calls with a literal file and topic are checked, and a call citing a
+help file PMIx owns is left to PMIx.
+
 ---
 
 ## Do not grow this directory

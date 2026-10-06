@@ -132,10 +132,11 @@ int prte_util_init_sys_limits(char **errmsg)
         return PRTE_SUCCESS;
     }
 
-    /* parse the requested limits to set */
+    /* parse the requested limits to set - a list with no entries in it
+     * asks for nothing */
     lims = PMIx_Argv_split(prte_set_max_sys_limits, ',');
     if (NULL == lims) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_SUCCESS;
     }
 
     /* each limit is expressed as a "param:value" pair */

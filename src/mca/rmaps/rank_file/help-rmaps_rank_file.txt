@@ -96,3 +96,11 @@ to a different process.
 If this is intentional then you must pass the "overload-allowed"
 qualifier to the --bind-to option.
   --bind-to :overload-allowed
+#
+[not-supported-rankfile]
+The rankfile contains a field that is not supported:
+
+  Field:     %s
+  Rankfile:  %s
+
+Please remove the field and try again.

@@ -40,3 +40,10 @@ flux_kvs_lookup_get returned with an error. Unable to lookup resource.R info.
 
     %s
 
+#
+[flux-json-parse-failure]
+The resource description returned by Flux could not be parsed:
+
+    %s
+
+The allocation could not be read.
