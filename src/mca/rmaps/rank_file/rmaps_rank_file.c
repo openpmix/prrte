@@ -230,7 +230,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_COMPUTED)) {
             app->num_procs = num_ranks;
             if (0 == app->num_procs) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "no-ranks", true, rankfile);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -423,7 +423,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
                 } else if (PRTE_ERROR == rc) {
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-slot-list", true,
+                                   rankfile, (int) entry, slots);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;

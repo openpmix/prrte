@@ -195,8 +195,8 @@ Re-run this command with "--help hosts" for further information.
 A relative host was specified, but the index given is beyond the
 number of hosts in the current allocation:
 
-   Index: %d
-   #hosts: %d
+   Index:          %d
+   Specification:  %s
 
 You could obtain a larger allocation or reduce the relative host
 index.

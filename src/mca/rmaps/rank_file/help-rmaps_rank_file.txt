@@ -65,6 +65,25 @@ Examples of proper syntax include:
     rank 2=host4 slot=1-2
     rank 3=host3 slot=0:1;1:0-2
 #
+[no-ranks]
+The rankfile gives no rank a location, and the number of processes
+was not given either, so there is nothing to launch:
+
+   Rankfile: %s
+
+Add "rank N=host slot=..." lines to the rankfile, or give the number
+of processes on the command line.
+#
+[bad-slot-list]
+The rankfile gives a rank a slot list that could not be understood:
+
+   Rankfile:   %s
+   Rank:       %d
+   Slot list:  %s
+
+A slot list names cpus - for example "1:0,1" (package 1, cores 0 and 1),
+"0:*" (all of package 0), or "1-2" (cpus 1 and 2).
+#
 [missing-rank]
 A rank is missing its location specification:
 

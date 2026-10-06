@@ -118,7 +118,15 @@ static void dmodex_req(int sd, short args, void *cbdata)
             if (PMIX_CHECK_KEY(&req->info[n], PMIX_GET_REFRESH_CACHE)) {
                 refresh_cache = PMIX_INFO_TRUE(&req->info[n]);
             } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_REQUIRED_KEY)) {
-                req->key = strdup(req->info[n].value.data.string);
+                /* the value is the caller's, and PMIx does not check its
+                 * type against the key */
+                if (PMIX_STRING == req->info[n].value.type &&
+                    NULL != req->info[n].value.data.string) {
+                    if (NULL != req->key) {
+                        free(req->key);
+                    }
+                    req->key = strdup(req->info[n].value.data.string);
+                }
             }
         }
     }

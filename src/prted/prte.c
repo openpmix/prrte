@@ -765,7 +765,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         if (PRTE_SUCCESS != rc || 0 == pmix_list_get_size(&apps)) {
             if (proxyrun) {
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:executable-not-specified", true,
-                               prte_tool_basename, prte_tool_basename);
+                               prte_tool_basename);
                 PRTE_UPDATE_EXIT_STATUS(rc);
                 goto DONE;
             }
@@ -989,7 +989,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             if (0 != strcmp(cptr, param)) {
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-base.txt", "multiple-prrte-prefixes", true,
                                prte_tool_basename, prte_tool_basename,
-                               prte_tool_basename, param, cptr);
+                               prte_tool_basename, prte_tool_basename, param, cptr);
                 free(param);
                 free(cptr);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
