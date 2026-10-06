@@ -35,8 +35,6 @@
 #include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/ras/base/base.h"
 
-#define PRTE_SLURM_MAX_SALLOC_ARGS 32
-
 /* Slurm states a job's time limit in minutes */
 #define PRTE_SLURM_SECS_PER_MINUTE 60
 
@@ -107,7 +105,7 @@ static void swt_des(prte_slurm_wait_tracker_t *p);
 static void ssc_con(prte_slurm_salloc_child_t *p);
 static void ssc_des(prte_slurm_salloc_child_t *p);
 static void salloc_wait_cb(int fd, short args, void *cbdata);
-static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, int *argc, char **argv);
+static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, char ***argv);
 static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
 static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
@@ -394,26 +392,18 @@ int prte_ras_slurm_modify_extend_finalize(void)
  * @param[in] obj_num
  *     Indicates whether the field represents a numeric object; enables
  *     filtering of special sentinel values (e.g., "unset", "infinite").
- * @param[in,out] argc
- *     Current argument count. Incremented if an argument is appended.
  * @param[in,out] argv
- *     Argument vector to append to (size PRTE_SLURM_MAX_SALLOC_ARGS+1).
+ *     NULL-terminated argument vector to append to.
  */
 static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields,
                                           const char *field_name,
                                           const char *field_format,
                                           bool obj_num,
-                                          int *argc,
-                                          char **argv
+                                          char ***argv
                                           )
 {
-    if(NULL == fields || NULL == field_name || NULL == field_format
-    || NULL == argv || NULL == argc || *argc < 0) {
+    if(NULL == fields || NULL == field_name || NULL == field_format || NULL == argv) {
         return PRTE_ERR_BAD_PARAM;
-    }
-
-    if(*argc >= PRTE_SLURM_MAX_SALLOC_ARGS) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     char *stored_val = NULL;
@@ -438,17 +428,16 @@ static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields,
         }
     }
 
-    int rc = asprintf(&argv[*argc], field_format, stored_val);
+    char *arg = NULL;
 
-    if(0 > rc) {
-        argv[*argc] = NULL;
+    if(0 > asprintf(&arg, field_format, stored_val)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    (*argc)++;
-    argv[*argc] = NULL;
+    int pmix_rc = PMIx_Argv_append_nosize(argv, arg);
+    free(arg);
 
-    return PRTE_SUCCESS;
+    return prte_pmix_convert_status(pmix_rc);
 }
 
 /*
@@ -846,8 +835,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     int err = PRTE_SUCCESS;
     int pmix_err = PMIX_SUCCESS;
 
-    char *argv[PRTE_SLURM_MAX_SALLOC_ARGS+1] = {NULL};
-    int argc = 0;
+    char **argv = NULL;
 
     bool have_mem_per_cpu = false;
 
@@ -861,16 +849,16 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
                                 NULL };
 
     for (int i = 0; initial_args[i] != NULL; i++) {
-        if (argc >= PRTE_SLURM_MAX_SALLOC_ARGS ||
-            NULL == (argv[argc] = strdup(initial_args[i]))) {
-            err = PRTE_ERR_OUT_OF_RESOURCE;
+        pmix_err = PMIx_Argv_append_nosize(&argv, initial_args[i]);
+
+        if (PMIX_SUCCESS != pmix_err) {
+            err = prte_pmix_convert_status(pmix_err);
             PRTE_ERROR_LOG(err);
             goto cleanup;
         }
-        argc++;
     }
     
-    err = prte_ras_slurm_make_salloc_arg(fields, record_job_data_fields[PRTE_JOB_DATA_NODES], nodes_format, false, &argc, argv);
+    err = prte_ras_slurm_make_salloc_arg(fields, record_job_data_fields[PRTE_JOB_DATA_NODES], nodes_format, false, &argv);
 
     if(PRTE_SUCCESS != err) {
         PRTE_ERROR_LOG(err);
@@ -879,7 +867,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     /* Only when the caller named the nodes; Slurm picks them otherwise */
     err = prte_ras_slurm_make_salloc_arg(fields, record_job_data_fields[PRTE_JOB_DATA_NODELIST],
-                                         nodelist_format, false, &argc, argv);
+                                         nodelist_format, false, &argv);
 
     if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
         PRTE_ERROR_LOG(err);
@@ -887,7 +875,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     }
 
     if (prte_mca_ras_slurm_component.propagate_account) {
-        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_ACCOUNT], account_format, false, &argc, argv);
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_ACCOUNT], account_format, false, &argv);
 
         /* Tolerate not found errors */
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
@@ -897,7 +885,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     }
 
     if (prte_mca_ras_slurm_component.propagate_partition) {
-        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_PARTITION], partition_format, false, &argc, argv);
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_PARTITION], partition_format, false, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
@@ -906,7 +894,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     }
 
     if (prte_mca_ras_slurm_component.propagate_qos) {
-        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_QOS], qos_format, false, &argc, argv);
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_QOS], qos_format, false, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
@@ -916,7 +904,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     }
 
     if (prte_mca_ras_slurm_component.propagate_cwd) {
-        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_CWD], cwd_format, false, &argc, argv);
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_CWD], cwd_format, false, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
@@ -926,7 +914,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     if(prte_mca_ras_slurm_component.propagate_mem_per_cpu) {
         err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_MEMORY_PER_CPU], 
-                                            mem_per_cpu_format, true, &argc, argv);
+                                            mem_per_cpu_format, true, &argv);
 
         if(PRTE_SUCCESS == err) {
             have_mem_per_cpu = true;
@@ -940,7 +928,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     /* Mem per node; only if mem per CPU not already set */
     if(!have_mem_per_cpu && prte_mca_ras_slurm_component.propagate_mem_per_node) {
         err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_MEMORY_PER_NODE], 
-                                            mem_per_node_format, true, &argc, argv);
+                                            mem_per_node_format, true, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
@@ -951,7 +939,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     if(prte_mca_ras_slurm_component.propagate_time) {
 
         err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_TIME_LIMIT], 
-                                            time_format, true, &argc, argv);
+                                            time_format, true, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
@@ -962,11 +950,24 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     if(prte_mca_ras_slurm_component.propagate_threads_per_core) {
 
         err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_THREADS_PER_CORE], 
-                                            threads_per_core_format, true, &argc, argv);
+                                            threads_per_core_format, true, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
             goto cleanup;
+        }
+    }
+
+    if (10 <= pmix_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+        char *line = PMIx_Argv_join(argv, ' ');
+
+        if (NULL == line) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        } else {
+            pmix_output(prte_ras_base_framework.framework_output,
+                        "%s ras:slurm:launch_expander_job: %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), line);
+            free(line);
         }
     }
 
@@ -1011,9 +1012,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
         free(job_id_dyn);
     }
 
-    for(int i = 0; i<PRTE_SLURM_MAX_SALLOC_ARGS+1 && NULL != argv[i]; i++) {
-        free(argv[i]);
-    }
+    PMIx_Argv_free(argv);
 
     return err;
 }
