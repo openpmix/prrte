@@ -336,3 +336,6 @@ the daemons run as, readable by no one else (mode 0600 or 0400), and hold
 exactly 64 hexadecimal digits. One way to create it:
 
   umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > prte.key
+#
+[prte_init:syslimit]
+%s

@@ -139,3 +139,14 @@ controller, and only when "prte_if_include" selects it and nothing
 else, or when the host has no other interface - a daemon on another
 node could never reach it.  Please check the "prte_if_include" and
 "prte_if_exclude" MCA parameters and retry.
+#
+[static-and-dynamic-ipv6]
+Both static and dynamic port ranges were specified for the
+out-of-band (OOB) communication subsystem:
+
+Static IPv4 ports:   %s
+Static IPv6 ports:   %s
+Dynamic IPv6 ports:  %s
+
+Only one can be specified. Please choose either static or
+dynamic ports and try again.

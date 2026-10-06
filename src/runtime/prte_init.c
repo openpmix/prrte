@@ -418,7 +418,10 @@ int prte_init_util(prte_proc_type_t flags)
      * doing so twice in cases where the launch agent did it for us
      */
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte_init:syslimit", false, error);
+        // the message is rendered already; it is missing only if that failed
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "prte_init:syslimit", false,
+                       (NULL == error) ? "PRTE was unable to set the system resource limits it was asked to set" : error);
+        free(error);
         return PRTE_ERR_SILENT;
     }
 
