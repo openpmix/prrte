@@ -54,6 +54,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/prted/prted.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -233,6 +234,18 @@ void prte_pmix_server_tool_departed(pmix_proc_t *tool)
     int rc;
 
     if (PRTE_PROC_IS_MASTER) {
+        if (!PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+            PMIX_CHECK_PROCID_STRICT(tool, &prte_pmix_server_globals.scheduler)) {
+            /* the scheduler has gone - forget it, so the DVM stops
+             * deferring to it */
+            PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler, NULL, PMIX_RANK_INVALID);
+            prte_pmix_server_globals.scheduler_connected = false;
+            if (prte_pmix_server_globals.primary_server_set &&
+                PMIX_CHECK_PROCID_STRICT(tool, &prte_pmix_server_globals.primary_server)) {
+                prte_pmix_server_globals.primary_server = *PRTE_NAME_INVALID;
+                prte_pmix_server_globals.primary_server_set = false;
+            }
+        }
         jdata = prte_get_job_data_object(tool->nspace);
         if (NULL != jdata && PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
             PRTE_ACTIVATE_PROC_STATE(tool, PRTE_PROC_STATE_TERMINATED);
@@ -561,6 +574,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     bool primary = false;
     bool nspace_given = false;
     bool rank_given = false;
+    bool uid_given = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -582,6 +596,8 @@ static void _toolconn(int sd, short args, void *cbdata)
                 trc = PMIx_Value_get_number(&cd->info[n].value, (void*)&cd->uid, PMIX_UINT32);
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
+                } else if (PMIX_SUCCESS == trc) {
+                    uid_given = true;
                 }
 
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
@@ -681,6 +697,20 @@ static void _toolconn(int sd, short args, void *cbdata)
         if (!PRTE_PROC_IS_MASTER) {
             if (NULL != cd->toolcbfunc) {
                 cd->toolcbfunc(PMIX_ERR_NOT_SUPPORTED, NULL, cd->cbdata);
+            }
+            PMIX_RELEASE(cd);
+            return;
+        } else if (!uid_given || !prte_pmix_server_scheduler_permitted(cd->uid)) {
+            /* the scheduler decides every session and receives every
+             * allocation request, so it has to run as root, as the user
+             * this DVM runs as, or as one prte_pmix_scheduler_uids names.
+             * (cd->uid is the one PMIx authenticated for the connection,
+             * but defaults to root, so it counts only if PMIx gave it.) */
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                           "scheduler-refused", true, cd->target.nspace,
+                           uid_given ? (unsigned) cd->uid : 0, uid_given ? "" : " (not given)");
+            if (NULL != cd->toolcbfunc) {
+                cd->toolcbfunc(PMIX_ERR_NO_PERMISSIONS, NULL, cd->cbdata);
             }
             PMIX_RELEASE(cd);
             return;

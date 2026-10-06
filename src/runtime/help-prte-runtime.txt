@@ -348,3 +348,37 @@ The job was not started. Correct the type of the value and try again.
 #
 [prte_init:syslimit]
 %s
+#
+[spawn-parent-refused]
+A request to start a job named a parent process the requester may not
+act for:
+
+   Requester:  %s
+   Parent:     %s
+
+A job's parent decides the session it runs in and the job it is
+connected to, so only a process of the requester's own job, or of a job
+the requester is permitted to access, may be named. The job was not
+started.
+#
+[scheduler-refused]
+A tool asked to be this DVM's scheduler, but it does not run as a user
+that may hold that role:
+
+   Tool:     %s
+   User id:  %u%s
+
+The scheduler decides every session and receives every allocation
+request, so it has to run as root, as the user the DVM runs as, or as a
+user the "prte_pmix_scheduler_uids" MCA parameter names. The connection
+was refused.
+#
+[scheduler-uid-unknown]
+The "prte_pmix_scheduler_uids" MCA parameter names a user this system
+does not know:
+
+   User:   %s
+   Value:  %s
+
+It must be a comma-separated list of user names or numeric user ids.
+Please correct it and try again.

@@ -85,9 +85,7 @@
 #include "src/util/prte_cmd_line.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
 #    include "src/server/pmix_server_ops.h"
-#endif
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -2782,7 +2780,6 @@ static int test_common_cli(void)
 #define ACC_LISTED   5151
 #define ACC_STRANGER 9999
 
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
 /* what a daemon registers the job with, from what it has cached - its
  * info cache, as the registration drains it */
 static pmix_status_t record_cached(prte_job_t *jdata)
@@ -2823,7 +2820,6 @@ static bool cached(prte_job_t *jdata, const char *key)
     }
     return false;
 }
-#endif
 
 static int test_access(void)
 {
@@ -2835,7 +2831,6 @@ static int test_access(void)
     pmix_proc_t me;
     pmix_info_t tinfo;
     pmix_status_t prc;
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     prte_job_t *tool, *sched;
     prte_session_t *session;
     pmix_info_t ents[2];
@@ -2845,7 +2840,6 @@ static int test_access(void)
     char spec[128];
     bool made_array = false, found;
     pmix_proc_t savesched;
-#endif
 
     /* an access list is kept as a data array, which PMIx copies - and
      * will only once it has been initialized, as a daemon's always is */
@@ -2886,11 +2880,8 @@ static int test_access(void)
     /* a request naming nobody: our own, when it comes from us */
     CHECK("access/request-ourselves",
           prte_pmix_server_request_permitted(PRTE_PROC_MY_NAME, NULL, 0, jdata));
-#if PRTE_PMIX_HAVE_REQUESTER_ID
     CHECK("access/request-unnamed", !prte_pmix_server_request_permitted(&other, NULL, 0, jdata));
-#endif
 
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     /* --rtos users= travels with the job's info, and a daemon keeps what it
      * registers */
     CHECK("access/rtos-users",
@@ -2997,6 +2988,142 @@ static int test_access(void)
     prte_pmix_server_globals.scheduler = savesched;
     PMIX_RELEASE(session);
 
+    /* a requester that may change what the DVM consists of: the scheduler,
+     * root, our own user, ourselves - and the users the DVM was started
+     * with */
+    {
+        uint32_t uids[3] = {0, (uint32_t) prte_process_info.euid, ACC_STRANGER};
+        const char *labels[3] = {"dvm/root", "dvm/our-user", "dvm/stranger"};
+        prte_job_t *dvm;
+        int u;
+
+        PMIX_LOAD_PROCID(&other, "unit-test-access-tool", 0);
+        for (u = 0; u < 3; u++) {
+            PMIX_INFO_LOAD(&info[0], PMIX_USERID, &uids[u], PMIX_UINT32);
+            CHECK(labels[u], (2 != u) == prte_pmix_server_dvm_permitted(&other, info, 1));
+            PMIX_INFO_DESTRUCT(&info[0]);
+        }
+        CHECK("dvm/ourselves", prte_pmix_server_dvm_permitted(PRTE_PROC_MY_NAME, NULL, 0));
+        CHECK("dvm/unnamed", !prte_pmix_server_dvm_permitted(&other, NULL, 0));
+        savesched = prte_pmix_server_globals.scheduler;
+        PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler, "unit-test-access-sched", 0);
+        id = ACC_STRANGER;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+        CHECK("dvm/scheduler",
+              prte_pmix_server_dvm_permitted(&prte_pmix_server_globals.scheduler, info, 1));
+        CHECK("dvm/not-scheduler", !prte_pmix_server_dvm_permitted(&other, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        /* with no scheduler, an empty name matches nothing */
+        PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler, NULL, PMIX_RANK_INVALID);
+        PMIX_LOAD_PROCID(&other, NULL, 0);
+        id = ACC_STRANGER;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+        CHECK("dvm/no-scheduler-empty-name", !prte_pmix_server_dvm_permitted(&other, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        prte_pmix_server_globals.scheduler = savesched;
+
+        /* the DVM started with --rtos users=: those users too, and only
+         * through the DVM's rule - not as members of its job */
+        PMIX_LOAD_PROCID(&other, "unit-test-access-tool", 0);
+        dvm = fresh_job();
+        PMIX_LOAD_NSPACE(dvm->nspace, "unit-test-access-dvm");
+        CHECK("dvm/rtos-users",
+              PRTE_SUCCESS == prte_state_base_set_runtime_options(dvm, "users=5151"));
+        CHECK("dvm/record", PRTE_SUCCESS == prte_pmix_server_access_record_dvm(dvm));
+        id = ACC_LISTED;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+        CHECK("dvm/listed", prte_pmix_server_dvm_permitted(&other, info, 1));
+        CHECK("dvm/listed-not-job-member", !prte_pmix_server_job_permitted(ACC_LISTED, dvm));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        id = ACC_STRANGER;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+        CHECK("dvm/unlisted", !prte_pmix_server_dvm_permitted(&other, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        if (NULL != pw) {
+            /* and groups= - a user is in its own primary group */
+            snprintf(spec, sizeof(spec), "groups=%u", (unsigned) pw->pw_gid);
+            CHECK("dvm/rtos-groups", PRTE_SUCCESS == prte_state_base_set_runtime_options(dvm, spec));
+            CHECK("dvm/record-groups", PRTE_SUCCESS == prte_pmix_server_access_record_dvm(dvm));
+            id = (uint32_t) pw->pw_uid;
+            PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+            CHECK("dvm/group-member", prte_pmix_server_dvm_permitted(&other, info, 1));
+            PMIX_INFO_DESTRUCT(&info[0]);
+        }
+        prte_pmix_server_access_release_dvm();
+        id = ACC_LISTED;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+        CHECK("dvm/released", !prte_pmix_server_dvm_permitted(&other, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(dvm);
+    }
+
+    /* the users a scheduler may run as: root, our own user, and the ones
+     * prte_pmix_scheduler_uids names - by number or by name */
+    {
+        char *saveuids = prte_pmix_server_globals.scheduler_uids;
+        char list[64];
+
+        CHECK("sched/root", prte_pmix_server_scheduler_permitted(0));
+        CHECK("sched/our-user", prte_pmix_server_scheduler_permitted(prte_process_info.euid));
+        CHECK("sched/unlisted", !prte_pmix_server_scheduler_permitted(ACC_LISTED));
+        snprintf(list, sizeof(list), "%u,root", (unsigned) ACC_LISTED);
+        prte_pmix_server_globals.scheduler_uids = list;
+        CHECK("sched/resolve", PRTE_SUCCESS == prte_pmix_server_scheduler_uids_resolve());
+        CHECK("sched/listed", prte_pmix_server_scheduler_permitted(ACC_LISTED));
+        CHECK("sched/still-stranger", !prte_pmix_server_scheduler_permitted(ACC_STRANGER));
+        snprintf(list, sizeof(list), "prte-unit-no-such-user");
+        prte_pmix_server_globals.scheduler_uids = list;
+        CHECK("sched/unknown-name", PRTE_SUCCESS != prte_pmix_server_scheduler_uids_resolve());
+        CHECK("sched/unknown-cleared", !prte_pmix_server_scheduler_permitted(ACC_LISTED));
+        prte_pmix_server_globals.scheduler_uids = saveuids;
+        (void) prte_pmix_server_scheduler_uids_resolve();
+    }
+
+    /* naming a spawn's parent: a process of one's own job, or of a job one
+     * may access - a job not known here, only if privileged */
+    {
+        prte_job_t *pjob;
+        pmix_proc_t parent;
+
+        pjob = PMIX_NEW(prte_job_t);
+        PMIX_LOAD_NSPACE(pjob->nspace, "unit-test-access-parent");
+        prte_set_attribute(&pjob->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL, &owner,
+                           PMIX_UINT32);
+        if (PRTE_SUCCESS == prte_set_job_data_object(pjob)) {
+            PMIX_LOAD_PROCID(&parent, pjob->nspace, 0);
+            PMIX_LOAD_PROCID(&other, "unit-test-access-tool", 0);
+            id = ACC_STRANGER;
+            PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+            CHECK("parent/stranger", !prte_pmix_server_parent_permitted(&other, info, 1, &parent));
+            /* the requester's own job may always be named */
+            PMIX_LOAD_PROCID(&parent, other.nspace, 3);
+            CHECK("parent/own-job", prte_pmix_server_parent_permitted(&other, info, 1, &parent));
+            /* a job nobody here knows */
+            PMIX_LOAD_PROCID(&parent, "unit-test-access-nowhere", 0);
+            CHECK("parent/unknown-stranger",
+                  !prte_pmix_server_parent_permitted(&other, info, 1, &parent));
+            /* an empty name is no job at all, not a wildcard */
+            PMIX_LOAD_PROCID(&parent, NULL, 0);
+            CHECK("parent/empty", !prte_pmix_server_parent_permitted(&other, info, 1, &parent));
+            PMIX_INFO_DESTRUCT(&info[0]);
+            PMIX_LOAD_PROCID(&parent, pjob->nspace, 0);
+            PMIX_INFO_LOAD(&info[0], PMIX_USERID, &owner, PMIX_UINT32);
+            CHECK("parent/owner", prte_pmix_server_parent_permitted(&other, info, 1, &parent));
+            PMIX_INFO_DESTRUCT(&info[0]);
+            id = 0;
+            PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
+            PMIX_LOAD_PROCID(&parent, "unit-test-access-nowhere", 0);
+            CHECK("parent/unknown-root", prte_pmix_server_parent_permitted(&other, info, 1, &parent));
+            PMIX_INFO_DESTRUCT(&info[0]);
+            CHECK("parent/ourselves",
+                  prte_pmix_server_parent_permitted(PRTE_PROC_MY_NAME, NULL, 0, &parent));
+            pmix_pointer_array_set_item(prte_job_data, pjob->index, NULL);
+        } else {
+            CHECK("parent/fixture", false);
+        }
+        PMIX_RELEASE(pjob);
+    }
+
     /* a user is let go once nothing of theirs is left */
     tool = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(tool->nspace, "unit-test-access-last");
@@ -3033,7 +3160,6 @@ static int test_access(void)
         PMIX_RELEASE(prte_job_data);
         prte_job_data = NULL;
     }
-#endif
 #if PRTE_PMIX_HAVE_INFO_RELAYED
     /* relaying a request: the requester's identity is marked as theirs */
     {

@@ -118,11 +118,3 @@ user or group names or numbers separated by ':' - for example,
 Every name must be one this system knows, and the list may not be empty.
 Please correct it and try again.
 #
-[access-not-supported]
-The "%s" runtime option names who else may access the job:
-
-    %s
-
-but the PMIx library this runtime was built with cannot apply an access
-list. The job can be accessed only by its owner. Please remove the option,
-or rebuild with a newer PMIx.

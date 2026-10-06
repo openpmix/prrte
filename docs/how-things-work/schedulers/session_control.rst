@@ -34,8 +34,13 @@ Where it is decided depends on who asked:
   session control usable on a standalone ``prte`` DVM.
 
 In the last case the requestor must be entitled to act on the session. A
-reservation records both the namespaces that own it and the user it was
-granted to, and either is sufficient — so a second command run by the same
+session may be created by root, by the user the DVM runs as, or by a user
+or group named when the DVM was started (``prte --rtos
+users=<list>,groups=<list>``, each a ``:``-separated list of names or
+numbers). To operate on an
+existing session, it is enough to be the user it was granted to, or a
+member of that user's group. A reservation also records the namespaces
+that own it; either is sufficient — so a second command run by the same
 person reaches an allocation their first command created, even though the
 tool namespace of the first command is long gone.
 
@@ -83,6 +88,15 @@ Two constraints are worth knowing:
   that *does* name apps exists in order to run them, and is reclaimed when the
   last of them retires — at which point its nodes return to the general pool
   and, if a scheduler instantiated it, ``PMIX_SESSION_COMPLETE`` is sent.
+
+* **A node belongs to one session at a time.** A request naming a node that
+  another session holds is refused; the node becomes available again when
+  that session ends or releases it.
+
+* **Only an elastic DVM grows.** A node that is not yet part of the DVM can be
+  given to a session only if the DVM was started with
+  ``--prtemca prte_elastic_mode 1``. Otherwise the request is refused, and
+  nodes the DVM already runs on can still be reserved.
 
 Pause and resume
 ^^^^^^^^^^^^^^^^

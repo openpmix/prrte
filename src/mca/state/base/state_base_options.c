@@ -428,10 +428,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 /* further users or groups allowed to access the job - the
                  * vocabulary requires the value, a ':'-separated list */
                 rc = prte_pmix_server_access_parse(jdata, PRTE_RTOS_ACCESS_GROUPS == tag, ptr);
-                if (PRTE_ERR_NOT_SUPPORTED == rc) {
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "access-not-supported",
-                                   true, prte_cli_name(prte_cli_rtos_directives, tag), ptr);
-                } else if (PRTE_SUCCESS != rc) {
+                if (PRTE_SUCCESS != rc) {
                     prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "access-bad-list",
                                    true, prte_cli_name(prte_cli_rtos_directives, tag), ptr);
                 }

@@ -20,6 +20,15 @@ via the ``PMIx_Session_control`` API - i.e., the RM cannot guarantee
 its ability to intercept and process an allocation response to learn
 of a session that needs to be instantiated.
 
+A scheduler attaches to the DVM master as a tool that declares itself the
+scheduler (``PMIX_SERVER_SCHEDULER``), naming its own namespace and rank.
+The master accepts that only from a tool running as root, as the user the
+DVM runs as, or as a user named by the ``prte_pmix_scheduler_uids`` MCA
+parameter - a comma-separated list of user names or numeric ids, for a
+scheduler that runs as a service user of its own. It forgets the scheduler
+when it disconnects, after which the DVM answers session and allocation
+requests itself again.
+
 PRRTE's role in the ``PMIx_Allocation_request`` flow is generally to
 pass the request on to the scheduler, and transport the reply back
 to the requestor.

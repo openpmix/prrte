@@ -1389,8 +1389,12 @@ so `pmix_server_access.c` calls it on our own progress thread with **our own
 copies** of what it needs. PMIx keeps its own, on its own thread - no lock,
 no thread-shift, and no pointer from one side into the other.
 
+- **Both PMIx capabilities are required.** `configure` refuses a PMIx
+  without `PMIX_CAP_REQUESTER_ID` or `PMIX_CAP_ACCESS_CHECK`, so everything
+  below always has the requester's identity and PMIx's rule to work with.
+  Every PMIx release at the minimum version has both.
 - **A job's rule** is `jdata->access` (a `pmix_access_t`, held as `void *`
-  because an older PMIx has no such type), loaded with
+  in the job object), loaded with
   `pmix_server_access_load()` from exactly the info
   `prte_pmix_server_register_nspace` hands PMIx. Every daemon registers
   every job - the launch message is xcast to all - so every daemon has it.
@@ -1443,6 +1447,41 @@ no thread-shift, and no pointer from one side into the other.
   own user, the session's owner, or a member of the owner's group (`session->owner_gid`, from the requester job's recorded
   gid). Which jobs use a session's *resources* - spawning onto it - is a
   separate question, still answered by `prte_session_is_owned_by`.
+- **Creating a session** (`PMIX_SESSION_INSTANTIATE`) is a different kind of
+  request: there is no session yet to be the owner of, and the new one takes
+  nodes - out of the pool, or new ones the DVM grows onto - so it changes
+  what the DVM consists of. That is for the scheduler, ourselves, root, our
+  own user, and the users and groups the DVM was started with
+  (`prte --rtos users=a:b,groups=c:d`) - `prte_pmix_server_dvm_permitted`.
+  Those come from the DVM job's info cache, where `--rtos` leaves them, via
+  `prte_pmix_server_access_record_dvm()` into a rule of their own
+  (`prte_pmix_server_globals.dvm_access`). That rule is deliberately **not**
+  the DVM job's `jdata->access`: job control judges its targets by their
+  job's rule, so a user who may change the DVM would otherwise also be one
+  who may signal or kill its daemons. With a scheduler attached, anyone
+  else's request goes up to the scheduler and never reaches this check; the
+  scheduler's answer comes back down as its own request.
+- **A spawn's `PMIX_PARENT_ID`** makes the new job the parent's: it decides
+  the session the job lands in, whose allocation it draws on, and the job it
+  is connected to. Naming a parent is therefore acting for the parent's job,
+  and `interim()` accepts a parent outside the requester's own job only
+  from a requester permitted on the parent's job
+  (`prte_pmix_server_parent_permitted`). A parent whose job this daemon does
+  not know - a tool's job lives only on the HNP - is accepted only from root,
+  our own user and ourselves.
+- **The scheduler role** is claimed at tool connection
+  (`PMIX_SERVER_SCHEDULER`), and is accepted only from root, our own user, or
+  a user the `prte_pmix_scheduler_uids` MCA parameter names
+  (`prte_pmix_server_scheduler_permitted`) - judged by the uid PMIx
+  authenticated for the connection. Schedulers commonly run as a dedicated
+  service user rather than root, which is what the list is for. It is a
+  comma-separated list of names or numbers, looked up once when the master's
+  server starts (a lookup can block, which accepting a connection on the
+  progress thread must not), and a name nobody has stops the DVM starting
+  (`scheduler-uid-unknown`). The caddy's `uid` defaults to 0, so the check
+  also requires that PMIx supplied one. A scheduler that departs is forgotten
+  (`prte_pmix_server_tool_departed`), so the DVM stops deferring session
+  requests to it and tools may spawn into the default session again.
 
 ## Who may have a job's data
 

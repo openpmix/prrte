@@ -1336,6 +1336,16 @@ static void interim(int sd, short args, void *cbdata)
         goto complete;
     }
 
+    /* a PMIX_PARENT_ID makes the new job the parent's - its session, its
+     * allocation, its connection - so the requester has to be one that may
+     * act for the parent's job */
+    if (!prte_pmix_server_parent_permitted(requestor, cd->info, cd->ninfo, &jdata->originator)) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-runtime.txt", "spawn-parent-refused",
+                       true, PRTE_NAME_PRINT(requestor), PRTE_NAME_PRINT(&jdata->originator));
+        rc = PRTE_ERR_PERM;
+        goto complete;
+    }
+
     /* set debugger flags on apps if needed */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         for (n=0; n < (size_t)jdata->apps->size; n++) {

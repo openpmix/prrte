@@ -4037,6 +4037,41 @@ test_session() {
             && ok "a general job was kept off the reserved nodes" \
             || bad "a general job landed on reserved nodes: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
 
+        banner "session: a node another session holds is not given away"
+        # 4242 holds node3 and is running a job there, so a second session
+        # naming node3 has to be refused, and 4242's job left alone.
+        out=$(RUN "timeout 60 $SESSCTL instantiate 4250 --hosts node3:2" 2>&1); rc=$?
+        if [ "$rc" = 124 ]; then
+            bad "instantiating onto a held node hung"
+        elif echo "$out" | grep -q PMIX_SUCCESS; then
+            bad "a second session was given node3, which 4242 holds"
+        else
+            ok "a second session was refused a node 4242 holds"
+        fi
+        ON 3 'pgrep -x sleep >/dev/null' \
+            && ok "the holding session's job on node3 is untouched" \
+            || bad "4242's job on node3 is gone"
+
+        banner "session: a fixed-size DVM is not grown by a session"
+        # node5 is not in this DVM, which was not started elastic and so
+        # cannot change size.  A session naming it has to be refused - not
+        # grow onto it, which a non-elastic DVM cannot complete.
+        out=$(RUN "timeout 60 $SESSCTL instantiate 4251 --hosts node5:2" 2>&1); rc=$?
+        if [ "$rc" = 124 ]; then
+            bad "instantiating onto a node outside a non-elastic DVM hung"
+        elif echo "$out" | grep -q PMIX_SUCCESS; then
+            bad "a session grew a non-elastic DVM onto node5"
+        else
+            ok "a session naming a node outside a non-elastic DVM was refused"
+        fi
+        ON 5 'pgrep -x prted >/dev/null' \
+            && bad "a daemon was started on node5" \
+            || ok "no daemon was started on node5"
+        out=$(PRUN '-n 2 --map-by node hostname' 2>&1)
+        echo "$out" | grep -qE '^node[12]$' \
+            && ok "the DVM still runs jobs afterwards" \
+            || bad "the DVM stopped running jobs: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
         banner "session: a request relayed from a non-master daemon is served"
         # node3 is not the DVM master, so this goes out on PRTE_RML_TAG_SCHED
         # and comes back on ..._SCHED_RESP.  With one daemon that relay never
@@ -4183,6 +4218,171 @@ test_session() {
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     for n in $(seq 1 "$NNODES"); do kill_stray "$n" sleep; done
+    cleanup_swarm
+}
+
+########################################################################
+# src/prted/pmix -- what a tool of ANOTHER user may ask of the DVM.
+#
+# The DVM judges a request by the user PMIx authenticated for the
+# requester's connection.  Only a second user can show that, so the DVM
+# runs as root with prte_pmix_no_foreign_tools off, and roletool runs as
+# uid 65534 through setpriv, reaching the DVM by its URI (its rendezvous
+# files are root's alone).  That user must be refused:
+#
+#   * a spawn naming a job of root's as its parent - the parent decides
+#     the session, the allocation and the job the new one is connected to
+#   * the scheduler role, which decides every session
+#   * a new session, which takes nodes out of the general pool
+#
+# and root's own scheduler, once it has gone, must not keep the DVM
+# deferring to it.  A DVM started naming that user - --rtos users= and
+# prte_pmix_scheduler_uids - lets it create a session and be the scheduler.
+########################################################################
+ROLETOOL=/opt/prte/prte/bin/roletool
+test_requesters() {
+    local out uri pns rq rc
+
+    banner "requesters: a tool of another user is judged as that user"
+    cleanup_swarm
+    if ! RUN "test -x $ROLETOOL"; then
+        skp "roletool not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! RUN 'test "$(id -u)" = 0 && command -v setpriv >/dev/null'; then
+        skp "running a tool as a second user needs root and setpriv on the head node"
+        return
+    fi
+    if ! prted_dvm_start_mca 'node1:2,node2:2' '--prtemca prte_pmix_no_foreign_tools 0'; then
+        bad "could not start a DVM that accepts other users' tools"
+        return
+    fi
+    # the URI is the file's first line; the rest describe the server
+    uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
+    # HOME too: root's is not readable by the second user
+    rq="setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp $ROLETOOL '$uri'"
+
+    # the control: without it, every refusal below could just as well be a
+    # tool that cannot reach the DVM at all
+    out=$(RUN "timeout 60 $rq spawn" 2>&1)
+    if ! echo "$out" | grep -q "ROLE SPAWN PMIX_SUCCESS"; then
+        bad "a tool of another user could not start a job of its own: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+        cleanup_swarm
+        return
+    fi
+    ok "a tool of another user can start a job of its own"
+
+    banner "requesters: another user may not name root's job as a parent"
+    ON 1 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec sleep 60\n" > /tmp/rqparent.sh && chmod +x /tmp/rqparent.sh'
+    PRUN_BG /tmp/rqparent.out '--host node1:1 -n 1 /tmp/rqparent.sh'
+    pns=""
+    for _ in $(seq 1 20); do
+        pns=$(RUN 'cat /tmp/rqparent.out 2>/dev/null' | sed -n 's/^NS=//p' | tr -d '\r' | head -1)
+        [ -n "$pns" ] && break
+        sleep 1
+    done
+    if [ -z "$pns" ]; then
+        bad "the parent job did not report its namespace"
+    else
+        out=$(RUN "timeout 60 $rq parent '$pns' 0" 2>&1)
+        if echo "$out" | grep -q "ROLE SPAWN PMIX_SUCCESS"; then
+            bad "another user's spawn was made a child of root's job $pns"
+        elif echo "$out" | grep -q "ROLE SPAWN PMIX_ERR_NO_PERMISSIONS"; then
+            ok "another user's spawn naming root's job as parent was refused"
+        else
+            bad "naming root's job as parent failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        ON 1 'pgrep -f rqparent.sh >/dev/null' \
+            && ok "root's job is still running" \
+            || bad "root's job did not survive the refused spawn"
+    fi
+
+    banner "requesters: another user may not be the scheduler"
+    out=$(RUN "timeout 60 $rq scheduler" 2>&1)
+    if echo "$out" | grep -q "ROLE INIT PMIX_SUCCESS"; then
+        bad "a tool of another user was accepted as the scheduler"
+    else
+        ok "a tool of another user was refused the scheduler role"
+    fi
+
+    banner "requesters: another user may not create a session"
+    out=$(RUN "timeout 60 $rq instantiate 4270 node2:2" 2>&1)
+    if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+        bad "another user created a session"
+    elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_NO_PERMISSIONS"; then
+        ok "another user was refused a new session"
+    else
+        bad "creating a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    # two procs by node: one must land on node2 (root's parent job still
+    # holds a slot on node1, so ask for no more than will fit)
+    out=$(PRUN '-n 2 --map-by node hostname' 2>&1)
+    echo "$out" | grep -q '^node2$' \
+        && ok "node2 is still in the general pool" \
+        || bad "node2 is no longer usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "requesters: a scheduler that has gone is forgotten"
+    # root's own scheduler is accepted - and once it leaves, the DVM must
+    # stop deferring to it, or no tool could start a job again
+    out=$(RUN "timeout 60 $ROLETOOL '$uri' scheduler" 2>&1)
+    echo "$out" | grep -q "ROLE INIT PMIX_SUCCESS" \
+        && ok "root's tool was accepted as the scheduler" \
+        || bad "root's tool was refused the scheduler role: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    sleep 2
+    out=$(PRUN '-n 2 --map-by node hostname' 2>&1)
+    echo "$out" | grep -qE '^node[12]$' \
+        && ok "tools start jobs again once the scheduler has gone" \
+        || bad "a tool could not start a job after the scheduler left: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    ON 1 'rm -f /tmp/rqparent.sh /tmp/rqparent.out'
+    for n in 1 2; do kill_stray "$n" sleep; done
+    cleanup_swarm
+
+    banner "requesters: the users a DVM is started with may change it"
+    # the same second user, now named twice when the DVM starts: by
+    # --rtos users= (who else may change the DVM) and by
+    # prte_pmix_scheduler_uids (who else may be its scheduler)
+    if ! prted_dvm_start_mca 'node1:2,node2:2' \
+            '--prtemca prte_pmix_no_foreign_tools 0 --prtemca prte_pmix_scheduler_uids 65534 --rtos users=65534'; then
+        bad "could not start a DVM naming a second user"
+    else
+        uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
+        rq="setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp $ROLETOOL '$uri'"
+        out=$(RUN "timeout 60 $rq instantiate 4271 node2:2" 2>&1)
+        echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS" \
+            && ok "a user named by --rtos users= created a session" \
+            || bad "a user named by --rtos users= could not create a session: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN "timeout 60 $SESSCTL terminate 4271" 2>&1)
+        echo "$out" | grep -q PMIX_SUCCESS \
+            || bad "could not terminate session 4271: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        banner "requesters: a scheduler may run as a user the DVM names"
+        out=$(RUN "timeout 60 $rq scheduler" 2>&1)
+        echo "$out" | grep -q "ROLE INIT PMIX_SUCCESS" \
+            && ok "a scheduler running as a user prte_pmix_scheduler_uids names was accepted" \
+            || bad "a scheduler running as a listed user was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 2
+        out=$(PRUN '-n 2 --map-by node hostname' 2>&1)
+        echo "$out" | grep -qE '^node[12]$' \
+            && ok "tools start jobs again once that scheduler has gone" \
+            || bad "a tool could not start a job after the scheduler left: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "requesters: a scheduler user nobody has stops the DVM starting"
+    out=$(RUN "timeout -k 5 60 prte --prtemca prte_pmix_scheduler_uids prte-no-such-user --host node1:1" 2>&1); rc=$?
+    if [ "$rc" = 124 ]; then
+        bad "the DVM started with a scheduler user nobody has"
+    elif [ "$rc" = 0 ]; then
+        bad "prte exited 0 with a scheduler user nobody has"
+    else
+        echo "$out" | grep -q "does not know" \
+            && ok "a scheduler user nobody has is reported and stops the DVM" \
+            || bad "prte failed without naming the unknown user: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
     cleanup_swarm
 }
 
@@ -10578,6 +10778,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     phase test_prted
 
     phase test_session
+
+    phase test_requesters
 
     phase test_tools
 

@@ -626,6 +626,14 @@ typedef struct {
     bool session_server;
     bool system_server;
     bool no_foreign_tools;
+    /* the users, besides root and our own, a tool may run as to be accepted
+     * as the scheduler: the MCA list, and what it resolved to */
+    char *scheduler_uids;
+    uint32_t *sched_uids;
+    size_t nsched_uids;
+    /* who may act on the DVM itself - a pmix_access_t, made from the
+     * --rtos users=/groups= the DVM was started with */
+    void *dvm_access;
     bool system_controller;
     bool scheduler_connected;
     /* we have already looked for a scheduler to attach to and found none - do
@@ -697,21 +705,53 @@ PRTE_EXPORT bool prte_pmix_server_privileged(uid_t uid);
 PRTE_EXPORT uid_t prte_pmix_server_job_owner(prte_job_t *jdata);
 
 /* May uid act on jdata? PMIx's rule (pmix_server_access_check) over our
- * copy of the job's owner and access list and our record of the user;
- * against a PMIx without it, root, our own user and the owner. A NULL
- * jdata admits only root and our own user. */
+ * copy of the job's owner and access list and our record of the user. A
+ * NULL jdata admits only root and our own user. */
 PRTE_EXPORT bool prte_pmix_server_job_permitted(uid_t uid, prte_job_t *jdata);
 
-/* The same for the requester an up-call's info names. A PMIx that names
- * the requester of every client and tool request
- * (PRTE_PMIX_HAVE_REQUESTER_ID) names none only for a request we made of
- * it ourselves: that is allowed when requestor - the up-call's requesting
- * process, NULL where it has none - is our own name, and anything else
- * naming none is refused. Against an older PMIx, a request naming no
- * requester is allowed. */
+/* The same for the requester an up-call's info names. PMIx names the
+ * requester of every client and tool request, so a request naming none is
+ * one we made of it ourselves: that is allowed when requestor - the
+ * up-call's requesting process, NULL where it has none - is our own name,
+ * and anything else naming none is refused. */
 PRTE_EXPORT bool prte_pmix_server_request_permitted(const pmix_proc_t *requestor,
                                                     const pmix_info_t *info, size_t ninfo,
                                                     prte_job_t *jdata);
+
+/* May the requester an up-call's info names declare parent as the parent
+ * of the job it asks to start? A job's parent decides the session it runs
+ * in, whose allocation it may draw on, and whose job it is connected to,
+ * so naming one is acting for the parent's job: a process of the
+ * requester's own job may always be named, and any other only by a
+ * requester permitted on the parent's job (prte_pmix_server_request_permitted).
+ * A parent whose job is not known here admits only root, our own user and
+ * ourselves. */
+PRTE_EXPORT bool prte_pmix_server_parent_permitted(const pmix_proc_t *requestor,
+                                                   const pmix_info_t *info, size_t ninfo,
+                                                   const pmix_proc_t *parent);
+
+/* May the requester an up-call's info names change what the DVM consists
+ * of - create a session, say? The scheduler, ourselves, root, our own user,
+ * and the users and groups the DVM was started with (--rtos users=,
+ * groups=). */
+PRTE_EXPORT bool prte_pmix_server_dvm_permitted(const pmix_proc_t *requestor,
+                                                const pmix_info_t *info, size_t ninfo);
+
+/* Make the rule prte_pmix_server_dvm_permitted applies - our own user as
+ * the owner, plus the access list --rtos users=/groups= cached on the DVM's
+ * job - and release it. The master calls this once the DVM's runtime
+ * options are applied. It is kept apart from the DVM job's own rule: it
+ * says who may change the DVM, not who may act on its daemons. */
+PRTE_EXPORT int prte_pmix_server_access_record_dvm(prte_job_t *daemons);
+PRTE_EXPORT void prte_pmix_server_access_release_dvm(void);
+
+/* Look up the users prte_pmix_scheduler_uids names, once; a name nobody
+ * has is reported and refused. */
+PRTE_EXPORT int prte_pmix_server_scheduler_uids_resolve(void);
+
+/* May a tool running as uid be the scheduler? Root, our own user, and the
+ * users prte_pmix_scheduler_uids names. */
+PRTE_EXPORT bool prte_pmix_server_scheduler_permitted(uid_t uid);
 
 /* May the requester an up-call's info names operate on session - grow,
  * shrink, release, terminate it? The scheduler, root, our own user, the
@@ -724,8 +764,8 @@ PRTE_EXPORT bool prte_pmix_server_session_permitted(prte_session_t *session,
 /* Add to a job's info the further users (or, with group, groups) the
  * --rtos users= / groups= directives name - a ':'-separated list of names
  * and numbers, resolved here - as a PMIX_ACCESS_PERMISSIONS, which travels
- * with the job to every daemon. PRTE_ERR_NOT_SUPPORTED against a PMIx
- * without the rule; PRTE_ERR_NOT_FOUND for a name nobody has. */
+ * with the job to every daemon. PRTE_ERR_NOT_FOUND for a name nobody
+ * has. */
 PRTE_EXPORT int prte_pmix_server_access_parse(prte_job_t *jdata, bool group, const char *list);
 
 /* Keep our copy of a job's owner and access list, from the info we

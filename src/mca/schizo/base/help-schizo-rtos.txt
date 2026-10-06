@@ -193,6 +193,10 @@ Supported values include:
   Output files the job writes are made readable by the first group
   listed.
 
+  Given to "prte" when starting a DVM, USERS and GROUPS also name who
+  else may make changes to the DVM itself, such as creating a session in
+  it.
+
 The "--rtos" command line option has no qualifiers.
 
 Note:

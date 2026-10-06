@@ -561,6 +561,16 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.no_foreign_tools);
 
+    /* the users a scheduler may run as, besides root and our own */
+    prte_pmix_server_globals.scheduler_uids = NULL;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "scheduler_uids",
+                                      "Comma-separated list of the users (names or numeric "
+                                      "uids) a tool may run as to be accepted as the DVM's "
+                                      "scheduler, in addition to root and the user the DVM "
+                                      "runs as",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_pmix_server_globals.scheduler_uids);
+
     /* whether or not to generate device distances */
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
                                       "Device types whose distances are to be provided (default=fabric,gpu,network)",
@@ -923,6 +933,19 @@ int pmix_server_init(void)
     prte_pmix_server_globals.nscheddirs = 0;
     prte_pmix_server_globals.primary_server = *PRTE_NAME_INVALID;
     prte_pmix_server_globals.primary_server_set = false;
+    prte_pmix_server_globals.sched_uids = NULL;
+    prte_pmix_server_globals.nsched_uids = 0;
+    prte_pmix_server_globals.dvm_access = NULL;
+
+    /* only the master accepts a scheduler. Its users are looked up now -
+     * a name lookup may block, which a connection being accepted on the
+     * progress thread cannot - and one naming nobody stops us here */
+    if (PRTE_PROC_IS_MASTER) {
+        rc = prte_pmix_server_scheduler_uids_resolve();
+        if (PRTE_SUCCESS != rc) {
+            return rc;
+        }
+    }
 
     PMIX_INFO_LIST_START(ilist);
 
@@ -1426,6 +1449,11 @@ void pmix_server_finalize(void)
 
     /* finalize our local data server */
     prte_data_server_finalize();
+
+    free(prte_pmix_server_globals.sched_uids);
+    prte_pmix_server_globals.sched_uids = NULL;
+    prte_pmix_server_globals.nsched_uids = 0;
+    prte_pmix_server_access_release_dvm();
 
     /* and the users we judged access for */
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.users);
