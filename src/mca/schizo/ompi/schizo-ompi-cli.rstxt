@@ -12,6 +12,19 @@
 
    $HEADER$
 
+.. caution::
+
+   The MCA parameter options - ``--mca``, ``--prtemca``, ``--pmixmca``
+   and ``--tune`` - are applied before the rest of the command line is
+   parsed, so they are looked for across the whole line, the program's
+   arguments included. If you are passing MCA parameters to your
+   program, put ``--`` in front of the program so that the search stops
+   there:
+
+   .. code:: sh
+
+      mpirun -n 4 -- ./myapp --mca foo bar
+
 General command line options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
