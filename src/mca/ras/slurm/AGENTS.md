@@ -162,6 +162,31 @@ parent is always running when it grows, so `prefer` is always empty there,
 and a `--prefer` its nodes satisfied reaches the expander as a hard
 `--constraint` — the expander gets the node type the parent got.
 
+### Fields a site names: `ras_slurm_propagate_extra`
+
+Further members of the record, as comma-separated `json_key:--option` pairs
+(`comment:--comment`). Each sends `--option=<the parent's value>`; the value
+always comes from the parent, never from the parameter, so an extend stays a
+continuation.
+
+- **Checked once, in `modify_extend_init`**, so only where extends can run.
+  A bad entry is reported with `propagate-extra-bad-entry`, naming it, and
+  every extend is then refused with `propagate-extra-refused`; the DVM still
+  comes up, since a failed `init()` would only hand the allocation to the
+  next component. Keys are top-level member names (`[a-z_]+`); options are
+  long ones (`--[a-z][a-z0-9-]*`); neither may repeat; and an option may not
+  be, or abbreviate, one PRRTE sets (`initial_args`, `owned_formats`) —
+  getopt_long takes abbreviations, so `--exc` would reach `--exclusive`.
+- **Read with the built-ins**, in the same pass over the record. A string
+  goes as is; a `{set, infinite, number}` object holding a whole number goes
+  as that number, and is omitted when unset or infinite; empty and null are
+  omitted. A member the record lacks, or of any other type, fails the extend
+  with `propagate-extra-bad-member`. PRRTE's own entries in that table
+  (`record_job_data_fields`) carry a `:`, so no member can overwrite them.
+- **No transforms.** The value is sent as Slurm printed it, so only members
+  that round-trip verbatim work. Some do not; for example, Slurm prints a
+  default `wckey` with a leading `*`.
+
 ### The expander job ends with the parent allocation
 
 The expander must not outlive the allocation it was grown for, which takes two
