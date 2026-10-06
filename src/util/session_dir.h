@@ -55,17 +55,23 @@ PRTE_EXPORT int prte_session_dir(pmix_proc_t *proc);
  * Create a directory PRRTE names for itself under a shared temporary
  * directory, applying the session-directory rule: one already there -
  * the name is predictable, so it need not be one we made - is used only
- * if it is ours and no one else can write to it. A refusal is reported
- * here.
+ * if it is ours and no one else can write to it.
  *
- * @param directory The directory.
+ * When something we cannot use already holds the name, a directory is
+ * made beside it instead, named "<directory>.XXXXXX" by mkdtemp(), and
+ * *directory is replaced with that name. Nothing a caller does depends
+ * on the name itself - it is handed on to PMIx and to everything else by
+ * value - so the only effect of the fallback is that startup succeeds.
+ *
+ * @param directory The directory; on success, the one actually used,
+ *                  which the caller owns either way.
  * @param created   If not NULL, set true only if this call made it, so
  *                  the caller knows it is the one to remove it.
  * @retval PRTE_SUCCESS    It is ours to use.
- * @retval PRTE_ERR_SILENT It is not, or could not be opened; the reason
- *                         has already been shown.
+ * @retval PRTE_ERR_SILENT Neither the name nor an alternative could be
+ *                         had; the reason has already been shown.
  */
-PRTE_EXPORT int prte_session_dir_create(const char *directory, bool *created);
+PRTE_EXPORT int prte_session_dir_create(char **directory, bool *created);
 
 /** The session_dir_finalize functions perform a cleanup of the
  * relevant session directory tree.

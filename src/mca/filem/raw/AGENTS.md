@@ -591,10 +591,16 @@ preloaded *binary* is symlinked (`create_link`). That split is deliberate:
   large executable can cost a great deal. If the cwd model ever changes,
   this exception has to move with it.
 
-The copy goes to `<dest>.prte-tmp.<pid>` and is `rename()`d into place, so
-a proc never sees a half-written file — which matters precisely in the
-shared-working-directory case, where several daemons may be placing the
-identical file at the same moment.
+The copy goes to a temporary beside the destination and is `rename()`d into
+place, so a proc never sees a half-written file — which matters precisely in
+the shared-working-directory case, where several daemons may be placing the
+identical file at the same moment. The temporary comes from
+`prte_filem_base_open_temp()`: `<dest>.prte-tmp.XXXXXX`, made by `mkstemp()`,
+so it is always a new file, created exclusively, under a name no other daemon
+will pick - a pid alone is not unique across nodes sharing the directory. Its
+mode is set on the descriptor (`mkstemp()` creates 0600), and if that fails
+the file is not used, since what is placed must arrive with the mode it was
+sent with.
 
 ### Refusing to overwrite, without refusing ourselves
 

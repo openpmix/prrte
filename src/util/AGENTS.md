@@ -182,7 +182,19 @@ directories. `_check_owner()` therefore refuses any directory PRRTE composes
 (top, job, rank) that is not owned by our euid or is group/other-writable,
 inspecting it through an `O_NOFOLLOW` descriptor. It never examines
 `tmpdir_base`: that was handed to us, and on macOS it is reached through the
-root-owned `/tmp` symlink. A job whose directory is refused must also forget
+root-owned `/tmp` symlink.
+
+**A top-level name that is taken is not a reason to stop.** For the top
+directory, and for `prun`'s own session directory, `prte_session_dir_create()`
+(`_claim_dir()`) uses the name only if it is free or holds a directory of ours
+that passes that check; otherwise it creates `<name>.XXXXXX` with `mkdtemp()`
+and hands that name back in its place. Nothing looks a session directory up
+by name - it is passed to PMIx (`PMIX_SERVER_TMPDIR`, `PMIX_TMPDIR`) and
+everywhere else by value, and PMIx finds rendezvous files by searching
+subdirectories - so the only effect is that startup succeeds. The prefix is
+kept, so cleanup by prefix (`/tmp/prte.*`, as `contrib/dockerswarm` does)
+still catches it. The job and rank directories need none of this: they are
+made inside a directory that is ours and closed to everyone else. A job whose directory is refused must also forget
 the path (`jdata->session_dir = NULL`), because finalize recursively destroys
 whatever that names. Verifying the foreign-owner refusal needs a second uid,
 so it was checked in the dockerswarm image as root planting the name for the
@@ -322,9 +334,15 @@ the modex match the names found locally.
   `--map-by`/`--rank-by`/`--bind-to` over synthetic topologies. It consumes
   what `dash_host`/`hostfile` produce, so run it after touching either.
 
-Not unit-testable, and deliberately left to the live smoke test: `session_dir`
-(creates directories under the real `$TMPDIR`), `stacktrace` (installs signal
-handlers), `daemon_init` (forks), and `nidmap` (needs a populated DVM).
+Not unit-testable, and deliberately left to the live smoke test: most of
+`session_dir` (it creates directories under the real `$TMPDIR`), `stacktrace`
+(installs signal handlers), `daemon_init` (forks), and `nidmap` (needs a
+populated DVM). The exception is claiming a top-level directory
+(`prte_session_dir_create()`), which takes the path it is given, so
+`test/unit/util/test_session_dir.c` drives it inside a scratch directory:
+a free name, our own directory, and each kind of name it must pass over.
+A directory owned by another user needs a second uid, so that case is in
+`contrib/dockerswarm`'s `test_util` phase, which can make one as root.
 
 `nidmap` in particular needs a DVM that has **changed size**, and a job that
 **spans a daemon which predates the change** — a one-proc job lands on the
