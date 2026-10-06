@@ -114,6 +114,7 @@ typedef struct {
     bool propagate_time;
     bool propagate_threads_per_core;
     bool propagate_gres;
+    bool propagate_reservation;
 } prte_mca_ras_slurm_component_t;
 PRTE_EXPORT extern prte_mca_ras_slurm_component_t prte_mca_ras_slurm_component;
 
@@ -128,6 +129,7 @@ enum slurm_str_field {
     STR_QOS,
     STR_CWD,
     STR_TRES_PER_NODE,
+    STR_RESV_NAME,
     STR_FIELD_COUNT
 };
 

@@ -133,6 +133,7 @@ const char *const str_fields[STR_FIELD_COUNT] = {
     [STR_QOS]       = "qos",
     [STR_CWD]       = "current_working_directory",
     [STR_TRES_PER_NODE] = "tres_per_node",
+    [STR_RESV_NAME] = "resv_name",
 };
 
 /* Numberic object fields to read from "parent" Slurm job JSON */
@@ -188,6 +189,7 @@ static const char *time_format = "--time=%s";
 static const char *nodes_format = "--nodes=%s";
 static const char *nodelist_format = "--nodelist=%s";
 static const char *threads_per_core_format = "--threads-per-core=%s";
+static const char *reservation_format = "--reservation=%s";
 
 /*
  * Constructor for prte_slurm_wait_tracker_t
@@ -1019,6 +1021,15 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
         /* The third memory option; Slurm sets it only when the other two are unset */
         err = prte_ras_slurm_make_count_envar_arg(mem_per_gpu_envar, mem_per_gpu_format, &argv);
+
+        if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+    }
+
+    if(prte_mca_ras_slurm_component.propagate_reservation) {
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_RESV_NAME], reservation_format, false, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
