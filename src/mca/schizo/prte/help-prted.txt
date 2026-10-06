@@ -307,3 +307,13 @@ in the top-level session directory assigned to the DVM.
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
+#
+[orted:cannot-bind]
+A PRRTE daemon was asked to bind itself to a core that does not
+exist on its node:
+
+  Node:   %s
+  Cores:  %s
+
+The cores are given by the "prte_daemon_cores" MCA parameter. Please
+correct the list and try again.

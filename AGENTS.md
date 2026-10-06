@@ -439,6 +439,13 @@ python3 src/util/prte-convert-help.py --root . --check-only \
     --cppflags="$(pkg-config --cflags-only-I pmix)"
 ```
 
+The same run checks the calls against the help files, in both directions:
+every topic in a help file must be shown by some call, and every topic a
+call names in one of PRRTE's help files must exist there - a missing one
+does not fail, it prints PMIx's "couldn't find that topic" placeholder in
+place of the diagnostic. So adding a call means adding its topic, and
+removing the last call to a topic means removing the topic.
+
 ### Mixed-version DVMs are strictly forbidden
 
 Every process in a DVM comes from the same build. There is no version

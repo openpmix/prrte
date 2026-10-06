@@ -541,6 +541,30 @@ def check_citation_files(parsed_data, citations, verbose=False):
         print("All show_help citations name their PRRTE help file correctly")
     return errorFound
 
+def check_citation_topics(parsed_data, citations, verbose=False):
+    # Every topic a show_help call names in one of our help files must
+    # exist in that file.  Like a misnamed file, a missing topic does not
+    # fail loudly: the lookup finds nothing and the user is handed PMIx's
+    # "Sorry! ... I couldn't find that topic" placeholder in place of the
+    # diagnostic, on exactly the error path nobody exercises.  A citation of
+    # a file we do not own is PMIx's to resolve and is not checked here.
+    topics = {}
+    for path, sections in parsed_data.items():
+        topics.setdefault(os.path.basename(path), set()).update(sections.keys())
+    errorFound = False
+    reported = set()
+    for (fil, topic) in citations:
+        if fil not in topics or topic in topics[fil] or (fil, topic) in reported:
+            continue
+        reported.add((fil, topic))
+        sys.stderr.write("ERROR: show_help names a topic its help file does not have\n")
+        sys.stderr.write("    File:  " + fil + "\n")
+        sys.stderr.write("    Topic: " + topic + "\n")
+        errorFound = True
+    if verbose and not errorFound:
+        print("Every topic a show_help call names exists in its help file")
+    return errorFound
+
 def purge(parsed_data, citations):
     special_topics = SPECIAL_TOPICS
     result_data = {}
@@ -550,25 +574,6 @@ def purge(parsed_data, citations):
         result_sections = {}
         for section in sections:
             content_list = sections[section]
-            # check for duplicate entries
-            content = '\n'.join(content_list)
-            # search all other entries for a matching section
-            for (file2, sec) in parsed_data.items():
-                if file2 == filename:
-                    continue
-                for (sec2, cl) in sec.items():
-                    cnt = '\n'.join(cl)
-                    if sec == section:
-                        if content == cnt:
-                            # these are the same
-                            sys.stderr.write("DUPLICATE FOUND:\n    SECTION: " + section + "\n    FILES: " + \
-                                             filename + "\n           " + file2 + "\n")
-                            errorFound = True
-                        else:
-                            # same topic, different content
-                            sys.stderr.write("DUPLICATE SECTION WITH DIFFERENT CONTENT:\n    SECTION: " + \
-                                             section + "\n    FILES: " + filename + "\n           " + file2 + "\n")
-                            errorFound = True
             # search code files for usage
             # protect special values
             if section in special_topics:
@@ -595,9 +600,8 @@ def purge(parsed_data, citations):
         else:
             sys.stderr.write("File " + filename + " has no used topics - omitting\n")
             errorFound = True
-        if errorFound:
-            exit(1)
 
+    # report every file's unused topics before failing, not just the first's
     if errorFound:
         exit(1)
     return result_data
@@ -721,6 +725,8 @@ def main():
         if check_tool_options(tool_data, tables, norm, citations, args.verbose):
             exit(1)
         if check_citation_files(parsed_data, citations, args.verbose):
+            exit(1)
+        if check_citation_topics(parsed_data, citations, args.verbose):
             exit(1)
         outdata = purge(parsed_data, citations)
     else:

@@ -25,3 +25,19 @@ See the mpirun(1) man page or HTML help for a detailed list of command
 line options that are available.
 
 %s
+#
+[with-ft-bad-option]
+The OMPI personality was passed the --with-ft directive,
+but that directive was given an unsupported option:
+
+  Option: %s
+
+Supported options include:
+
+* typical representations for "true" ("yes", "true", or "1")
+
+* typical representations for "false" ("no", "false", or "0")
+
+* either "ulfm" or "mpi"
+
+Please provide one of the above values and try again.

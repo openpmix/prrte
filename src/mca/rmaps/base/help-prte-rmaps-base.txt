@@ -626,3 +626,12 @@ The "ndev" qualifier was given with a mapping policy it cannot apply to:
 
 "ndev" says how many devices each process is to be assigned, so it is
 meaningful only in combination with "--map-by device=<class|name>".
+#
+[must-map-by-obj]
+When ranking by FILL or by SPAN, you must map by an object
+type (e.g., HWTHREAD, CORE, a cache level, PACKAGE or NUMA):
+
+  Map policy:   %s
+  Rank policy:  %s
+
+Please specify a supported combination and try again.

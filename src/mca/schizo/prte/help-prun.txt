@@ -1446,3 +1446,50 @@ PRRTE framework, and otherwise to PMIx. A parameter that belongs to
 neither is an error, as is a parameter given twice with different
 values. A parameter given explicitly on the command line ("--prtemca",
 "--pmixmca") overrides the same parameter in a tune file.
+#
+[bad-job-object]
+%s could not find the job object that describes its own daemons.
+That object is created during startup, so this is an internal error;
+please report it.
+#
+[bad-app-object]
+%s could not find the application description of its own daemons.
+That description is created during startup, so this is an internal
+error; please report it.
+#
+[malformed-envar]
+A command line option was given to %s an environment variable for
+an application, but its value is not in the form that option takes:
+
+  App:    %s
+  Value:  %s
+
+--set-env takes "NAME=value". --prepend-env and --append-env take two
+values: "NAME[sep]", where "sep" is the one character that separates
+the entries of the variable, followed by the value to add - for
+example, "--prepend-env PATH[:] /opt/bin".
+
+Please correct the option and try again.
+#
+[prun:init-failure]
+The PMIx Reference RTE was unable to initialize properly. The error
+occurred while attempting to %s. Returned value %d instead of
+PRTE_SUCCESS.
+#
+[prun:paffinity-missing-module]
+A request to bind processes was made, but process binding is not
+available on this node:
+
+  Local host:        %s
+
+You can rerun your job without requesting binding, or check the
+configuration of this node.
+#
+[prun:proc-socket-not-avail]
+%s was unable to start the specified application as it encountered an
+error:
+
+Error name: %s
+Node: %s
+
+when attempting to start process rank %lu.

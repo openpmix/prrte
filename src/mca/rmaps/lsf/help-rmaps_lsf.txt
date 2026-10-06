@@ -78,3 +78,7 @@ some systems may require using full hostnames, such as
 "host1.example.com" (instead of just plain "host1").
 
   Host: %s
+#
+[bad-index]
+The LSF affinity file named host %s by an index that is larger than
+the number of allocated hosts.
