@@ -1065,6 +1065,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
+    /* the users= and groups= among them say who else may change the DVM -
+     * create a session in it, say */
+    rc = prte_pmix_server_access_record_dvm(jdata);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        goto DONE;
+    }
 
     /* Check a couple of display options for the DVM itself.  Ask the same
      * parser the job's copy of these directives goes through rather than

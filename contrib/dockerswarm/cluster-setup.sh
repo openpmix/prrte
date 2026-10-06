@@ -128,6 +128,7 @@ fencer     contrib/dockerswarm/fencer.c
 pmixloop   contrib/dockerswarm/pmixloop.c
 faulty     contrib/dockerswarm/faulty.c
 envspawn   contrib/dockerswarm/envspawn.c
+roletool   contrib/dockerswarm/roletool.c
 peerinfo   contrib/dockerswarm/peerinfo.c
 slotinfo   contrib/dockerswarm/slotinfo.c
 scaletest  contrib/scaling/scaletest.c

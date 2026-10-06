@@ -215,6 +215,13 @@ can still be refused cleanly:
   the reservation's nodes carry daemons. A NEW that names no nodes reserves
   nodes the DVM already has, and a release of daemon-less nodes shrinks
   nothing; both stay legal.
+- a session's nodes (`PMIX_SESSION_INSTANTIATE`, `PMIX_SESSION_EXTEND`) in
+  `prte_ras_base_insert_node_string()`, per node, before any is inserted:
+  a node with no daemon of ours is refused on a non-elastic DVM, while a node
+  it already runs on can still be reserved. The same check refuses a node
+  another session holds (`ras-base:node-in-session`) - a node belongs to one
+  session at a time - and serves the allocation path through the same
+  function.
 
 A non-elastic DVM used to serve these. An `--add-host` launched its daemon,
 and when that daemon failed to start the requester waited forever on a daemon

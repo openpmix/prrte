@@ -242,15 +242,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_have_group_ft],
                        [Whether PMIx supports the group fault-tolerance feature set, including the PMIX_GROUP_CANCEL host operation])
 
+    # Who may act on a job or a session is decided from the requester's
+    # identity, which PMIx names on every up-call, and by PMIx's own access
+    # rule - so both are required. Every PMIx release at or above the
+    # minimum version has them; a pre-release that passes the version
+    # check may not.
     AC_MSG_CHECKING([for PMIx requester identity on up-calls])
     PRTE_CHECK_PMIX_CAP([REQUESTER_ID],
-                        [AC_MSG_RESULT([yes])
-                         prte_pmix_have_requester_id=1],
+                        [AC_MSG_RESULT([yes])],
                         [AC_MSG_RESULT([no])
-                         prte_pmix_have_requester_id=0])
-    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_REQUESTER_ID],
-                       [$prte_pmix_have_requester_id],
-                       [Whether PMIx passes the requester's PMIX_USERID and PMIX_GRPID to every up-call it makes for a client or tool])
+                         AC_MSG_ERROR([PRRTE requires a PMIx that names the requester of every up-call (PMIX_CAP_REQUESTER_ID). Please use a PMIx release of at least version $prte_pmix_min_version.])])
 
     AC_MSG_CHECKING([for PMIx_server_dmodex_request2])
     PRTE_CHECK_PMIX_CAP([DMODEX_REQUEST2],
@@ -264,13 +265,9 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     AC_MSG_CHECKING([for PMIx access check])
     PRTE_CHECK_PMIX_CAP([ACCESS_CHECK],
-                        [AC_MSG_RESULT([yes])
-                         prte_pmix_have_access_check=1],
+                        [AC_MSG_RESULT([yes])],
                         [AC_MSG_RESULT([no])
-                         prte_pmix_have_access_check=0])
-    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_ACCESS_CHECK],
-                       [$prte_pmix_have_access_check],
-                       [Whether PMIx provides pmix_server_access_check and pmix_server_access_lookup_groups, its rule for access to a job by user and group])
+                         AC_MSG_ERROR([PRRTE requires a PMIx that provides its access check (PMIX_CAP_ACCESS_CHECK). Please use a PMIx release of at least version $prte_pmix_min_version.])])
 
     AC_MSG_CHECKING([for PMIx relayed-identity support])
     PRTE_CHECK_PMIX_CAP([INFO_RELAYED],

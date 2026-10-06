@@ -190,3 +190,12 @@ daemon on a node the allocation already contains - so a slot count here
 could not be honored and is refused rather than silently ignored. Drop the
 ":N" extension, or use "--add-host" where PRRTE owns the allocation and the
 slot count really is PRRTE's to set.
+#
+[ras-base:node-in-session]
+A request named a node that another session holds:
+
+  Node:     %s
+  Session:  %u
+
+A session keeps its nodes until it ends or releases them, so they cannot
+be given to another session or reservation. The request was refused.

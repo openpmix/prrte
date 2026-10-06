@@ -44,10 +44,9 @@
 #include "src/util/attr.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/proc_info.h"
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
+#include "src/util/prte_show_help.h"
 #    include "src/server/pmix_server_ops.h"
 #    include "src/util/pmix_idname.h"
-#endif
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -90,7 +89,6 @@ uid_t prte_pmix_server_job_owner(prte_job_t *jdata)
     return prte_process_info.euid;
 }
 
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
 typedef struct {
     pmix_info_t *info;
     size_t ninfo;
@@ -175,20 +173,14 @@ static pmix_user_t *user_get(uid_t uid)
     }
     return user;
 }
-#endif
 
 void prte_pmix_server_access_user(uid_t uid)
 {
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     if (PRTE_INVALID_UID != uid && !prte_pmix_server_privileged(uid)) {
         (void) user_get(uid);
     }
-#else
-    PRTE_HIDE_UNUSED_PARAMS(uid);
-#endif
 }
 
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
 
 /* the rule for uid against an owner (and, when valid, one group) alone */
 static bool owner_permitted(uid_t uid, uid_t owner, gid_t group)
@@ -217,14 +209,11 @@ static bool owner_permitted(uid_t uid, uid_t owner, gid_t group)
     pmix_server_access_destruct(&acc);
     return (PMIX_SUCCESS == rc);
 }
-#endif
 
 bool prte_pmix_server_job_permitted(uid_t uid, prte_job_t *jdata)
 {
     uid_t owner;
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     pmix_user_t *user;
-#endif
 
     /* root and our own user, before anything is looked up */
     if (prte_pmix_server_privileged(uid)) {
@@ -238,7 +227,6 @@ bool prte_pmix_server_job_permitted(uid_t uid, prte_job_t *jdata)
     if (owner == uid) {
         return true;
     }
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     if (NULL == jdata->access) {
         /* not registered here yet - all we know is its owner */
         return owner_permitted(uid, owner, PRTE_INVALID_GID);
@@ -248,10 +236,6 @@ bool prte_pmix_server_job_permitted(uid_t uid, prte_job_t *jdata)
         return false;
     }
     return (PMIX_SUCCESS == pmix_server_access_check(user, (pmix_access_t *) jdata->access));
-#else
-    /* a PMIx without the rule: root, our own user and the owner */
-    return false;
-#endif
 }
 
 bool prte_pmix_server_request_permitted(const pmix_proc_t *requestor, const pmix_info_t *info,
@@ -260,20 +244,182 @@ bool prte_pmix_server_request_permitted(const pmix_proc_t *requestor, const pmix
     uid_t uid;
 
     if (!prte_pmix_server_requester_uid(info, ninfo, &uid)) {
-#if PRTE_PMIX_HAVE_REQUESTER_ID
-        /* this PMIx names the requester of every request a client or tool
+        /* PMIx names the requester of every request a client or tool
          * makes, replacing any id it supplied - so a request naming none
          * is one we made of our own PMIx server (prterun forwarding its
          * stdin or a signal), and we are not restricted. Anything else
          * naming none is refused */
         return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
-#else
-        /* an older PMIx does not say who is asking */
-        PRTE_HIDE_UNUSED_PARAMS(requestor);
-        return true;
-#endif
     }
     return prte_pmix_server_job_permitted(uid, jdata);
+}
+
+bool prte_pmix_server_parent_permitted(const pmix_proc_t *requestor, const pmix_info_t *info,
+                                       size_t ninfo, const pmix_proc_t *parent)
+{
+    /* naming a process of one's own job as the parent is naming oneself */
+    if (NULL != requestor && !PMIX_NSPACE_INVALID(parent->nspace) &&
+        PMIX_CHECK_NSPACE(parent->nspace, requestor->nspace)) {
+        return true;
+    }
+    /* anything else is acting for the parent's job - and a job not known
+     * here is one we cannot judge, which the request_permitted rule refuses
+     * to all but root, our own user and ourselves */
+    return prte_pmix_server_request_permitted(requestor, info, ninfo,
+                                              prte_get_job_data_object(parent->nspace));
+}
+
+bool prte_pmix_server_dvm_permitted(const pmix_proc_t *requestor, const pmix_info_t *info,
+                                    size_t ninfo)
+{
+    uid_t uid;
+    pmix_user_t *user;
+
+    /* the scheduler - only if there IS one: an empty nspace is
+     * PMIX_CHECK_PROCID's wildcard */
+    if (NULL != requestor &&
+        !PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+        PMIX_CHECK_PROCID(&prte_pmix_server_globals.scheduler, requestor)) {
+        return true;
+    }
+    if (!prte_pmix_server_requester_uid(info, ninfo, &uid)) {
+        /* a request we made of ourselves - see
+         * prte_pmix_server_request_permitted */
+        return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
+    }
+    if (prte_pmix_server_privileged(uid)) {
+        return true;
+    }
+    /* and the users and groups the DVM was started with (--rtos users=,
+     * groups= - see prte_pmix_server_access_record_dvm) */
+    if (NULL == prte_pmix_server_globals.dvm_access) {
+        return false;
+    }
+    user = user_get(uid);
+    if (NULL == user) {
+        return false;
+    }
+    return (PMIX_SUCCESS ==
+            pmix_server_access_check(user, (pmix_access_t *) prte_pmix_server_globals.dvm_access));
+}
+
+void prte_pmix_server_access_release_dvm(void)
+{
+    if (NULL != prte_pmix_server_globals.dvm_access) {
+        pmix_server_access_destruct((pmix_access_t *) prte_pmix_server_globals.dvm_access);
+        free(prte_pmix_server_globals.dvm_access);
+        prte_pmix_server_globals.dvm_access = NULL;
+    }
+}
+
+int prte_pmix_server_access_record_dvm(prte_job_t *daemons)
+{
+    pmix_list_t *cache = NULL;
+    prte_info_item_t *kv;
+    pmix_info_t *info;
+    pmix_access_t *acc;
+    size_t n = 0, ninfo = 1;
+    uint32_t uid = (uint32_t) prte_process_info.euid;
+    pmix_status_t rc;
+
+    /* our own user as the owner, and whatever access list --rtos cached on
+     * the DVM's job */
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache,
+                           PMIX_POINTER) && NULL != cache) {
+        PMIX_LIST_FOREACH (kv, cache, prte_info_item_t) {
+            if (PMIX_CHECK_KEY(&kv->info, PMIX_ACCESS_PERMISSIONS)) {
+                ++ninfo;
+            }
+        }
+    }
+    PMIX_INFO_CREATE(info, ninfo);
+    if (NULL == info) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    PMIX_INFO_LOAD(&info[n++], PMIX_USERID, &uid, PMIX_UINT32);
+    if (NULL != cache) {
+        PMIX_LIST_FOREACH (kv, cache, prte_info_item_t) {
+            if (PMIX_CHECK_KEY(&kv->info, PMIX_ACCESS_PERMISSIONS)) {
+                PMIX_INFO_XFER(&info[n++], &kv->info);
+            }
+        }
+    }
+    prte_pmix_server_access_release_dvm();
+    acc = (pmix_access_t *) malloc(sizeof(pmix_access_t));
+    if (NULL == acc) {
+        PMIX_INFO_FREE(info, ninfo);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    pmix_server_access_construct(acc);
+    rc = pmix_server_access_load(acc, info, ninfo);
+    PMIX_INFO_FREE(info, ninfo);
+    if (PMIX_SUCCESS != rc) {
+        pmix_server_access_destruct(acc);
+        free(acc);
+        return prte_pmix_convert_status(rc);
+    }
+    prte_pmix_server_globals.dvm_access = acc;
+    return PRTE_SUCCESS;
+}
+
+int prte_pmix_server_scheduler_uids_resolve(void)
+{
+    char **names;
+    uint32_t *ids;
+    size_t n, nnames;
+    pmix_status_t prc;
+    int rc = PRTE_SUCCESS;
+
+    free(prte_pmix_server_globals.sched_uids);
+    prte_pmix_server_globals.sched_uids = NULL;
+    prte_pmix_server_globals.nsched_uids = 0;
+    if (NULL == prte_pmix_server_globals.scheduler_uids) {
+        return PRTE_SUCCESS;
+    }
+    names = PMIx_Argv_split(prte_pmix_server_globals.scheduler_uids, ',');
+    nnames = PMIx_Argv_count(names);
+    if (0 == nnames) {
+        PMIx_Argv_free(names);
+        return PRTE_SUCCESS;
+    }
+    ids = (uint32_t *) malloc(nnames * sizeof(uint32_t));
+    if (NULL == ids) {
+        PMIx_Argv_free(names);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    for (n = 0; n < nnames; n++) {
+        prc = pmix_util_uid_from_string(names[n], &ids[n]);
+        if (PMIX_SUCCESS != prc) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                           "scheduler-uid-unknown", true, names[n],
+                           prte_pmix_server_globals.scheduler_uids);
+            rc = PRTE_ERR_SILENT;
+            break;
+        }
+    }
+    PMIx_Argv_free(names);
+    if (PRTE_SUCCESS != rc) {
+        free(ids);
+        return rc;
+    }
+    prte_pmix_server_globals.sched_uids = ids;
+    prte_pmix_server_globals.nsched_uids = nnames;
+    return PRTE_SUCCESS;
+}
+
+bool prte_pmix_server_scheduler_permitted(uid_t uid)
+{
+    size_t n;
+
+    if (prte_pmix_server_privileged(uid)) {
+        return true;
+    }
+    for (n = 0; n < prte_pmix_server_globals.nsched_uids; n++) {
+        if ((uint32_t) uid == prte_pmix_server_globals.sched_uids[n]) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc_t *requestor,
@@ -294,15 +440,9 @@ bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc
         return true;
     }
     if (!prte_pmix_server_requester_uid(info, ninfo, &uid)) {
-#if PRTE_PMIX_HAVE_REQUESTER_ID
         /* a request we made of ourselves - see
          * prte_pmix_server_request_permitted */
         return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
-#else
-        /* no requester identity to judge by: the namespace ownership this
-         * was decided by before */
-        return (NULL != requestor && prte_session_is_owned_by(session, requestor->nspace));
-#endif
     }
     if (prte_pmix_server_privileged(uid)) {
         return true;
@@ -314,12 +454,8 @@ bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc
     if (owner == uid) {
         return true;
     }
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     /* or a member of the owner's group */
     return owner_permitted(uid, owner, session->owner_gid);
-#else
-    return false;
-#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -328,7 +464,6 @@ bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc
 
 int prte_pmix_server_access_parse(prte_job_t *jdata, bool group, const char *list)
 {
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     char **names;
     uint32_t *ids = NULL, *tmp;
     size_t n, nids = 0;
@@ -384,16 +519,11 @@ int prte_pmix_server_access_parse(prte_job_t *jdata, bool group, const char *lis
     pmix_server_cache_job_info(jdata, &info);
     PMIX_INFO_DESTRUCT(&info);
     return PRTE_SUCCESS;
-#else
-    PRTE_HIDE_UNUSED_PARAMS(jdata, group, list);
-    return PRTE_ERR_NOT_SUPPORTED;
-#endif
 }
 
 pmix_status_t prte_pmix_server_access_record(prte_job_t *jdata, const pmix_info_t *info,
                                              size_t ninfo)
 {
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     pmix_access_t *acc;
 
     pmix_status_t rc;
@@ -412,23 +542,15 @@ pmix_status_t prte_pmix_server_access_record(prte_job_t *jdata, const pmix_info_
         prte_pmix_server_access_user(((pmix_access_t *) jdata->access)->uid);
     }
     return rc;
-#else
-    PRTE_HIDE_UNUSED_PARAMS(jdata, info, ninfo);
-    return PMIX_SUCCESS;
-#endif
 }
 
 void prte_pmix_server_access_release_job(prte_job_t *jdata)
 {
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     if (NULL != jdata->access) {
         pmix_server_access_destruct((pmix_access_t *) jdata->access);
         free(jdata->access);
         jdata->access = NULL;
     }
-#else
-    PRTE_HIDE_UNUSED_PARAMS(jdata);
-#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -437,7 +559,6 @@ void prte_pmix_server_access_release_job(prte_job_t *jdata)
 
 void prte_pmix_server_access_job_done(const pmix_nspace_t nspace)
 {
-#if PRTE_PMIX_HAVE_ACCESS_CHECK
     prte_job_t *jdata, *other;
     pmix_user_t *user;
     uid_t owner;
@@ -471,9 +592,6 @@ void prte_pmix_server_access_job_done(const pmix_nspace_t nspace)
         }
     }
     user_tell_pmix(owner, NULL);
-#else
-    PRTE_HIDE_UNUSED_PARAMS(nspace);
-#endif
 }
 
 /* ------------------------------------------------------------------ */
