@@ -337,5 +337,14 @@ exactly 64 hexadecimal digits. One way to create it:
 
   umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > prte.key
 #
+[spawn-directive-type]
+A request to start a job gave a directive a value of the wrong type:
+
+   Directive:  %s
+   Expected:   %s
+   Given:      %s
+
+The job was not started. Correct the type of the value and try again.
+#
 [prte_init:syslimit]
 %s

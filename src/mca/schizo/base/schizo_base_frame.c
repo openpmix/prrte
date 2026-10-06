@@ -1263,7 +1263,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     if (PRTE_OUTQUAL_NOCOPY == tag || PRTE_OUTQUAL_COPY == tag) {
                         if (copyqualgiven) {
                             // cannot give both copy and nocopy
-                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-output.txt", "copy-nocopy", true, cptr);
+                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-output.txt", "copy-nocopy", true);
                             rc = PRTE_ERR_SILENT;
                             goto cleanup;
                         }

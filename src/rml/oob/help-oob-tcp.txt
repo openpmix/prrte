@@ -95,6 +95,7 @@ up aborting your job.
 
   Local host:             %s
   Local process name:     %s
+  Local PRTE version:     %s
   Peer host:              %s
   Peer process name:      %s
   Peer PRTE version:  %s
@@ -105,6 +106,7 @@ processes.  No immediate reason is available.
 
   Local host:             %s
   Local process name:     %s
+  Local PRTE version:     %s
   Peer host:              %s
   Peer process name:      %s
 #

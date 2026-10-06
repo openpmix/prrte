@@ -266,7 +266,7 @@ static int ppr_mapper(prte_job_t *jdata,
             num_slots < (int) app->num_procs) {
             if (!options->oversubscribe) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                               app->num_procs, app->app, prte_process_info.nodename);
+                               app->num_procs, app->app);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             } else {

@@ -512,6 +512,56 @@ static int test_xfer_job_info(void)
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_RELEASE(jdata);
 
+    /* A value of the wrong type for its key is refused before anything
+     * reads it: PMIx does not check a value's type against its key, and
+     * read through the member its key implies, an integer becomes an
+     * address. */
+    {
+        uint64_t big = 0x4141414141414141ULL;
+        int32_t ints[2] = {1, 2};
+        pmix_data_array_t darray;
+        pmix_proc_t procs[1];
+
+        jdata = fresh_job();
+        PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, &big, PMIX_UINT64);
+        CHECK("xfer/mapby-not-string", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+
+        jdata = fresh_job();
+        PMIX_INFO_LOAD(&info[0], PMIX_PARENT_ID, "not-a-proc", PMIX_STRING);
+        CHECK("xfer/parent-not-proc", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+
+        jdata = fresh_job();
+        PMIX_INFO_LOAD(&info[0], PMIX_SET_ENVAR, "FOO=bar", PMIX_STRING);
+        CHECK("xfer/envar-not-envar", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+
+        /* an array is read by its element type as well */
+        jdata = fresh_job();
+        darray.type = PMIX_INT32;
+        darray.size = 2;
+        darray.array = ints;
+        PMIX_INFO_LOAD(&info[0], PMIX_COLOCATE_PROCS, &darray, PMIX_DATA_ARRAY);
+        CHECK("xfer/colocate-not-procs", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+
+        /* ...and the right types still go through */
+        jdata = fresh_job();
+        PMIX_LOAD_PROCID(&procs[0], "prte-test-other@1", 0);
+        darray.type = PMIX_PROC;
+        darray.size = 1;
+        darray.array = procs;
+        PMIX_INFO_LOAD(&info[0], PMIX_COLOCATE_PROCS, &darray, PMIX_DATA_ARRAY);
+        CHECK("xfer/colocate-procs", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+    }
+
     return failures;
 }
 
@@ -618,6 +668,21 @@ static int test_xfer_app(void)
     CHECK("app/wdir-null", PRTE_SUCCESS != prte_pmix_xfer_app(jdata, &papp));
     PMIX_APP_DESTRUCT(&papp);
     PMIX_RELEASE(jdata);
+
+    /* an app-level directive of the wrong type is refused too */
+    {
+        int32_t i32 = 7;
+        jdata = fresh_job();
+        PMIX_APP_CONSTRUCT(&papp);
+        papp.cmd = strdup("hostname");
+        papp.maxprocs = 1;
+        PMIX_INFO_CREATE(papp.info, 1);
+        papp.ninfo = 1;
+        PMIX_INFO_LOAD(&papp.info[0], PMIX_WDIR, &i32, PMIX_INT32);
+        CHECK("app/wdir-not-string", PRTE_SUCCESS != prte_pmix_xfer_app(jdata, &papp));
+        PMIX_APP_DESTRUCT(&papp);
+        PMIX_RELEASE(jdata);
+    }
 
     return failures;
 }

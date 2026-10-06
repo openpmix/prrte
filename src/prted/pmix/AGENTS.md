@@ -1068,6 +1068,32 @@ onto PRRTE job and app attributes. Notes for extending them:
 
 ---
 
+### A directive's value has the type its key implies only once it is checked
+
+PMIx carries a `pmix_value_t` with whatever type the caller gave it and
+does not check that type against the key. A branch that reads
+`value.data.string`, `.proc`, `.envar` or `.darray` out of a value of some
+other type takes an integer as an address. So `prte_pmix_xfer_job_info()`
+and `prte_pmix_xfer_app()` check each directive against
+`job_directive_types[]` / `app_directive_types[]` before any branch runs
+(`directive_check()`), refusing the spawn with `spawn-directive-type` when the
+type is wrong - and, for an array, its element type.
+
+- **A branch that reads a pointer member belongs in the table.** Numbers
+  read through `PMIx_Value_get_number()` and flags read through
+  `PMIX_INFO_TRUE()` check the type themselves and need no entry; a branch
+  that accepts more than one type (`PMIX_SPAWN_TARGET`, `PMIX_SPAWN_ALLOC`,
+  the timeouts) checks it in the branch, and must not be listed.
+- **An empty value is the branch's to judge.** The table checks the type,
+  not presence: a NULL string or proc is what a value loaded with nothing
+  arrives as, and a branch that only hands the value onward
+  (`PMIX_ALLOC_ID`) accepts it, while one that reads it refuses it itself.
+- The same rule applies everywhere a client's or tool's value is read:
+  `PMIX_PERSONALITY` in `interim()`, `PMIX_NSPACE`/`PMIX_HOSTNAME`/
+  `PMIX_CMD_LINE` at tool connection, `PMIX_REQUIRED_KEY` in the direct
+  modex, and the allocation-timeout event's keys all check the type before
+  reading.
+
 ## Connected assemblages (`pmix_server_connect.c`)
 
 `PMIx_Connect` is not a communication operation — the fence it runs is a

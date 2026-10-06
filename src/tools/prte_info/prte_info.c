@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
     /* Initialize the argv parsing stuff */
     if (PRTE_SUCCESS != (ret = prte_init_util(PRTE_PROC_MASTER))) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
-                       __LINE__, NULL);
+                       __LINE__);
         exit(ret);
     }
 

@@ -223,6 +223,110 @@ void prte_pmix_server_launch_job(prte_job_t *jdata,
     PRTE_SPN_REQ(jdata, spawn, cbfunc, cbdata);
 }
 
+/* The type each directive's value has to be, for the directives whose
+ * value is read through a pointer member of the pmix_value_t union - a
+ * string, a proc, an envar, an array. PMIx carries whatever type the caller
+ * gave and does not check it against the key, so reading one of those
+ * members out of a value of another type takes an integer as an address.
+ * Every directive the two functions below read that way is listed here and
+ * checked once, before its branch runs; a directive not listed is either
+ * read through PMIx_Value_get_number() or PMIX_INFO_TRUE(), which check the
+ * type themselves, or checks it in its own branch because it accepts more
+ * than one (PMIX_SPAWN_TARGET, PMIX_SPAWN_ALLOC, the timeouts). A branch
+ * added to either function that reads a pointer member belongs here too. */
+typedef struct {
+    const char *key;
+    pmix_data_type_t type;
+    pmix_data_type_t elem; /* for a PMIX_DATA_ARRAY, its element type */
+} directive_type_t;
+
+static const directive_type_t job_directive_types[] = {
+    {PMIX_PREFIX, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MAPPER, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_ALLOC_ID, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_ALLOC_REQ_ID, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_DISPLAY_TOPOLOGY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_DISPLAY_PROCESSORS, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PPR, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MAPBY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_COLOCATE_PROCS, PMIX_DATA_ARRAY, PMIX_PROC},
+    {PMIX_RANKBY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_BINDTO, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_RUNTIME_OPTIONS, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_EXEC_AGENT, PMIX_STRING, PMIX_UNDEF},
+    {PRTE_XTERM_RANKS, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_CPU_LIST, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PARENT_ID, PMIX_PROC, PMIX_UNDEF},
+    {PMIX_IOF_OUTPUT_TO_FILE, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_OUTPUT_TO_FILE, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_IOF_OUTPUT_TO_DIRECTORY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_OUTPUT_TO_DIRECTORY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_STDIN_TGT, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_DEBUG_TARGET, PMIX_PROC, PMIX_UNDEF},
+    {PMIX_SET_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_ADD_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_UNSET_ENVAR, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PREPEND_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_APPEND_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {NULL, PMIX_UNDEF, PMIX_UNDEF}
+};
+
+static const directive_type_t app_directive_types[] = {
+    {PMIX_HOST, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_HOSTFILE, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_ADD_HOSTFILE, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_ADD_HOST, PMIX_STRING, PMIX_UNDEF},
+    {PRTE_ACTIVATE_HOSTS, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PREFIX, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_WDIR, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PRELOAD_FILES, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PPR, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MAPPER, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MAPBY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_RANKBY, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_BINDTO, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_SET_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_ADD_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_UNSET_ENVAR, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_PREPEND_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_APPEND_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
+    {PMIX_PSET_NAME, PMIX_STRING, PMIX_UNDEF},
+    {NULL, PMIX_UNDEF, PMIX_UNDEF}
+};
+
+/* PMIX_UNDEF if the directive's value has the type its branch reads it
+ * as, or the type it should have been */
+static pmix_data_type_t directive_check(const pmix_info_t *info, const directive_type_t *table)
+{
+    const pmix_value_t *v = &info->value;
+    const directive_type_t *t;
+
+    for (t = table; NULL != t->key; t++) {
+        if (!PMIX_CHECK_KEY(info, t->key)) {
+            continue;
+        }
+        if (t->type != v->type) {
+            return t->type;
+        }
+        /* An empty value - a NULL string or proc, which is what a value
+         * loaded with nothing arrives as - is for the branch to judge: one
+         * that only hands the value onward accepts it, one that reads it
+         * refuses it. An array, though, is read by its element type. */
+        if (PMIX_DATA_ARRAY == t->type && NULL != v->data.darray && t->elem != v->data.darray->type) {
+            return t->type;
+        }
+        return PMIX_UNDEF;
+    }
+    return PMIX_UNDEF;
+}
+
+static int directive_refuse(prte_job_t *jdata, const pmix_info_t *info, pmix_data_type_t want)
+{
+    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-runtime.txt", "spawn-directive-type", true,
+                   info->key, PMIx_Data_type_string(want), PMIx_Data_type_string(info->value.type));
+    return PRTE_ERR_BAD_PARAM;
+}
+
 int prte_pmix_xfer_job_info(prte_job_t *jdata,
                             pmix_info_t *iptr,
                             size_t ninfo)
@@ -237,9 +341,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
     prte_job_t *djob;
     prte_app_context_t *app;
     pmix_envar_t envar;
+    pmix_data_type_t want;
 
     for (n = 0; n < ninfo; n++) {
         info = &iptr[n];
+        if (PMIX_UNDEF != (want = directive_check(info, job_directive_types))) {
+            return directive_refuse(jdata, info, want);
+        }
 
             /***   PREFIX   ***/
         if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
@@ -861,6 +969,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     pmix_status_t prc;
     bool flag;
     pmix_envar_t envar;
+    pmix_data_type_t want;
     char cwd[PRTE_PATH_MAX];
 
     app = PMIX_NEW(prte_app_context_t);
@@ -889,6 +998,9 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     if (NULL != papp->info) {
         for (m = 0; m < papp->ninfo; m++) {
             info = &papp->info[m];
+            if (PMIX_UNDEF != (want = directive_check(info, app_directive_types))) {
+                return directive_refuse(jdata, info, want);
+            }
             if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
@@ -1167,6 +1279,10 @@ static void interim(int sd, short args, void *cbdata)
      * option parsing */
     for (n=0; n < cd->ninfo; n++) {
         if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PERSONALITY)) {
+            if (PMIX_STRING != cd->info[n].value.type || NULL == cd->info[n].value.data.string) {
+                rc = directive_refuse(jdata, &cd->info[n], PMIX_STRING);
+                goto complete;
+            }
             jdata->personality = PMIx_Argv_split(cd->info[n].value.data.string, ',');
             jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(cd->info[n].value.data.string);
             pmix_server_cache_job_info(jdata, &cd->info[n]);

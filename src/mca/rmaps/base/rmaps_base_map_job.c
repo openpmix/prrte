@@ -2105,7 +2105,7 @@ static int map_colocate(prte_job_t *jdata,
                         // oversubscribed - we can still fit if they allow oversubscription
                         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
                             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                           app->num_procs, app->app, prte_process_info.nodename);
+                                           app->num_procs, app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             ret = PRTE_ERR_SILENT;
                             goto done;
@@ -2190,7 +2190,7 @@ static int map_colocate(prte_job_t *jdata,
                     // oversubscribed - we can still fit if they allow oversubscription
                     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
                         prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                       app->num_procs, app->app, prte_process_info.nodename);
+                                       app->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         ret = PRTE_ERR_SILENT;
                         goto done;

@@ -798,10 +798,14 @@ static void _alloc_timeout_warning(int sd, short args, void *cbdata)
 
     for (n = 0; n < cd->ninfo; n++) {
         if (PMIx_Check_key(cd->info[n].key, PMIX_ALLOC_ID)) {
-            alloc_id = cd->info[n].value.data.string;
+            if (PMIX_STRING == cd->info[n].value.type) {
+                alloc_id = cd->info[n].value.data.string;
+            }
         } else if (PMIx_Check_key(cd->info[n].key, PMIX_TIME_REMAINING)) {
-            time_remaining = cd->info[n].value.data.uint32;
-            have_time = true;
+            if (PMIX_SUCCESS == PMIx_Value_get_number(&cd->info[n].value, &time_remaining,
+                                                      PMIX_UINT32)) {
+                have_time = true;
+            }
         }
     }
     if (NULL == alloc_id) {
@@ -1962,6 +1966,11 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     if (NULL != info) {
         for (sz = 0; sz < ninfo; sz++) {
             if (PMIX_CHECK_KEY(&info[sz], PMIX_REQUIRED_KEY)) {
+                /* from the requesting client, whose value PMIx does not
+                 * check against the key */
+                if (PMIX_STRING != info[sz].value.type || NULL == info[sz].value.data.string) {
+                    continue;
+                }
                 if (NULL != key) {
                     free(key);
                 }

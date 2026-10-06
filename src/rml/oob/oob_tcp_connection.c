@@ -1607,7 +1607,8 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
         // missing version string
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "missing version", true,
                        prte_process_info.nodename, PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                       pmix_fd_get_peer_name(sd), PRTE_NAME_PRINT(&(peer->name)));
+                       prte_version_string, pmix_fd_get_peer_name(sd),
+                       PRTE_NAME_PRINT(&(peer->name)));
         abort_handshake(peer, sd);
         free(msg);
         return PRTE_ERR_CONNECTION_REFUSED;
