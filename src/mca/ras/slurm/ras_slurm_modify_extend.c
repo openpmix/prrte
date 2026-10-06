@@ -132,6 +132,7 @@ const char *const str_fields[STR_FIELD_COUNT] = {
     [STR_PARTITION] = "partition",
     [STR_QOS]       = "qos",
     [STR_CWD]       = "current_working_directory",
+    [STR_TRES_PER_NODE] = "tres_per_node",
 };
 
 /* Numberic object fields to read from "parent" Slurm job JSON */
@@ -165,14 +166,24 @@ static const char *qos_format       = "--qos=%s";
 static const char *cwd_format       = "--chdir=%s";
 static const char *mem_per_cpu_format  = "--mem-per-cpu=%s";
 static const char *mem_per_node_format = "--mem=%s";
+static const char *mem_per_gpu_format  = "--mem-per-gpu=%s";
+static const char *cpus_per_gpu_format = "--cpus-per-gpu=%s";
 
-/* The parent's memory request, as Slurm settled it: a batch job's carries
- * the default too, as though asked for (see AGENTS.md).
+/* The tres_per_node value; it holds --gpus-per-node as well as --gres */
+static const char *gres_format = "--gres=%s";
+
+/* The parent's memory and per-GPU requests. The memory ones are as Slurm
+ * settled them: a batch job's carries the default too, as though asked for
+ * (see AGENTS.md). The per-GPU ones are only what the job asked for.
  * The job record cannot stand in for these: once a job has GPUs and the
  * partition a DefMemPerGPU, Slurm keeps the per-GPU default in the record's
- * one memory slot, which then reads as memory_per_node whatever was asked. */
+ * one memory slot, which then reads as memory_per_node whatever was asked, and
+ * prints DefCpuPerGPU and DefMemPerGPU into cpus_per_tres and memory_per_tres
+ * as if the job had asked for them. */
 static const char *mem_per_cpu_envar  = "SLURM_MEM_PER_CPU";
 static const char *mem_per_node_envar = "SLURM_MEM_PER_NODE";
+static const char *mem_per_gpu_envar  = "SLURM_MEM_PER_GPU";
+static const char *cpus_per_gpu_envar = "SLURM_CPUS_PER_GPU";
 static const char *time_format = "--time=%s";
 static const char *nodes_format = "--nodes=%s";
 static const char *nodelist_format = "--nodelist=%s";
@@ -889,6 +900,8 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     char **argv = NULL;
 
+    bool have_gres = false;
+
     char job_id[PRTE_SLURM_JOB_ID_MAX_LEN+1] = {0};
     char *job_id_dyn = NULL;
 
@@ -974,6 +987,38 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     if(prte_mca_ras_slurm_component.propagate_mem_per_node) {
         err = prte_ras_slurm_make_count_envar_arg(mem_per_node_envar, mem_per_node_format, &argv);
+
+        if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+    }
+
+    if(prte_mca_ras_slurm_component.propagate_gres) {
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_TRES_PER_NODE],
+                                             gres_format, false, &argv);
+
+        if(PRTE_SUCCESS == err) {
+            have_gres = true;
+        }
+        else if(PRTE_ERR_NOT_FOUND != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+    }
+
+    /* Slurm refuses a per-GPU option on a job that asks for no GPU, which is
+     * what the expander of a --gpus or --gpus-per-task parent is */
+    if(have_gres) {
+        err = prte_ras_slurm_make_count_envar_arg(cpus_per_gpu_envar, cpus_per_gpu_format, &argv);
+
+        if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+
+        /* The third memory option; Slurm sets it only when the other two are unset */
+        err = prte_ras_slurm_make_count_envar_arg(mem_per_gpu_envar, mem_per_gpu_format, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);

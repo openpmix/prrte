@@ -84,11 +84,11 @@ deviation* and the framework guide.
 
 - **`PMIX_ALLOC_EXTEND`** → `serve_extend_req`: propagates the original
   job's SLURM attributes (account, partition, qos, cwd, time,
-  threads-per-core, and the memory option, read as described below — each
-  gated by a `propagate_*` MCA param, all default true), builds `salloc`
-  args, launches an **expander job**, waits for its `salloc` to exit, trims
-  its time limit to the parent's end, then adds the modified resources.
-  Answers in two phases — see below.
+  threads-per-core, per-node GRES, and the memory and per-GPU options read
+  as described below — each gated by a `propagate_*` MCA param, all default
+  true), builds `salloc` args, launches an **expander job**, waits for its
+  `salloc` to exit, trims its time limit to the parent's end, then adds the
+  modified resources. Answers in two phases — see below.
 - **`PMIX_ALLOC_NEW`** → the same request; see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count or by name while
@@ -111,12 +111,16 @@ is submitted: no per-node slot counts, since Slurm sizes the node. A grow
 naming neither selector is refused, not passed on — inside a Slurm allocation
 no other module could legitimately serve it.
 
-### Memory comes from the environment, not the record
+### Memory and per-GPU options come from the environment, not the record
 
-`--mem-per-cpu` and `--mem` are taken from `SLURM_MEM_PER_CPU` and
-`SLURM_MEM_PER_NODE`, which hold the memory Slurm settled on for the job. An
+`--mem-per-cpu`, `--mem`, `--mem-per-gpu` and `--cpus-per-gpu` are taken from
+`SLURM_MEM_PER_CPU`, `SLURM_MEM_PER_NODE`, `SLURM_MEM_PER_GPU` and
+`SLURM_CPUS_PER_GPU`. The first two hold the memory Slurm settled on for the
+job; the per-GPU two are exported only for options the job was given. An
 unset variable sends nothing, so the expander gets the same default as the
-parent.
+parent. The two per-GPU options are sent only with a `--gres`, since Slurm
+refuses them on a job that asks for no GPU — the expander of a `--gpus` or
+`--gpus-per-task` parent.
 
 The memory Slurm settled on includes a default: a batch job exports the
 partition's `DefMemPerCPU` or `DefMemPerNode`, else the cluster's, as though
@@ -127,7 +131,16 @@ The record cannot be read for this. Once a job has GPUs and the partition a
 `DefMemPerGPU`, Slurm keeps the per-GPU default in the job's one memory
 slot, and `scontrol show job --json` prints it as `memory_per_node`: a job
 given `--mem-per-cpu=30` reads `memory_per_node: 100`, and one with two GPUs
-reads 100 for an allocation of 200.
+reads 100 for an allocation of 200. `DefCpuPerGPU` and `DefMemPerGPU` are
+also printed into `cpus_per_tres` and `memory_per_tres` as if requested.
+
+GRES itself is read from the record: `tres_per_node` holds `--gres` and
+`--gpus-per-node` alike (`gres/gpu:2`), and goes back verbatim as `--gres=`.
+`--gpus` and `--gpus-per-task` land in `tres_per_job` and `tres_per_task`,
+which are not propagated: one counts GPUs for the whole job, the other per
+task, and the expander has neither the parent's size nor tasks. `--exclusive`
+already hands the expander every GPU on its nodes; the request is what makes
+Slurm choose nodes that have them.
 
 ### The expander job ends with the parent allocation
 
