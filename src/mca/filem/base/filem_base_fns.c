@@ -22,6 +22,7 @@
 #include "prte_config.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -46,6 +47,7 @@
 #include "src/mca/filem/filem.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_printf.h"
+#include "src/util/prte_dvm_key.h"
 
 /******************
  * Local Functions
@@ -250,37 +252,151 @@ char *prte_filem_base_shell_quote(const char *path)
     return q;
 }
 
-/* A file is written out under a temporary name and renamed into place, so
- * a process never sees half of it. mkstemp() makes that temporary: always
- * a new file, created exclusively, under a name no other daemon placing
- * the same file in a shared directory will also pick. Its mode is set on
- * the descriptor - mkstemp() creates 0600 - and a file whose mode cannot
- * be set is not used, since what is placed must arrive with the mode it
- * was sent with.
- */
-int prte_filem_base_open_temp(const char *dest, mode_t mode, char **tmpname)
+/* Is a directory that is already there one the user may place files in?
+ * Their own, or one whose group they belong to - a project directory shared
+ * with the rest of a group. */
+static bool usable_dir(const struct stat *st)
 {
-    char *name = NULL;
-    int fd, save;
+    gid_t *groups;
+    int n, i;
+    bool found = false;
 
-    *tmpname = NULL;
-    if (0 > pmix_asprintf(&name, "%s.prte-tmp.XXXXXX", dest) || NULL == name) {
+    if (st->st_uid == geteuid() || st->st_gid == getegid() || st->st_gid == getgid()) {
+        return true;
+    }
+    n = getgroups(0, NULL);
+    if (0 >= n) {
+        return false;
+    }
+    groups = (gid_t *) malloc((size_t) n * sizeof(gid_t));
+    if (NULL == groups) {
+        return false;
+    }
+    n = getgroups(n, groups);
+    for (i = 0; i < n && !found; i++) {
+        found = (groups[i] == st->st_gid);
+    }
+    free(groups);
+    return found;
+}
+
+/* A preloaded file lands in the app's working directory, possibly under
+ * subdirectories its name carries ("data/in.dat"). Those are walked one at a
+ * time relative to a descriptor, never following a symlink, so that the
+ * file goes into the directory its name says - and the descriptor on that
+ * directory is what everything after works through, so no later step
+ * resolves the path again.
+ */
+int prte_filem_base_open_dir_under(const char *root, const char *tail, mode_t mode)
+{
+    char *copy, *comp, *save = NULL;
+    struct stat st;
+    int fd, next, err;
+
+    fd = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (0 > fd) {
+        return -1;
+    }
+    if (NULL == tail || '\0' == tail[0]) {
+        return fd;
+    }
+    if (NULL == (copy = strdup(tail))) {
+        close(fd);
         errno = ENOMEM;
         return -1;
     }
-    fd = mkstemp(name);
-    if (0 > fd) {
-        save = errno;
+    for (comp = strtok_r(copy, "/", &save); NULL != comp; comp = strtok_r(NULL, "/", &save)) {
+        if (0 == strcmp(comp, ".")) {
+            continue;
+        }
+        if (0 == strcmp(comp, "..")) {
+            err = EINVAL;
+            goto fail;
+        }
+        next = openat(fd, comp, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (0 > next && ENOENT == errno) {
+            if (0 != mkdirat(fd, comp, mode) && EEXIST != errno) {
+                err = errno;
+                goto fail;
+            }
+            next = openat(fd, comp, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        }
+        if (0 > next) {
+            err = errno;
+            goto fail;
+        }
+        if (0 != fstat(next, &st) || !usable_dir(&st)) {
+            err = EACCES;
+            close(next);
+            goto fail;
+        }
+        close(fd);
+        fd = next;
+    }
+    free(copy);
+    return fd;
+
+fail:
+    free(copy);
+    close(fd);
+    errno = err;
+    return -1;
+}
+
+/* A file is written out under a temporary name and renamed into place, so a
+ * process never sees half of it. The temporary is always a new file,
+ * created exclusively, under a random name no other daemon placing the same
+ * file in a shared directory will also pick. Its mode is set on the
+ * descriptor, and a file whose mode cannot be set is not used, since what
+ * is placed must arrive with the mode it was sent with.
+ */
+#define PRTE_FILEM_TEMP_TRIES 64
+
+int prte_filem_base_open_temp_at(int dfd, const char *leaf, mode_t mode, char **tmpname)
+{
+    static const char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    uint8_t rnd[6];
+    char suffix[sizeof(rnd) + 1];
+    char *name = NULL;
+    int fd = -1, save, tries;
+    size_t i;
+
+    *tmpname = NULL;
+    for (tries = 0; tries < PRTE_FILEM_TEMP_TRIES && 0 > fd; tries++) {
+        if (PRTE_SUCCESS != prte_dvm_key_random(rnd, sizeof(rnd))) {
+            errno = EIO;
+            return -1;
+        }
+        for (i = 0; i < sizeof(rnd); i++) {
+            suffix[i] = chars[rnd[i] % (sizeof(chars) - 1)];
+        }
+        suffix[sizeof(rnd)] = '\0';
         free(name);
-        errno = save;
+        name = NULL;
+        if (0 > pmix_asprintf(&name, "%s.prte-tmp.%s", leaf, suffix) || NULL == name) {
+            errno = ENOMEM;
+            return -1;
+        }
+        fd = openat(dfd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                    S_IRUSR | S_IWUSR);
+        if (0 > fd && EEXIST != errno) {
+            save = errno;
+            free(name);
+            errno = save;
+            return -1;
+        }
+    }
+    if (0 > fd) {
+        free(name);
+        errno = EEXIST;
         return -1;
     }
-    if (0 != fchmod(fd, mode) || PMIX_SUCCESS != pmix_fd_set_cloexec(fd)) {
+    if (0 != fchmod(fd, mode)) {
         save = errno;
         close(fd);
-        unlink(name);
+        unlinkat(dfd, name, 0);
         free(name);
-        errno = (0 != save) ? save : EIO;
+        errno = save;
         return -1;
     }
     *tmpname = name;

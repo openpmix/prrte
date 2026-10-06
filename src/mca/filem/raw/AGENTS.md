@@ -594,13 +594,25 @@ preloaded *binary* is symlinked (`create_link`). That split is deliberate:
 The copy goes to a temporary beside the destination and is `rename()`d into
 place, so a proc never sees a half-written file — which matters precisely in
 the shared-working-directory case, where several daemons may be placing the
-identical file at the same moment. The temporary comes from
-`prte_filem_base_open_temp()`: `<dest>.prte-tmp.XXXXXX`, made by `mkstemp()`,
-so it is always a new file, created exclusively, under a name no other daemon
+identical file at the same moment.
+
+Every step works through **one descriptor on the destination directory**,
+from `prte_filem_base_open_dir_under(wdir, <dirs in the file's name>)`: the
+existence check (`fstatat`), the comparison (`openat`), the temporary and the
+`renameat`. That walk opens each directory below the working directory with
+`O_NOFOLLOW`, creating what is missing, and accepts an existing one only if it
+is the user's own or belongs to a group the user is in - a shared project
+directory. A symlink at any of those components, or a directory of another
+user and group, fails the placement. The working directory itself is the
+user's and is opened the ordinary way. Resolving the path afresh at each step
+is exactly what this replaced.
+
+The temporary comes from `prte_filem_base_open_temp_at()`:
+`<leaf>.prte-tmp.XXXXXX` with a random suffix, created `O_EXCL|O_NOFOLLOW`
+in that directory, so it is always a new file under a name no other daemon
 will pick - a pid alone is not unique across nodes sharing the directory. Its
-mode is set on the descriptor (`mkstemp()` creates 0600), and if that fails
-the file is not used, since what is placed must arrive with the mode it was
-sent with.
+mode is set on the descriptor, and if that fails the file is not used, since
+what is placed must arrive with the mode it was sent with.
 
 ### Refusing to overwrite, without refusing ourselves
 

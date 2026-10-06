@@ -66,8 +66,9 @@ BEGIN_C_DECLS
 PRTE_EXPORT extern uint8_t prte_dvm_key[PRTE_DVM_KEY_LEN];
 PRTE_EXPORT extern bool prte_dvm_key_ready;
 
-/* Fill `buf` from the operating system's random source.  For key and nonce
- * material only - values that must not be guessable. */
+/* Fill `buf` from the operating system's random source - for values that
+ * must not be guessable: key and nonce material, and names that must not
+ * collide (filem's temporaries). */
 PRTE_EXPORT int prte_dvm_key_random(uint8_t *buf, size_t len);
 
 /* The HNP's key: freshly generated, never stored anywhere but memory. */

@@ -953,7 +953,7 @@ static int write_bytes(int fd, char *buf, size_t len)
  * asked us to stage sitting in the directory they launched from. It answers
  * no for anything else, which is then somebody else's data.
  */
-static bool same_contents(char *src, char *dest)
+static bool same_contents(char *src, int dfd, const char *leaf)
 {
     int fsrc, fdest;
     struct stat sbuf, dbuf;
@@ -971,7 +971,7 @@ static bool same_contents(char *src, char *dest)
      * somebody opened the other end. The fstat below is what actually
      * decides; anything that is not a plain file is simply "not ours".
      */
-    if (0 > (fdest = open(dest, O_RDONLY | O_NONBLOCK))) {
+    if (0 > (fdest = openat(dfd, leaf, O_RDONLY | O_NONBLOCK | O_CLOEXEC))) {
         close(fsrc);
         return false;
     }
@@ -1015,11 +1015,12 @@ done:
  */
 static int place_file(char *my_dir, char *wdir, char *fname)
 {
-    char *src = NULL, *dest = NULL, *tmpname = NULL, *basedir;
+    char *src = NULL, *dest = NULL, *tmpname = NULL, *subdir = NULL;
+    const char *leaf;
     struct stat sbuf;
     mode_t mode;
     char data[PRTE_FILEM_RAW_COPY_MAX];
-    int fsrc = -1, fdest = -1;
+    int fsrc = -1, fdest = -1, dfd = -1;
     ssize_t nb;
     int rc = PRTE_SUCCESS;
 
@@ -1031,8 +1032,48 @@ static int place_file(char *my_dir, char *wdir, char *fname)
         goto cleanup;
     }
 
-    if (0 == lstat(dest, &sbuf)) {
-        if (same_contents(src, dest)) {
+    /* Split the name into the directories it sits under and the file
+     * itself, and open the directory once. Everything below works through
+     * that descriptor, so every step acts on the directory the name led to
+     * when it was opened - see prte_filem_base_open_dir_under() for the
+     * rule each directory has to pass. The working directory itself is the
+     * user's, and is created as before if it is not there yet - without
+     * touching the mode of one that is. */
+    leaf = strrchr(fname, '/');
+    if (NULL != leaf) {
+        subdir = strndup(fname, (size_t) (leaf - fname));
+        ++leaf;
+        if (NULL == subdir) {
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(rc);
+            goto cleanup;
+        }
+    } else {
+        leaf = fname;
+    }
+    if (0 != stat(wdir, &sbuf)) {
+        rc = pmix_os_dirpath_create(wdir, S_IRWXU | S_IRWXG | S_IRWXO);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_EXISTS != rc) {
+            PMIX_ERROR_LOG(rc);
+            rc = prte_pmix_convert_status(rc);
+            goto cleanup;
+        }
+        rc = PRTE_SUCCESS;
+    }
+    dfd = prte_filem_base_open_dir_under(wdir, subdir, S_IRWXU | S_IRWXG | S_IRWXO);
+    if (0 > dfd) {
+        pmix_output(0, "%s CANNOT PLACE FILE %s: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), dest,
+                    (ELOOP == errno || ENOTDIR == errno)
+                        ? "a directory in its path is a symbolic link or not a directory"
+                        : (EACCES == errno)
+                              ? "a directory in its path belongs to a user and group other than ours"
+                              : strerror(errno));
+        rc = PRTE_ERR_FILE_OPEN_FAILURE;
+        goto cleanup;
+    }
+
+    if (0 == fstatat(dfd, leaf, &sbuf, AT_SYMLINK_NOFOLLOW)) {
+        if (same_contents(src, dfd, leaf)) {
             PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: %s is already in place at %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fname, dest));
@@ -1047,26 +1088,6 @@ static int place_file(char *my_dir, char *wdir, char *fname)
     PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                          "%s filem:raw: placing %s in %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fname, wdir));
-
-    /* create any directories the file is to sit under - but only if they
-     * are not already there. pmix_os_dirpath_create() chmods a path that
-     * already exists to the mode it was given, and the working directory
-     * here belongs to the user: handing it their own cwd would silently
-     * reduce it to 0700. Directories we do create are left to the user's
-     * umask, like any other directory made on their behalf.
-     */
-    basedir = pmix_dirname(dest);
-    if (NULL != basedir && 0 != stat(basedir, &sbuf)) {
-        rc = pmix_os_dirpath_create(basedir, S_IRWXU | S_IRWXG | S_IRWXO);
-        if (PMIX_SUCCESS != rc && PMIX_ERR_EXISTS != rc) {
-            PMIX_ERROR_LOG(rc);
-            rc = prte_pmix_convert_status(rc);
-            free(basedir);
-            goto cleanup;
-        }
-        rc = PRTE_SUCCESS;
-    }
-    free(basedir);
 
     if (0 > (fsrc = open(src, O_RDONLY))) {
         pmix_output(0, "%s CANNOT ACCESS STAGED FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), src);
@@ -1088,9 +1109,9 @@ static int place_file(char *my_dir, char *wdir, char *fname)
      * rename is atomic, so a proc never sees a half-written file - which
      * matters when the working directory is shared and several daemons are
      * placing the identical file at the same moment, each under a name of
-     * its own (prte_filem_base_open_temp).
+     * its own (prte_filem_base_open_temp_at).
      */
-    if (0 > (fdest = prte_filem_base_open_temp(dest, mode, &tmpname))) {
+    if (0 > (fdest = prte_filem_base_open_temp_at(dfd, leaf, mode, &tmpname))) {
         pmix_output(0, "%s CANNOT CREATE A FILE BESIDE %s: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     dest, strerror(errno));
         rc = PRTE_ERR_FILE_OPEN_FAILURE;
@@ -1109,7 +1130,7 @@ static int place_file(char *my_dir, char *wdir, char *fname)
     }
     close(fdest);
     fdest = -1;
-    if (0 != rename(tmpname, dest)) {
+    if (0 != renameat(dfd, tmpname, dfd, leaf)) {
         pmix_output(0, "%s FAILED TO PLACE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), dest);
         rc = PRTE_ERR_FILE_WRITE_FAILURE;
         goto cleanup;
@@ -1126,9 +1147,13 @@ cleanup:
     }
     if (NULL != tmpname) {
         /* we never got it into place */
-        unlink(tmpname);
+        unlinkat(dfd, tmpname, 0);
         free(tmpname);
     }
+    if (0 <= dfd) {
+        close(dfd);
+    }
+    free(subdir);
     free(src);
     free(dest);
     return rc;

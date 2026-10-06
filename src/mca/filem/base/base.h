@@ -88,14 +88,33 @@ PRTE_EXPORT bool prte_filem_base_has_dotdot(const char *path);
  */
 PRTE_EXPORT char *prte_filem_base_shell_quote(const char *path);
 
-/* Create a new file beside `dest` to write it out in, ready to be renamed
- * over it: "<dest>.prte-tmp.XXXXXX", made by mkstemp() - so it is new,
- * exclusively ours, and has a name no other writer of the same file will
- * choose - then given `mode` and made close-on-exec. Returns the open
- * descriptor, with the name in *tmpname for the caller to rename or unlink
- * and free; or -1, with errno set and *tmpname NULL.
+/* Open the directory `tail` names beneath `root`, creating what is missing,
+ * and return a descriptor on it for the caller to close; or -1 with errno
+ * set.
+ *
+ * `root` - the app's working directory - is trusted and opened the
+ * ordinary way. Each component of `tail` is opened in turn relative to the
+ * one before, never following a symlink, so the descriptor returned is on
+ * the directory the path names and nowhere else: a component that is a
+ * symlink, or not a directory, answers ELOOP or ENOTDIR. A missing component
+ * is created with `mode` (the umask applies, as to any directory made on the
+ * user's behalf); one already there must be the user's own, or belong to a
+ * group the user is in - a shared project directory - and otherwise answers
+ * EACCES. An empty `tail` opens `root` itself. A ".." component is refused
+ * with EINVAL.
  */
-PRTE_EXPORT int prte_filem_base_open_temp(const char *dest, mode_t mode, char **tmpname);
+PRTE_EXPORT int prte_filem_base_open_dir_under(const char *root, const char *tail, mode_t mode);
+
+/* Create a new file in the directory `dfd` to write `leaf` out in, ready to
+ * be renamed over it: "<leaf>.prte-tmp.XXXXXX" with a random suffix, created
+ * exclusively and without following a symlink - so it is always a new file,
+ * and no other writer of the same file picks its name - then given `mode`
+ * and made close-on-exec. Returns the open descriptor, with the name in
+ * *tmpname for the caller to renameat()/unlinkat() and free; or -1, with
+ * errno set and *tmpname NULL.
+ */
+PRTE_EXPORT int prte_filem_base_open_temp_at(int dfd, const char *leaf, mode_t mode,
+                                             char **tmpname);
 
 END_C_DECLS
 

@@ -8725,6 +8725,41 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     for n in 1 2 3; do EXEC_SH "$n" 'rm -rf /root/pfsub' >/dev/null 2>&1; done
 
     fi   # FS_SHARED
+    _fl="filem: a relative subdirectory is placed into only through real directories"
+    if [ "$FS_SHARED" != 0 ]; then skp "${_fl}: $WORKDIR is shared, so staging cannot be proved"; else
+    banner "filem: a relative subdirectory is placed into only through real directories"
+    # The directories a preloaded file's name carries are walked one at a
+    # time below the working directory, never through a symlink, and an
+    # existing one is used only if it is ours or our group's.
+    EXEC_SH 1 'mkdir -p /root/pfsub && echo SUBDIR-DATA-OK > /root/pfsub/pf.dat' >/dev/null 2>&1
+    # a symlink where the subdirectory should be: not followed
+    EXEC_SH 2 'rm -rf /root/pfsub /root/pfelse; mkdir /root/pfelse && ln -s /root/pfelse /root/pfsub' >/dev/null 2>&1
+    out=$(RUN 'cd /root && timeout -k 5 60 prterun --host node2:1 -np 1 \
+                 --preload-files pfsub/pf.dat -- sh -c "cat pfsub/pf.dat"' 2>&1); rc=$?
+    [ "$rc" != 0 ] \
+        && ok "a symlinked subdirectory stops the placement" \
+        || bad "the file was placed through a symlinked subdirectory: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    ON 2 'test -e /root/pfelse/pf.dat' \
+        && bad "the file was written where the symlink pointed" \
+        || ok "...and nothing was written where it pointed"
+    # a directory of another user, in our group: a shared project directory
+    EXEC_SH 2 'rm -rf /root/pfsub /root/pfelse; mkdir /root/pfsub && chown 65534:$(id -g) /root/pfsub && chmod 775 /root/pfsub' >/dev/null 2>&1
+    out=$(RUN 'cd /root && timeout -k 5 60 prterun --host node2:1 -np 1 \
+                 --preload-files pfsub/pf.dat -- sh -c "cat pfsub/pf.dat"' 2>&1); rc=$?
+    [ "$rc" = 0 ] && echo "$out" | grep -q 'SUBDIR-DATA-OK' \
+        && ok "a subdirectory shared through our group is placed into" \
+        || bad "a group-shared subdirectory was refused (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # ...and one of another user in another group is not
+    EXEC_SH 2 'rm -rf /root/pfsub; mkdir /root/pfsub && chown 65534:65534 /root/pfsub && chmod 777 /root/pfsub' >/dev/null 2>&1
+    out=$(RUN 'cd /root && timeout -k 5 60 prterun --host node2:1 -np 1 \
+                 --preload-files pfsub/pf.dat -- sh -c "cat pfsub/pf.dat"' 2>&1); rc=$?
+    [ "$rc" != 0 ] && ! ON 2 'test -e /root/pfsub/pf.dat' \
+        && ok "a subdirectory of another user and group is not placed into" \
+        || bad "the file was placed into another user's subdirectory (rc=$rc)"
+    for n in 1 2 3; do EXEC_SH "$n" 'rm -rf /root/pfsub /root/pfelse' >/dev/null 2>&1; done
+    cleanup_swarm
+
+    fi   # FS_SHARED
     _fl="filem: --preload-files keeps a staged file executable"
     if [ "$FS_SHARED" != 0 ]; then skp "${_fl}: $WORKDIR is shared, so staging cannot be proved"; else
     banner "filem: --preload-files keeps a staged file executable"
