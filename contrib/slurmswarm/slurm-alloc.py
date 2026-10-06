@@ -37,6 +37,7 @@ Subcommands::
 
     slurm-alloc new [--tag NAME] [--nodes N] [--nodelist LIST]
                     [--tasks-per-node T] [--exclusive] [--time MINS]
+                    [--salloc-arg=OPTION]...
     slurm-alloc env [--tag NAME]        # export lines to eval
     slurm-alloc jobid [--tag NAME]      # the SLURM job id
     slurm-alloc nodes [--tag NAME]      # allocated nodes, comma separated
@@ -113,6 +114,7 @@ def cmd_new(args):
         salloc.append("--exclusive")
     if args.time:
         salloc.append("--time=%d" % args.time)
+    salloc.extend(args.salloc_arg)
 
     # The held command.  It writes the environment SLURM gave it, then the job
     # id (LAST, so a reader that sees the job id knows the environment file is
@@ -293,6 +295,8 @@ def main():
     p.add_argument("--exclusive", action="store_true")
     p.add_argument("--time", type=int)
     p.add_argument("--timeout", type=int, default=60)
+    # anything else for salloc, one option per use: --salloc-arg=--gres=gpu:1
+    p.add_argument("--salloc-arg", action="append", default=[])
     p.set_defaults(fn=cmd_new)
 
     for name, fn in (("env", cmd_env), ("jobid", cmd_jobid), ("nodes", cmd_nodes)):

@@ -33,6 +33,7 @@ differences are in §3, §9 and §10 and nowhere else.
 | `Dockerfile` | Base image: toolchain, a baked PMIx, **SLURM built from source**, munge, SSH wiring. It does **not** contain PRRTE. |
 | `slurm.conf` | The cluster configuration, one copy baked into the image. Every container-specific choice is commented in the file; see §9. |
 | `cgroup.conf` | `CgroupPlugin=disabled`. Two lines, and the reason the containers can stay unprivileged; see §9. |
+| `gres.conf` | Two GPUs each on node9 and node10, backed by `/dev/null` and `/dev/zero`; see §9. |
 | `slurm-alloc.py` | Creates and holds a real allocation across many `docker exec` calls, and replays the environment SLURM put in it. See §11. |
 | `slurm-shim.py` | A recording, optionally misbehaving, **wrapper** around the real `salloc`/`scontrol`/`scancel`. Answers the two questions slurmctld cannot: what PRRTE *asked* for, and what PRRTE does when the scheduler misbehaves. See §14. |
 | `docker-compose.yml` | The ten nodes `prteslurm-node1..prteslurm-node10`. Every name derives from `$PRTE_SLURM_SWARM`, so two clones can each run a cluster. |
@@ -310,6 +311,16 @@ Three more groups came over when the fake scheduler was retired:
   two requests, because the sleep is the bug.
 - **What PRRTE put on the `salloc` command line**, and the `propagate_*`
   parameters that gate it. §14.
+- **What an expander inherits from its parent**: GPUs and the per-GPU
+  options, the memory option, node features, excluded nodes, the
+  reservation, and members named by `ras_slurm_propagate_extra`. Where
+  Slurm records the value, a case compares the expander's record with the
+  parent's; otherwise it asserts the argv. One about placement also puts
+  its parent so that the node Slurm would otherwise grant is the wrong one,
+  and asserts the grant. node1, where the HNP runs, is parked: PRRTE refuses
+  a grant of a node it already holds. §9 has the node shape they rely on. The group also checks that a bad
+  `ras_slurm_propagate_extra` entry, and an extend outside elastic mode, are
+  refused.
 - **Malformed JSON and a failing `scancel`.** §14.
 
 **The phase is a sequence of independent groups, and that is load-bearing.**
@@ -469,6 +480,13 @@ not ordinary cluster configuration:
   plugins want a cgroup hierarchy to own. `linuxproc` tracks a step by walking
   `/proc` parentage, which needs nothing a container lacks. See §7 for the
   cleanup consequence and §9a for the much larger one.
+
+The nodes are not all alike, so an expander job can be checked for asking
+what its parent asked: node[7-10] carry the feature `fast`, and node[9-10]
+two GPUs each, declared in [`gres.conf`](gres.conf). Slurm drops a GPU with
+no `File=`, so the two are `/dev/null` and `/dev/zero`; with the cgroup
+plugins off nothing ever opens them, and a GPU is only something to
+schedule.
 
 ### 9a. Process tracking, and why the default hides bugs
 
