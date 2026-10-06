@@ -140,6 +140,12 @@ static int ras_slurm_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_ras_slurm_component.propagate_gres);
 
+    prte_mca_ras_slurm_component.propagate_reservation = true;
+    (void) pmix_mca_base_component_var_register(component, "propagate_reservation",
+                                                "Propagate the original job's reservation when requesting additional resources",
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                                &prte_mca_ras_slurm_component.propagate_reservation);
+
 
     return PRTE_SUCCESS;
 }
