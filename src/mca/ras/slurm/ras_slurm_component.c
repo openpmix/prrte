@@ -134,6 +134,12 @@ static int ras_slurm_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_ras_slurm_component.propagate_threads_per_core);
 
+    prte_mca_ras_slurm_component.propagate_gres = true;
+    (void) pmix_mca_base_component_var_register(component, "propagate_gres",
+                                                "Propagate the original job's per-node GRES, and its --cpus-per-gpu and --mem-per-gpu read from SLURM_CPUS_PER_GPU and SLURM_MEM_PER_GPU, when requesting additional resources",
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                                &prte_mca_ras_slurm_component.propagate_gres);
+
 
     return PRTE_SUCCESS;
 }
