@@ -790,7 +790,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         else if (0 == strcmp(option, "ppr")) {
             /* if they didn't specify a complete pattern, then this is an error */
             if (NULL == strchr(opt->values[0], ':')) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "bad-ppr", true, opt->values[0]);
                 return PRTE_ERR_SILENT;
             }
             pmix_asprintf(&p2, "ppr:%s", opt->values[0]);

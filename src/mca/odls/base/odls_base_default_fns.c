@@ -1105,6 +1105,22 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
         for (m = ninfo; m > 0; m--) {
             size_t idx = m - 1;
             pmix_info_t *iptr = &info[idx];
+            bool is_unset = (0 == strcmp(iptr->key, PMIX_UNSET_ENVAR));
+            bool is_envar = (0 == strcmp(iptr->key, PMIX_SET_ENVAR)
+                             || 0 == strcmp(iptr->key, PMIX_ADD_ENVAR)
+                             || 0 == strcmp(iptr->key, PMIX_PREPEND_ENVAR)
+                             || 0 == strcmp(iptr->key, PMIX_APPEND_ENVAR));
+            /* each is read below through the member of the value union its
+             * key implies, so a value of any other type is passed over */
+            if ((is_unset && (PMIX_STRING != iptr->value.type || NULL == iptr->value.data.string))
+                || (is_envar && (PMIX_ENVAR != iptr->value.type
+                                 || NULL == iptr->value.data.envar.envar
+                                 || NULL == iptr->value.data.envar.value))) {
+                pmix_output(0, "%s odls: ignoring an envar directive %s carrying %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), iptr->key,
+                            PMIx_Data_type_string(iptr->value.type));
+                continue;
+            }
             if (0 == strcmp(iptr->key, PMIX_SET_ENVAR)) {
                 envt.envar = iptr->value.data.envar.envar;
                 envt.value = iptr->value.data.envar.value;
@@ -1791,10 +1807,13 @@ void prte_odls_base_process_envars(prte_job_t *jdata,
          * filter below, and read out of data.string.  Filtered out first
          * (and read as an envar), --unset-env quietly did nothing. */
         if (attr->key == PRTE_JOB_UNSET_ENVAR) {
-            unset_envar(attr->data.data.string, app);
+            if (PMIX_STRING == attr->data.type && NULL != attr->data.data.string) {
+                unset_envar(attr->data.data.string, app);
+            }
             continue;
         }
-        if (PMIX_ENVAR != attr->data.type) {
+        if (PMIX_ENVAR != attr->data.type || NULL == attr->data.data.envar.envar
+            || NULL == attr->data.data.envar.value) {
             continue;
         }
         val = &attr->data;
@@ -1855,10 +1874,13 @@ void prte_odls_base_process_envars(prte_job_t *jdata,
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
         /* see the note on UNSET in the job loop above */
         if (attr->key == PRTE_APP_UNSET_ENVAR) {
-            unset_envar(attr->data.data.string, app);
+            if (PMIX_STRING == attr->data.type && NULL != attr->data.data.string) {
+                unset_envar(attr->data.data.string, app);
+            }
             continue;
         }
-        if (PMIX_ENVAR != attr->data.type) {
+        if (PMIX_ENVAR != attr->data.type || NULL == attr->data.data.envar.envar
+            || NULL == attr->data.data.envar.value) {
             continue;
         }
         val = &attr->data;

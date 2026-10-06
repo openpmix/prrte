@@ -1044,13 +1044,13 @@ int prte_rmaps_base_check_oversubscribed(prte_job_t *jdata,
             if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN &
                   PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
-                               true, app->num_procs, app->app, prte_process_info.nodename);
+                               true, app->num_procs, app->app);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return PRTE_ERR_SILENT;
             } else if (!options->oversubscribe) {
                 /* if we were explicitly told not to oversubscribe, then don't */
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
-                               true, app->num_procs, app->app, prte_process_info.nodename);
+                               true, app->num_procs, app->app);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return PRTE_ERR_SILENT;
             }

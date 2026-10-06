@@ -591,6 +591,12 @@ static void _toolconn(int sd, short args, void *cbdata)
                 }
 
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
+                if (PMIX_STRING != cd->info[n].value.type || NULL == cd->info[n].value.data.string) {
+                    if (PMIX_SUCCESS == xrc) {
+                        xrc = PMIX_ERR_BAD_PARAM;
+                    }
+                    continue;
+                }
                 PMIX_LOAD_NSPACE(cd->target.nspace, cd->info[n].value.data.string);
                 nspace_given = true;
 
@@ -608,16 +614,19 @@ static void _toolconn(int sd, short args, void *cbdata)
                 /* These two are strings the connecting tool composed, and a
                  * PMIX_STRING carrying no string survives the wire as a NULL
                  * (the packer writes a zero length, the unpacker hands back
-                 * NULL) - so strdup'ing it unchecked let any tool segfault the
-                 * daemon it attached to.  A tool may also send the same key
+                 * NULL), and PMIx does not check that a value has the type
+                 * its key implies - so both are checked before the string
+                 * is used.  A tool may also send the same key
                  * twice; keep the first rather than stranding it. */
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
-                if (NULL != cd->info[n].value.data.string && NULL == cd->operation) {
+                if (PMIX_STRING == cd->info[n].value.type &&
+                    NULL != cd->info[n].value.data.string && NULL == cd->operation) {
                     cd->operation = strdup(cd->info[n].value.data.string);
                 }
 
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_CMD_LINE)) {
-                if (NULL != cd->info[n].value.data.string && NULL == cd->cmdline) {
+                if (PMIX_STRING == cd->info[n].value.type &&
+                    NULL != cd->info[n].value.data.string && NULL == cd->cmdline) {
                     cd->cmdline = strdup(cd->info[n].value.data.string);
                 }
 

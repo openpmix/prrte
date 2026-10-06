@@ -493,9 +493,11 @@ generation rule under `--purge`) checks the calls against the help files:
 | `purge()` | a topic no call shows |
 | `check_citation_files()` | a call naming one of our help files with the name mangled |
 | `check_citation_topics()` | a call naming a topic its help file does not have - the user would get PMIx's "couldn't find that topic" placeholder |
+| `check_call_arguments()` | a call passing a different number of arguments than the topic has `printf` conversions - the topic is the format string, so the compiler cannot |
 
-Only calls with a literal file and topic are checked, and a call citing a
-help file PMIx owns is left to PMIx.
+Only calls with a literal file and topic are checked, a call citing a help
+file PMIx owns is left to PMIx, and a topic that pulls in other text with
+`#include` is not counted.
 
 ---
 

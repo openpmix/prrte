@@ -86,7 +86,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app, prte_process_info.nodename);
+                           app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -278,7 +278,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app, prte_process_info.nodename);
+                           app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -503,7 +503,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app, prte_process_info.nodename);
+                           app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -753,7 +753,7 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app, prte_process_info.nodename);
+                           app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {

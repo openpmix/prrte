@@ -446,6 +446,14 @@ does not fail, it prints PMIx's "couldn't find that topic" placeholder in
 place of the diagnostic. So adding a call means adding its topic, and
 removing the last call to a topic means removing the topic.
 
+The check also counts arguments: every `prte_show_help()` or
+`pmix_show_help()` call whose file and topic are string literals must pass
+exactly as many arguments as the topic has `printf` conversions. The topic
+text *is* the format string, so the compiler never sees it, and a call that
+passes too few reads whatever happens to be on the stack - with a `%s`
+among them, it dereferences it. When you change a topic's conversions,
+change every call that shows it.
+
 ### Mixed-version DVMs are strictly forbidden
 
 Every process in a DVM comes from the same build. There is no version
