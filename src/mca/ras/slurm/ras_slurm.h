@@ -117,6 +117,7 @@ typedef struct {
     bool propagate_reservation;
     bool propagate_features;
     bool propagate_exclude;
+    char *propagate_extra;
 } prte_mca_ras_slurm_component_t;
 PRTE_EXPORT extern prte_mca_ras_slurm_component_t prte_mca_ras_slurm_component;
 
@@ -170,6 +171,17 @@ enum record_job_data_field {
     PRTE_JOB_DATA_JOB_ID,
     PRTE_JOB_DATA_COUNT
 };
+
+/* A job record member ras_slurm_propagate_extra copies into the expander,
+   and the salloc argument format it is passed with, such as "--comment=%s" */
+
+typedef struct {
+    char *key;
+    char *format;
+} prte_ras_slurm_extra_field_t;
+
+extern prte_ras_slurm_extra_field_t *prte_ras_slurm_extra_fields;
+extern size_t prte_ras_slurm_num_extra_fields;
 
 /* Stack item type for our session stack */
 

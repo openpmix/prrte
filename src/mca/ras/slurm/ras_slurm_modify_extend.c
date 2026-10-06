@@ -26,6 +26,7 @@
 #include <stdlib.h>
 
 #include "src/util/pmix_output.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
@@ -109,6 +110,7 @@ static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields, const char 
 static int prte_ras_slurm_make_count_envar_arg(const char *envar, const char *field_format, char ***argv);
 static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
+static int prte_ras_slurm_parse_propagate_extra(void);
 static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
 static int prte_ras_slurm_extract_reused_nodes(const char *slurm_jobid,
                                                pmix_list_t *node_list,
@@ -151,11 +153,12 @@ const char *const num_obj_subfields[NUM_OBJ_SUBFIELD_COUNT] = {
     [NUM_OBJ_SUBFIELD_NUMBER]   = "number",
 };
 
-/* Fields for internal PRRTE record keeping */
+/* Fields for internal PRRTE record keeping. The ':' keeps them apart from the
+ * job record members ras_slurm_propagate_extra adds to the same table. */
 const char *const record_job_data_fields[PRTE_JOB_DATA_COUNT] = {
-    [PRTE_JOB_DATA_NODES]  = "nodes",
-    [PRTE_JOB_DATA_NODELIST] = "nodelist",
-    [PRTE_JOB_DATA_JOB_ID] = "job_id",
+    [PRTE_JOB_DATA_NODES]  = "prte:nodes",
+    [PRTE_JOB_DATA_NODELIST] = "prte:nodelist",
+    [PRTE_JOB_DATA_JOB_ID] = "prte:job_id",
 };
 
 /* Number of fields to expect inside job record hash table */
@@ -171,9 +174,31 @@ static const char *mem_per_cpu_format  = "--mem-per-cpu=%s";
 static const char *mem_per_node_format = "--mem=%s";
 static const char *mem_per_gpu_format  = "--mem-per-gpu=%s";
 static const char *cpus_per_gpu_format = "--cpus-per-gpu=%s";
-
+static const char *time_format = "--time=%s";
+static const char *nodes_format = "--nodes=%s";
+static const char *nodelist_format = "--nodelist=%s";
+static const char *threads_per_core_format = "--threads-per-core=%s";
 /* The tres_per_node value; it holds --gpus-per-node as well as --gres */
 static const char *gres_format = "--gres=%s";
+static const char *reservation_format = "--reservation=%s";
+static const char *constraint_format = "--constraint=%s";
+static const char *exclude_format = "--exclude=%s";
+
+/* What every expander's salloc line starts with */
+static const char *const initial_args[] = {"salloc",
+                                           "--no-shell",
+                                           "--exclusive",
+                                           "--job-name=prrte",
+                                           NULL};
+
+/* Every option PRRTE sets, besides initial_args. ras_slurm_propagate_extra
+ * may not name these, so each option on the line has a single source. */
+static const char *const *const owned_formats[] = {
+    &account_format, &partition_format, &qos_format, &cwd_format,
+    &mem_per_cpu_format, &mem_per_node_format, &mem_per_gpu_format,
+    &cpus_per_gpu_format, &time_format, &nodes_format, &nodelist_format,
+    &threads_per_core_format, &gres_format, &reservation_format,
+    &constraint_format, &exclude_format, NULL};
 
 /* The parent's memory and per-GPU requests. The memory ones are as Slurm
  * settled them: a batch job's carries the default too, as though asked for
@@ -187,13 +212,17 @@ static const char *mem_per_cpu_envar  = "SLURM_MEM_PER_CPU";
 static const char *mem_per_node_envar = "SLURM_MEM_PER_NODE";
 static const char *mem_per_gpu_envar  = "SLURM_MEM_PER_GPU";
 static const char *cpus_per_gpu_envar = "SLURM_CPUS_PER_GPU";
-static const char *time_format = "--time=%s";
-static const char *nodes_format = "--nodes=%s";
-static const char *nodelist_format = "--nodelist=%s";
-static const char *threads_per_core_format = "--threads-per-core=%s";
-static const char *reservation_format = "--reservation=%s";
-static const char *exclude_format = "--exclude=%s";
-static const char *constraint_format = "--constraint=%s";
+
+/* ras_slurm_propagate_extra, parsed: job record members and the salloc
+ * argument formats they are passed with. Set up once by
+ * prte_ras_slurm_parse_propagate_extra. */
+prte_ras_slurm_extra_field_t *prte_ras_slurm_extra_fields = NULL;
+size_t prte_ras_slurm_num_extra_fields = 0;
+
+/* The entry of ras_slurm_propagate_extra that could not be used, and why.
+ * Set, every extend is refused with them. */
+static char *extra_bad_entry = NULL;
+static char *extra_bad_reason = NULL;
 
 /*
  * Constructor for prte_slurm_wait_tracker_t
@@ -256,6 +285,198 @@ static void ssc_des(prte_slurm_salloc_child_t *p)
     }
 }
 
+/* Forget the entries of ras_slurm_propagate_extra parsed so far */
+static void prte_ras_slurm_free_extra_fields(void)
+{
+    if (NULL != prte_ras_slurm_extra_fields) {
+        for (size_t i = 0; i < prte_ras_slurm_num_extra_fields; i++) {
+            free(prte_ras_slurm_extra_fields[i].key);
+            free(prte_ras_slurm_extra_fields[i].format);
+        }
+        free(prte_ras_slurm_extra_fields);
+    }
+    prte_ras_slurm_extra_fields = NULL;
+    prte_ras_slurm_num_extra_fields = 0;
+}
+
+/* Forget ras_slurm_propagate_extra, a bad entry included */
+static void prte_ras_slurm_free_propagate_extra(void)
+{
+    prte_ras_slurm_free_extra_fields();
+    free(extra_bad_entry);
+    extra_bad_entry = NULL;
+    free(extra_bad_reason);
+    extra_bad_reason = NULL;
+}
+
+/* The option an argument or a format sets: everything before the '=' */
+static size_t prte_ras_slurm_option_len(const char *arg)
+{
+    return strcspn(arg, "=");
+}
+
+/* Whether an argument or a format sets exactly this option */
+static bool prte_ras_slurm_sets_option(const char *arg, const char *option)
+{
+    size_t len = prte_ras_slurm_option_len(arg);
+
+    return strlen(option) == len && 0 == strncmp(arg, option, len);
+}
+
+/* A top-level member name of a job record: lowercase letters and underscores */
+static bool prte_ras_slurm_is_member_name(const char *s)
+{
+    return '\0' != s[0] && strlen(s) == strspn(s, "abcdefghijklmnopqrstuvwxyz_");
+}
+
+/* A long salloc option: "--", a lowercase letter, then lowercase letters,
+ * digits or dashes */
+static bool prte_ras_slurm_is_long_option(const char *s)
+{
+    return 0 == strncmp(s, "--", 2) && islower((unsigned char) s[2])
+           && strlen(s + 2) == strspn(s + 2, "abcdefghijklmnopqrstuvwxyz0123456789-");
+}
+
+/*
+ * Why an option ras_slurm_propagate_extra names is one PRRTE sets, or NULL.
+ *
+ * getopt_long takes any unambiguous abbreviation, so a name that abbreviates
+ * an option PRRTE sets would reach that option too.
+ */
+static const char *prte_ras_slurm_owned_option(const char *option)
+{
+    size_t len = strlen(option);
+
+    for (int i = 0; NULL != initial_args[i]; i++) {
+        size_t olen = prte_ras_slurm_option_len(initial_args[i]);
+        if (len <= olen && 0 == strncmp(option, initial_args[i], len)) {
+            return initial_args[i];
+        }
+    }
+    for (int i = 0; NULL != owned_formats[i]; i++) {
+        const char *fmt = *owned_formats[i];
+        size_t olen = prte_ras_slurm_option_len(fmt);
+        if (len <= olen && 0 == strncmp(option, fmt, len)) {
+            return fmt;
+        }
+    }
+    return NULL;
+}
+
+/*
+ * Why the entry key:option of ras_slurm_propagate_extra cannot be used, or NULL
+ * if it can. The entries accepted so far are the ones it may not repeat.
+ *
+ * An option PRRTE sets is also returned through owner, so the caller can name
+ * it.
+ */
+static const char *prte_ras_slurm_extra_unusable(const char *key, const char *option,
+                                                 const char **owner)
+{
+    if (!prte_ras_slurm_is_member_name(key)) {
+        return "the key is not a top-level member of \"scontrol show job <id> --json\" in lowercase";
+    }
+    if (!prte_ras_slurm_is_long_option(option)) {
+        return "the option is not a long salloc option in lowercase, such as --comment";
+    }
+    if (NULL != (*owner = prte_ras_slurm_owned_option(option))) {
+        return "PRRTE sets the option itself";
+    }
+    for (size_t i = 0; i < prte_ras_slurm_num_extra_fields; i++) {
+        if (0 == strcmp(key, prte_ras_slurm_extra_fields[i].key)) {
+            return "its key is named twice";
+        }
+        if (prte_ras_slurm_sets_option(prte_ras_slurm_extra_fields[i].format, option)) {
+            return "its option is named twice";
+        }
+    }
+    return NULL;
+}
+
+/*
+ * Parse and check ras_slurm_propagate_extra.
+ *
+ * Called from modify_extend_init. A bad entry is reported there and kept, and
+ * every extend is refused with it.
+ */
+static int prte_ras_slurm_parse_propagate_extra(void)
+{
+    const char *spec = prte_mca_ras_slurm_component.propagate_extra;
+    const char *reason = NULL;
+    const char *owner = NULL;
+    char **entries = NULL;
+    int err = PRTE_SUCCESS;
+    size_t i, n;
+
+    if (NULL == spec || '\0' == spec[0]) {
+        return PRTE_SUCCESS;
+    }
+
+    entries = PMIx_Argv_split(spec, ',');
+    n = (size_t) PMIx_Argv_count(entries);
+    if (0 == n) {
+        goto cleanup;
+    }
+    prte_ras_slurm_extra_fields = (prte_ras_slurm_extra_field_t *) calloc(n, sizeof(*prte_ras_slurm_extra_fields));
+    if (NULL == prte_ras_slurm_extra_fields) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        goto cleanup;
+    }
+
+    for (i = 0; i < n; i++) {
+        prte_ras_slurm_extra_field_t *field = &prte_ras_slurm_extra_fields[i];
+        char *colon = strchr(entries[i], ':');
+
+        if (NULL == colon) {
+            reason = "it has no ':' between the key and the option";
+            break;
+        }
+        *colon = '\0';
+        reason = prte_ras_slurm_extra_unusable(entries[i], colon + 1, &owner);
+        if (NULL == reason) {
+            field->key = strdup(entries[i]);
+            /* The option is checked to hold no '%' */
+            if (0 > asprintf(&field->format, "%s=%%s", colon + 1)) {
+                field->format = NULL;
+            }
+            /* Counted before the check, so a half-filled entry is freed too */
+            prte_ras_slurm_num_extra_fields++;
+        }
+        *colon = ':';
+        if (NULL != reason) {
+            break;
+        }
+        if (NULL == field->key || NULL == field->format) {
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
+    }
+
+    if (NULL != reason) {
+        extra_bad_entry = strdup(entries[i]);
+        if (NULL == owner) {
+            extra_bad_reason = strdup(reason);
+        } else if (0 > asprintf(&extra_bad_reason, "PRRTE sets %.*s itself",
+                                (int) prte_ras_slurm_option_len(owner), owner)) {
+            extra_bad_reason = NULL;
+        }
+        if (NULL == extra_bad_entry || NULL == extra_bad_reason) {
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "propagate-extra-bad-entry", true,
+                       extra_bad_entry, extra_bad_reason);
+        prte_ras_slurm_free_extra_fields();
+    }
+
+cleanup:
+    PMIx_Argv_free(entries);
+    if (PRTE_SUCCESS != err) {
+        prte_ras_slurm_free_propagate_extra();
+    }
+    return err;
+}
+
 /*
  * Set up the records of work in flight.
  */
@@ -280,7 +501,7 @@ int prte_ras_slurm_modify_extend_init(void)
 
     extend_initialized = true;
 
-    return PRTE_SUCCESS;
+    return prte_ras_slurm_parse_propagate_extra();
 }
 
 /*
@@ -338,6 +559,8 @@ int prte_ras_slurm_modify_extend_finalize(void)
     if (!extend_initialized) {
         return PRTE_SUCCESS;
     }
+
+    prte_ras_slurm_free_propagate_extra();
 
     prte_slurm_salloc_child_t *child;
 
@@ -911,12 +1134,6 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     char job_id[PRTE_SLURM_JOB_ID_MAX_LEN+1] = {0};
     char *job_id_dyn = NULL;
 
-    const char * const initial_args[] = {"salloc",
-                                "--no-shell",
-                                "--exclusive",
-                                "--job-name=prrte",
-                                NULL };
-
     for (int i = 0; initial_args[i] != NULL; i++) {
         pmix_err = PMIx_Argv_append_nosize(&argv, initial_args[i]);
 
@@ -1075,6 +1292,16 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
         err = prte_ras_slurm_make_salloc_arg(fields, num_obj_fields[NUM_OBJ_THREADS_PER_CORE], 
                                             threads_per_core_format, true, &argv);
+
+        if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+    }
+
+    for (size_t i = 0; i < prte_ras_slurm_num_extra_fields; i++) {
+        err = prte_ras_slurm_make_salloc_arg(fields, prte_ras_slurm_extra_fields[i].key,
+                                             prte_ras_slurm_extra_fields[i].format, true, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);
@@ -1881,6 +2108,12 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 {
     if (!prte_ras_slurm_have_extensions(false)) {
         return PRTE_ERR_NOT_AVAILABLE;
+    }
+
+    if (NULL != extra_bad_entry) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "propagate-extra-refused", true,
+                       extra_bad_entry, extra_bad_reason);
+        return PRTE_ERR_BAD_PARAM;
     }
 
     int err = PRTE_SUCCESS;

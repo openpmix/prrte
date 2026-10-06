@@ -158,6 +158,12 @@ static int ras_slurm_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_ras_slurm_component.propagate_exclude);
 
+    prte_mca_ras_slurm_component.propagate_extra = NULL;
+    (void) pmix_mca_base_component_var_register(component, "propagate_extra",
+                                                "Further members of the original job's record to propagate when requesting additional resources, as comma-separated json_key:--option pairs (e.g. comment:--comment). Keys are the job's top-level members in \"scontrol show job <id> --json\". Each sends --option=<the job's value>, copied as Slurm prints it, so a member printed differently from what salloc accepts does not propagate correctly",
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                                &prte_mca_ras_slurm_component.propagate_extra);
+
 
     return PRTE_SUCCESS;
 }
