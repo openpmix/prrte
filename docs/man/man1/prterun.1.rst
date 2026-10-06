@@ -44,6 +44,19 @@ it is passed to the program as its arguments. See "Per-app-context
 mapping" under ``--mapby`` for how placement options given on
 different contexts combine.
 
+.. caution::
+
+   The MCA parameter options - ``--mca``, ``--prtemca``, ``--pmixmca``
+   and ``--tune`` - are the exception: ``prterun`` applies them before
+   it parses the rest of the command line, so it looks for them across
+   the whole line, the program's arguments included. If you are passing
+   MCA parameters to your program, put ``--`` in front of the program so
+   that ``prterun`` stops there:
+
+   .. code:: sh
+
+      prterun -n 4 -- ./myapp --mca foo bar
+
 All of the text below is also available from the command itself:
 ``prterun --help`` lists the options, and ``prterun --help <option>``
 (for example, ``prterun --help mapby``) prints the full description of

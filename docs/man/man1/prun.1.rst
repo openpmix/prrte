@@ -44,6 +44,19 @@ it is passed to the program as its arguments. See "Per-app-context
 mapping" under ``--mapby`` for how placement options given on
 different contexts combine.
 
+.. caution::
+
+   The MCA parameter options - ``--mca``, ``--prtemca``, ``--pmixmca``
+   and ``--tune`` - are the exception: ``prun`` applies them before it
+   parses the rest of the command line, so it looks for them across the
+   whole line, the program's arguments included. If you are passing MCA
+   parameters to your program, put ``--`` in front of the program so
+   that ``prun`` stops there:
+
+   .. code:: sh
+
+      prun -n 4 -- ./myapp --mca foo bar
+
 All of the text below is also available from the command itself:
 ``prun --help`` lists the options, and ``prun --help <option>`` (for
 example, ``prun --help mapby``) prints the full description of one.
