@@ -21,7 +21,10 @@
 
 #include "prte_config.h"
 
+#include <errno.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #ifdef HAVE_SYS_TYPES_H
 #    include <sys/types.h>
 #endif
@@ -41,6 +44,8 @@
 
 #include "src/mca/filem/base/base.h"
 #include "src/mca/filem/filem.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_printf.h"
 
 /******************
  * Local Functions
@@ -243,6 +248,43 @@ char *prte_filem_base_shell_quote(const char *path)
     q[j++] = '\'';
     q[j] = '\0';
     return q;
+}
+
+/* A file is written out under a temporary name and renamed into place, so
+ * a process never sees half of it. mkstemp() makes that temporary: always
+ * a new file, created exclusively, under a name no other daemon placing
+ * the same file in a shared directory will also pick. Its mode is set on
+ * the descriptor - mkstemp() creates 0600 - and a file whose mode cannot
+ * be set is not used, since what is placed must arrive with the mode it
+ * was sent with.
+ */
+int prte_filem_base_open_temp(const char *dest, mode_t mode, char **tmpname)
+{
+    char *name = NULL;
+    int fd, save;
+
+    *tmpname = NULL;
+    if (0 > pmix_asprintf(&name, "%s.prte-tmp.XXXXXX", dest) || NULL == name) {
+        errno = ENOMEM;
+        return -1;
+    }
+    fd = mkstemp(name);
+    if (0 > fd) {
+        save = errno;
+        free(name);
+        errno = save;
+        return -1;
+    }
+    if (0 != fchmod(fd, mode) || PMIX_SUCCESS != pmix_fd_set_cloexec(fd)) {
+        save = errno;
+        close(fd);
+        unlink(name);
+        free(name);
+        errno = (0 != save) ? save : EIO;
+        return -1;
+    }
+    *tmpname = name;
+    return fd;
 }
 
 /***********************

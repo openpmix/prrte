@@ -43,13 +43,18 @@
  */
 
 #include "prte_config.h"
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/filem/base/base.h"
@@ -244,6 +249,71 @@ static int test_path_rules(void)
     return failures;
 }
 
+/*
+ * The temporary a placed file is written to before it is renamed into
+ * place: always a new file, under a name of its own, with the mode it was
+ * asked for whatever the umask, and not inherited by anything this process
+ * starts.
+ */
+static int test_open_temp(void)
+{
+    int failures = 0, fd1, fd2, fl;
+    char base[] = "/tmp/prte_filem_test_XXXXXX";
+    char *dest = NULL, *t1 = NULL, *t2 = NULL, *bad = NULL;
+    struct stat st;
+    mode_t old;
+
+    if (NULL == mkdtemp(base)) {
+        fprintf(stderr, "FAIL [mkdtemp]: %s\n", strerror(errno));
+        return 1;
+    }
+    CHECK("asprintf", 0 <= pmix_asprintf(&dest, "%s/data.bin", base));
+
+    old = umask(077);
+    fd1 = prte_filem_base_open_temp(dest, 0755, &t1);
+    fd2 = prte_filem_base_open_temp(dest, 0644, &t2);
+    umask(old);
+    CHECK("a temporary is created", 0 <= fd1 && NULL != t1);
+    CHECK("beside the destination, under its name",
+          NULL != t1 && 0 == strncmp(t1, dest, strlen(dest))
+              && 0 == strncmp(t1 + strlen(dest), ".prte-tmp.", 10));
+    CHECK("a second is created", 0 <= fd2 && NULL != t2);
+    CHECK("under a different name", NULL != t1 && NULL != t2 && 0 != strcmp(t1, t2));
+    CHECK("the mode asked for, whatever the umask",
+          NULL != t1 && 0 == stat(t1, &st) && 0755 == (st.st_mode & 07777) && 0 == st.st_size);
+    fl = (0 <= fd1) ? fcntl(fd1, F_GETFD) : -1;
+    CHECK("close-on-exec", 0 <= fl && 0 != (fl & FD_CLOEXEC));
+    if (0 <= fd1) {
+        close(fd1);
+    }
+    if (0 <= fd2) {
+        close(fd2);
+    }
+    if (NULL != t1) {
+        unlink(t1);
+    }
+    if (NULL != t2) {
+        unlink(t2);
+    }
+    free(t1);
+    free(t2);
+
+    /* nowhere to put it: an error, and nothing to clean up */
+    CHECK("asprintf", 0 <= pmix_asprintf(&bad, "%s/missing/data.bin", base));
+    t1 = (char *) 1;
+    fd1 = prte_filem_base_open_temp(bad, 0644, &t1);
+    CHECK("a missing directory is an error", 0 > fd1 && NULL == t1);
+    free(bad);
+
+    rmdir(base);
+    free(dest);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_open_temp\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -270,6 +340,7 @@ int main(void)
     failures += test_classes();
     failures += test_none_module();
     failures += test_path_rules();
+    failures += test_open_temp();
 
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
 

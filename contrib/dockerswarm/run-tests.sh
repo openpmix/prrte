@@ -4576,21 +4576,24 @@ test_util() {
                  || bad "a valid system limit broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     cleanup_swarm
 
-    banner "util: a session directory owned by another user is refused"
-    # The top session directory has a predictable name, <tmpdir>/prtrn.<pid>
-    # for prterun, and one already there used to be adopted whoever owned it.
-    # exec keeps the pid, so the shell can make the directory prterun will
-    # look for before prterun exists. It must be ours.
+    banner "util: a session directory owned by another user is not used"
+    # The top session directory is <tmpdir>/prtrn.<pid> for prterun, and one
+    # already there used to be adopted whoever owned it.  It must be ours to
+    # be used; when it is not, prterun makes one of its own beside it
+    # (prtrn.<pid>.XXXXXX) and runs as usual.  exec keeps the pid, so the
+    # shell can make the directory prterun will look for before prterun
+    # exists.
     cleanup_swarm
     if bounded 90 RUN 'd=/tmp/prtrn.$$; mkdir $d && chmod 777 $d && chown 65534 $d &&
-                       exec prterun -n 1 hostname'; then
-        bad "prterun used a session directory owned by uid 65534"
-    elif grep -q 'belongs to another user' "$BOUT"; then
-        ok "prterun refused a session directory owned by another user"
+                       exec prterun -n 1 hostname' && grep -q '^node1$' "$BOUT"; then
+        ok "prterun ran with its session directory name held by another user"
     else
-        bad "prterun failed, but not over the directory's owner: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+        bad "prterun did not run past another user's session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
     fi
     rm -f "$BOUT"
+    RUN 'find /tmp -maxdepth 1 -name "prtrn.*" -uid 65534 | grep -q .' \
+        && ok "the other user's directory is still theirs" \
+        || bad "the other user's session directory was removed or taken over"
     RUN 'find /tmp -maxdepth 1 -name "prtrn.*" -uid 65534 -exec sh -c "ls -A {} | grep -q ." \; -print' \
         | grep -q . \
         && bad "something was written into the other user's session directory" \
@@ -4606,11 +4609,12 @@ test_util() {
     rm -f "$BOUT"
     cleanup_swarm
 
-    banner "util: prun refuses a session directory owned by another user"
+    banner "util: prun does not use a session directory owned by another user"
     # prun hands PMIx <tmpdir>/prun.session.<node>.<euid>.<pid> as its server
     # tmpdir, and PMIx trusts a directory it is given - so prun has to create
-    # it, and refuse one already there that is not ours, before handing it
-    # over. A DVM on node1 alone is enough: the directory is prun's own.
+    # it, and use one already there only if it is ours, before handing it
+    # over; otherwise it makes one of its own beside it. A DVM on node1 alone
+    # is enough: the directory is prun's own.
     cleanup_swarm
     RUN 'nohup prte --daemonize --report-uri /tmp/sessdir-dvm.uri >/tmp/prte.out 2>&1 & sleep 5' >/dev/null
     if ! RUN 'pgrep -x prte >/dev/null'; then
@@ -4618,14 +4622,19 @@ test_util() {
     else
         if bounded 90 RUN 'd=/tmp/prun.session.$(hostname).$(id -u).$$
                            mkdir $d && chmod 777 $d && chown 65534 $d &&
-                           exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname'; then
-            bad "prun used a session directory owned by uid 65534"
-        elif grep -q 'belongs to another user' "$BOUT"; then
-            ok "prun refused a session directory owned by another user"
+                           exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' &&
+           grep -q '^node1$' "$BOUT"; then
+            ok "prun ran with its session directory name held by another user"
         else
-            bad "prun failed, but not over the directory's owner: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+            bad "prun did not run past another user's session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
         fi
         rm -f "$BOUT"
+        RUN 'find /tmp -maxdepth 1 -name "prun.session.*" -uid 65534 | grep -q .' \
+            && ok "the other user's directory is still theirs" \
+            || bad "the other user's session directory was removed or taken over"
+        RUN 'find /tmp -maxdepth 1 -name "prun.session.*" ! -uid 65534 | grep -q .' \
+            && bad "prun left the session directory it made instead behind" \
+            || ok "prun removed the session directory it made instead"
         RUN 'rm -rf /tmp/prun.session.*' >/dev/null 2>&1
         if bounded 90 RUN 'mkdir /tmp/prun.session.$(hostname).$(id -u).$$ &&
                            exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' &&

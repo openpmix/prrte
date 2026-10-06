@@ -88,6 +88,15 @@ PRTE_EXPORT bool prte_filem_base_has_dotdot(const char *path);
  */
 PRTE_EXPORT char *prte_filem_base_shell_quote(const char *path);
 
+/* Create a new file beside `dest` to write it out in, ready to be renamed
+ * over it: "<dest>.prte-tmp.XXXXXX", made by mkstemp() - so it is new,
+ * exclusively ours, and has a name no other writer of the same file will
+ * choose - then given `mode` and made close-on-exec. Returns the open
+ * descriptor, with the name in *tmpname for the caller to rename or unlink
+ * and free; or -1, with errno set and *tmpname NULL.
+ */
+PRTE_EXPORT int prte_filem_base_open_temp(const char *dest, mode_t mode, char **tmpname);
+
 END_C_DECLS
 
 #endif /* PRTE_FILEM_BASE_H */

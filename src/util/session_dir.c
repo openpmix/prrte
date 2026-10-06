@@ -86,7 +86,8 @@ static bool setup_base_complete = false;
  ****************************/
 /*
  * Confirm that a session directory PRRTE has just created - or found
- * already sitting at the name it composed - is really ours to use.
+ * already sitting at the name it composed - is really ours to use,
+ * saying why not when `report` is set.
  *
  * Every name that reaches here is one PRRTE composes itself
  * (<tmpdir>/<prefix>.<pid>, then <jobid>, then <rank>), and the top of
@@ -115,7 +116,7 @@ static bool setup_base_complete = false;
  * exposure as a foreign directory - someone else may already have put
  * files in it.
  */
-static int _check_owner(const pmix_nspace_t nspace, const char *directory)
+static int _check_dir(const pmix_nspace_t nspace, const char *directory, bool report)
 {
     struct stat buf;
     int fd, save;
@@ -123,30 +124,43 @@ static int _check_owner(const pmix_nspace_t nspace, const char *directory)
     fd = open(directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
     if (0 > fd) {
         save = errno;
-        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
-                       directory, strerror(save));
+        if (report) {
+            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
+                           directory, strerror(save));
+        }
         return PRTE_ERR_SILENT;
     }
     if (0 != fstat(fd, &buf)) {
         save = errno;
         close(fd);
-        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
-                       directory, strerror(save));
+        if (report) {
+            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
+                           directory, strerror(save));
+        }
         return PRTE_ERR_SILENT;
     }
     close(fd);
 
     if (buf.st_uid != geteuid()) {
-        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:owner", true,
-                       directory, (unsigned long) buf.st_uid, (unsigned long) geteuid());
+        if (report) {
+            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:owner", true,
+                           directory, (unsigned long) buf.st_uid, (unsigned long) geteuid());
+        }
         return PRTE_ERR_SILENT;
     }
     if (0 != (buf.st_mode & (S_IWGRP | S_IWOTH))) {
-        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:writable", true,
-                       directory, (unsigned int) (buf.st_mode & 07777));
+        if (report) {
+            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:writable", true,
+                           directory, (unsigned int) (buf.st_mode & 07777));
+        }
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;
+}
+
+static int _check_owner(const pmix_nspace_t nspace, const char *directory)
+{
+    return _check_dir(nspace, directory, true);
 }
 
 /*
@@ -178,9 +192,73 @@ static int _create_dir(const pmix_nspace_t nspace, const char *directory, bool *
     return _check_owner(nspace, directory);
 }
 
-int prte_session_dir_create(const char *directory, bool *created)
+/*
+ * Claim a top-level directory - one whose name sits directly under a
+ * shared temporary directory.
+ *
+ * Such a name may already be taken by a directory we cannot use - one
+ * left behind by another user's job that had the same pid, for
+ * instance. Not using it is right (see _check_owner), but failing to
+ * start because of it is not, since nothing depends on the name itself -
+ * it is passed on, to PMIx and everything else, by value. So when the
+ * name is taken, make a directory beside it: mkdtemp() creates one
+ * atomically, mode 0700, under a unique name. The prefix is kept, so
+ * whatever looks for our directories by prefix still finds them.
+ *
+ * Only a top-level name needs this. The job and rank directories below
+ * it are created inside a directory that is ours and that no one else
+ * can write to.
+ */
+static int _claim_dir(const pmix_nspace_t nspace, char **directory, bool *created)
 {
-    return _create_dir(PRTE_PROC_MY_NAME->nspace, directory, created);
+    struct stat buf;
+    char *alt = NULL;
+    int ret;
+
+    if (NULL != created) {
+        *created = false;
+    }
+    ret = pmix_os_dirpath_create(*directory, S_IRWXU);
+    if (PMIX_SUCCESS == ret || PMIX_ERR_EXISTS == ret) {
+        if (PRTE_SUCCESS == _check_dir(nspace, *directory, false)) {
+            if (PMIX_SUCCESS == ret && NULL != created) {
+                *created = true;
+            }
+            return PRTE_SUCCESS;
+        }
+    } else if (0 != lstat(*directory, &buf)) {
+        /* nothing is there - the directory simply could not be made */
+        PMIX_ERROR_LOG(ret);
+        return prte_pmix_convert_status(ret);
+    }
+
+    /* the name is taken by something we cannot use */
+    if (0 > pmix_asprintf(&alt, "%s.XXXXXX", *directory) || NULL == alt) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (NULL == mkdtemp(alt)) {
+        /* say why the name we wanted was refused - that is the problem
+         * to fix - and give up */
+        free(alt);
+        (void) _check_owner(nspace, *directory);
+        return PRTE_ERR_SILENT;
+    }
+    ret = _check_owner(nspace, alt);
+    if (PRTE_SUCCESS != ret) {
+        free(alt);
+        return ret;
+    }
+    free(*directory);
+    *directory = alt;
+    if (NULL != created) {
+        *created = true;
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_session_dir_create(char **directory, bool *created)
+{
+    return _claim_dir(PRTE_PROC_MY_NAME->nspace, directory, created);
 }
 
 static int _setup_top_session_dir(void)
@@ -219,7 +297,7 @@ static int _setup_top_session_dir(void)
             }
         }
     }
-    rc = _create_dir(PRTE_PROC_MY_NAME->nspace, prte_process_info.top_session_dir, NULL);
+    rc = _claim_dir(PRTE_PROC_MY_NAME->nspace, &prte_process_info.top_session_dir, NULL);
 
 exit:
     if (PRTE_SUCCESS != rc) {

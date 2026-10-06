@@ -1087,25 +1087,14 @@ static int place_file(char *my_dir, char *wdir, char *fname)
     /* write a temporary alongside the target and rename it into place. The
      * rename is atomic, so a proc never sees a half-written file - which
      * matters when the working directory is shared and several daemons are
-     * placing the identical file at the same moment.
+     * placing the identical file at the same moment, each under a name of
+     * its own (prte_filem_base_open_temp).
      */
-    pmix_asprintf(&tmpname, "%s.prte-tmp.%lu", dest, (unsigned long) getpid());
-    if (NULL == tmpname) {
-        rc = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(rc);
-        goto cleanup;
-    }
-    if (0 > (fdest = open(tmpname, O_WRONLY | O_CREAT | O_TRUNC, mode))) {
-        pmix_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmpname);
+    if (0 > (fdest = prte_filem_base_open_temp(dest, mode, &tmpname))) {
+        pmix_output(0, "%s CANNOT CREATE A FILE BESIDE %s: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    dest, strerror(errno));
         rc = PRTE_ERR_FILE_OPEN_FAILURE;
-        free(tmpname);
-        tmpname = NULL;
         goto cleanup;
-    }
-    if (0 != fchmod(fdest, mode)) {
-        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                             "%s filem:raw: could not set mode on %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmpname));
     }
     while (0 < (nb = read_bytes(fsrc, data, sizeof(data)))) {
         if (PRTE_SUCCESS != (rc = write_bytes(fdest, data, (size_t) nb))) {
