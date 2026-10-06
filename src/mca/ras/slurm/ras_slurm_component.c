@@ -146,6 +146,12 @@ static int ras_slurm_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_ras_slurm_component.propagate_reservation);
 
+    prte_mca_ras_slurm_component.propagate_features = true;
+    (void) pmix_mca_base_component_var_register(component, "propagate_features",
+                                                "Propagate the original job's required node features as --constraint when requesting additional resources. A --prefer the original job's nodes satisfied is among them, and becomes a requirement",
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                                &prte_mca_ras_slurm_component.propagate_features);
+
 
     return PRTE_SUCCESS;
 }

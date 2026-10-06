@@ -134,6 +134,7 @@ const char *const str_fields[STR_FIELD_COUNT] = {
     [STR_CWD]       = "current_working_directory",
     [STR_TRES_PER_NODE] = "tres_per_node",
     [STR_RESV_NAME] = "resv_name",
+    [STR_FEATURES] = "features",
 };
 
 /* Numberic object fields to read from "parent" Slurm job JSON */
@@ -190,6 +191,7 @@ static const char *nodes_format = "--nodes=%s";
 static const char *nodelist_format = "--nodelist=%s";
 static const char *threads_per_core_format = "--threads-per-core=%s";
 static const char *reservation_format = "--reservation=%s";
+static const char *constraint_format = "--constraint=%s";
 
 /*
  * Constructor for prte_slurm_wait_tracker_t
@@ -1030,6 +1032,16 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     if(prte_mca_ras_slurm_component.propagate_reservation) {
         err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_RESV_NAME], reservation_format, false, &argv);
+
+        if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+    }
+
+    /* A satisfied --prefer is printed here too, and so becomes a requirement */
+    if(prte_mca_ras_slurm_component.propagate_features) {
+        err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_FEATURES], constraint_format, false, &argv);
 
         if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
             PRTE_ERROR_LOG(err);

@@ -84,11 +84,12 @@ deviation* and the framework guide.
 
 - **`PMIX_ALLOC_EXTEND`** → `serve_extend_req`: propagates the original
   job's SLURM attributes (account, partition, qos, cwd, time,
-  threads-per-core, per-node GRES, reservation, and the memory and per-GPU
-  options read as described below — each gated by a `propagate_*` MCA param,
-  all default true), builds `salloc` args, launches an **expander job**,
-  waits for its `salloc` to exit, trims its time limit to the parent's end,
-  then adds the modified resources. Answers in two phases — see below.
+  threads-per-core, per-node GRES, reservation, node features, and the
+  memory and per-GPU options read as described below — each gated by a
+  `propagate_*` MCA param, all default true), builds `salloc` args, launches
+  an **expander job**, waits for its `salloc` to exit, trims its time limit
+  to the parent's end, then adds the modified resources. Answers in two
+  phases — see below.
 - **`PMIX_ALLOC_NEW`** → the same request; see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count or by name while
@@ -141,6 +142,15 @@ which are not propagated: one counts GPUs for the whole job, the other per
 task, and the expander has neither the parent's size nor tasks. `--exclusive`
 already hands the expander every GPU on its nodes; the request is what makes
 Slurm choose nodes that have them.
+
+### Node features: a satisfied preference becomes a requirement
+
+`features` goes back as `--constraint`, expressions (`a&b`, `a|b`) included.
+`prefer` is not propagated: Slurm empties it when the job starts, moving a
+preference the nodes met into `features` and dropping one they did not. The
+parent is always running when it grows, so `prefer` is always empty there,
+and a `--prefer` its nodes satisfied reaches the expander as a hard
+`--constraint` — the expander gets the node type the parent got.
 
 ### The expander job ends with the parent allocation
 
