@@ -74,6 +74,7 @@
 #include "src/mca/base/pmix_mca_base_var.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/ras.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -340,6 +341,98 @@ static int test_node_insert(void)
  * ras/bootstrap rejects it rather than letting a permanently unclaimable
  * rank stall DVM formation.
  */
+/*
+ * The DVMNodes list of prte.conf, expanded: "base[width:ranges]suffix"
+ * names one node per number in the ranges, zero-padded to the width. A
+ * list that is not well formed is refused, never expanded in part.
+ */
+static int boot_nodes(const char *dir, const char *nodes, prte_bootstrap_config_t *cfg)
+{
+    char *path = NULL;
+    FILE *fp;
+    int rc;
+
+    if (0 > pmix_asprintf(&path, "%s/prte.conf", dir) || NULL == path) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    fp = fopen(path, "w");
+    free(path);
+    if (NULL == fp) {
+        return PRTE_ERROR;
+    }
+    fprintf(fp, "DVMControllerHost=ctrl\nDVMNodes=%s\n", nodes);
+    fclose(fp);
+    rc = prte_bootstrap_parse(cfg);
+    return rc;
+}
+
+static bool nodes_are(prte_bootstrap_config_t *cfg, const char *expected)
+{
+    char *got = PMIx_Argv_join(cfg->nodes, ',');
+    bool same = (NULL != got && 0 == strcmp(got, expected));
+
+    if (!same) {
+        fprintf(stderr, "    nodes: got \"%s\", expected \"%s\"\n",
+                (NULL == got) ? "(none)" : got, expected);
+    }
+    free(got);
+    return same;
+}
+
+static int test_bootstrap_nodelist(void)
+{
+    int failures = 0;
+    char dir[] = "/tmp/prte_boot_test_XXXXXX";
+    char *savedir = prte_install_dirs.sysconfdir, *conf = NULL;
+    prte_bootstrap_config_t cfg;
+    const struct {
+        const char *nodes;
+        const char *expected;   /* NULL: must be refused */
+    } cases[] = {
+        {"bn[2:1-3]", "bn01,bn02,bn03"},
+        {"bn[3:5]", "bn005"},
+        {"bn[2:8-11]-ib", "bn08-ib,bn09-ib,bn10-ib,bn11-ib"},
+        {"head,bn[2:1,3]", "head,bn01,bn03"},
+        {"bn[0:7-8]", "bn7,bn8"},
+        /* a number wider than its field is written in full */
+        {"bn[1:9-10]", "bn9,bn10"},
+        {"bn[-5:1-3]", NULL},
+        {"bn[21:1-2]", NULL},
+        {"bn[x:1-2]", NULL},
+        {"bn[2x:1-2]", NULL},
+        {"bn[2:5-3]", NULL},
+        {"bn[2:1-2000000]", NULL},
+        {"bn[2:1-2x]", NULL},
+        {"bn[2:-3]", NULL},
+    };
+    size_t n;
+
+    if (NULL == mkdtemp(dir)) {
+        fprintf(stderr, "FAIL [bootnodes]: mkdtemp\n");
+        return 1;
+    }
+    prte_install_dirs.sysconfdir = dir;
+    for (n = 0; n < sizeof(cases) / sizeof(cases[0]); n++) {
+        char label[96];
+        int rc = boot_nodes(dir, cases[n].nodes, &cfg);
+
+        snprintf(label, sizeof(label), "bootnodes: %s", cases[n].nodes);
+        if (NULL == cases[n].expected) {
+            CHECK(label, PRTE_SUCCESS != rc);
+        } else {
+            CHECK(label, PRTE_SUCCESS == rc && nodes_are(&cfg, cases[n].expected));
+        }
+        prte_bootstrap_config_free(&cfg);
+    }
+    prte_install_dirs.sysconfdir = savedir;
+    if (0 <= pmix_asprintf(&conf, "%s/prte.conf", dir) && NULL != conf) {
+        unlink(conf);
+        free(conf);
+    }
+    rmdir(dir);
+    return failures;
+}
+
 static int test_bootstrap_ranks(void)
 {
     int failures = 0;
@@ -2056,6 +2149,7 @@ int main(void)
     failures += test_select();
     failures += test_node_insert();
     failures += test_bootstrap_ranks();
+    failures += test_bootstrap_nodelist();
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();
