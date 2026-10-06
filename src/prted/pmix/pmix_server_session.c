@@ -1432,6 +1432,15 @@ static pmix_status_t process_directive(prte_pmix_server_req_t *req)
     }
 
     if (PRTE_SESSCTRL_INSTANTIATE == ctl.op) {
+        /* a new session takes nodes - from the pool, or new ones the DVM
+         * grows onto - so creating one changes what the DVM consists of,
+         * which is for the scheduler, or for whoever may act on the DVM
+         * itself. (With a scheduler attached, anyone else's request went
+         * up to it rather than coming here.) */
+        if (!prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)) {
+            rc = PMIX_ERR_NO_PERMISSIONS;
+            goto done;
+        }
         rc = session_instantiate(req, &ctl);
         if (PMIX_SUCCESS == rc) {
             session = prte_get_session_object(req->sessionID);

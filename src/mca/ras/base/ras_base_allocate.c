@@ -1806,6 +1806,35 @@ int prte_ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
         return ret;
     }
 
+    /* Judge every node before taking any, so a refusal changes nothing. */
+    PMIX_LIST_FOREACH(snap, &ndlist, prte_node_t) {
+        prte_node_t *gnode = prte_node_match(NULL, snap->name);
+
+        /* a node with no daemon of ours makes the DVM bigger, which only
+         * an elastic DVM can be (ras_base_resize_allowed) */
+        if (NULL == gnode || NULL == gnode->daemon) {
+            char *why = NULL;
+
+            pmix_asprintf(&why, "add node %s", snap->name);
+            if (!ras_base_resize_allowed((NULL == why) ? snap->name : why)) {
+                free(why);
+                PMIX_LIST_DESTRUCT(&ndlist);
+                return PRTE_ERR_SILENT;
+            }
+            free(why);
+        }
+        /* and one a session holds is that session's until it lets it go -
+         * taking it would leave its jobs placed on a node it no longer has */
+        if (NULL != gnode && NULL != gnode->session && gnode->session != dest &&
+            gnode->session != prte_default_session) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:node-in-session", true, snap->name,
+                           (unsigned) gnode->session->session_id);
+            PMIX_LIST_DESTRUCT(&ndlist);
+            return PRTE_ERR_SILENT;
+        }
+    }
+
     /* prte_ras_base_node_insert() drains ndlist into the global
      * pool, so snapshot the node names first: add_nodes_to_session()
      * below needs them to re-find the pool objects and set their

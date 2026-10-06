@@ -797,6 +797,14 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/envspawn.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # roletool: a PMIx tool that asks the DVM for what only some users
+            # may have - the scheduler role, a spawn naming another job as its
+            # parent, a new session - so it can be run as a second user.
+            echo ">>>> roletool (requester checks) test client"
+            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/roletool \
+                /prrte-src/contrib/dockerswarm/roletool.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
             # stdin bugs in iof live in the back-pressure path, and a normal
             # "cat" drains its pipe as fast as the daemon fills it, so the
