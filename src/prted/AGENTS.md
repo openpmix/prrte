@@ -179,6 +179,18 @@ still parsing, or still inside the spawn finds it empty. Both
 and note that the window is not small — the spawn covers the whole mapping
 and launch of the job.
 
+**In `prun_common.c` the handler only writes the signal number down a
+pipe.** It is a plain `signal()` handler and may run on any thread -
+including PMIx's progress thread, where a blocking PMIx call is refused
+outright - and at any moment, so it may call nothing that is not
+async-signal-safe. `forward_signal()`, on a progress thread of its own
+(`prun-signals`), reads the pipe and makes the non-blocking
+`PMIx_Job_control_nb` request. The main thread cannot do it: it spends the
+run parked in `PRTE_PMIX_WAIT_THREAD` and never looks at an event base.
+That thread is stopped before `PMIx_tool_finalize`; the pipe is left open,
+so a late signal never writes to a descriptor number reused for something
+else.
+
 **And the borrowed-array rule above is about a pure server, not about
 `prun`.** `prun_common.c`'s `defhandler()` hands `PMIx_Job_control_nb`
 a `pmix_proc_t` and a `pmix_info_t` on its own stack, and that is correct:
@@ -421,9 +433,9 @@ support".
 search directive the user gave), register event handlers for job
 termination and debugger events, `PMIx_Spawn`, push stdin, wait, then
 report the job's exit status. Signal forwarding is done with
-`PMIx_Job_control(PMIX_JOB_CTRL_SIGNAL)` against the spawned nspace,
-which is what eventually arrives at `prted_comm.c`'s
-`SIGNAL_LOCAL_PROCS`.
+`PMIx_Job_control_nb(PMIX_JOB_CTRL_SIGNAL)` against the spawned nspace,
+from the `prun-signals` progress thread (see above), which is what
+eventually arrives at `prted_comm.c`'s `SIGNAL_LOCAL_PROCS`.
 
 **prun's own name is the static `myproc`, never `prte_process_info.myproc`.**
 `PMIx_tool_init()` fills in `myproc`; nothing sets
