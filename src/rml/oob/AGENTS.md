@@ -491,6 +491,12 @@ socket on each. Two rules here are easy to break by "simplifying":
   Linux passes back); only something else gives up on the listener, and the
   event path must `prte_event_del` the persistent event before closing its
   socket and mark `sd = -1` so the destructor does not close it again.
+- **The listen thread marks an accepted socket close-on-exec itself**, right
+  after `accept()`. The progress thread takes the connection up some time
+  later, and may fork a launcher (`srun`, the PALS launcher, `ssh`) in
+  between; a socket still inheritable then stays open in that launcher for
+  as long as it runs. `prte_oob_accept_connection()` sets the flag too, which
+  covers the event-driven path, where accept and take-up are one step.
 
 ## Gotchas before you edit
 

@@ -284,7 +284,8 @@ process exits — see the ownership note below.
   check, not before it.
 - **`ssh_probe` forks.** If you touch it, keep the pipe fds closed on the
   error paths and keep reaping the probe child — PRRTE's SIGCHLD handler
-  knows nothing about it.
+  knows nothing about it. The child keeps only its stdio: everything else,
+  the read end of its own pipe included, is closed before the exec.
 - **Launch pacing is `num_concurrent`, nothing else.** There used to be a
   `plm_ssh_delay` parameter that was parsed into `component.delay` and
   never read by anything; it was retired rather than left advertising a

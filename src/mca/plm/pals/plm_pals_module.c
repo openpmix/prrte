@@ -64,6 +64,7 @@
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/prte_dvm_key.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -639,6 +640,11 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
         if (fd > 2) {
             close(fd);
         }
+
+        /* the launcher lives as long as the daemons it launched, so
+         * anything else it inherited - our sockets to other daemons among
+         * them - would stay open on its account until the job ended */
+        pmix_close_open_file_descriptors(-1);
 
         /* the DVM key rides in the daemons' environment, the one channel
          * to them that is private to the DVM's user - unlike the command line */

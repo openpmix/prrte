@@ -72,8 +72,10 @@ is the default launcher.
 proc; registers a `prte_wait_cb` (`pals_wait_cb`) so it notices aprun's
 exit. The child rewrites `PATH`/`LD_LIBRARY_PATH` and exports
 `PRTE_PREFIX`/`PMIX_PREFIX` if a prefix was set, ties stdout/stderr to
-`/dev/null` (unless debugging), `setpgid`s out of prun's process group,
-and `execve`s aprun.
+`/dev/null` (unless debugging), closes every other inherited descriptor
+(`pmix_close_open_file_descriptors`; aprun lives as long as the daemons, so
+anything it inherited would stay open until the job ended), `setpgid`s out
+of prun's process group, and `execve`s aprun.
 
 ### aprun exit handling (`pals_wait_cb`)
 
