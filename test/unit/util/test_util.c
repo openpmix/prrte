@@ -888,6 +888,35 @@ static int test_dash_host(void)
     CHECK("nodeB's absolute count is intact", NULL != nd && 3 == nd->slots);
     PMIX_LIST_DESTRUCT(&nodes);
 
+    /* a slot count is a whole number, and is refused otherwise rather than
+     * read as whatever digits it starts with - "4x" was 4, "x" was 0 */
+    {
+        static const char *bad[] = {"nodeA:4x", "nodeA:x", "nodeA:", "nodeA:99999999999"};
+        size_t b;
+
+        fprintf(stdout, "-- the next cases give malformed slot counts;"
+                        " the errors they print are expected --\n");
+        for (b = 0; b < sizeof(bad) / sizeof(bad[0]); b++) {
+            PMIX_CONSTRUCT(&nodes, pmix_list_t);
+            spec = strdup(bad[b]);
+            CHECK("a malformed slot count is refused",
+                  PRTE_SUCCESS != prte_util_add_dash_host_nodes(&nodes, spec));
+            free(spec);
+            PMIX_LIST_DESTRUCT(&nodes);
+        }
+    }
+
+    /* repeats of a host whose count is already as large as an int can say
+     * stay there rather than wrapping negative */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    spec = strdup("nodeA:2147483647,nodeA:5");
+    CHECK("add a host at the largest count, then again",
+          PRTE_SUCCESS == prte_util_add_dash_host_nodes(&nodes, spec));
+    free(spec);
+    nd = find_node(&nodes, "nodeA");
+    CHECK("the count is held at INT_MAX", NULL != nd && INT_MAX == nd->slots);
+    PMIX_LIST_DESTRUCT(&nodes);
+
     /* compute_slots reads a spec against an already-known node */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     nd = PMIX_NEW(prte_node_t);
