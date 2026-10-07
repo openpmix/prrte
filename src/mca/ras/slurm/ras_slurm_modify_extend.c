@@ -1969,12 +1969,9 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         prte_ras_base_activate_dvm_grow();
 
         /* A grant is not usable nodes, so the campaign's PMIX_DVM_IS_READY is
-         * the answer, as it is for a release. Only where that event can
-         * arrive: outside elastic mode no campaign is recorded, so the grant
-         * stays the answer. Unlike serve_release_req the extend does not
-         * refuse there - it has already done what was asked of Slurm. */
+         * the answer, as it is for a release. */
 #if PRTE_HAVE_DVM_MOD_EVENTS
-        if (prte_elastic_mode && requester_recorded) {
+        if (requester_recorded) {
             req->pstatus = PMIX_OPERATION_IN_PROGRESS;
         }
 #endif
