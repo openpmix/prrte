@@ -181,6 +181,9 @@ static int hostinfo_append_ranks (struct R_hostinfo *hostinfo,
     while (i != IDSET_INVALID_ID) {
         if (start + count > nnodes - 1) {
             pmix_string_copy(error_buf, "Rlite ranks exceeds nodelist entries", error_buf_size);
+            /* an error, however many ranks were placed before it - the
+             * caller fails on a count of zero or less */
+            count = -1;
             goto out;
         }
         hostinfo[start + count].broker_rank = i;

@@ -31,6 +31,8 @@
 #include "types.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <netdb.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -375,6 +377,8 @@ static int prte_ras_slurm_finalize(void)
 static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist)
 {
     int i, j, len, ret, count, reps, num_nodes;
+    long lv;
+    bool bad = false;
     char *base, **names = NULL;
     char *begptr, *endptr, *orig;
     int *slots;
@@ -452,8 +456,16 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
             if (base[j + 1] == ',') {
                 more_to_come = true;
                 base = &base[j + 2];
-            } else {
+            } else if (base[j + 1] == '\0') {
                 more_to_come = false;
+            } else {
+                /* anything else after the range would be silently lost */
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+                               tasks_per_node, "SLURM_NODELIST");
+                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                PMIx_Argv_free(names);
+                free(orig);
+                return PRTE_ERR_BAD_PARAM;
             }
         } else {
             /* If we didn't find a range, just add the node */
@@ -496,9 +508,23 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
     j = 0;
     while (begptr) {
-        count = strtol(begptr, &endptr, 10);
+        /* a count of slots, optionally repeated: "4" or "4(x3)" */
+        errno = 0;
+        lv = strtol(begptr, &endptr, 10);
+        if (endptr == begptr || 0 != errno || 0 > lv || INT_MAX < lv) {
+            bad = true;
+            break;
+        }
+        count = (int) lv;
         if ((endptr[0] == '(') && (endptr[1] == 'x')) {
-            reps = strtol((endptr + 2), &endptr, 10);
+            begptr = endptr + 2;
+            errno = 0;
+            lv = strtol(begptr, &endptr, 10);
+            if (endptr == begptr || 0 != errno || 1 > lv || INT_MAX < lv) {
+                bad = true;
+                break;
+            }
+            reps = (int) lv;
             if (endptr[0] == ')') {
                 endptr++;
             }
@@ -527,14 +553,18 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         } else if (*endptr == '\0' || j >= num_nodes) {
             break;
         } else {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
-                           tasks_per_node, "SLURM_TASKS_PER_NODE");
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            free(slots);
-            free(orig);
-            PMIx_Argv_free(names);
-            return PRTE_ERR_BAD_PARAM;
+            bad = true;
+            break;
         }
+    }
+    if (bad) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+                       tasks_per_node, "SLURM_TASKS_PER_NODE");
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        free(slots);
+        free(orig);
+        PMIx_Argv_free(names);
+        return PRTE_ERR_BAD_PARAM;
     }
 
     free(orig);
@@ -630,6 +660,22 @@ static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***names)
  * @param *ranges  A pointer to a single range. (i.e. "1-3" or "5")
  * @param ***names An argv array to add the newly discovered nodes to
  */
+/* read one node index of a range: digits, no larger than a node count
+ * can be - so the loop over the range always ends */
+static bool range_number(const char *p, size_t *val)
+{
+    char *end;
+    unsigned long v;
+
+    errno = 0;
+    v = strtoul(p, &end, 10);
+    if (end == p || 0 != errno || (unsigned long) INT_MAX < v) {
+        return false;
+    }
+    *val = (size_t) v;
+    return true;
+}
+
 static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
 {
     char *str, temp1[BUFSIZ];
@@ -648,9 +694,11 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
     /* Look for the beginning of the first number */
 
     for (found = false, i = 0; i < len; ++i) {
-        if (isdigit((int) range[i])) {
+        if (isdigit((unsigned char) range[i])) {
             if (!found) {
-                start = atoi(range + i);
+                if (!range_number(range + i, &start)) {
+                    break;
+                }
                 found = true;
                 break;
             }
@@ -681,14 +729,13 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
 
     else {
         for (; i < len; ++i) {
-            if (isdigit((int) range[i])) {
-                end = atoi(range + i);
-                found = true;
+            if (isdigit((unsigned char) range[i])) {
+                found = range_number(range + i, &end);
                 break;
             }
         }
     }
-    if (!found) {
+    if (!found || end < start) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
