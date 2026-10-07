@@ -26,6 +26,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "src/util/pmix_argv.h"
@@ -39,6 +40,21 @@
 #include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/base.h"
+
+/* a node's slots plus an adjustment that may be negative (add-host's
+ * "+N"/"-N"), floored at zero and held at INT_MAX rather than wrapped */
+static int adjust_slots(int slots, int delta)
+{
+    long long r = (long long) slots + delta;
+
+    if (0 > r) {
+        return 0;
+    }
+    if ((long long) INT_MAX < r) {
+        return INT_MAX;
+    }
+    return (int) r;
+}
 
 /* Normalize a node name to the short form, storing the FQDN as rawname
  * and as an alias so both forms resolve via prte_quickmatch / prte_nptr_match.
@@ -167,10 +183,8 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             /* copy the allocation data to that node's info */
             hnp_node->slots_max = node->slots_max;
             if (PRTE_ATTR_IS_TRUE(&node->attributes, PRTE_NODE_ADD_SLOTS)) {
-                hnp_node->slots += node->slots;
-                if (0 > hnp_node->slots) {
-                    hnp_node->slots = 0;
-                } else if (hnp_node->slots > hnp_node->slots_max && hnp_node->slots_max > 0) {
+                hnp_node->slots = adjust_slots(hnp_node->slots, node->slots);
+                if (hnp_node->slots > hnp_node->slots_max && hnp_node->slots_max > 0) {
                     hnp_node->slots = hnp_node->slots_max;
                 }
             } else {
@@ -263,10 +277,8 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                         nptr->state = PRTE_NODE_STATE_ADDED;
                     }
                     if (PRTE_ATTR_IS_TRUE(&node->attributes, PRTE_NODE_ADD_SLOTS)) {
-                        nptr->slots += node->slots;
-                        if (0 > nptr->slots) {
-                            nptr->slots = 0;
-                        } else if (nptr->slots > nptr->slots_max && nptr->slots_max > 0) {
+                        nptr->slots = adjust_slots(nptr->slots, node->slots);
+                        if (nptr->slots > nptr->slots_max && nptr->slots_max > 0) {
                             nptr->slots = nptr->slots_max;
                         }
                     }

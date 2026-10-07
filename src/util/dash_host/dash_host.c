@@ -25,6 +25,8 @@
 #include "prte_config.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <string.h>
 
 #include "constants.h"
@@ -43,6 +45,41 @@
 #include "src/runtime/prte_globals.h"
 
 #include "dash_host.h"
+
+/* Read a count out of a -host token: all of the string, digits only - with
+ * a leading sign only where one means something (":+N"/":-N" adjust a
+ * node's slots) - and no larger than an int. strtol alone read "4x" as 4
+ * and "x" as 0. */
+static bool dash_count(const char *str, bool signed_ok, int *val)
+{
+    char *end;
+    long v;
+
+    if (!signed_ok && !isdigit((unsigned char) str[0])) {
+        return false;
+    }
+    errno = 0;
+    v = strtol(str, &end, 10);
+    if (end == str || '\0' != *end || 0 != errno || INT_MAX < v || -INT_MAX > v) {
+        return false;
+    }
+    *val = (int) v;
+    return true;
+}
+
+/* a + b, held at the ends of an int rather than wrapped */
+static int add_count(int a, int b)
+{
+    long long r = (long long) a + b;
+
+    if ((long long) INT_MAX < r) {
+        return INT_MAX;
+    }
+    if ((long long) -INT_MAX > r) {
+        return -INT_MAX;
+    }
+    return (int) r;
+}
 
 /*
  * Does this node answer to one -host token?
@@ -110,8 +147,8 @@ static bool relative_token_matches(const char *token, prte_node_t *node)
         return (0 == node->slots_inuse);
     }
     if ('n' == token[1] || 'N' == token[1]) {
-        nodeidx = strtol(&token[2], NULL, 10);
-        if (0 > nodeidx || nodeidx >= (int) prte_node_pool->size) {
+        if (!dash_count(&token[2], false, &nodeidx) ||
+            nodeidx >= (int) prte_node_pool->size) {
             return false;
         }
         /* the pool is offset by one when the HNP is not in the allocation */
@@ -128,7 +165,7 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 {
     char **specs, *cptr;
     int slots = 0;
-    int n;
+    int n, n_given;
 
     specs = PMIx_Argv_split(hosts, ',');
 
@@ -159,12 +196,14 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
         if (dash_host_match(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
-                    slots += node->slots - node->slots_inuse;
-                } else {
-                    slots += strtol(cptr, NULL, 10);
+                    slots = add_count(slots, node->slots - node->slots_inuse);
+                } else if (dash_count(cptr, false, &n_given)) {
+                    slots = add_count(slots, n_given);
                 }
+                /* a count that is not one was refused when the nodes
+                 * were added, so there is nothing to add for it here */
             } else {
-                ++slots;
+                slots = add_count(slots, 1);
             }
         }
     }
@@ -278,7 +317,13 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
                 slots = -1;
                 slots_given = false;
             } else {
-                slots = strtol(cptr, NULL, 10);
+                if (!dash_count(cptr, true, &slots)) {
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
+                                   "dash-host:invalid-slots", true, mini_map[i], cptr);
+                    PMIx_Argv_free(mini_map);
+                    rc = PRTE_ERR_SILENT;
+                    goto cleanup;
+                }
                 if ('+' == *cptr || '-' == *cptr) {
                     // mark that we are being asked to increase/decrease #slots
                     add_slots = true;
@@ -298,7 +343,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
         node = prte_node_match(&adds, ndname);
         if (NULL != node) {
             if (slots_given) {
-                node->slots += slots;
+                node->slots = add_count(node->slots, slots);
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 if (add_slots) {
                     prte_set_bool_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, PRTE_ATTR_GLOBAL, true);
@@ -360,7 +405,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                 if (PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                     /* transfer across the number of slots */
-                    node->slots += nd->slots;
+                    node->slots = add_count(node->slots, nd->slots);
                     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
                 PMIX_RELEASE(item);
@@ -438,7 +483,13 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                             rc = PRTE_ERR_SILENT;
                             goto cleanup;
                         }
-                        nnodes = strtol(cptr, NULL, 10);
+                        if (!dash_count(cptr, false, &nnodes)) {
+                            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
+                                           "dash-host:invalid-relative-node-syntax", true,
+                                           mini_map[k]);
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
                         /* scan the pool with its own index: this used to
                          * reuse "j", the index of the outer loop over the
                          * comma-separated tokens, leaving it past the end of
@@ -477,8 +528,14 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                     /* they want a specific relative node #, so
                      * look it up on global pool
                      */
-                    nodeidx = strtol(&mini_map[k][2], NULL, 10);
-                    if (nodeidx < 0 || nodeidx >= (int) prte_node_pool->size) {
+                    if (!dash_count(&mini_map[k][2], false, &nodeidx)) {
+                        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
+                                       "dash-host:invalid-relative-node-syntax", true,
+                                       mini_map[k]);
+                        rc = PRTE_ERR_SILENT;
+                        goto cleanup;
+                    }
+                    if (nodeidx >= (int) prte_node_pool->size) {
                         /* this is an error */
                         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
                                        "dash-host:relative-node-out-of-bounds", true, nodeidx,

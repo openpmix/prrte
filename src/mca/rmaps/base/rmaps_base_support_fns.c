@@ -29,6 +29,7 @@
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif /* HAVE_UNISTD_H */
+#include <limits.h>
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
@@ -532,7 +533,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                             return PRTE_ERR_SILENT;
                         }
                         if (0 != node->slots_max &&
-                            node->slots_inuse + s > node->slots_max) {
+                            (long long) node->slots_inuse + s > node->slots_max) {
                             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-dash-host.txt",
                                            "dash-host:slots-exceed-max", true,
                                            node->name, s,
@@ -548,7 +549,10 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                          * cleanup and prte_ras_base.total_slots_alloc, which
                          * describes the allocation, is left alone. */
                         prte_rmaps_base_record_resize(node, node->slots);
-                        node->slots = node->slots_inuse + s;
+                        /* held at INT_MAX: the count is the user's, and may
+                         * be as large as an int can say */
+                        node->slots = (INT_MAX - node->slots_inuse < s) ? INT_MAX
+                                                                        : node->slots_inuse + s;
                         PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                     }
                 } else {
@@ -559,7 +563,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                 PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s has %d slots available",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, s));
-                num_slots += s;
+                num_slots = (0 < s && INT32_MAX - num_slots < s) ? INT32_MAX : num_slots + s;
                 continue;
             }
             if (!(PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(policy))) {

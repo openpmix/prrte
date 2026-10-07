@@ -216,6 +216,19 @@ requesting.
 
 Re-run this command with "--help hosts" for further information.
 #
+[dash-host:invalid-slots]
+
+The number of slots given for a host is not a number:
+
+   Host:   %s
+   Slots:  %s
+
+A slot count is a whole number. It may begin with "+" or "-" to add
+to or remove from the slots the host already has, or be "*" or "auto"
+to use the number of slots the host was found to have.
+
+Re-run this command with "--help hosts" for further information.
+#
 [dash-host:not-enough-empty]
 
 The requested number of empty hosts was not available — the system was

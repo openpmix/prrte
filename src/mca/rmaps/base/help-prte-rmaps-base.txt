@@ -408,6 +408,13 @@ A %s was given that requires a value, but the provided value is invalid:
 
 Please provide a valid value for this policy, or remove it.
 #
+[rmaps:ppr-too-many-procs]
+A "ppr" mapping asks for more processes than a job can hold:
+
+  Pattern:  %d per %s
+
+Request fewer processes per object.
+#
 [rankfile-no-filename]
 The request to map processes using a rankfile could not be completed
 because the filename of the rankfile was not specified. Please
