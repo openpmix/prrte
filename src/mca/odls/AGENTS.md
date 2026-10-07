@@ -901,7 +901,9 @@ pure function of its inputs:
 
 - **`prte_odls_base_process_envars`** — exported (rather than file-static)
   precisely so this test can drive it: SET vs ADD, the front-to-back
-  ordering, `UNSET` with and without a trailing `*`, the "match up to and
+  ordering, `UNSET` with and without a trailing `*` (and a prefix that
+  matches an entry with no `=`, which has nothing to remove and must be
+  passed over rather than matched again forever), the "match up to and
   including the `=`" rule (a directive on `PATH` must not edit `PATHEXT`),
   and app-trumps-job.
 - **The child→parent pipe record** — `child_warn` across a real pipe, and
