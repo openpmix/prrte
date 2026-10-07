@@ -221,9 +221,8 @@ reports `PMIX_OPERATION_IN_PROGRESS` with the allocation id and
   one campaign can cover several.
 - **Without a requester a failed grow is silent.** `grow_target_failed` notifies
   only a campaign that has one.
-- **Outside `prte_elastic_mode` phase one stays terminal.** No campaign is
-  recorded, so no event can come. Unlike `serve_release_req` the extend does not
-  refuse there — it has already done what was asked of Slurm.
+- **An extend never runs outside `prte_elastic_mode`.** The ras base refuses
+  it before any module sees it (`ras_base_allocate.c`).
 - **Both phase-one statuses are `#if PRTE_HAVE_DVM_MOD_EVENTS`.**
   `prte_plm_base_dvm_mod_notify` compiles away without the event codes.
 
