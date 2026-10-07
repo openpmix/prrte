@@ -40,7 +40,9 @@
 #    include <sys/time.h>
 #endif /* HAVE_SYS_TIME_H */
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
+#include <string.h>
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -80,6 +82,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
+#include "src/util/prte_output_file.h"
 
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -1587,9 +1590,10 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
             fp = stderr;
         } else {
             /* attempt to open the specified file */
-            fp = fopen(file, "w");
+            fp = prte_output_file_open(file, 0666, NULL);
             if (NULL == fp) {
-                pmix_output(0, "Unable to open file %s for output of proctable", file);
+                pmix_output(0, "Unable to open file %s for output of proctable: %s", file,
+                            strerror(errno));
                 goto next;
             }
         }
