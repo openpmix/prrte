@@ -90,17 +90,18 @@ Five rules that are not obvious from the struct:
   defeat the check). Once per connection, instead of restated on every
   message. Do not remove it to "simplify": it is the enforcement that lets
   every other header omit the field.
-- **`nslen` describes the wire length by itself.** The handshake sets it, a
-  data header sets it to zero, and both are read the same way — fixed part
-  first, then `nslen` characters, then the terminator the receiver supplies
-  (`PRTE_OOB_TCP_HDR_END_NSPACE`). Anything that sends or reads a header uses
+- **`nslen` describes the wire length by itself.** The handshake sets it and
+  a data header sets it to zero. The handshake reader takes the fixed part,
+  then `nslen` characters, then supplies the terminator
+  (`PRTE_OOB_TCP_HDR_END_NSPACE`); the data path refuses a header whose
+  `nslen` is not zero and closes the connection, so the namespace a message
+  is read in is always ours. Anything that sends or reads a header uses
   `PRTE_OOB_TCP_HDR_FIXED` and `PRTE_OOB_TCP_HDR_LEN()`, **never**
   `sizeof(prte_oob_tcp_hdr_t)` — the struct is 288 bytes, because the nspace
   array is the receiver's landing space.
-- **Reading a name out of a header takes two reads off the socket**, even
-  though the second is empty for a data message: `hdr_recvd` is not enough to
-  build a `pmix_proc_t`, `nspace_recvd` is the flag that says the names are
-  complete.
+- **`nspace_recvd` is still the flag that says the names are complete**, set
+  once the empty namespace has been terminated. Nothing in the data path
+  builds a `pmix_proc_t` from the header before it.
 - **Every multi-byte field is byte-order converted**, by
   `MCA_OOB_TCP_HDR_HTON`/`_NTOH`. Add a field, extend both macros — a field
   that is quietly not converted works perfectly until two daemons differ in
@@ -157,9 +158,12 @@ Rules that are easy to break:
   The handshake is now several messages on one connection, so the per-message
   reset must not forget how far authentication got. A new socket
   (`tcp_peer_create_socket`) and a destructor clear.
-- **Refusals are rate-limited** (`auth_refuse()`): a misconfigured process
+- **Refusals are rate-limited** (`report_refusal()`, which `auth_refuse()`
+  and the handshake reader's own refusals both use): a misconfigured process
   can produce them endlessly, so only the first few reach
-  `pmix_output(0, ...)`.
+  `pmix_output(0, ...)`. Anything quoted from the connection - a namespace,
+  a version string - goes through `printable_copy()` first, which shows each
+  byte outside printable ASCII as `?`.
 - `prte_oob_authenticate=0` makes every connection start out proven and sends
   the bare IDENT, as before. It exists for launch agents that cannot forward
   stdin; the HNP passes it to its daemons explicitly
@@ -217,9 +221,11 @@ Three things keep that sound:
   Linux never lets an accepted socket inherit `O_NONBLOCK`, and a blocking one
   turns "read what has arrived" back into "wait for it".
 - **The header is judged before any payload is sized from it.** The nspace
-  check, the message type, the ack flag's minimum length and the
-  `prte_max_msg_size` cap all run as soon as the fixed header and its nspace
-  are in, so a connection that is not ours never gets to name an allocation.
+  check, the message type, and the IDENT's minimum and maximum length
+  (an ack flag, and at most `PRTE_OOB_TCP_IDENT_MAX` in all) run as soon as
+  the fixed header and its nspace are in, so a connection that is not ours
+  never gets to name an allocation. The IDENT's bound is what an IDENT
+  holds, not `prte_max_msg_size`, which is for messages.
   The payload is allocated one byte longer than sent and terminated, which lets
   the version compare be a plain `strcmp`.
 - **`peer->hshake` is emptied whenever a new socket is made for the peer**
@@ -257,10 +263,11 @@ the live connection's socket to open its own.
 `prte_max_msg_size` (MBytes, default 100) bounds what a *receiving* daemon will
 `malloc` for an incoming message. This matters more than a tuning knob usually
 does: the length comes straight off the wire, so without the check a peer
-dictates the allocation. It is enforced in two places — the normal recv path in
-`oob_tcp_sendrecv.c` and the handshake in `oob_tcp_connection.c` — and both
-respond by refusing the message and closing the connection with the
-`msg-too-big` help text.
+dictates the allocation. It is enforced on the recv path in
+`oob_tcp_sendrecv.c`, which refuses the message and closes the connection with
+the `msg-too-big` help text; the limit is scaled to bytes in 64 bits, since as
+an `int` it overflows from 2048 MBytes up. The handshake has its own, much
+smaller, fixed bound (see above).
 
 Note when trying to *test* this: PMIx compresses the launch buffer, so a large
 payload of repeated bytes shrinks to nothing on the wire and sails under any

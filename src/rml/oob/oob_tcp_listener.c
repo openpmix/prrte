@@ -707,10 +707,10 @@ static void *listen_thread(pmix_object_t *obj)
                 /* if we are on a privileged port, we only accept connections
                  * from other privileged sockets. A privileged port is one
                  * whose port is less than 1024 on Linux, so we'll check for that. */
-                if (1024 >= listener->port) {
+                if (1024 > listener->port) {
                     uint16_t inport;
                     inport = pmix_net_get_port((struct sockaddr *) &pending_connection->addr);
-                    if (1024 < inport) {
+                    if (1024 <= inport) {
                         /* someone tried to cross-connect privileges,
                          * say something */
                         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "privilege failure", true,
