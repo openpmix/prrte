@@ -64,3 +64,14 @@ value, so there is no command to run on the remote nodes:
 
 Set prte_launch_agent to the daemon command you want started (the
 default is "prted"), or leave it unset to use that default.
+#
+[bad-host-arg]
+The ssh launcher was asked to start a daemon using a host name or user
+name that begins with a '-':
+
+  Name: %s
+
+These are passed to the launch agent (typically ssh) on its command
+line, where a leading '-' would be read as an option. No valid host
+name begins with one. Please check the hostfile, the --host option, or
+the add-host request that gave this name.
