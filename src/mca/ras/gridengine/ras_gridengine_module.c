@@ -41,6 +41,7 @@
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/prte_show_help.h"
 
 /*
@@ -70,8 +71,9 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
 {
     char *pe_hostfile;
     char *job_id;
-    char buf[1024], *tok, *num, *queue, *arch, *ptr;
+    char *line, *tok, *num, *queue, *arch, *ptr;
     int rc, nslots;
+    bool failed = false;
     FILE *fp;
     prte_node_t *node;
     bool found;
@@ -109,8 +111,9 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
                 "ras:gridengine: PE_HOSTFILE: %s",
                 pe_hostfile);
 
-    while (fgets(buf, sizeof(buf), fp)) {
-        ptr = strtok_r(buf, " \n", &tok);
+    /* a whole line, however long */
+    while (NULL != (line = pmix_getline(fp, &failed))) {
+        ptr = strtok_r(line, " \n", &tok);
         num = strtok_r(NULL, " \n", &tok);
         queue = strtok_r(NULL, " \n", &tok);
         arch = strtok_r(NULL, " \n", &tok);
@@ -119,6 +122,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
          * count yields no num - either way there is nothing to add, and
          * dereferencing them would take down the HNP */
         if (NULL == ptr || NULL == num) {
+            free(line);
             continue;
         }
         /* the slot count is a whole number - strtol alone read "4x" as 4
@@ -132,6 +136,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             if (end == num || '\0' != *end || 0 != errno || 0 > v || INT_MAX < v) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "bad-slots", true,
                                pe_hostfile, ptr, num);
+                free(line);
                 fclose(fp);
                 return PRTE_ERR_SILENT;
             }
@@ -152,6 +157,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             /* create a new node entry */
             node = PMIX_NEW(prte_node_t);
             if (NULL == node) {
+                free(line);
                 fclose(fp);
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
@@ -167,9 +173,15 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
                         node->name, node->slots, queue, arch);
             pmix_list_append(nodelist, &node->super);
         }
+        free(line);
     } /* finished reading the $PE_HOSTFILE */
 
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-util.txt", "file-read-failed", true,
+                       pe_hostfile);
+        return PRTE_ERR_SILENT;
+    }
 
     /* in gridengine, if we didn't find anything, then something
      * is wrong. The user may not have indicated this was a parallel

@@ -46,9 +46,10 @@ On success it records `prte_num_allocated_nodes` and returns
 
 ## Things to watch when editing
 
-- The nodefile parser (`pbs_getline`) caps lines at
-  `PBS_FILE_MAX_LINE_LENGTH` (512), strips a trailing `\n`/`\r` **only if
-  one is present** (the last line of a file need not be terminated), and
+- The nodefile parser (`pbs_getline`) reads each line whole with
+  `pmix_getline()`, strips a trailing `\r` **only if one is present**
+  (the last line of a file need not be terminated), reports a read that
+  stops short of the end of the file rather than taking it for the end, and
   **skips blank lines** rather than returning `""` — an empty hostname
   would otherwise become an unusable, unresolvable node in the
   allocation.

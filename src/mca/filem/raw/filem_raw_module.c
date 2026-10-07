@@ -46,6 +46,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -1578,7 +1579,8 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
     FILE *fp;
     char *cmd, *quoted;
     size_t len;
-    char path[PRTE_PATH_MAX];
+    char *path;
+    bool failed = false;
 
     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: identifying links for archive %s",
@@ -1601,20 +1603,16 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
      * directory tree, but link to different files, we
      * have to link to each individual file
      */
-    while (fgets(path, sizeof(path), fp) != NULL) {
+    /* each member on a line of its own, however long */
+    while (NULL != (path = pmix_getline(fp, &failed))) {
         PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: path %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-        /* trim the trailing newline, if fgets gave us one - a final line
-         * with no newline keeps every character it has
-         */
         len = strlen(path);
-        if (0 < len && '\n' == path[len - 1]) {
-            path[--len] = '\0';
-        }
         /* protect against an empty result - a bare newline would otherwise
          * send the directory test reading in front of the buffer
          */
         if (0 == len) {
+            free(path);
             continue;
         }
         /* ignore directories */
@@ -1622,6 +1620,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
             PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: path %s is a directory - ignoring it",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
+            free(path);
             continue;
         }
         /* an archive member that steps above the directory it is unpacked
@@ -1632,6 +1631,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
             PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: path %s is not relative - ignoring it",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
+            free(path);
             continue;
         }
         /* ignore specific useless directory trees */
@@ -1639,17 +1639,19 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
             PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: path %s includes .deps - ignoring it",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
+            free(path);
             continue;
         }
         PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: adding path %s to link points",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
         PMIx_Argv_append_nosize(&inbnd->link_pts, path);
+        free(path);
     }
     /* a listing that failed leaves us with no link points and nothing to
      * place - say so rather than acking a delivery that did not happen
      */
-    if (0 != pclose(fp)) {
+    if (0 != pclose(fp) || failed) {
         PRTE_ERROR_LOG(PRTE_ERR_FILE_READ_FAILURE);
         return PRTE_ERR_FILE_READ_FAILURE;
     }
