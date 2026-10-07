@@ -898,7 +898,11 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             // and need to set LD_LIBRARY_PATH
             exists = false;
             for (i = 0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '='); // cannot be NULL
+                saveptr = strchr(app->env[i], '=');
+                if (NULL == saveptr) {
+                    /* not an assignment - nothing to match */
+                    continue;
+                }
                 *saveptr = '\0';
                 if (0 == strcmp(app->env[i], "LD_LIBRARY_PATH")) {
                     /* we have the var - prepend it */
@@ -941,7 +945,11 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             // and need to set LD_LIBRARY_PATH
             exists = false;
             for (i = 0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '='); // cannot be NULL
+                saveptr = strchr(app->env[i], '=');
+                if (NULL == saveptr) {
+                    /* not an assignment - nothing to match */
+                    continue;
+                }
                 *saveptr = '\0';
                 if (0 == strcmp(app->env[i], "LD_LIBRARY_PATH")) {
                     /* we have the var - prepend it */

@@ -17,7 +17,8 @@ test_schizo_SOURCES = \
     test_sanity.c       \
     test_output.c       \
     test_personality.c  \
-    test_tune.c
+    test_tune.c         \
+    test_setup_fork.c
 
 noinst_HEADERS = test_schizo.h
 
