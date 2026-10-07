@@ -37,6 +37,7 @@ extern int test_sanity(void);
 extern int test_output(void);
 extern int test_personality(void);
 extern int test_tune(void);
+extern int test_setup_fork(void);
 
 /* shared helpers (test_helpers.c) */
 

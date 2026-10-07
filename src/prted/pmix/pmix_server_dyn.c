@@ -988,6 +988,17 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
         app->argv = PMIx_Argv_copy(papp->argv);
     }
     if (NULL != papp->env) {
+        /* every entry is a NAME=value assignment - what the daemons that
+         * fork the app take it to be */
+        for (m = 0; NULL != papp->env[m]; m++) {
+            const char *eq = strchr(papp->env[m], '=');
+
+            if (NULL == eq || eq == papp->env[m]) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-runtime.txt",
+                               "spawn-env-entry", true, papp->env[m]);
+                return PRTE_ERR_BAD_PARAM;
+            }
+        }
         app->env = PMIx_Argv_copy(papp->env);
     }
     if (NULL != papp->cwd) {

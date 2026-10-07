@@ -382,3 +382,11 @@ does not know:
 
 It must be a comma-separated list of user names or numeric user ids.
 Please correct it and try again.
+#
+[spawn-env-entry]
+A request to start a job gave an application an environment entry that
+is not a NAME=value assignment:
+
+   Entry:  %s
+
+The job was not started. Give each environment entry as NAME=value.
