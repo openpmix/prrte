@@ -32,6 +32,15 @@ The following error is returned:
 
   %s
 #
+[bad-slots]
+The PE_HOSTFILE names a node with a slot count that is not a number:
+
+  PE_HOSTFILE: %s
+  Node:        %s
+  Slots:       %s
+
+The slot count must be a whole number.
+#
 [no-nodes-found]
 No slots were found in the Grid Engine Parallel Environment (PE). This
 is probably a setup issue, or could be due to a corrupted $PE_HOSTFILE.

@@ -300,7 +300,17 @@ static int lsf_map(prte_job_t *jdata,
                                    && (('n' == rfmap->node_name[1])
                                        || ('N' == rfmap->node_name[1])))) {
 
-                        relative_index = atoi(strtok(rfmap->node_name, "+n"));
+                        /* "+n<index>", the index all digits */
+                        char *iend;
+                        long iv;
+
+                        errno = 0;
+                        iv = strtol(&rfmap->node_name[2], &iend, 10);
+                        if (iend == &rfmap->node_name[2] || '\0' != *iend || 0 != errno ||
+                            0 > iv || (long) pmix_list_get_size(&node_list) <= iv) {
+                            iv = -1;
+                        }
+                        relative_index = (int) iv;
                         if (relative_index >= (int) pmix_list_get_size(&node_list)
                             || (0 > relative_index)) {
                             prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_lsf.txt", "bad-index", true,
@@ -516,7 +526,7 @@ static int file_parse(const char *affinity_file)
     FILE *fp;
     char *hstname, *membind_opt;
     char *sep = NULL, *eptr, **cpus, *ptr;
-    char *logical_cpus = NULL;
+    char *logical_cpus = NULL, *lcpu;
     prte_node_t *nptr, *node;
     hwloc_obj_t obj;
 
@@ -562,7 +572,7 @@ static int file_parse(const char *affinity_file)
             sep++;
             /* remove any trailing space */
             eptr = sep + strlen(sep) - 1;
-            while (eptr > sep && isspace(*eptr)) {
+            while (eptr > sep && isspace((unsigned char) *eptr)) {
                 eptr--;
             }
             *(eptr + 1) = 0;
@@ -587,7 +597,8 @@ static int file_parse(const char *affinity_file)
 
         // Convert the Physical CPU set from LSF to a Hwloc logical CPU set
         pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:lsf: (lsf) Convert Physical CPUSET from <%s>", sep);
+                            "mca:rmaps:lsf: (lsf) Convert Physical CPUSET from <%s>",
+                            (NULL == sep) ? "" : sep);
 
         // if we are not keeping fqdn, remove the domain name here
         if (!prte_keep_fqdn_hostnames) {
@@ -630,10 +641,17 @@ static int file_parse(const char *affinity_file)
                     free(hstname);
                     return PRTE_ERROR;
                 }
-                free(cpus[i]);
                 // 10 max number of digits in an int
-                cpus[i] = (char*)malloc(sizeof(char) * 10);
-                snprintf(cpus[i], 10, "%d", obj->logical_index);
+                lcpu = (char*)malloc(sizeof(char) * 10);
+                if (NULL == lcpu) {
+                    PMIx_Argv_free(cpus);
+                    fclose(fp);
+                    free(hstname);
+                    return PRTE_ERR_OUT_OF_RESOURCE;
+                }
+                snprintf(lcpu, 10, "%d", obj->logical_index);
+                free(cpus[i]);
+                cpus[i] = lcpu;
             }
             /* keep the joined logical list in its own variable - "sep" points
              * into hstname, which the map takes ownership of below */

@@ -36,6 +36,14 @@ The SMP mode flag was given, but the required PBS_PPN environmental
 variable was not found. Please check that your system actually supports
 the indicated mode and try again.
 #
+[bad-ppn]
+The SMP mode flag was given, but the PBS_PPN environmental variable
+does not hold a number of slots:
+
+  PBS_PPN: %s
+
+It must be a whole number greater than zero.
+#
 [smp-multi]
 The SMP mode flag was given, but a node was listed in the PBS_Nodefile
 more than once. This usually indicates that the system is not

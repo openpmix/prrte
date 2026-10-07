@@ -1197,6 +1197,53 @@ static int test_slurm_allocation(void)
     CHECK("slurm allocate: re-discovery adds nothing", 0 == pmix_list_get_size(&nodes));
     PMIX_LIST_DESTRUCT(&nodes);
 
+    /* the nodelist and the slot counts are parsed strictly: each case below
+     * is a new job, so none of them can be answered by the one above */
+    {
+        static const struct {
+            const char *jobid, *nodelist, *tasks, *what;
+        } bad[] = {
+            {"20001", "n[3-1]", "1", "a reversed range"},
+            {"20002", "n[0-4294967295]", "1", "a range past any node count"},
+            {"20003", "n[1-2]junk,m1", "1(x3)", "text after a range"},
+            {"20004", "n[1-2]", "-4(x2)", "a negative slot count"},
+            {"20005", "n[1-2]", "4(x-2)", "a negative repeat"},
+            {"20006", "n[1-2]", "4x", "text after a slot count"},
+            {"20007", "n[1-2]", "4294967300(x2)", "a slot count past an int"},
+        };
+        size_t b;
+
+        for (b = 0; b < sizeof(bad) / sizeof(bad[0]); b++) {
+            setenv("SLURM_JOBID", bad[b].jobid, 1);
+            setenv("SLURM_NODELIST", bad[b].nodelist, 1);
+            setenv("SLURM_TASKS_PER_NODE", bad[b].tasks, 1);
+            PMIX_CONSTRUCT(&nodes, pmix_list_t);
+            rc = mod->allocate(jdata, &nodes);
+            if (PRTE_SUCCESS == rc) {
+                fprintf(stderr, "  accepted %s\n", bad[b].what);
+            }
+            CHECK("slurm allocate: refuses a malformed nodelist or slot count",
+                  PRTE_SUCCESS != rc);
+            PMIX_LIST_DESTRUCT(&nodes);
+        }
+
+        /* and a well-formed mix of a range and a bare name still parses */
+        setenv("SLURM_JOBID", "20010", 1);
+        setenv("SLURM_NODELIST", "n[1-2],m1", 1);
+        setenv("SLURM_TASKS_PER_NODE", "2(x2),3", 1);
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        rc = mod->allocate(jdata, &nodes);
+        CHECK("slurm allocate: a range and a name", PRTE_SUCCESS == rc);
+        CHECK("slurm allocate: ...give three nodes", 3 == pmix_list_get_size(&nodes));
+        i = 0;
+        PMIX_LIST_FOREACH(nd, &nodes, prte_node_t) {
+            CHECK("slurm allocate: ...with their own slot counts",
+                  (2 > i ? 2 : 3) == nd->slots);
+            i++;
+        }
+        PMIX_LIST_DESTRUCT(&nodes);
+    }
+
     /* The jobid reaches scontrol/sbatch command lines, so it is a taint
      * boundary: tag_node_allocation and assign_new_session both run it
      * through validate_jobid, and allocate() must fail rather than carry a

@@ -26,6 +26,7 @@
 #include "types.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -158,7 +159,20 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-pbs.txt", "smp-error", true);
             return PRTE_ERR_NOT_FOUND;
         }
-        ppn = strtol(cppn, NULL, 10);
+        /* a whole number of slots - strtol alone read "4x" as 4 and "x" as
+         * 0, and handed a negative count straight to every node */
+        {
+            char *end;
+            long v;
+
+            errno = 0;
+            v = strtol(cppn, &end, 10);
+            if (end == cppn || '\0' != *end || 0 != errno || 1 > v || INT_MAX < v) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-pbs.txt", "bad-ppn", true, cppn);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            ppn = (int) v;
+        }
     } else {
         ppn = 1;
     }
