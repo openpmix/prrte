@@ -564,9 +564,11 @@ typedef struct prte_job_t {
      * the array. */
     prte_session_t **target_sessions;
     size_t num_target_sessions;
-    /* track the number of stack traces recv'd */
+    /* track the number of stack traces recv'd, and whether we asked for
+     * them - only the master asks, and a reply nobody asked for is dropped */
     uint32_t ntraces;
     char **traces;
+    bool traces_requested;
     // store the result of parsing this app's cmd line
     pmix_cli_result_t cli;
 } prte_job_t;

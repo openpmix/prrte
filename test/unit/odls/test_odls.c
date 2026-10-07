@@ -956,6 +956,7 @@ static int test_slice_discard(void)
     int failures = 0;
     pmix_data_buffer_t *buf;
     pmix_nspace_t ns, other, bogus;
+    pmix_proc_t peer;
     int32_t nprocs = 0;
     pmix_status_t rc;
 
@@ -966,13 +967,26 @@ static int test_slice_discard(void)
     CHECK("no slices parked to begin with",
           0 == pmix_list_get_size(&prte_odls_globals.pending_slices));
 
+    /* only the master computes bindings, so a slice from anyone else is
+     * not one - and is not parked */
+    PMIX_LOAD_PROCID(&peer, PRTE_PROC_MY_HNP->nspace, PRTE_PROC_MY_HNP->rank + 1);
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &ns, 1, PMIX_PROC_NSPACE);
+    CHECK("pack slice nspace", PMIX_SUCCESS == rc);
+    rc = PMIx_Data_pack(NULL, buf, &nprocs, 1, PMIX_INT32);
+    CHECK("pack slice count", PMIX_SUCCESS == rc);
+    prte_odls_base_recv_cpuset_slice(PRTE_SUCCESS, &peer, buf, 0, NULL);
+    PMIX_DATA_BUFFER_RELEASE(buf);
+    CHECK("a slice from a daemon other than the master is not parked",
+          0 == pmix_list_get_size(&prte_odls_globals.pending_slices));
+
     /* a slice that beats its launch message here */
     PMIX_DATA_BUFFER_CREATE(buf);
     rc = PMIx_Data_pack(NULL, buf, &ns, 1, PMIX_PROC_NSPACE);
     CHECK("pack slice nspace", PMIX_SUCCESS == rc);
     rc = PMIx_Data_pack(NULL, buf, &nprocs, 1, PMIX_INT32);
     CHECK("pack slice count", PMIX_SUCCESS == rc);
-    prte_odls_base_recv_cpuset_slice(PRTE_SUCCESS, NULL, buf, 0, NULL);
+    prte_odls_base_recv_cpuset_slice(PRTE_SUCCESS, PRTE_PROC_MY_HNP, buf, 0, NULL);
     PMIX_DATA_BUFFER_RELEASE(buf);
     CHECK("an early slice is parked",
           1 == pmix_list_get_size(&prte_odls_globals.pending_slices));
