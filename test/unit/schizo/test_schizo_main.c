@@ -51,6 +51,7 @@ int main(void)
     failures += test_output();
     failures += test_personality();
     failures += test_tune();
+    failures += test_setup_fork();
 
     (void) pmix_mca_base_framework_close(&prte_schizo_base_framework);
     prte_finalize();

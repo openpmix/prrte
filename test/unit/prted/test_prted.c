@@ -667,6 +667,35 @@ static int test_xfer_app(void)
     PMIX_APP_DESTRUCT(&papp);
     PMIX_RELEASE(jdata);
 
+    /* every environment entry has to be a NAME=value assignment */
+    {
+        const char *bad[] = {"NOT_AN_ASSIGNMENT", "=value"};
+        size_t b;
+
+        for (b = 0; b < sizeof(bad) / sizeof(bad[0]); b++) {
+            jdata = fresh_job();
+            PMIX_APP_CONSTRUCT(&papp);
+            papp.cmd = strdup("hostname");
+            papp.maxprocs = 1;
+            PMIx_Argv_append_nosize(&papp.env, "GOOD=1");
+            PMIx_Argv_append_nosize(&papp.env, bad[b]);
+            CHECK("app/env-not-assignment", PRTE_SUCCESS != prte_pmix_xfer_app(jdata, &papp));
+            PMIX_APP_DESTRUCT(&papp);
+            PMIX_RELEASE(jdata);
+        }
+        jdata = fresh_job();
+        PMIX_APP_CONSTRUCT(&papp);
+        papp.cmd = strdup("hostname");
+        papp.maxprocs = 1;
+        PMIx_Argv_append_nosize(&papp.env, "GOOD=1");
+        PMIx_Argv_append_nosize(&papp.env, "EMPTY=");
+        CHECK("app/env-assignments", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+        CHECK("app/env-copied", NULL != app && 2 == PMIx_Argv_count(app->env));
+        PMIX_APP_DESTRUCT(&papp);
+        PMIX_RELEASE(jdata);
+    }
+
     /* an app-level directive of the wrong type is refused too */
     {
         int32_t i32 = 7;
