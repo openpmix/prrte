@@ -834,7 +834,14 @@ void prte_odls_base_recv_cpuset_slice(int status, pmix_proc_t *sender,
     int32_t cnt;
     prte_odls_slice_t *sl;
     prte_odls_jcaddy_t *cd;
-    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
+
+    /* the master computes every binding and sends each daemon its slice
+     * (prte_odls_base_send_cpuset_slices); nothing else has one to send */
+    if (NULL == sender || !PMIX_CHECK_PROCID(sender, PRTE_PROC_MY_HNP)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return;
+    }
 
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_PROC_NSPACE);

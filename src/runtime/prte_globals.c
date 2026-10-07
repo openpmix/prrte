@@ -851,6 +851,7 @@ static void prte_job_construct(prte_job_t *job)
     job->num_target_sessions = 0;
     job->ntraces = 0;
     job->traces = NULL;
+    job->traces_requested = false;
     PMIX_CONSTRUCT(&job->cli, pmix_cli_result_t);
 }
 
