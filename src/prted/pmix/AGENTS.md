@@ -359,7 +359,10 @@ because a directive that is merely useless rather than fatal still gets
 broadcast to the whole DVM and answered with success. A pset with no members
 is the case: `PMIx_Proc_create(0)` returns NULL and PMIx refuses a set with
 no name or no members, so every daemon logged an error and the requestor was
-told it had worked.
+told it had worked. Its members are also held to the rule `KILL` and
+`SIGNAL` already follow: every job a set names must be one the requester may
+act on (`targets_permitted()`), or the request is refused with
+`PMIX_ERR_NO_PERMISSIONS`.
 
 **A query's qualifiers are the same array under another name.** `_query()`
 (`pmix_server_queries.c`) reads six of them - `PMIX_NSPACE`, `PMIX_GROUP_ID`,

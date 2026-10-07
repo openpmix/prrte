@@ -309,6 +309,12 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 NULL == targets || 0 == ntargets) {
                 return PMIX_ERR_BAD_PARAM;
             }
+            /* a set is defined over the procs it names, and like any other
+             * job-control request it may name only procs of jobs the
+             * requester may act on */
+            if (!targets_permitted(requestor, targets, ntargets, directives, ndirs)) {
+                return PMIX_ERR_NO_PERMISSIONS;
+            }
             // goes to all daemons
             PMIX_DATA_BUFFER_CREATE(cmd);
             cmmnd = PRTE_DAEMON_DEFINE_PSET;
