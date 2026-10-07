@@ -485,12 +485,17 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 peer->recv_msg->hdr_recvd = true;
                 /* convert the header */
                 MCA_OOB_TCP_HDR_NTOH(&peer->recv_msg->hdr);
-                /* set up to read the nspace that trails it.  nslen is a
-                 * single byte and PMIX_MAX_NSLEN is 255, so it cannot name
-                 * more characters than the field can hold */
-                peer->recv_msg->rdptr = peer->recv_msg->hdr.nspace;
-                peer->recv_msg->rdbytes = peer->recv_msg->hdr.nslen;
-                /* fall thru and attempt to read it */
+                /* only the connect handshake sends a namespace - a message
+                 * names its ranks in ours (see oob_tcp_hdr.h), and one that
+                 * says otherwise is not from a daemon of this build */
+                if (0 != peer->recv_msg->hdr.nslen) {
+                    pmix_output(0, "%s a message from %s carries a namespace - closing the connection",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
+                    peer->state = MCA_OOB_TCP_FAILED;
+                    prte_oob_tcp_peer_close(peer);
+                    return;
+                }
+                /* fall thru - there is no nspace to read */
             } else if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
                 /* exit this event and let the event lib progress */
                 return;
@@ -504,24 +509,9 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
         }
 
-        /* the names in this header are a rank plus the nspace that follows the
-         * fixed part, so nothing may read one until those characters are in */
+        /* the header names its ranks in our nspace, which the empty one it
+         * carries stands for once it is terminated */
         if (peer->recv_msg->hdr_recvd && !peer->recv_msg->nspace_recvd) {
-            if (0 < peer->recv_msg->hdr.nslen) {
-                rc = read_bytes(peer);
-                if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
-                    /* exit this event and let the event lib progress */
-                    return;
-                }
-                if (PRTE_SUCCESS != rc) {
-                    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
-                                        "%s:tcp:recv:handler error reading nspace - closing connection",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-                    prte_oob_tcp_peer_close(peer);
-                    return;
-                }
-            }
-            /* the terminator is not sent - we supply it */
             PRTE_OOB_TCP_HDR_END_NSPACE(&peer->recv_msg->hdr);
             peer->recv_msg->nspace_recvd = true;
 
@@ -539,7 +529,9 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                     "%s:tcp:recv:handler allocate data region of size %lu",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     (unsigned long) peer->recv_msg->hdr.nbytes);
-                if (peer->recv_msg->hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
+                /* scaled in 64 bits - as an int the product overflows from
+                 * 2048 MBytes up */
+                if (peer->recv_msg->hdr.nbytes > (uint64_t) prte_oob_base.max_msg_size * 1024 * 1024) {
                     prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "msg-too-big", true,
                                     PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     peer->recv_msg->hdr.nbytes, prte_oob_base.max_msg_size);
@@ -549,6 +541,12 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 }
                 /* allocate the data region */
                 peer->recv_msg->data = (char *) malloc(peer->recv_msg->hdr.nbytes);
+                if (NULL == peer->recv_msg->data) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    peer->state = MCA_OOB_TCP_FAILED;
+                    prte_oob_tcp_peer_close(peer);
+                    return;
+                }
                 /* point to it */
                 peer->recv_msg->rdptr = peer->recv_msg->data;
                 peer->recv_msg->rdbytes = peer->recv_msg->hdr.nbytes;

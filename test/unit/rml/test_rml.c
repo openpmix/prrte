@@ -957,6 +957,30 @@ static int test_handshake_never_waits(void)
     prte_oob_tcp_handshake_clear(&hs);
     close(sv[1]);
 
+    /* an ident is an ack flag and a version string, so one that claims a
+     * payload far longer than that is refused on its header - well under
+     * prte_max_msg_size, which bounds messages, not handshakes */
+    CHECK("socketpair", make_pair(sv));
+    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 4096);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("an overlong ident is refused", PRTE_SUCCESS != rc && PRTE_ERR_WOULD_BLOCK != rc);
+    CHECK("and the connection disposed of", !fd_is_open(sv[0]));
+    CHECK("with nothing allocated for it", NULL == hs.payload);
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
+    /* a namespace that is not text is refused like any other, and the
+     * refusal - which quotes it - prints it with '?' for each control byte */
+    CHECK("socketpair", make_pair(sv));
+    len = build_ident(wire, "\x1b[2J\x07not-a-dvm", 0);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("a namespace of control bytes is refused", PRTE_ERR_CONNECTION_REFUSED == rc);
+    CHECK("and the connection disposed of", !fd_is_open(sv[0]));
+    prte_oob_tcp_handshake_clear(&hs);
+    close(sv[1]);
+
     if (0 == failures) {
         fprintf(stdout, "PASSED test_handshake_never_waits\n");
     }

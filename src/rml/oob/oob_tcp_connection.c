@@ -848,6 +848,10 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 /* how many refused connections are reported before the rest go quiet */
 #define PRTE_OOB_TCP_AUTH_REFUSALS_REPORTED 8
 
+/* the longest IDENT payload accepted: the ack flag, and a version string far
+ * longer than any release has had along with its terminator */
+#define PRTE_OOB_TCP_IDENT_MAX (sizeof(uint16_t) + 256)
+
 static void store_be32(uint8_t *p, uint32_t v)
 {
     p[0] = (uint8_t) (v >> 24);
@@ -955,17 +959,25 @@ static int tcp_peer_send_hello(prte_oob_tcp_peer_t *peer)
     return PRTE_SUCCESS;
 }
 
-/* Refuse a connection that failed to authenticate, and say so once.
- *
- * Disposes of the connection the way every failure of
- * prte_oob_tcp_peer_recv_connect_ack does: the peer when we dialed it - which
- * moves it on to its next address, or reports it unreachable - and the bare
- * socket when it dialed us. */
-static int auth_refuse(prte_oob_tcp_peer_t *peer, int sd, const char *why)
+/* Copy what a connection sent into dst for a log line, each byte that is
+ * not printable ASCII shown as '?'. */
+static void printable_copy(char *dst, size_t len, const char *src)
 {
-    /* Any process that reaches the port by mistake produces one of these,
-     * and a misconfigured one may keep doing so, so only the first few are
-     * reported out loud. */
+    size_t n;
+
+    for (n = 0; n + 1 < len && '\0' != src[n]; n++) {
+        dst[n] = (' ' <= src[n] && '~' >= src[n]) ? src[n] : '?';
+    }
+    dst[n] = '\0';
+}
+
+/* Say why a connection is being refused.
+ *
+ * Any process that reaches the port by mistake produces one of these, and a
+ * misconfigured one may keep doing so, so only the first few are reported
+ * out loud. */
+static void report_refusal(prte_oob_tcp_peer_t *peer, int sd, const char *why)
+{
     static unsigned int refusals = 0;
     const char *who = (NULL == peer) ? pmix_fd_get_peer_name(sd) : PRTE_NAME_PRINT(&peer->name);
 
@@ -982,6 +994,17 @@ static int auth_refuse(prte_oob_tcp_peer_t *peer, int sd, const char *why)
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == peer) ? "from" : "to",
                             who, why);
     }
+}
+
+/* Refuse a connection that failed to authenticate, and say so once.
+ *
+ * Disposes of the connection the way every failure of
+ * prte_oob_tcp_peer_recv_connect_ack does: the peer when we dialed it - which
+ * moves it on to its next address, or reports it unreachable - and the bare
+ * socket when it dialed us. */
+static int auth_refuse(prte_oob_tcp_peer_t *peer, int sd, const char *why)
+{
+    report_refusal(peer, sd, why);
     if (NULL != peer) {
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);
@@ -1618,9 +1641,12 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
      * payload, so this is a string even if the peer sent none */
     version = (char *) ((char *) msg + offset);
     if (0 != strcmp(version, prte_version_string)) {
+        char shown[PRTE_OOB_TCP_IDENT_MAX];
+
+        printable_copy(shown, sizeof(shown), version);
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_version_string,
-                       pmix_fd_get_peer_name(sd), PRTE_NAME_PRINT(&(peer->name)), version);
+                       pmix_fd_get_peer_name(sd), PRTE_NAME_PRINT(&(peer->name)), shown);
 
         abort_handshake(peer, sd);
         free(msg);
@@ -1958,12 +1984,12 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
          * reason - it would fall back to ours and defeat the check. */
         if (0 == hs->hdr.nslen
             || !PMIX_CHECK_NSPACE_STRICT(hs->hdr.nspace, PRTE_PROC_MY_NAME->nspace)) {
-            pmix_output(0,
-                        "%s tcp_peer_recv_connect_ack: refusing a connection from "
-                        "namespace \"%s\" - this daemon serves \"%s\"",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        (0 == hs->hdr.nslen) ? "(none given)" : hs->hdr.nspace,
-                        PRTE_PROC_MY_NAME->nspace);
+            char ns[PMIX_MAX_NSLEN + 1], why[2 * PMIX_MAX_NSLEN + 64];
+
+            printable_copy(ns, sizeof(ns), (0 == hs->hdr.nslen) ? "(none given)" : hs->hdr.nspace);
+            snprintf(why, sizeof(why), "it named namespace \"%s\" - this daemon serves \"%s\"",
+                     ns, PRTE_PROC_MY_NAME->nspace);
+            report_refusal(NULL, sd, why);
             return PRTE_ERR_CONNECTION_REFUSED;
         }
 
@@ -1980,9 +2006,7 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
             || MCA_OOB_TCP_AUTH_CHALLENGE == hs->hdr.type) {
             if (((MCA_OOB_TCP_AUTH_CHALLENGE == hs->hdr.type) ? 2 : 1) * PRTE_OOB_TCP_AUTH_LEN
                 != nbytes) {
-                pmix_output(0, "%s tcp_peer_recv_connect_ack: an authentication message of "
-                            "%" PRIsize_t " bytes is malformed",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nbytes);
+                report_refusal(NULL, sd, "it sent an authentication message of the wrong size");
                 return PRTE_ERR_COMM_FAILURE;
             }
             if (NULL == (hs->payload = (char *) malloc(nbytes + 1))) {
@@ -1992,26 +2016,19 @@ static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs)
             goto payload;
         }
         if (MCA_OOB_TCP_IDENT != hs->hdr.type) {
-            pmix_output(0, "tcp_peer_recv_connect_ack: invalid header type: %d\n",
-                        hs->hdr.type);
+            report_refusal(NULL, sd, "it sent a message that is not part of the handshake");
             return PRTE_ERR_COMM_FAILURE;
         }
 
         /* an ident's payload is the ack flag followed by a version string,
          * and everything after this reads the flag */
         if (sizeof(uint16_t) > nbytes) {
-            pmix_output(0, "%s tcp_peer_recv_connect_ack: a handshake of %" PRIsize_t
-                        " bytes is too short to carry an acknowledgement",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nbytes);
+            report_refusal(NULL, sd, "its handshake is too short to carry an acknowledgement");
             return PRTE_ERR_COMM_FAILURE;
         }
-        if (nbytes > (size_t) prte_oob_base.max_msg_size * 1024 * 1024) {
-            pmix_proc_t sender;
-            PRTE_OOB_TCP_HDR_PROC(&hs->hdr, hs->hdr.origin, &sender);
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "msg-too-big", true,
-                           PRTE_NAME_PRINT(&sender), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                           hs->hdr.nbytes, prte_oob_base.max_msg_size);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+        if (PRTE_OOB_TCP_IDENT_MAX < nbytes) {
+            report_refusal(NULL, sd, "its handshake is longer than any this build sends");
+            return PRTE_ERR_COMM_FAILURE;
         }
         /* one more byte than was sent, for the terminator added below */
         if (NULL == (hs->payload = (char *) malloc(nbytes + 1))) {
