@@ -1770,12 +1770,15 @@ static void unset_envar(const char *name, prte_app_context_t *app)
             p2 = strchr(tmp, '=');
             if (NULL != p2) {
                 *p2 = '\0';
-                pmix_unsetenv(tmp, &app->env);
+                /* the entry we just removed shifted the array down, so
+                 * re-check this index rather than stepping past the new
+                 * occupant - but only if one was removed, or the same
+                 * entry would be matched again forever */
+                if (PMIX_SUCCESS == pmix_unsetenv(tmp, &app->env)) {
+                    --n;
+                }
             }
             free(tmp);
-            /* the entry we just removed shifted the array down, so re-check
-             * this index rather than stepping past the new occupant */
-            --n;
         }
     }
     free(ptr);

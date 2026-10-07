@@ -419,8 +419,10 @@ static int test_process_envars(void)
 
     jdata = PMIX_NEW(prte_job_t);
     app = PMIX_NEW(prte_app_context_t);
+    /* PFX_NOVALUE is not an assignment: a prefix UNSET that matches it
+     * has nothing to remove, and must move on rather than match it again */
     app->env = PMIx_Argv_split("PATH=/bin PATHEXT=.EXE KEEP=orig SET_ME=old"
-                               " PFX_A=1 PFX_B=2 OTHER=3",
+                               " PFX_A=1 PFX_NOVALUE PFX_B=2 OTHER=3",
                                ' ');
 
     /* SET overwrites; ADD must NOT - attr.h defines it as "add envar, do
@@ -471,6 +473,15 @@ static int test_process_envars(void)
     CHECK("UNSET removed the named variable", NULL == envget(app->env, "OTHER"));
     CHECK("UNSET prefix removed PFX_A", NULL == envget(app->env, "PFX_A"));
     CHECK("UNSET prefix removed PFX_B", NULL == envget(app->env, "PFX_B"));
+    {
+        bool kept = false;
+        int n;
+
+        for (n = 0; NULL != app->env[n]; n++) {
+            kept = kept || (0 == strcmp(app->env[n], "PFX_NOVALUE"));
+        }
+        CHECK("UNSET prefix passed over a non-assignment", kept);
+    }
 
     PMIX_RELEASE(app);
     PMIX_RELEASE(jdata);
