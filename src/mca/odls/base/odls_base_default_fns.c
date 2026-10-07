@@ -1183,7 +1183,9 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
             }
             /* connect the proc to its node object */
             dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, pptr->parent);
-            if (NULL == dmn) {
+            /* a daemon learns which node it is on from the nidmap, so one
+             * named in a launch before that has no node to place procs on */
+            if (NULL == dmn || NULL == dmn->node) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto REPORT_ERROR;

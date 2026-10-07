@@ -491,9 +491,12 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             free(cmd_str);
             goto CLEANUP;
         }
-        // unpack the targets
+        // unpack the targets - all of them, or the set is not the one sent
         n = num_procs;
         ret = PMIx_Data_unpack(NULL, buffer, pptr, &n, PMIX_PROC);
+        if (PMIX_SUCCESS == ret && n != num_procs) {
+            ret = PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
+        }
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             free(cmd_str);
@@ -601,11 +604,14 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             goto CLEANUP;
         }
-        // unpack the targets
+        // unpack the targets - all of them, since we search every slot
         n = num_procs;
         ret = PMIx_Data_unpack(NULL, buffer, ranks, &n, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS == ret && n != num_procs) {
+            ret = PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
+        }
         if (PMIX_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
+            PMIX_ERROR_LOG(ret);
             free(ranks);
             goto CLEANUP;
         }
