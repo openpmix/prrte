@@ -235,10 +235,13 @@ static void purge(const prte_rml_recovery_status_t* status){
         if(NULL != rank) PMIX_RELEASE(rank);
     }
 
-    pmix_rank_t* empty = malloc(
-        pmix_hash_table_get_size(&prte_relm_sm->ranks) * sizeof(pmix_rank_t)
-    );
+    size_t n_ranks = pmix_hash_table_get_size(&prte_relm_sm->ranks);
+    pmix_rank_t* empty = malloc((0 < n_ranks ? n_ranks : 1) * sizeof(pmix_rank_t));
     size_t n_empty = 0;
+    if(NULL == empty){
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return;
+    }
 
     prte_relm_guid_t* purged_buf = NULL;
     size_t p_alloc = 0;
@@ -250,6 +253,11 @@ static void purge(const prte_rml_recovery_status_t* status){
         if(p_alloc < n_msgs){
             free(purged_buf);
             purged_buf = malloc(n_msgs*sizeof(prte_relm_guid_t));
+            if(NULL == purged_buf){
+                /* stop here rather than purge through a NULL buffer */
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                break;
+            }
             p_alloc = n_msgs;
         }
 
