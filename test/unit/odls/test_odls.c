@@ -422,7 +422,7 @@ static int test_process_envars(void)
     /* PFX_NOVALUE is not an assignment: a prefix UNSET that matches it
      * has nothing to remove, and must move on rather than match it again */
     app->env = PMIx_Argv_split("PATH=/bin PATHEXT=.EXE KEEP=orig SET_ME=old"
-                               " PFX_A=1 PFX_NOVALUE PFX_B=2 OTHER=3",
+                               " PFX_A=1 PFX_NOVALUE PFX_B=2 OTHER=3 AB*X=4",
                                ' ');
 
     /* SET overwrites; ADD must NOT - attr.h defines it as "add envar, do
@@ -445,6 +445,10 @@ static int test_process_envars(void)
                           (void *) "OTHER", PMIX_STRING);
     prte_append_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR, PRTE_ATTR_GLOBAL,
                           (void *) "PFX_*", PMIX_STRING);
+    /* a '*' anywhere but the end is part of the name: "AB*C" names one
+     * variable, and must not be read as the prefix "AB*" */
+    prte_append_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR, PRTE_ATTR_GLOBAL,
+                          (void *) "AB*C", PMIX_STRING);
 
     /* the app's directives are applied after the job's, so they win */
     add_envar(&app->attributes, PRTE_APP_SET_ENVAR, "SET_ME", "app");
@@ -482,6 +486,9 @@ static int test_process_envars(void)
         }
         CHECK("UNSET prefix passed over a non-assignment", kept);
     }
+    v = envget(app->env, "AB*X");
+    CHECK("UNSET of a name with an inner '*' is not a prefix",
+          NULL != v && 0 == strcmp(v, "4"));
 
     PMIX_RELEASE(app);
     PMIX_RELEASE(jdata);
