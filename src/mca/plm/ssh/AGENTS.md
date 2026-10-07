@@ -51,7 +51,13 @@ The query decides *which agent* to use and offers the module at priority
      `using_tmrsh`.
 3. Fall back to looking up the `plm_ssh_agent` list (default
    `"ssh : rsh"` — a colon-delimited preference list) in PATH via
-   `ssh_launch_agent_lookup` → `prte_plm_ssh_search`.
+   `ssh_launch_agent_lookup` → `prte_plm_ssh_search`. Each agent is
+   located as a shell would locate it: a bare name (`ssh`) on the PATH,
+   an absolute path as given, and a relative path (`./myssh`,
+   `tools/myssh`) against the working directory alone - never the PATH.
+   A bare name is never looked for in the working directory, but it *is*
+   looked for in a directory the caller passes as `path`: that is how
+   `qrsh` is found in `$SGE_ROOT/bin/$ARC`, so keep it.
 
 If the user named an agent that cannot be found, it is a hard error
 (`agent-not-found`, activates `NEVER_LAUNCHED`); if only the default
@@ -237,6 +243,14 @@ process exits — see the ownership note below.
 ---
 
 ## Things to watch when editing
+
+- **A host goes on the agent's command line as an argument.**
+  `launch_daemons` checks every node in the map - its name, raw name and
+  any user name - before building anything, and `remote_spawn` checks
+  each child's host, refusing one that begins with `-` (`bad-host-arg`)
+  rather than handing the agent something it would read as an option.
+  `--` is deliberately not inserted before the host: the agent may be
+  `rsh`, `qrsh` or a site script, which need not accept it.
 
 - **`num_concurrent` vs. `--debug-daemons` is a real deadlock**, guarded
   explicitly in `launch_daemons`. Any change to session-attach behavior

@@ -164,6 +164,7 @@ static prte_plm_ssh_shell_t find_shell(char *shell);
 static int launch_agent_setup(const char *agent, char *path);
 static void ssh_child(int argc, char **argv, int keyfd) __prte_attribute_noreturn__;
 static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell);
+static bool host_arg_ok(const char *host);
 static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshell, char *nodename,
                        int *argc, char ***argv);
 static void launch_daemons(int fd, short args, void *cbdata);
@@ -959,6 +960,10 @@ static int remote_spawn(void)
             rc = PRTE_ERR_NOT_FOUND;
             goto cleanup;
         }
+        if (!host_arg_ok(hostname)) {
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
+        }
 
         free(argv[node_name_index1]);
         argv[node_name_index1] = strdup(hostname);
@@ -1290,6 +1295,29 @@ static void launch_daemons(int fd, short args, void *cbdata)
         pmix_prefix = NULL;
     }
 
+    /* every host - and any user name given with it - goes on the launch
+     * agent's command line, so check them all before launching any */
+    for (nnode = 0; nnode < map->nodes->size; nnode++) {
+        if (NULL == (nd = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
+            continue;
+        }
+        if (!host_arg_ok(nd->name) ||
+            (NULL != nd->rawname && !host_arg_ok(nd->rawname))) {
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
+        }
+        username = NULL;
+        if (prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, (void **) &username,
+                               PMIX_STRING)) {
+            if (!host_arg_ok(username)) {
+                free(username);
+                rc = PRTE_ERR_SILENT;
+                goto cleanup;
+            }
+            free(username);
+        }
+    }
+
     /* we also need at least one node name so we can check what shell is
      * being used, if we have to
      */
@@ -1610,6 +1638,20 @@ static int launch_agent_setup(const char *agent, char *path)
 
     /* the caller can append any additional argv's they desire */
     return PRTE_SUCCESS;
+}
+
+/*
+ * A host is handed to the launch agent as a command-line argument, so
+ * one that begins with '-' would be read as an option rather than a
+ * host. No valid host name begins with one; say so and refuse it.
+ */
+static bool host_arg_ok(const char *host)
+{
+    if (NULL != host && '-' == host[0]) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "bad-host-arg", true, host);
+        return false;
+    }
+    return true;
 }
 
 /**
