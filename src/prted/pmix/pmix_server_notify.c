@@ -177,9 +177,14 @@ void prte_pmix_server_group_member_left(pmix_status_t code, const pmix_proc_t *s
             }
         }
     }
-    /* the event source is the departing proc if it wasn't called out explicitly */
+    /* a process leaves a group only for itself, so the departing proc is
+     * the event's source whether or not it is named - the same rule the
+     * PMIx server applies before it hands us the event */
     if (NULL == affected) {
         affected = (pmix_proc_t *) source;
+    } else if (NULL == source || !PMIX_CHECK_NSPACE_STRICT(affected->nspace, source->nspace) ||
+               affected->rank != source->rank) {
+        return;
     }
     if (NULL == grpid || NULL == affected) {
         return;

@@ -1590,6 +1590,11 @@ in a place where the wildcard arrived from outside rather than from an
 uninitialized field. A proc leaves a group one at a time; insist on being
 told which one.
 
+And it leaves only for itself. A departure that names a proc other than
+the event's source is ignored - the rule the PMIx server applies before it
+hands the event to us, applied here as well, because every daemon acts on
+the broadcast copy.
+
 The helper is not static only so that `test_group_left` can pin all of that
 without a DVM.
 
