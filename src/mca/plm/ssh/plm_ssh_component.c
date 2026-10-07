@@ -326,8 +326,12 @@ static int ssh_component_close(void)
 
 /*
  * Take a colon-delimited list of agents and locate the first one that
- * we are able to find in the PATH.  Split that one into argv and
- * return it.  If nothing found, then return NULL.
+ * we are able to find, as a shell would: a bare name is looked up on
+ * the PATH (and then in path, if the caller gave one), an absolute path
+ * is taken as given, and a relative path (such as "./myssh") is
+ * resolved against path or, if none was given, the working directory.
+ * Split that one into argv and return it.  If nothing found, then
+ * return NULL.
  */
 char **prte_plm_ssh_search(const char *agent_list, const char *path)
 {
@@ -374,8 +378,20 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         /* Split it */
         tokens = PMIx_Argv_split(line, ' ');
 
-        /* Look for the first token in the PATH */
-        tmp = pmix_path_findv(tokens[0], X_OK, environ, wrkdir);
+        /* Locate the first token as a shell would: a bare name such
+         * as "ssh" on the PATH - plus a directory the caller named, such
+         * as Grid Engine's bin directory for qrsh, but never the working
+         * directory - an absolute path as given, and a relative path
+         * against path or the working directory alone */
+        if (NULL == strchr(tokens[0], '/')) {
+            tmp = pmix_path_findv(tokens[0], X_OK, environ, (NULL == path) ? NULL : wrkdir);
+        } else if (pmix_path_is_absolute(tokens[0])) {
+            tmp = pmix_path_access(tokens[0], NULL, X_OK);
+        } else if (NULL != wrkdir) {
+            tmp = pmix_path_access(tokens[0], wrkdir, X_OK);
+        } else {
+            tmp = NULL;
+        }
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;
