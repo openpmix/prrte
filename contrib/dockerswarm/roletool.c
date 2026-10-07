@@ -16,6 +16,7 @@
  *   roletool <uri> spawn
  *   roletool <uri> parent <nspace> <rank>
  *   roletool <uri> instantiate <session-id> <hosts>
+ *   roletool <uri> pset <name> <nspace> <rank>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
  * DVM's rendezvous files are readable by its own user only.
@@ -24,12 +25,14 @@
  *   spawn        start /bin/true, naming no parent
  *   parent       start /bin/true, naming <nspace>:<rank> as its parent
  *   instantiate  create session <session-id> holding <hosts>
+ *   pset         define process set <name> holding <nspace>:<rank>
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
  *   ROLE INIT <status>
  *   ROLE SPAWN <status>
  *   ROLE SESSION <status>
+ *   ROLE PSET <status>
  *
  * Why this cannot be a unit test: what is being asked is whether the DVM
  * judges the requester by the user PMIx authenticated for its connection,
@@ -93,13 +96,13 @@ static void usage(const char *name)
 {
     fprintf(stderr,
             "usage: %s <uri> scheduler | spawn | parent <nspace> <rank> |"
-            " instantiate <session-id> <hosts>\n",
+            " instantiate <session-id> <hosts> | pset <name> <nspace> <rank>\n",
             name);
 }
 
 int main(int argc, char **argv)
 {
-    pmix_proc_t myproc, parent;
+    pmix_proc_t myproc, parent, member;
     pmix_info_t iinfo[4], jinfo[1], dirs[2];
     pmix_app_t app;
     pmix_nspace_t child;
@@ -116,7 +119,8 @@ int main(int argc, char **argv)
     }
     op = argv[2];
     if ((0 == strcmp(op, "parent") && 5 != argc) ||
-        (0 == strcmp(op, "instantiate") && 5 != argc)) {
+        (0 == strcmp(op, "instantiate") && 5 != argc) ||
+        (0 == strcmp(op, "pset") && 6 != argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -171,6 +175,20 @@ int main(int argc, char **argv)
         printf("ROLE SESSION %s\n", PMIx_Error_string(rc));
         PMIX_INFO_DESTRUCT(&dirs[0]);
         PMIX_INFO_DESTRUCT(&dirs[1]);
+
+    } else if (0 == strcmp(op, "pset")) {
+        PMIX_LOAD_PROCID(&member, argv[4], (pmix_rank_t) strtoul(argv[5], NULL, 10));
+        PMIX_INFO_LOAD(&dirs[0], PMIX_JOB_CTRL_DEFINE_PSET, argv[3], PMIX_STRING);
+        lock_init(&lock);
+        rc = PMIx_Job_control_nb(&member, 1, dirs, 1, ctrl_cb, &lock);
+        if (PMIX_SUCCESS != rc) {
+            lock_wake(&lock, rc);
+        } else {
+            lock_wait(&lock);
+        }
+        rc = lock.status;
+        printf("ROLE PSET %s\n", PMIx_Error_string(rc));
+        PMIX_INFO_DESTRUCT(&dirs[0]);
 
     } else {
         usage(argv[0]);
