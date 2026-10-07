@@ -82,6 +82,7 @@
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
+#include "src/util/prte_output_file.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -109,6 +110,7 @@ int prun(int argc, char *argv[])
     pmix_cli_item_t *opt;
     FILE *fp;
     char *mypidfile = NULL;
+    struct stat mypidstat;
     char *param;
 
     /* init the globals */
@@ -275,9 +277,10 @@ int prun(int argc, char *argv[])
                 close(outpipe);
             } else {
                 /* must be a file */
-                fp = fopen(opt->values[0], "w");
+                fp = prte_output_file_open(opt->values[0], 0666, &mypidstat);
                 if (NULL == fp) {
-                    pmix_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
+                    pmix_output(0, "Impossible to open the file %s in write mode: %s\n",
+                                opt->values[0], strerror(errno));
                     PRTE_UPDATE_EXIT_STATUS(1);
                     goto DONE;
                 }
@@ -338,7 +341,8 @@ DONE:
     // reached prun_common() has had it closed there, and every other path to
     // this label either never opened it or is the open's own failure.
     if (NULL != mypidfile) {
-        unlink(mypidfile);
+        /* only if it is still the file we wrote */
+        prte_output_file_remove(mypidfile, &mypidstat);
     }
 
     exit(prte_exit_status);
