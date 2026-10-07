@@ -81,3 +81,12 @@ The %s option was given "%s" without the value it requires:
   Given:  %s
 
 Please write it as %s=<value>.
+#
+[file-read-failed]
+A file could not be read to its end:
+
+  File:  %s
+
+It may contain a NUL byte - a text file saved in a wide encoding such
+as UTF-16 has one after every character - or reading it failed part
+way through. Nothing after that point was used.

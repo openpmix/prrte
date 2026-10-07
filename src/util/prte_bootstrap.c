@@ -129,6 +129,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
     int rc = PRTE_ERR_SILENT;
     int i, j;
     pmix_status_t ret;
+    bool failed = false;
 
     /* set the defaults */
     memset(cfg, 0, sizeof(*cfg));
@@ -149,7 +150,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
         return PRTE_ERR_SILENT;
     }
 
-    while (NULL != (line = pmix_getline(fp))) {
+    while (NULL != (line = pmix_getline(fp, &failed))) {
         /* ignore if line is empty or comment */
         if (0 == strlen(line) || '#' == line[0]) {
             free(line);
@@ -257,6 +258,10 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
         free(line);
     }
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, path);
+        goto cleanup;
+    }
 
     /* we require the node list */
     if (NULL == dvmnodes) {
@@ -722,12 +727,13 @@ static pmix_status_t read_file(char *regexp, char ***names)
 {
     char *line;
     FILE *fp;
+    bool failed = false;
 
     fp = fopen(regexp, "r");
     if (NULL == fp) {
         return PMIX_ERR_BAD_PARAM;
     }
-    while (NULL != (line = pmix_getline(fp))) {
+    while (NULL != (line = pmix_getline(fp, &failed))) {
         /* ignore if line is empty or comment */
         if (0 == strlen(line) || '#' == line[0]) {
             free(line);
@@ -737,5 +743,9 @@ static pmix_status_t read_file(char *regexp, char ***names)
         free(line);
     }
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, regexp);
+        return PMIX_ERR_SILENT;
+    }
     return PMIX_SUCCESS;
 }

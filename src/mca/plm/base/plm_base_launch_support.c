@@ -507,7 +507,8 @@ void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
         /* unpack the stack_trace until complete */
         cnt = 1;
         while (PRTE_SUCCESS == (rc = PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING))) {
-            pmix_asprintf(&st2, "\t%s", st); // has its own newline
+            /* one line of a trace, sent without its newline */
+            pmix_asprintf(&st2, "\t%s\n", st);
             PMIx_Argv_append_nosize(&jdata->traces, st2);
             free(st);
             free(st2);

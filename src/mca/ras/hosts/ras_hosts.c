@@ -298,7 +298,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
 {
     FILE *fp;
     char *line, *cptr, *ptr;
-    bool addslots;
+    bool addslots, failed = false;
     int slots;
     prte_node_t *nptr, *node;
 
@@ -311,7 +311,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         return PMIX_ERR_SILENT;
     }
 
-    while (NULL != (line = pmix_getline(fp))) {
+    while (NULL != (line = pmix_getline(fp, &failed))) {
         // ignore comments and blank lines
         if (0 == strlen(line)) {
             free(line);
@@ -420,6 +420,10 @@ process:
         free(line);
     }
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, hostfile);
+        return PMIX_ERR_SILENT;
+    }
     return PMIX_SUCCESS;
 }
 

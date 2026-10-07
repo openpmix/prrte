@@ -33,6 +33,7 @@
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -49,9 +50,8 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
 
 static int discover(pmix_list_t *nodelist, char *pbs_jobid);
-static char *pbs_getline(FILE *fp);
+static char *pbs_getline(FILE *fp, bool *failed);
 
-#define PBS_FILE_MAX_LINE_LENGTH 512
 
 static char *filename;
 
@@ -138,7 +138,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     FILE *fp;
     char *hostname, *cppn;
     int ppn;
-    bool found;
+    bool found, failed = false;
     PRTE_HIDE_UNUSED_PARAMS(pbs_jobid);
 
     /* Ignore anything that the user already specified -- we're
@@ -198,7 +198,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
        resolving to the same hostname (i.e., vcpu's on a single
        host). */
 
-    while (NULL != (hostname = pbs_getline(fp))) {
+    while (NULL != (hostname = pbs_getline(fp, &failed))) {
 
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:pbs:allocate:discover: got hostname %s",
@@ -253,6 +253,10 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
 
     }
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, filename);
+        return PRTE_ERR_SILENT;
+    }
 
     return PRTE_SUCCESS;
 }
@@ -263,21 +267,22 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
  * otherwise inject an unusable, unresolvable node into the allocation.
  * Note also that the final line of a file need not be newline-terminated,
  * so the newline is removed only if it is actually there. */
-static char *pbs_getline(FILE *fp)
+static char *pbs_getline(FILE *fp, bool *failed)
 {
-    char *ret;
+    char *line;
     size_t len;
-    char input[PBS_FILE_MAX_LINE_LENGTH];
 
-    while (NULL != (ret = fgets(input, PBS_FILE_MAX_LINE_LENGTH, fp))) {
-        len = strlen(input);
-        while (0 < len && ('\n' == input[len - 1] || '\r' == input[len - 1])) {
-            input[--len] = '\0';
+    /* a whole line, however long */
+    while (NULL != (line = pmix_getline(fp, failed))) {
+        len = strlen(line);
+        while (0 < len && '\r' == line[len - 1]) {
+            line[--len] = '\0';
         }
         if (0 == len) {
+            free(line);
             continue;
         }
-        return strdup(input);
+        return line;
     }
 
     return NULL;

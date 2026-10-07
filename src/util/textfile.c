@@ -16,6 +16,7 @@
 #include <sys/types.h>
 
 #include "constants.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/textfile.h"
 
 /* A carriage return is whitespace here, which it was not to the lexer this
@@ -24,95 +25,6 @@
  * or editing a hostfile on Windows is an ordinary thing to do and should
  * not be a parse error. */
 #define IS_SPACE(c) (' ' == (c) || '\t' == (c) || '\f' == (c) || '\v' == (c) || '\r' == (c))
-
-/* Make room for `need` bytes in tf->raw, doubling rather than sizing to
- * fit so that reading a long line is not quadratic. */
-static bool raw_room(prte_textfile_t *tf, size_t need)
-{
-    size_t want;
-    char *grown;
-
-    if (need <= tf->rawsize) {
-        return true;
-    }
-    want = (0 == tf->rawsize) ? 256 : tf->rawsize;
-    while (want < need) {
-        want *= 2;
-    }
-    grown = (char *) realloc(tf->raw, want);
-    if (NULL == grown) {
-        /* tf->raw is still ours, and prte_textfile_close() frees it */
-        return false;
-    }
-    tf->raw = grown;
-    tf->rawsize = want;
-    return true;
-}
-
-/*
- * Read one physical line into tf->raw, without its newline.
- *
- * This reads a character at a time rather than with fgets() because fgets()
- * cannot say how much it read: it reports the line as a C string, so a NUL
- * byte in the file is indistinguishable from the end of the line, and
- * everything after it on that line is silently dropped and the next line
- * read onto the end of it.  That is not a theoretical file.  A hostfile
- * saved as UTF-16 -- which is what a Windows editor will do if asked, and
- * this reader already accommodates that user by treating CR as whitespace
- * -- is a NUL after every ASCII character, and it would have produced a
- * node list built from fragments and reported it as a success.
- *
- * So a NUL is refused outright, the same way a read error is: the fields
- * reach their callers as C strings and there is nothing a text
- * configuration file can mean by one.
- */
-static bool read_raw_line(prte_textfile_t *tf)
-{
-    size_t used = 0;
-    bool started = false;
-    int c;
-
-    for (;;) {
-        c = fgetc(tf->fp);
-        if (EOF == c) {
-            if (ferror(tf->fp)) {
-                /* not the end of the file: whatever is left of it was never
-                 * read, so neither this fragment nor the lines before it
-                 * are the whole of what the file says */
-                tf->failed = true;
-                return false;
-            }
-            /* A final line with no newline is still a line. */
-            break;
-        }
-        started = true;
-        if ('\n' == c) {
-            break;
-        }
-        if ('\0' == c) {
-            tf->failed = true;
-            return false;
-        }
-        /* room for this character and the terminator that follows it */
-        if (!raw_room(tf, used + 2)) {
-            tf->failed = true;
-            return false;
-        }
-        tf->raw[used++] = (char) c;
-    }
-
-    if (!started) {
-        /* end of the file, with nothing at all on this line */
-        return false;
-    }
-    /* an empty line is still a line, and still needs a terminator */
-    if (!raw_room(tf, used + 1)) {
-        tf->failed = true;
-        return false;
-    }
-    tf->raw[used] = '\0';
-    return true;
-}
 
 /*
  * Copy the line into tf->code with the comments taken out, carrying an
@@ -223,12 +135,27 @@ char **prte_textfile_next(prte_textfile_t *tf)
     size_t need;
     char *code;
     char **fields;
+    bool failed;
 
     if (NULL == tf->fp) {
         return NULL;
     }
 
-    while (read_raw_line(tf)) {
+    for (;;) {
+        /* a NUL byte is refused along with a read error.  The fields reach
+         * their callers as C strings, so the rest of its line would vanish;
+         * and a hostfile saved as UTF-16 - which is what a Windows editor
+         * will do if asked - is a NUL after every ASCII character, which
+         * would otherwise be a node list built from fragments, reported as
+         * a success */
+        free(tf->raw);
+        tf->raw = pmix_getline(tf->fp, &failed);
+        if (NULL == tf->raw) {
+            if (failed) {
+                tf->failed = true;
+            }
+            return NULL;
+        }
         tf->lineno++;
 
         /* the stripped line is never longer than the raw one, and it can
@@ -257,7 +184,6 @@ char **prte_textfile_next(prte_textfile_t *tf)
         }
         /* the line held nothing but whitespace and comments */
     }
-    return NULL;
 }
 
 void prte_textfile_close(prte_textfile_t *tf)
@@ -278,7 +204,6 @@ void prte_textfile_close(prte_textfile_t *tf)
         free(tf->fields);
         tf->fields = NULL;
     }
-    tf->rawsize = 0;
     tf->nfields = 0;
     tf->in_comment = false;
     /* "failed" and "lineno" are left as they are: together they are the
