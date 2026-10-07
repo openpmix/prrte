@@ -28,7 +28,7 @@ linked into `libprrte`. There are no MCA components here.
 | **Names** | `name_fns.[ch]` | Rendering and parsing of `pmix_proc_t`/`pmix_nspace_t`, and `prte_util_compare_name_fields()`. |
 | **Node specifications** | [`hostfile/`](hostfile/AGENTS.md), [`dash_host/`](dash_host/AGENTS.md) | The two ways a user names machines. Each has its own AGENTS.md. |
 | **Rankfile** | [`rankfile/`](rankfile/AGENTS.md) | Reading the per-rank placement file. Here rather than in `rmaps/rank_file` because parsing a file the user wrote is not a mapping policy. |
-| **Line-oriented files** | `textfile.[ch]` | One logical line at a time, comments stripped and fields split, for the two parsers above. What replaced PRRTE's flex scanners. |
+| **Line-oriented files** | `textfile.[ch]` | One logical line at a time, comments stripped and fields split, for the two parsers above. What replaced PRRTE's flex scanners. Lines are read with `pmix_getline()`, as is every other line-oriented file in PRRTE: it returns a line of any length, and its `failed` flag tells a read error or a NUL byte from the end of the file. Do not use a fixed `fgets()` buffer, which hands a long line back in pieces, the next piece read as a line of its own. |
 | **Nidmap** | `nidmap.[ch]` | The compressed node-name/daemon-vpid map the HNP ships to every daemon. |
 | **Errors and states** | `error.[ch]`, `error_strings.[ch]` | `prte_strerror()`, `PRTE_ERROR_LOG()`, and the four state→name renderers. |
 | **Process info** | `proc_info.[ch]` | The `prte_process_info` global: hostname and its aliases, uid/gid, session-dir paths, proc type. |

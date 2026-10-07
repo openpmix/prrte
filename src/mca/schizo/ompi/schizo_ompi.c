@@ -53,6 +53,7 @@
 #include "src/runtime/pmix_init_util.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/prte_show_help.h"
 
 #include "src/mca/base/pmix_mca_base_vari.h"
@@ -1219,6 +1220,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     int i, n, rc = PRTE_SUCCESS;
     char **cache = NULL, **cachevals = NULL;
     char **xparams = NULL, **xvals = NULL;
+    bool failed = false;
 
     tmp = PMIx_Argv_split(filename, sep);
     if (NULL == tmp) {
@@ -1240,7 +1242,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             PMIx_Argv_free(xvals);
             return PRTE_ERR_NOT_FOUND;
         }
-        while (NULL != (line = prte_schizo_base_getline(fp))) {
+        while (NULL != (line = pmix_getline(fp, &failed))) {
             if ('\0' == line[0]) {
                 free(line);
                 continue; /* skip empty lines */
@@ -1403,6 +1405,16 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             free(line);
         }
         fclose(fp);
+        if (failed) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true,
+                           tmp[i]);
+            PMIx_Argv_free(tmp);
+            PMIx_Argv_free(cache);
+            PMIx_Argv_free(cachevals);
+            PMIx_Argv_free(xparams);
+            PMIx_Argv_free(xvals);
+            return PRTE_ERR_SILENT;
+        }
     }
 
     PMIx_Argv_free(tmp);

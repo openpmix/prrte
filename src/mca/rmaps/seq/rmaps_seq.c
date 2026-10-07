@@ -564,6 +564,7 @@ static int process_file(char *path, pmix_list_t *list)
     FILE *fp;
     seq_node_t *sq;
     char *sep, *eptr, *membind_opt;
+    bool failed = false;
 
     /* open the file */
     fp = fopen(path, "r");
@@ -571,7 +572,7 @@ static int process_file(char *path, pmix_list_t *list)
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
-    while (NULL != (hstname = pmix_getline(fp))) {
+    while (NULL != (hstname = pmix_getline(fp, &failed))) {
         if (0 == strlen(hstname)) {
             free(hstname);
             /* blank line - ignore */
@@ -616,5 +617,9 @@ static int process_file(char *path, pmix_list_t *list)
         pmix_list_append(list, &sq->super);
     }
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, path);
+        return PRTE_ERR_SILENT;
+    }
     return PRTE_SUCCESS;
 }

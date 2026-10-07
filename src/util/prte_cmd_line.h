@@ -562,6 +562,8 @@ PRTE_EXPORT int prte_parse_pid_option(const char *value, pid_t *pid,
  *
  * @retval PRTE_SUCCESS
  * @retval PRTE_ERR_FILE_OPEN_FAILURE
+ * @retval PRTE_ERR_FILE_READ_FAILURE  stopped short of the end of the
+ *                                     file - a read error or a NUL byte
  */
 PRTE_EXPORT int prte_load_appfile(const char *filename, char ***argv);
 

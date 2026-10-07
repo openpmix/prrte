@@ -33,6 +33,7 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/prte_show_help.h"
 #include "src/util/prte_cmd_line.h"
 
@@ -303,31 +304,6 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
         free(ptr);
     }
     return PRTE_SUCCESS;
-}
-
-char *prte_schizo_base_getline(FILE *fp)
-{
-    char *ret, *buff;
-    size_t len;
-    char input[2048];
-
-    memset(input, 0, 2048);
-    ret = fgets(input, 2048, fp);
-    if (NULL != ret) {
-        /* strip the newline - but only if there IS one.  The last line of a
-         * file that does not end in a newline has none, and blindly chopping
-         * its final character silently corrupts that line (an MCA param file
-         * saved without a trailing newline would lose a character off its
-         * last parameter) */
-        len = strlen(input);
-        if (0 < len && '\n' == input[len - 1]) {
-            input[len - 1] = '\0';
-        }
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
 }
 
 char *prte_schizo_base_strip_quotes(char *p)
@@ -676,7 +652,7 @@ static int process_tune_files(const char *files, bool strict)
 {
     char **names, *line, *entry, *eq, *name, *value, *argv[4];
     char **cache = NULL, **cachevals = NULL;
-    bool claimed;
+    bool claimed, failed = false;
     FILE *fp;
     int i, k, rc = PRTE_SUCCESS;
 
@@ -702,7 +678,7 @@ static int process_tune_files(const char *files, bool strict)
                 continue;
             }
         }
-        while (PRTE_SUCCESS == rc && NULL != (line = prte_schizo_base_getline(fp))) {
+        while (PRTE_SUCCESS == rc && NULL != (line = pmix_getline(fp, &failed))) {
             entry = trim(line);
             if ('\0' == entry[0] || '#' == entry[0]) {
                 free(line);
@@ -779,6 +755,11 @@ static int process_tune_files(const char *files, bool strict)
             }
             free(value);
             free(line);
+        }
+        if (PRTE_SUCCESS == rc && failed) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true,
+                           names[i]);
+            rc = PRTE_ERR_SILENT;
         }
         fclose(fp);
     }

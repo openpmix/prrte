@@ -376,7 +376,7 @@ int prte_load_appfile(const char *filename, char ***argv)
 {
     FILE *fp;
     char *line, *p, **split;
-    bool first = true;
+    bool first = true, failed = false;
     int n;
 
     if (NULL == filename || NULL == argv) {
@@ -388,7 +388,7 @@ int prte_load_appfile(const char *filename, char ***argv)
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
 
-    while (NULL != (line = pmix_getline(fp))) {
+    while (NULL != (line = pmix_getline(fp, &failed))) {
         /* a comment - a line whose first non-blank character is '#' -
          * contributes nothing.  Splitting it instead would hand the parser
          * an app context whose "executable" is the '#' */
@@ -417,6 +417,9 @@ int prte_load_appfile(const char *filename, char ***argv)
         first = false;
     }
     fclose(fp);
+    if (failed) {
+        return PRTE_ERR_FILE_READ_FAILURE;
+    }
 
     return PRTE_SUCCESS;
 }

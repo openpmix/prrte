@@ -191,10 +191,9 @@ int test_textfile(void)
     expect("a block marker inside a line comment", "# /* x\nhostA\n", "2:hostA;", &failures);
 
     /* --- a line longer than any fixed buffer ------------------------
-     * pmix_getline() would hand back the first 1023 bytes and read the
-     * remainder as a record of its own.  A rankfile naming a long cpu list
-     * is not an absurd thing to write, so the reader must not have a
-     * maximum line length at all. */
+     * A line read in pieces would have its remainder read as a record of
+     * its own.  A rankfile naming a long cpu list is not an absurd thing
+     * to write, so the reader must not have a maximum line length at all. */
     big = (char *) malloc(9000);
     want = (char *) malloc(9000);
     if (NULL != big && NULL != want) {

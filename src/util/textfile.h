@@ -25,11 +25,9 @@
  * whether the file says "slots=4" or "slots = 4".  Both spellings have
  * always parsed and both still do.
  *
- * A line of any length is read.  That is worth saying because the obvious
- * alternative, pmix_getline(), reads into a 1024-byte buffer and hands
- * back whatever fits: a longer line would arrive split in two, and the
- * second half would be read as a record of its own.  A rankfile line
- * naming a long cpu list is not an absurd thing to write.
+ * A line of any length is read, with pmix_getline().  A rankfile line
+ * naming a long cpu list is not an absurd thing to write, and a line read
+ * in pieces would have its second half taken for a record of its own.
  *
  * The file has to be text.  A NUL byte stops the read and sets "failed",
  * because the fields reach their callers as C strings and there is nothing
@@ -54,7 +52,6 @@ BEGIN_C_DECLS
 typedef struct {
     FILE *fp;
     char *raw;       /* one physical line, however long */
-    size_t rawsize;
     char *code;      /* that line with the comments taken out */
     char **fields;   /* the split line; ours, and replaced on each call */
     int nfields;

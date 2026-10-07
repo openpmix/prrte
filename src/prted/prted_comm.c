@@ -58,6 +58,7 @@
 
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 
@@ -309,7 +310,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     char *cmd_str = NULL;
     int32_t num_procs;
     FILE *fp;
-    char gscmd[256], path[1035], *pathptr;
+    char gscmd[256], *pathptr;
     char string[256], *string_ptr = string;
     pmix_byte_object_t pbo;
     char *tmp;
@@ -712,7 +713,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     case PRTE_DAEMON_GET_STACK_TRACES:
         /* prep the response */
         PMIX_DATA_BUFFER_CREATE(answer);
-        pathptr = path;
 
         /* unpack the jobid */
         n = 1;
@@ -792,14 +792,16 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                     PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }
-                /* Read the output a line at a time and pack it for transmission */
-                memset(path, 0, sizeof(path));
-                while (fgets(path, sizeof(path) - 1, fp) != NULL) {
-                    if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &pathptr, 1, PMIX_STRING)) {
+                /* Read the output a line at a time, however long, and pack
+                 * each for transmission - without its newline, which the
+                 * master puts back as it prints them */
+                while (NULL != (pathptr = pmix_getline(fp, NULL))) {
+                    ret = PMIx_Data_pack(NULL, &data, &pathptr, 1, PMIX_STRING);
+                    free(pathptr);
+                    if (PMIX_SUCCESS != ret) {
                         PMIX_DATA_BUFFER_DESTRUCT(&data);
                         break;
                     }
-                    memset(path, 0, sizeof(path));
                 }
                 /* close */
                 pclose(fp);

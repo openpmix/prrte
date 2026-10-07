@@ -529,6 +529,7 @@ static int file_parse(const char *affinity_file)
     char *logical_cpus = NULL, *lcpu;
     prte_node_t *nptr, *node;
     hwloc_obj_t obj;
+    bool failed = false;
 
     /* check to see if the file is empty - if it is,
      * then affinity wasn't actually set for this job */
@@ -548,7 +549,7 @@ static int file_parse(const char *affinity_file)
         return PRTE_ERR_NOT_FOUND;
     }
 
-    while (NULL != (hstname = pmix_getline(fp))) {
+    while (NULL != (hstname = pmix_getline(fp, &failed))) {
         /* start each line with no cpu list of its own: a line that carries
          * none must not inherit the previous line's, which by this point is
          * also a string this loop allocated and would otherwise leak */
@@ -678,6 +679,10 @@ static int file_parse(const char *affinity_file)
         free(logical_cpus);
     }
     fclose(fp);
+    if (failed) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, affinity_file);
+        return PRTE_ERR_SILENT;
+    }
 
     return PRTE_SUCCESS;
 }

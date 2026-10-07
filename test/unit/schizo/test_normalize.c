@@ -9,15 +9,13 @@
 
 /*
  * The shared argv/string helpers in schizo/base: normalize_argv (deprecated
- * option spellings and the personality hint), strip_quotes, getline, and
- * expose.  All of these run before anything else in a tool's main(), on the
+ * option spellings and the personality hint), strip_quotes, and expose.  All of these run before anything else in a tool's main(), on the
  * raw argv, so a mistake here is a mistake every tool inherits.
  */
 
 #include "test_schizo.h"
 
 #include <stdarg.h>
-#include <unistd.h>
 
 #include "src/util/pmix_environ.h"
 
@@ -41,8 +39,6 @@ int test_normalize(void)
     int failures = 0;
     char **argv;
     char *personality, *p;
-    char *tmpname;
-    FILE *fp;
 
     /*** the space-separated spellings ***/
     argv = mkargv("prterun", "--map-by", "node", "--rank-by", "slot",
@@ -117,34 +113,6 @@ int test_normalize(void)
     p = prte_schizo_base_strip_quotes("\"");
     CHECK("strip:lone-quote", 0 == strcmp(p, ""));
     free(p);
-
-    /*** getline: a file whose last line has no newline keeps its last
-     *** character (an MCA param file saved without a trailing newline) ***/
-    pmix_asprintf(&tmpname, "prte_schizo_getline_%lu.txt",
-                  (unsigned long) getpid());
-    fp = fopen(tmpname, "w+");
-    if (NULL == fp) {
-        fprintf(stderr, "FAIL [getline]: cannot create %s\n", tmpname);
-        failures++;
-    } else {
-        fputs("first=1\nlast=2", fp);
-        rewind(fp);
-        p = prte_schizo_base_getline(fp);
-        CHECK("getline:first", NULL != p && 0 == strcmp(p, "first=1"));
-        if (NULL != p) {
-            free(p);
-        }
-        p = prte_schizo_base_getline(fp);
-        CHECK("getline:last-no-newline", NULL != p && 0 == strcmp(p, "last=2"));
-        if (NULL != p) {
-            free(p);
-        }
-        p = prte_schizo_base_getline(fp);
-        CHECK("getline:eof", NULL == p);
-        fclose(fp);
-        unlink(tmpname);
-    }
-    free(tmpname);
 
     /*** expose: split at the '=' and push into the environment under the
      *** given prefix, leaving the caller's string as it found it ***/

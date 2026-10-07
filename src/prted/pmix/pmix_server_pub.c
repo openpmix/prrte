@@ -42,6 +42,7 @@
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/prte_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -104,7 +105,7 @@ int prte_pmix_server_init_pubsub(void)
 static int init_server(void)
 {
     char *server;
-    char input[1024], *filename;
+    char *input, *filename;
     size_t len;
     FILE *fp;
     pmix_status_t ret;
@@ -148,7 +149,11 @@ static int init_server(void)
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
-            if (NULL == fgets(input, 1024, fp)) {
+            /* the whole first line, however long - a URI naming several
+             * addresses is not short, and a fixed buffer handed back only
+             * as much of it as fit */
+            input = pmix_getline(fp, NULL);
+            if (NULL == input) {
                 /* something malformed about file */
                 fclose(fp);
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-file-bad", true,
@@ -162,10 +167,10 @@ static int init_server(void)
              * character unconditionally takes a character of the URI off a
              * file that has none. */
             len = strlen(input);
-            while (0 < len && ('\n' == input[len - 1] || '\r' == input[len - 1])) {
+            while (0 < len && '\r' == input[len - 1]) {
                 input[--len] = '\0';
             }
-            server = strdup(input);
+            server = input;
         } else {
             server = strdup(prte_data_server_uri);
         }

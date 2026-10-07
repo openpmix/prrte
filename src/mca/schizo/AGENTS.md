@@ -460,14 +460,14 @@ table.
   cannot reproduce is an option type repeated after another has
   intervened — every occurrence is grouped onto that option's single
   instance, so it applies at the position of its first appearance.
-- **`prte_schizo_base_getline` / `_strip_quotes` / `_root_error_msg`** —
-  small shared utilities. The first two are fed **user data** (MCA
-  param/tune files, `--prtemca` values), so they must not assume it is
-  well formed: `getline` only strips a trailing newline if there is one
-  (a file whose last line has none would otherwise lose a character),
-  and `strip_quotes` only inspects a last character if the string has
-  one (`""` used to index `pout[-1]`, writing in front of the
-  allocation).
+- **`prte_schizo_base_strip_quotes` / `_root_error_msg`** — small shared
+  utilities. `strip_quotes` is fed **user data** (`--prtemca` values, tune
+  files), so it must not assume it is well formed: it only inspects a last
+  character if the string has one (`""` used to index `pout[-1]`, writing
+  in front of the allocation). Tune and MCA param files are read with
+  `pmix_getline()`, which returns a line of any length; check its
+  `failed` flag when the loop ends, or a read that stops halfway is taken
+  for a file that ends there.
 
 ### `schizo_base_select.c`
 
