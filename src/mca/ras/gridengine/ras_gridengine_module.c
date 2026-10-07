@@ -30,6 +30,7 @@
 #include "constants.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -70,7 +71,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     char *pe_hostfile;
     char *job_id;
     char buf[1024], *tok, *num, *queue, *arch, *ptr;
-    int rc;
+    int rc, nslots;
     FILE *fp;
     prte_node_t *node;
     bool found;
@@ -120,13 +121,29 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
         if (NULL == ptr || NULL == num) {
             continue;
         }
+        /* the slot count is a whole number - strtol alone read "4x" as 4
+         * and "x" as 0, and took a negative one as given */
+        {
+            char *end;
+            long v;
+
+            errno = 0;
+            v = strtol(num, &end, 10);
+            if (end == num || '\0' != *end || 0 != errno || 0 > v || INT_MAX < v) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "bad-slots", true,
+                               pe_hostfile, ptr, num);
+                fclose(fp);
+                return PRTE_ERR_SILENT;
+            }
+            nslots = (int) v;
+        }
 
         /* see if we already have this node */
         found = false;
         PMIX_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(ptr, node->name)) {
-                /* just add the slots */
-                node->slots += (int) strtol(num, (char **) NULL, 10);
+                /* just add the slots, held at INT_MAX rather than wrapped */
+                node->slots = (INT_MAX - node->slots < nslots) ? INT_MAX : node->slots + nslots;
                 found = true;
                 break;
             }
@@ -142,7 +159,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             node->state = PRTE_NODE_STATE_UP;
             node->slots_inuse = 0;
             node->slots_max = 0;
-            node->slots = (int) strtol(num, (char **) NULL, 10);
+            node->slots = nslots;
             /* the count came from PE_HOSTFILE - authoritative */
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             pmix_output(prte_mca_ras_gridengine_component.verbose,
