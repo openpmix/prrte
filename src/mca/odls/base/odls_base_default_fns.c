@@ -1761,17 +1761,24 @@ static char *envar_value(char *entry, const char *name)
 static void unset_envar(const char *name, prte_app_context_t *app)
 {
     char *ptr, *tmp, *p2;
-    size_t n;
+    size_t n, len;
 
-    if (NULL == name) {
+    if (NULL == name || NULL == app->env) {
         return;
     }
-    if (NULL == strchr(name, '*')) {
+    /* only a '*' at the end makes a prefix - anywhere else it is part of
+     * the name, and stripping the last character would unset the wrong
+     * variables */
+    len = strlen(name);
+    if (0 == len || '*' != name[len - 1]) {
         pmix_unsetenv((char *) name, &app->env);
         return;
     }
     ptr = strdup(name);
-    ptr[strlen(ptr) - 1] = '\0'; // trim off the '*'
+    if (NULL == ptr) {
+        return;
+    }
+    ptr[len - 1] = '\0'; // trim off the '*'
     for (n = 0; NULL != app->env[n]; n++) {
         if (0 == strncmp(app->env[n], ptr, strlen(ptr))) {
             // find the '=' sign

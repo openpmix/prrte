@@ -328,8 +328,14 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                 pmix_asprintf(&pargv[n], "-%s", p2);
                 free(p2);
             }
-            // now skip the next two positions
-            n += 2;
+            // now skip the next two positions - as many of them as there
+            // are, so an option missing its values stops at the end
+            if (NULL != pargv[n + 1]) {
+                ++n;
+                if (NULL != pargv[n + 1]) {
+                    ++n;
+                }
+            }
             continue;
         }
         /* check for single-dash errors */
@@ -1098,7 +1104,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
         rc = check_cache(cache, cachevals, p1, value);
     } else {
         /* check for a '*' wildcard at the end of the value */
-        if ('*' == p1[strlen(p1) - 1]) {
+        if ('\0' != p1[0] && '*' == p1[strlen(p1) - 1]) {
             /* search the local environment for all params
              * that start with the string up to the '*' */
             p1[strlen(p1) - 1] = '\0';

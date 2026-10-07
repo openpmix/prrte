@@ -426,12 +426,16 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--prtemca");
-                if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
-                    pmix_asprintf(&param, "prtereachable_%s", &p1[strlen("reachable_")]);
+                /* rename the framework, or a parameter of it - the bare
+                 * name selects components, so it has no '_' to step over */
+                if (0 == strncasecmp(p1, "reachable", strlen("reachable")) &&
+                    ('\0' == p1[strlen("reachable")] || '_' == p1[strlen("reachable")])) {
+                    pmix_asprintf(&param, "prtereachable%s", &p1[strlen("reachable")]);
                     free(p1);
                     p1 = param;
-                } else if (0 == strncasecmp(p1, "plm_rsh", strlen("plm_rsh"))) {
-                    pmix_asprintf(&param, "plm_ssh_%s", &p1[strlen("plm_rsh_")]);
+                } else if (0 == strncasecmp(p1, "plm_rsh", strlen("plm_rsh")) &&
+                           ('\0' == p1[strlen("plm_rsh")] || '_' == p1[strlen("plm_rsh")])) {
+                    pmix_asprintf(&param, "plm_ssh%s", &p1[strlen("plm_rsh")]);
                     free(p1);
                     p1 = param;
                 }

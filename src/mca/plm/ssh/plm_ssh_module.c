@@ -673,7 +673,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
             if (0 == strcmp(orted_cmd, "prted")) {
                 /* if the cmd is our standard one, then add the prefix */
                 value = pmix_basename(prte_install_dirs.bindir);
-                if ('/' == prefix_dir[strlen(prefix_dir)-1]) {
+                if ('\0' != prefix_dir[0] && '/' == prefix_dir[strlen(prefix_dir)-1]) {
                     pmix_asprintf(&tmp, "%s%s", prefix_dir, value);
                 } else {
                     pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
@@ -689,7 +689,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         } else {
             /* use our standard one and add the prefix */
             value = pmix_basename(prte_install_dirs.bindir);
-            if ('/' == prefix_dir[strlen(prefix_dir)-1]) {
+            if ('\0' != prefix_dir[0] && '/' == prefix_dir[strlen(prefix_dir)-1]) {
                 pmix_asprintf(&tmp, "%s%s", prefix_dir, value);
             } else {
                 pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
