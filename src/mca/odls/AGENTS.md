@@ -303,6 +303,10 @@ a job that is over. The lookup is
 strict (`PMIX_CHECK_NSPACE_STRICT`): an undecodable namespace must not
 match, and so discard, somebody else's parked launch.
 
+**Only the master sends slices.** It computes every binding
+(`prte_odls_base_send_cpuset_slices()`), so `prte_odls_base_recv_cpuset_slice()`
+refuses one from any other sender rather than parking it.
+
 `--prtemca odls_base_scatter_cpusets 0` turns it off and broadcasts the
 bindings as before; it is an A/B switch, not a supported difference in
 behavior.
