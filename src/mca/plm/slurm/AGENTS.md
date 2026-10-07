@@ -143,9 +143,11 @@ dummy proc so it notices srun's exit. The wait callback's data is a
   tool-connection envars); everything needed is on the command line.
 - Rewrites `PATH`/`LD_LIBRARY_PATH` and exports `PRTE_PREFIX`/
   `PMIX_PREFIX` if a prefix was set (so srun propagates them).
-- Ties stdout/stderr to `/dev/null` unless debugging, `setpgid`s out of
-  prun's process group (so shell `Ctrl-C` doesn't hit srun), and
-  `execvp`s srun.
+- Ties stdout/stderr to `/dev/null` unless debugging, closes every other
+  inherited descriptor (`pmix_close_open_file_descriptors`) - srun lives as
+  long as the daemons, so a socket it inherited would stay open until the
+  job ended - `setpgid`s out of prun's process group (so shell `Ctrl-C`
+  doesn't hit srun), and `execvp`s srun.
 
 ---
 

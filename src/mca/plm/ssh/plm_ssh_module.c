@@ -1690,6 +1690,9 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errno));
             exit(01);
         }
+        /* the probe needs only its stdio - in particular, the read end of
+         * its own pipe must not stay open in it */
+        pmix_close_open_file_descriptors(-1);
         /* Build argv array */
         argv = PMIx_Argv_copy(prte_mca_plm_ssh_component.agent_argv);
         argc = PMIx_Argv_count(prte_mca_plm_ssh_component.agent_argv);
