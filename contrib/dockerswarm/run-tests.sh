@@ -4232,6 +4232,7 @@ test_session() {
 #
 #   * a spawn naming a job of root's as its parent - the parent decides
 #     the session, the allocation and the job the new one is connected to
+#   * a process set over procs of root's job
 #   * the scheduler role, which decides every session
 #   * a new session, which takes nodes out of the general pool
 #
@@ -4296,6 +4297,25 @@ test_requesters() {
         ON 1 'pgrep -f rqparent.sh >/dev/null' \
             && ok "root's job is still running" \
             || bad "root's job did not survive the refused spawn"
+    fi
+
+    banner "requesters: another user may not define a process set over root's job"
+    if [ -z "$pns" ]; then
+        skp "no job of root's to name in a process set"
+    else
+        out=$(RUN "timeout 60 $rq pset rqset-other '$pns' 0" 2>&1)
+        if echo "$out" | grep -q "ROLE PSET PMIX_SUCCESS"; then
+            bad "another user defined a process set over root's job $pns"
+        elif echo "$out" | grep -q "ROLE PSET PMIX_ERR_NO_PERMISSIONS"; then
+            ok "another user's process set over root's job was refused"
+        else
+            bad "defining a process set failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        # the control: root may define one over its own job
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' pset rqset-root '$pns' 0" 2>&1)
+        echo "$out" | grep -q "ROLE PSET PMIX_SUCCESS" \
+            && ok "root defined a process set over its own job" \
+            || bad "root could not define a process set over its own job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
 
     banner "requesters: another user may not be the scheduler"
