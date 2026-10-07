@@ -148,7 +148,25 @@ static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
 static bool verbose = false;
 
+/* A forwarded signal is caught by a plain handler, which can do nothing
+ * but write its number down this pipe; forward_signal() then reads it on
+ * a progress thread of its own and asks the DVM to deliver it. The main
+ * thread spends the run parked in PRTE_PMIX_WAIT_THREAD, so nothing else
+ * would ever look at the pipe. */
+static int sigfwd_pipe[2] = {-1, -1};
+static prte_event_base_t *sigfwd_base = NULL;
+static prte_event_t sigfwd_ev;
+#define PRUN_SIGFWD_THREAD "prun-signals"
+
+/* a forwarded signal's request, which PMIx borrows until it calls back */
+typedef struct {
+    pmix_proc_t proc;
+    pmix_info_t info;
+} prun_sigfwd_t;
+
 static void signal_forward_callback(int signal);
+static void forward_signal(int fd, short args, void *cbdata);
+static void forward_one(int signum);
 
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
@@ -652,6 +670,25 @@ int prun_common(pmix_cli_result_t *results,
     if (PMIX_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
         (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
         return rc;
+    }
+    if (0 < pmix_list_get_size(&prte_ess_base_signals)) {
+        /* both ends non-blocking: the handler must never wait on a full
+         * pipe, and the reader drains it until it is empty */
+        if (0 != pipe(sigfwd_pipe) ||
+            PMIX_SUCCESS != pmix_fd_set_cloexec(sigfwd_pipe[0]) ||
+            PMIX_SUCCESS != pmix_fd_set_cloexec(sigfwd_pipe[1]) ||
+            0 != fcntl(sigfwd_pipe[0], F_SETFL, fcntl(sigfwd_pipe[0], F_GETFL) | O_NONBLOCK) ||
+            0 != fcntl(sigfwd_pipe[1], F_SETFL, fcntl(sigfwd_pipe[1], F_GETFL) | O_NONBLOCK) ||
+            NULL == (sigfwd_base = prte_progress_thread_init(PRUN_SIGFWD_THREAD))) {
+            fprintf(stderr, "%s: unable to set up signal forwarding: %s\n",
+                    prte_tool_basename, strerror(errno));
+            (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+            /* our return is the tool's exit status */
+            return 1;
+        }
+        prte_event_set(sigfwd_base, &sigfwd_ev, sigfwd_pipe[0], PRTE_EV_READ | PRTE_EV_PERSIST,
+                       forward_signal, NULL);
+        prte_event_add(&sigfwd_ev, NULL);
     }
     PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
     {
@@ -1220,6 +1257,14 @@ DONE:
      * process.  It is why the callers no longer close this themselves.
      */
     (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+    /* stop forwarding signals before PMIx goes. The pipe stays open: a
+     * signal may still arrive, and its handler must not write to a
+     * descriptor number something else has since been given */
+    if (NULL != sigfwd_base) {
+        prte_event_del(&sigfwd_ev);
+        prte_progress_thread_finalize(PRUN_SIGFWD_THREAD);
+        sigfwd_base = NULL;
+    }
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
     if (PMIX_SUCCESS != ret) {
@@ -1574,11 +1619,53 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     return PRTE_SUCCESS;
 }
 
+/* The handler itself: write the number down the pipe and nothing else,
+ * since a handler may call only async-signal-safe functions - and it can
+ * interrupt the main thread in the middle of anything, PMIx included. */
 static void signal_forward_callback(int signum)
 {
+    int saved = errno;
+    ssize_t n;
+
+    /* a full pipe already holds signals enough to forward, and a handler
+     * has nothing else it may safely do about a failure */
+    n = write(sigfwd_pipe[1], &signum, sizeof(signum));
+    (void) n;
+    errno = saved;
+}
+
+static void sigfwd_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
+                          pmix_release_cbfunc_t release_fn, void *release_cbdata)
+{
+    prun_sigfwd_t *sf = (prun_sigfwd_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
+
+    if (PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
+        fprintf(stderr, "Signal could not be sent to job %s (returned %s)\n",
+                sf->proc.nspace, PMIx_Error_string(status));
+    }
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+    PMIX_INFO_DESTRUCT(&sf->info);
+    free(sf);
+}
+
+/* forward each signal the handler wrote down - on our own progress thread */
+static void forward_signal(int fd, short args, void *cbdata)
+{
+    int signum;
+    PRTE_HIDE_UNUSED_PARAMS(args, cbdata);
+
+    while ((ssize_t) sizeof(signum) == read(fd, &signum, sizeof(signum))) {
+        forward_one(signum);
+    }
+}
+
+static void forward_one(int signum)
+{
     pmix_status_t rc;
-    pmix_proc_t proc;
-    pmix_info_t info;
+    prun_sigfwd_t *sf;
 
     /* We are installed before the tool has connected to anything, let alone
      * spawned, and every forwardable signal is forwarded by default - so a
@@ -1599,12 +1686,22 @@ static void signal_forward_callback(int signum)
         fprintf(stderr, "%s: Forwarding signal %d to job\n", prte_tool_basename, signum);
     }
 
-    /* send the signal out to the processes */
-    PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
-    rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
-    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)", signum,
-                spawnednspace, PMIx_Error_string(rc));
+    /* send the signal out to the processes. PMIx borrows both arrays and
+     * reads them after this returns, so neither may live on our stack */
+    sf = (prun_sigfwd_t *) malloc(sizeof(prun_sigfwd_t));
+    if (NULL == sf) {
+        return;
+    }
+    PMIX_LOAD_PROCID(&sf->proc, spawnednspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&sf->info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
+    rc = PMIx_Job_control_nb(&sf->proc, 1, &sf->info, 1, sigfwd_cbfunc, sf);
+    if (PMIX_SUCCESS != rc) {
+        /* the callback will not fire, so the request is ours to release */
+        if (PMIX_OPERATION_SUCCEEDED != rc) {
+            fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)\n", signum,
+                    spawnednspace, PMIx_Error_string(rc));
+        }
+        PMIX_INFO_DESTRUCT(&sf->info);
+        free(sf);
     }
 }
