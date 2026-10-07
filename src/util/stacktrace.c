@@ -82,6 +82,28 @@ static char *unable_to_print_msg = "Unable to print stack trace!\n";
  * -or, if VPID is available-
  * stacktrace.VPID.PID
  */
+/* Open the trace file afresh, using only what is safe in a signal handler:
+ * the name is not followed if it is a symlink, and a file already there is
+ * emptied only if it is a regular file of our own with no other links */
+static int open_trace_file(void)
+{
+    struct stat st;
+    int fd;
+
+    fd = open(prte_stacktrace_output_filename, O_CREAT | O_WRONLY | O_NOFOLLOW | O_CLOEXEC,
+              S_IRUSR | S_IWUSR);
+    if (0 > fd) {
+        return -1;
+    }
+    if (0 != fstat(fd, &st) || !S_ISREG(st.st_mode) || geteuid() != st.st_uid ||
+        1 != st.st_nlink || 0 != ftruncate(fd, 0)) {
+        close(fd);
+        errno = EPERM;
+        return -1;
+    }
+    return fd;
+}
+
 static void set_stacktrace_filename(void)
 {
     snprintf(prte_stacktrace_output_filename, prte_stacktrace_output_filename_max_len, "%s.%lu.%lu",
@@ -171,8 +193,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
     /* Update the file name with the RANK, if available */
     if (0 < prte_stacktrace_output_filename_max_len) {
         set_stacktrace_filename();
-        prte_stacktrace_output_fileno = open(prte_stacktrace_output_filename,
-                                             O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+        prte_stacktrace_output_fileno = open_trace_file();
         if (0 > prte_stacktrace_output_fileno) {
             pmix_output(0,
                         "Error: Failed to open the stacktrace output file. Default: "
@@ -579,8 +600,7 @@ void prte_stackframe_output(int stream)
         /* Update the file name with the RANK, if available */
         if (0 < prte_stacktrace_output_filename_max_len) {
             set_stacktrace_filename();
-            prte_stacktrace_output_fileno = open(prte_stacktrace_output_filename,
-                                                 O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+            prte_stacktrace_output_fileno = open_trace_file();
             if (0 > prte_stacktrace_output_fileno) {
                 pmix_output(0,
                             "Error: Failed to open the stacktrace output file. Default: "

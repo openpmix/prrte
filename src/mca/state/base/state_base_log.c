@@ -193,7 +193,7 @@ void prte_state_base_log_open(void)
     /* The default location is the temporary directory itself, which
      * anyone may write to - so do not follow a symlink at the name, and
      * append only to a regular file of our own with no other links */
-    fd = pmix_os_dirpath_open_file(prte_state_base.log_file, O_WRONLY | O_APPEND | O_CREAT, 0666);
+    fd = pmix_os_dirpath_open_file(prte_state_base.log_file, O_WRONLY | O_APPEND | O_CREAT, 0600);
     if (0 > fd) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,
                        prte_process_info.nodename, prte_state_base.log_file, strerror(errno));
@@ -207,6 +207,8 @@ void prte_state_base_log_open(void)
                        "not a regular file owned by this user");
         goto disable;
     }
+    /* readable by this user alone, whoever created it and under what umask */
+    (void) fchmod(fd, S_IRUSR | S_IWUSR);
     prte_state_base.log_fp = fdopen(fd, "a");
     if (NULL == prte_state_base.log_fp) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-state-base.txt", "state-log-open-failed", true,

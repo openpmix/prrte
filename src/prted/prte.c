@@ -106,6 +106,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
 #include "src/util/prte_dvm_key.h"
+#include "src/util/prte_output_file.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -137,6 +138,7 @@ static int term_pipe[2];
 static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_t *forward_signals_events = NULL;
 static char *mypidfile = NULL;
+static struct stat mypidstat;
 static bool verbose = false;
 static bool want_prefix_by_default = (bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT;
 static void abort_signal_callback(int signal);
@@ -1285,9 +1287,10 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                 }
             } else {
                 /* must be a file */
-                fp = fopen(opt->values[0], "w");
+                fp = prte_output_file_open(opt->values[0], 0666, &mypidstat);
                 if (NULL == fp) {
-                    pmix_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
+                    pmix_output(0, "Impossible to open the file %s in write mode: %s\n",
+                                opt->values[0], strerror(errno));
                     PRTE_UPDATE_EXIT_STATUS(1);
                     goto DONE;
                 }
@@ -1519,7 +1522,8 @@ DONE:
     prte_finalize();
 
     if (NULL != mypidfile) {
-        unlink(mypidfile);
+        /* only if it is still the file we wrote */
+        prte_output_file_remove(mypidfile, &mypidstat);
     }
 
     if (prte_debug_daemons_flag) {
