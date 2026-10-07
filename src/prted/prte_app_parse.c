@@ -501,7 +501,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
          * and its cwd is not ours */
         atokens = PMIx_Argv_split(tval, ',');
         free(tval);
-        for (a = 0; NULL != atokens[a]; a++) {
+        /* an empty value names nothing to bring in */
+        for (a = 0; NULL != atokens && NULL != atokens[a]; a++) {
             if (0 != strncmp(atokens[a], "file=", 5) ||
                 '\0' == atokens[a][5] ||
                 pmix_path_is_absolute(&atokens[a][5])) {
@@ -515,10 +516,12 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
             pmix_asprintf(&atokens[a], "file=%s", value);
             free(value);
         }
-        tval = PMIx_Argv_join(atokens, ',');
-        PMIx_Argv_free(atokens);
-        PMIX_INFO_LIST_ADD(rc, app->info, PRTE_ACTIVATE_HOSTS, tval, PMIX_STRING);
-        free(tval);
+        if (NULL != atokens) {
+            tval = PMIx_Argv_join(atokens, ',');
+            PMIx_Argv_free(atokens);
+            PMIX_INFO_LIST_ADD(rc, app->info, PRTE_ACTIVATE_HOSTS, tval, PMIX_STRING);
+            free(tval);
+        }
         // these name nodes the allocation already holds, so they are
         // likewise no part of an initial DVM
     }
