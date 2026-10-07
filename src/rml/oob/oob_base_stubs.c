@@ -425,10 +425,12 @@ static void set_addr(pmix_proc_t *peer, char **uris)
                                 "%s oob:tcp: out of memory", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             continue;
         }
-        if (0 == strncmp(uris[i], "tcp:", 4)) {
+        /* match the whole prefix that is skipped, or a short address
+         * would leave host pointing past its end */
+        if (0 == strncmp(uris[i], "tcp://", strlen("tcp://"))) {
             af_family = AF_INET;
             host = tcpuri + strlen("tcp://");
-        } else if (0 == strncmp(uris[i], "tcp6:", 5)) {
+        } else if (0 == strncmp(uris[i], "tcp6://", strlen("tcp6://"))) {
 #if PRTE_ENABLE_IPV6
             af_family = AF_INET6;
             host = tcpuri + strlen("tcp6://");
@@ -454,8 +456,9 @@ static void set_addr(pmix_proc_t *peer, char **uris)
                             "%s oob:tcp: working peer %s address %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), uris[i]);
 
-        /* separate the mask from the network addrs */
-        masks_string = strrchr(tcpuri, ':');
+        /* separate the mask from the network addrs - looking only past
+         * the prefix, whose own ':' is not a separator */
+        masks_string = strrchr(host, ':');
         if (NULL == masks_string) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             free(tcpuri);
@@ -466,7 +469,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
         masks = PMIx_Argv_split(masks_string, ',');
 
         /* separate the ports from the network addrs */
-        ports = strrchr(tcpuri, ':');
+        ports = strrchr(host, ':');
         if (NULL == ports) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             PMIx_Argv_free(masks);
@@ -487,7 +490,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
             if ('[' == host[0]) {
                 hptr = &host[1];
             }
-            if (']' == host[strlen(host) - 1]) {
+            if ('\0' != host[0] && ']' == host[strlen(host) - 1]) {
                 host[strlen(host) - 1] = '\0';
             }
         }
@@ -591,7 +594,10 @@ static prte_oob_tcp_peer_t* process_uri(char *uri)
     *cptr = '\0';
     cptr++;
     /* the first field is the process name, so convert it */
-    prte_util_convert_string_to_process_name(&peer, uri);
+    if (PRTE_SUCCESS != prte_util_convert_string_to_process_name(&peer, uri)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return NULL;
+    }
 
     /* if the peer is us, no need to go further as we already
      * know our own contact info
