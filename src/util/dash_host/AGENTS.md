@@ -35,6 +35,13 @@ nodeA:+2  nodeA:-2     adjust the discovered count (records PRTE_NODE_ADD_SLOTS)
 +e   +e:2              all / N currently-empty nodes
 ```
 
+Every count in that table is read by `dash_count()`: the whole string, digits
+only (a sign only on a slot adjustment), and no larger than an `int`. A slot
+count that is not one is refused with `dash-host:invalid-slots`, a node index
+or node count with `dash-host:invalid-relative-node-syntax`; a bare `strtol`
+read `4x` as 4 and `x` as 0. Slot totals go through `add_count()`, which holds
+them at the ends of an `int` instead of wrapping.
+
 A token made **entirely of digits** is a launch id, not a hostname — no real
 machine is called `15` — so it is matched against the trailing run of digits
 in each node's name, which is what lets `--host 15` select `nid0015`. That

@@ -374,8 +374,11 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
         }
         pmix_list_append(updates, &node->super);
     } else {
-        /* this node was already found once - add a slot and mark slots as "given" */
-        node->slots++;
+        /* this node was already found once - add a slot and mark slots as "given".
+         * A count already at INT_MAX (slots=2147483647) stays there */
+        if (INT_MAX > node->slots) {
+            node->slots++;
+        }
         PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
         if (0 != strcmp(node_name, node->name)) {
             PMIx_Argv_append_unique_nosize(&node->aliases, node_name);

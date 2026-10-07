@@ -18,6 +18,7 @@
 #include "types.h"
 
 #include <errno.h>
+#include <limits.h>
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif /* HAVE_UNISTD_H */
@@ -40,6 +41,19 @@ static int ppr_mapper(prte_job_t *jdata,
 prte_rmaps_base_module_t prte_rmaps_ppr_module = {
     .map_job = ppr_mapper
 };
+
+/* *total + pprn * nobjs, refused rather than wrapped when it is more
+ * procs than an app can hold */
+static bool ppr_add(int *total, int pprn, size_t nobjs)
+{
+    long long v = (long long) *total + (long long) pprn * (long long) nobjs;
+
+    if ((long long) INT_MAX < v) {
+        return false;
+    }
+    *total = (int) v;
+    return true;
+}
 
 static int ppr_mapper(prte_job_t *jdata,
                       prte_rmaps_options_t *options)
@@ -211,20 +225,26 @@ static int ppr_mapper(prte_job_t *jdata,
         if (0 == app->num_procs) {
             // compute the number of procs
             if (HWLOC_OBJ_MACHINE == options->maptype) {
-                app->num_procs = options->pprn * pmix_list_get_size(&node_list);
+                if (!ppr_add(&app->num_procs, options->pprn, pmix_list_get_size(&node_list))) {
+                    goto too_many;
+                }
             } else if (HWLOC_OBJ_PACKAGE == options->maptype) {
                 /* add in #packages for each node */
                 PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
                     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                HWLOC_OBJ_PACKAGE);
-                    app->num_procs += options->pprn * nobjs;
+                    if (!ppr_add(&app->num_procs, options->pprn, nobjs)) {
+                        goto too_many;
+                    }
                 }
             } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
                 /* add in #numa for each node */
                 PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
                     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                HWLOC_OBJ_NUMANODE);
-                    app->num_procs += options->pprn * nobjs;
+                    if (!ppr_add(&app->num_procs, options->pprn, nobjs)) {
+                        goto too_many;
+                    }
                 }
             } else if (HWLOC_OBJ_L1CACHE == options->maptype ||
                        HWLOC_OBJ_L2CACHE == options->maptype ||
@@ -233,21 +253,27 @@ static int ppr_mapper(prte_job_t *jdata,
                 PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
                     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                options->maptype);
-                    app->num_procs += options->pprn * nobjs;
+                    if (!ppr_add(&app->num_procs, options->pprn, nobjs)) {
+                        goto too_many;
+                    }
                 }
             } else if (HWLOC_OBJ_CORE == options->maptype) {
                 /* add in #cores for each node */
                 PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
                     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                HWLOC_OBJ_CORE);
-                    app->num_procs += options->pprn * nobjs;
+                    if (!ppr_add(&app->num_procs, options->pprn, nobjs)) {
+                        goto too_many;
+                    }
                 }
             } else if (HWLOC_OBJ_PU == options->maptype) {
                 /* add in #hwt for each node */
                 PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
                     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                HWLOC_OBJ_PU);
-                    app->num_procs += options->pprn * nobjs;
+                    if (!ppr_add(&app->num_procs, options->pprn, nobjs)) {
+                        goto too_many;
+                    }
                 }
             } else if (HWLOC_OBJ_OS_DEVICE == options->maptype) {
                 /* add in #devices for each node */
@@ -257,7 +283,9 @@ static int ppr_mapper(prte_job_t *jdata,
                     PRTE_ERROR_LOG(rc);
                     goto error;
                 }
-                app->num_procs = options->pprn * (int) ndevs;
+                if (!ppr_add(&app->num_procs, options->pprn, ndevs)) {
+                    goto too_many;
+                }
             }
         }
 
@@ -373,7 +401,10 @@ static int ppr_mapper(prte_job_t *jdata,
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
-                options->nprocs = options->pprn * nobjs;
+                options->nprocs = 0;
+                if (!ppr_add(&options->nprocs, options->pprn, nobjs)) {
+                    goto too_many;
+                }
                 /* if there are not enough slots to support the required
                  * number of procs, and they didn't specify oversubscribe,
                  * then we cannot use this node */
@@ -483,6 +514,12 @@ static int ppr_mapper(prte_job_t *jdata,
         rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
     }
     return rc;
+
+too_many:
+    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:ppr-too-many-procs",
+                   true, options->pprn,
+                   bydev ? options->map_device : hwloc_obj_type_string(options->maptype));
+    rc = PRTE_ERR_SILENT;
 
 error:
     /* an early exit can leave a node's device list held */
