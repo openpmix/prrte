@@ -1020,6 +1020,11 @@ static int plm_slurm_start_proc(int argc, char **argv,
             }
         }
 
+        /* srun lives as long as the daemons it launched, so anything
+         * else it inherited - our sockets to other daemons among them -
+         * would stay open on its account until the job ended */
+        pmix_close_open_file_descriptors(-1);
+
         /* get the srun process out of prun's process group so that
            signals sent from the shell (like those resulting from
            cntl-c) don't get sent to srun */
