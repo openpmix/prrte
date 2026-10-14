@@ -292,7 +292,10 @@ static int test_open_dir_under(void)
     CHECK("symlink", 0 == symlink("a", p));
     free(p);
     fd = prte_filem_base_open_dir_under(base, "link/c", 0755);
-    CHECK("a symlink in the path is refused", 0 > fd && (ELOOP == errno || ENOTDIR == errno));
+    /* how the refusal is reported varies: Linux checks O_DIRECTORY first and says ENOTDIR,
+     * O_NOFOLLOW itself says ELOOP, and FreeBSD reports O_NOFOLLOW on a symlink as EMLINK */
+    CHECK("a symlink in the path is refused",
+          0 > fd && (ELOOP == errno || EMLINK == errno || ENOTDIR == errno));
     CHECK("asprintf", 0 <= pmix_asprintf(&p, "%s/a/c", base));
     CHECK("...and nothing is made through it", 0 != lstat(p, &st));
     free(p);
