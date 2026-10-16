@@ -153,9 +153,26 @@ daemon 1 dead, the promotion puts daemon 4 in slot 1 — so daemon 3's parent is
 4, while a walk-up says 0, and 0's children say 4.  Daemon 3 is in no tree at
 all.  Both halves now derive from the position the daemon actually occupies.
 ``test_release_tree`` in ``test/unit/rml`` brute-forces every failure subset
-for radices 2 to 4 and requires the relation to be one tree rooted at 0
-covering exactly the living daemons; it is the cheapest guard here by a wide
-margin, and it catches this in milliseconds.
+for radices 2 to 5 up to 14 daemons, and samples larger DVMs, and requires
+the relation to be one tree rooted at 0 covering exactly the living daemons;
+it is the cheapest guard here by a wide margin, and it catches this in
+milliseconds.
+
+The first fix still had a hole, and it is worth knowing which one, because
+the shape that opens it is the ordinary result of an elastic DVM growing and
+shrinking.  It let a daemon climb into a slot only while that slot was
+*dead*.  But a daemon promoted into a dead ancestor's slot leaves its own slot
+*vacated*, not dead, and that slot passes to the daemon's successor in its
+subtree, which must climb into it.  At radix 4 over 38 daemons with only 0, 5,
+21 and 37 alive, 5 takes dead slot 1 and lists 37 for slot 5 — but 37 never
+climbed, so 21 named 5 as its parent and the release never reached it
+(`#2850 <https://github.com/openpmix/prrte/issues/2850>`_).  The smallest such
+shape at radix 4 needs 38 daemons, past where the brute force went, and the
+radix-2 one (12 daemons, 0, 3, 7, 11 alive) was in a subset the test sampled
+away.  Occupancy is now decided from the root down by one rule: a slot holds
+the first living daemon of its subtree, in depth-first order, that no slot
+above it holds.  Parent and children are both read off that, so they cannot
+disagree.
 
 **"Is the sender my parent?" is not answerable during a repair.**  Both the
 forward and the ack-request paths screened on the sender being this daemon's
