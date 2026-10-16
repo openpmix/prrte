@@ -222,6 +222,39 @@ uint32_t prte_rml_tree_version(void)
     return prte_rml_base.tree_version;
 }
 
+static bool release_slot_taken(pmix_rank_t rank, const pmix_rank_t *taken,
+                               size_t ntaken)
+{
+    size_t i;
+
+    for (i = 0; i < ntaken; i++) {
+        if (taken[i] == rank) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The daemon standing in a release-tree slot: the first living daemon of the
+ * slot's subtree, in the tree's own depth-first order, that no slot above it
+ * has already taken.  `taken` holds the occupants of the slot's ancestors.
+ * Answers PMIX_RANK_INVALID when the whole subtree is dead or taken, in which
+ * case every slot below it is empty too. */
+static pmix_rank_t release_slot_occupant(const radix_node_t *slot,
+                                         const pmix_rank_t *taken, size_t ntaken)
+{
+    radix_node_t cand = *slot;
+
+    if (radix_is_living(&cand) && !release_slot_taken(cand.rank, taken, ntaken)) {
+        return cand.rank;
+    }
+    do {
+        radix_rooted_to_next_living(slot, &cand);
+    } while (PMIX_RANK_INVALID != cand.rank &&
+             release_slot_taken(cand.rank, taken, ntaken));
+    return cand.rank;
+}
+
 /* This daemon's place in the *release* tree - the low-radix one a collective
  * fans its release out over, beside the routing tree the rollup gathers on.
  *
@@ -244,9 +277,12 @@ uint32_t prte_rml_tree_version(void)
 int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
                           pmix_rank_t **children, size_t *nchildren)
 {
-    radix_node_t node, iter, up, pos;
-    pmix_rank_t *kids;
-    size_t n = 0;
+    /* one slot per level of the tree, and a radix of at least 2 cannot give a
+     * rank more levels than it has bits */
+    pmix_rank_t taken[8 * sizeof(pmix_rank_t)];
+    radix_node_t node, iter, pos;
+    pmix_rank_t *kids, occ = PMIX_RANK_INVALID, d;
+    size_t ntaken = 0, n = 0;
 
     *parent = PMIX_RANK_INVALID;
     *children = NULL;
@@ -260,70 +296,74 @@ int prte_rml_release_tree(pmix_rank_t me, pmix_rank_t *parent,
     }
 
     node = radix_node_in(me, (pmix_rank_t) prte_rml_base.radix2);
-
-    /* Find the position this daemon actually occupies.
-     *
-     * A dead node is replaced in place by the next living node of its own
-     * subtree, so a daemon whose parent slot has failed may be the daemon that
-     * takes it - and if it does, it may equally take that slot's parent, and
-     * so on up a chain of failures.  Climb while the answer is us.
-     *
-     * Both halves below have to be derived from that position rather than from
-     * the base one, and they have to agree.  Walking up past a dead ancestor
-     * to name a parent while computing children in place does not: on eight
-     * daemons at radix 2, losing daemon 1 promotes daemon 4 into its slot, so
-     * daemon 3's parent is 4 - but a walk-up says 0, and 0's children say 4.
-     * Daemon 3 then waits on a parent that is not sending to it, and a
-     * broadcast that must reach every daemon reaches six of seven.  Nothing
-     * detects that: it is not a failure, it is two daemons deriving different
-     * trees, which is the one thing a tree with no protocol cannot survive. */
-    pos = node;
-    while (0 != pos.rank) {
-        radix_node_t repl;
-        up = radix_parent(&pos);
-        if (PMIX_RANK_INVALID == up.rank || radix_is_living(&up)) {
-            break;
-        }
-        repl = radix_rooted_get_next_living(&up, &up);
-        if (repl.rank != me) {
-            break;
-        }
-        pos = up;
+    if (node.depth >= sizeof(taken) / sizeof(taken[0])) {
+        return PRTE_ERR_BAD_PARAM;
     }
 
-    /* Our parent is whoever occupies our position's parent slot: that daemon
-     * if it lives, and otherwise its replacement - which cannot be us, or the
-     * climb above would not have stopped.  The root has no parent, and is the
-     * only daemon allowed to be without one. */
-    if (0 != pos.rank) {
-        up = radix_parent(&pos);
-        if (PMIX_RANK_INVALID != up.rank && !radix_is_living(&up)) {
-            up = radix_rooted_get_next_living(&up, &up);
+    /* Find the slot this daemon actually occupies.
+     *
+     * Occupancy is decided from the root down, one rule at every slot: a slot
+     * holds the first living daemon of its own subtree, in the tree's
+     * depth-first order, that no slot above it already holds.  A living slot
+     * nobody has taken holds itself, a dead one holds its next living
+     * descendant - and a slot whose daemon has been promoted out of it, to
+     * stand in a dead ancestor's place, holds that daemon's successor.  So a
+     * daemon may climb any number of levels, and the only slots on its way
+     * are the ones on its own path to the root: walk that path and stop where
+     * the answer is us.
+     *
+     * The third case is the one that is easy to lose, because the vacated slot
+     * is not dead.  Climbing only into dead slots does just that: with radix 4
+     * over 38 daemons and only 0, 5, 21 and 37 alive, 5 climbs into dead slot
+     * 1 and 37 succeeds it in slot 5 - but 37 never climbs, slot 5 being alive,
+     * so 21 names 5 as its parent while 5 lists only 37.  21 is in no tree, and
+     * a fence release never reaches it (#2850).
+     *
+     * Parent and children are both read off the same occupancy, which is what
+     * makes them agree: a child slot's occupant is computed by this daemon from
+     * exactly the ancestors' occupants the child's own walk computes, ending
+     * with us. */
+    for (d = 0; d <= node.depth; d++) {
+        pos = radix_at_depth(&node, d);
+        pos.base = pos.rank;
+        occ = release_slot_occupant(&pos, taken, ntaken);
+        if (occ == me) {
+            break;
         }
-        *parent = up.rank;
+        if (PMIX_RANK_INVALID == occ) {
+            /* only reachable if we are not alive ourselves */
+            break;
+        }
+        taken[ntaken++] = occ;
     }
+    if (occ != me) {
+        /* a failed daemon stands nowhere in the tree */
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    /* Our parent is whoever occupies the slot above ours.  The root has no
+     * parent, and is the only daemon allowed to be without one. */
+    if (0 < ntaken) {
+        *parent = taken[ntaken - 1];
+    }
+    taken[ntaken++] = me;
 
     kids = (pmix_rank_t *) malloc((size_t) prte_rml_base.radix2 * sizeof(pmix_rank_t));
     if (NULL == kids) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    /* ...and take each child of that position, or the living node that stands
-     * in for it.  The slot holding our own original subtree is the exception:
-     * there our child is whoever succeeds *us* inside it, since we have left
-     * it to stand where its former root did.  Where we were not promoted, no
-     * slot holds us and this is the plain in-place replacement. */
+    /* ...and our children are whoever occupies each slot below ours.  That
+     * includes the slot holding our own original subtree, whose occupant -
+     * when we were promoted out of it - is whoever succeeds us there. */
     RADIX_CHILD_FOREACH(pos, iter) {
-        radix_node_t c = iter;
-        if (radix_subtree_contains(&iter, me)) {
-            c = radix_rooted_get_next_living(&iter, &node);
-        } else if (!radix_is_living(&c)) {
-            c = radix_rooted_get_next_living(&iter, &iter);
-        }
-        if (PMIX_RANK_INVALID == c.rank || c.rank >= prte_rml_base.n_dmns) {
+        pmix_rank_t c;
+        iter.base = iter.rank;
+        c = release_slot_occupant(&iter, taken, ntaken);
+        if (PMIX_RANK_INVALID == c || c >= prte_rml_base.n_dmns) {
             continue;
         }
-        kids[n++] = c.rank;
+        kids[n++] = c;
     }
 
     if (0 == n) {

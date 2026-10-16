@@ -614,9 +614,16 @@ added here inherits them:
   computes a parent *and* children, and they have to describe the same tree
   for every failure pattern. Walking up past dead ancestors to name a parent
   while replacing a dead child in place is two different promotion rules and
-  orphans daemons outright. `test_release_tree` (`test/unit/rml`) brute-forces
-  every failure subset and requires one tree rooted at 0 covering exactly the
-  living daemons — run it before believing any change here.
+  orphans daemons outright. So is climbing only into *dead* slots: a daemon
+  promoted into a dead ancestor's slot leaves its own slot vacated but alive,
+  and its successor must climb into that one too, or that slot's other
+  children name a parent that does not list them (#2850). Occupancy is
+  decided top-down — a slot holds the first living daemon of its subtree, in
+  depth-first order, not already holding a slot above it — and both halves
+  are read off that. `test_release_tree` (`test/unit/rml`) brute-forces every
+  failure subset up to 14 daemons, samples larger DVMs, and requires one tree
+  rooted at 0 covering exactly the living daemons — run it before believing
+  any change here.
 - **Do not screen a forward on "is the sender my parent".** That screen is
   sound on the routing tree, whose repair notice travels the routing tree, so
   a daemon has processed the notice that gave it a new parent before anything
