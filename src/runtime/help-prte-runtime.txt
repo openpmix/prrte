@@ -36,18 +36,27 @@ location.
 #
 [prte:session:dir:owner]
 
-PRRTE found an existing directory at the location it uses for its
+PRRTE found an existing directory at a location it uses inside its
 session directory, but that directory belongs to another user:
 
    Directory: %s
    Owner uid: %lu
    Our uid:   %lu
 
-Session directory names are predictable, so a directory with the right
-name and the wrong owner is either left over from another user's job
-or was created to intercept this one. PRRTE will not use it. Remove the
-directory (this may require the system administrator), or point PRRTE
-at a private temporary directory (use "-h" to see the cmd line option).
+PRRTE will not use it. Remove the directory (this may require the
+system administrator), or point PRRTE at a private temporary directory
+(use "-h" to see the cmd line option).
+#
+[prte:session:dir:create]
+
+PRRTE could not create its session directory:
+
+   Path:  %s
+   Error: %s
+
+Check that the temporary directory exists and that this user can write
+to it, or point PRRTE at another temporary directory (use "-h" to see
+the cmd line option).
 #
 [prte:session:dir:writable]
 

@@ -800,15 +800,11 @@ int prun_common(pmix_cli_result_t *results,
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, opt->values[0], PMIX_STRING);
     }
 
-    /* set our session directory to something hopefully unique so
-     * our rendezvous files don't conflict with other prun/prte
-     * instances */
-    pmix_asprintf(&sessdir, "%s/%s.session.%s.%lu.%lu", pmix_tmp_directory(), prte_tool_basename,
-                  prte_process_info.nodename, (unsigned long) geteuid(), (unsigned long) getpid());
-    /* PMIx trusts the directory it is given, so this name - which anyone
-     * could predict - has to be seen to be ours before it is handed over;
-     * if it is taken, we are given another beside it.  We then own its
-     * removal: PMIx only removes a directory it made */
+    /* a session directory of our own, <tmpdir>/<tool>.XXXXXX, so our
+     * rendezvous files don't conflict with other prun/prte instances -
+     * prte_session_dir_create makes the name unique and gives it back.
+     * We then own its removal: PMIx only removes a directory it made */
+    pmix_asprintf(&sessdir, "%s/%s", pmix_tmp_directory(), prte_tool_basename);
     if (NULL == sessdir ||
         PRTE_SUCCESS != prte_session_dir_create(&sessdir, &sessdir_created)) {
         free(sessdir);
