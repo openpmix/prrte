@@ -317,9 +317,10 @@ ONT()  { local n=$1; shift; EXEC_TOOL "$n" "$@"; }
 kill_stray() { EXEC_SH "$1" "pkill -9 $PSOPT -x $2 2>/dev/null; true" >/dev/null 2>&1; }
 
 # What must not survive into the next test, on one node.  Each tool has its
-# OWN session-dir prefix -- prte.<pid> for the HNP, prtrn.<pid> for prterun,
-# prted.<pid> for a bootstrapped daemon standing on its own, prun.<pid> for
-# prun itself, and ompi.<pid> for anything run under the ompi personality --
+# OWN session-dir prefix -- prte.XXXXXX for the HNP, prtrn.XXXXXX for
+# prterun, prted.XXXXXX for a bootstrapped daemon standing on its own,
+# prun.XXXXXX for prun itself, and ompi.XXXXXX for anything run under the
+# ompi personality --
 # and every one of them holds a pmix.* server rendezvous file.  A system-level
 # server drops one (pmix.sys.<host>) straight into the tmpdir as well.  Leaving
 # any behind is what makes a later prun report "multiple possible servers ...
@@ -4796,80 +4797,65 @@ test_util() {
                  || bad "a valid system limit broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     cleanup_swarm
 
-    banner "util: a session directory owned by another user is not used"
-    # The top session directory is <tmpdir>/prtrn.<pid> for prterun, and one
-    # already there used to be adopted whoever owned it.  It must be ours to
-    # be used; when it is not, prterun makes one of its own beside it
-    # (prtrn.<pid>.XXXXXX) and runs as usual.  exec keeps the pid, so the
-    # shell can make the directory prterun will look for before prterun
-    # exists.
+    banner "util: a session directory is always one of the tool's own"
+    # The top session directory is <tmpdir>/<prefix>.XXXXXX, made by
+    # mkdtemp(), with an empty node.<nodename> file in it - so a directory
+    # already in the tmpdir, under any name, is never taken over. Plant one
+    # owned by another user under the name the pid used to give (exec keeps
+    # the pid, so the shell knows it before prterun exists): prterun must run,
+    # and leave it alone and empty.
     cleanup_swarm
     if bounded 90 RUN 'd=/tmp/prtrn.$$; mkdir $d && chmod 777 $d && chown 65534 $d &&
                        exec prterun -n 1 hostname' && grep -q '^node1$' "$BOUT"; then
-        ok "prterun ran with its session directory name held by another user"
+        ok "prterun ran beside another user's directory"
     else
-        bad "prterun did not run past another user's session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+        bad "prterun did not run beside another user's directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
     fi
     rm -f "$BOUT"
     RUN 'find /tmp -maxdepth 1 -name "prtrn.*" -uid 65534 | grep -q .' \
         && ok "the other user's directory is still theirs" \
-        || bad "the other user's session directory was removed or taken over"
+        || bad "the other user's directory was removed or taken over"
     RUN 'find /tmp -maxdepth 1 -name "prtrn.*" -uid 65534 -exec sh -c "ls -A {} | grep -q ." \; -print' \
         | grep -q . \
-        && bad "something was written into the other user's session directory" \
-        || ok "nothing was written into the other user's session directory"
+        && bad "something was written into the other user's directory" \
+        || ok "nothing was written into the other user's directory"
+    RUN 'find /tmp -maxdepth 1 -name "prtrn.*" ! -uid 65534 | grep -q .' \
+        && bad "prterun left its session directory behind" \
+        || ok "prterun removed the session directory it made"
     cleanup_swarm
-    # ...while one of our own, left over from an earlier run, is still used
-    if bounded 90 RUN 'mkdir /tmp/prtrn.$$ && exec prterun -n 1 hostname' &&
-       grep -q '^node1$' "$BOUT"; then
-        ok "prterun used a pre-existing session directory of its own"
+    # ...and while it runs, its directory names the node it belongs to
+    if bounded 90 RUN 'prterun -n 1 sh -c "ls /tmp/prtrn.*/node.\$(hostname)"' &&
+       grep -q "/node\.node1$" "$BOUT"; then
+        ok "prterun's session directory holds the node's marker"
     else
-        bad "prterun refused its own pre-existing session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+        bad "prterun's session directory has no node marker: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
     fi
     rm -f "$BOUT"
     cleanup_swarm
 
-    banner "util: prun does not use a session directory owned by another user"
-    # prun hands PMIx <tmpdir>/prun.session.<node>.<euid>.<pid> as its server
-    # tmpdir, and PMIx trusts a directory it is given - so prun has to create
-    # it, and use one already there only if it is ours, before handing it
-    # over; otherwise it makes one of its own beside it. A DVM on node1 alone
-    # is enough: the directory is prun's own.
+    banner "util: prun's session directory is always its own"
+    # prun hands PMIx <tmpdir>/prun.XXXXXX as its server tmpdir, made the same
+    # way. A DVM on node1 alone is enough: the directory is prun's own.
     cleanup_swarm
     RUN 'nohup prte --daemonize --report-uri /tmp/sessdir-dvm.uri >/tmp/prte.out 2>&1 & sleep 5' >/dev/null
     if ! RUN 'pgrep -x prte >/dev/null'; then
         bad "could not start a DVM for the prun session-directory test"
     else
-        if bounded 90 RUN 'd=/tmp/prun.session.$(hostname).$(id -u).$$
-                           mkdir $d && chmod 777 $d && chown 65534 $d &&
+        if bounded 90 RUN 'd=/tmp/prun.$$; mkdir $d && chmod 777 $d && chown 65534 $d &&
                            exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' &&
            grep -q '^node1$' "$BOUT"; then
-            ok "prun ran with its session directory name held by another user"
+            ok "prun ran beside another user's directory"
         else
-            bad "prun did not run past another user's session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
+            bad "prun did not run beside another user's directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
         fi
         rm -f "$BOUT"
-        RUN 'find /tmp -maxdepth 1 -name "prun.session.*" -uid 65534 | grep -q .' \
+        RUN 'find /tmp -maxdepth 1 -name "prun.*" -uid 65534 | grep -q .' \
             && ok "the other user's directory is still theirs" \
-            || bad "the other user's session directory was removed or taken over"
-        RUN 'find /tmp -maxdepth 1 -name "prun.session.*" ! -uid 65534 | grep -q .' \
-            && bad "prun left the session directory it made instead behind" \
-            || ok "prun removed the session directory it made instead"
-        RUN 'rm -rf /tmp/prun.session.*' >/dev/null 2>&1
-        if bounded 90 RUN 'mkdir /tmp/prun.session.$(hostname).$(id -u).$$ &&
-                           exec prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' &&
-           grep -q '^node1$' "$BOUT"; then
-            ok "prun used a pre-existing session directory of its own"
-        else
-            bad "prun refused its own pre-existing session directory: $(tr '\n' ' ' <"$BOUT" | tail -c 250)"
-        fi
-        rm -f "$BOUT"
-        RUN 'rm -rf /tmp/prun.session.*' >/dev/null 2>&1
-        # ...and one it made itself, it removes again
-        RUN 'timeout 60 prun --dvm-uri file:/tmp/sessdir-dvm.uri -n 1 hostname' >/dev/null 2>&1
-        RUN 'ls -d /tmp/prun.session.* >/dev/null 2>&1' \
+            || bad "the other user's directory was removed or taken over"
+        RUN 'find /tmp -maxdepth 1 -name "prun.*" ! -uid 65534 | grep -q .' \
             && bad "prun left its session directory behind" \
             || ok "prun removed the session directory it made"
+        RUN 'rm -rf /tmp/prun.*' >/dev/null 2>&1
         RUN 'timeout -k 5 30 pterm --dvm-uri file:/tmp/sessdir-dvm.uri' >/dev/null 2>&1
     fi
     RUN 'rm -f /tmp/sessdir-dvm.uri' >/dev/null 2>&1
@@ -9456,7 +9442,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         # any of this is emitted -- /tmp/prte.out is empty by construction, so
         # grepping it can only ever fail.  So this one case drives its own
         # foreground DVM with prterun and reads that process's stderr directly.
-        # prterun takes its own session-dir prefix (prtrn.<pid>), so it coexists
+        # prterun takes its own session-dir prefix (prtrn.XXXXXX), so it coexists
         # with the daemonized DVM the rest of the phase is using.
         if ! pmix_cap PMIX_CAP_IOF_FLOW_CONTROL; then
             skp "PMIx predates PMIX_CAP_IOF_FLOW_CONTROL -- no XOFF to pair"

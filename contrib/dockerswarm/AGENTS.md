@@ -1154,9 +1154,9 @@ done
 ```
 
 **Every tool has its own session-dir prefix, and one missed prefix is enough.**
-`prte.<pid>` is the HNP, `prtrn.<pid>` is `prterun`, `prted.<pid>` is a
-bootstrapped daemon standing on its own, `prun.<pid>` is `prun` itself, and
-`ompi.<pid>` is anything run under the ompi personality. Each of them holds a
+`prte.XXXXXX` is the HNP, `prtrn.XXXXXX` is `prterun`, `prted.XXXXXX` is a
+bootstrapped daemon standing on its own, `prun.XXXXXX` is `prun` itself, and
+`ompi.XXXXXX` is anything run under the ompi personality. Each of them holds a
 `pmix.*` server rendezvous file, a system-level server drops `pmix.sys.<host>`
 straight into `/tmp`, and any one left behind makes the next tool report
 *"multiple possible servers … connection handles have been read from files
