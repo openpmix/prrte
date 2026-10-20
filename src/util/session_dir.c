@@ -77,6 +77,10 @@
  *******************************/
 static bool _check_file(const char *root, const char *path);
 
+/* the node marker of the top-level directory being cleaned up - which
+ * _check_file keeps, for _drop_marker to decide on */
+static char *top_marker = NULL;
+
 static bool setup_base_complete = false;
 
 #define PRTE_PRINTF_FIX_STRING(a) ((NULL == a) ? "(null)" : a)
@@ -85,38 +89,24 @@ static bool setup_base_complete = false;
  * Funcationality
  ****************************/
 /*
- * Confirm that a session directory PRRTE has just created - or found
- * already sitting at the name it composed - is really ours to use,
- * saying why not when `report` is set.
+ * Confirm that a job or rank directory PRRTE has just created - or found
+ * already sitting at the name it composed - is really ours to use, and
+ * say why not.
  *
- * Every name that reaches here is one PRRTE composes itself
- * (<tmpdir>/<prefix>.<pid>, then <jobid>, then <rank>), and the top of
- * that tree sits under a world-writable root such as /tmp. The name is
- * therefore predictable by anyone on the node, who can create it first.
- * pmix_os_dirpath_create() answers PMIX_ERR_EXISTS for such a directory
- * and cannot refuse it on ownership grounds: its generic callers
- * legitimately hand it directories they do not own - the system tmpdir
- * itself, or a shared, user-named output directory. The decision can
- * only be made here, where the name is known to be a per-user one.
- * Adopting a planted directory would put our rendezvous files and
- * per-job data where another user can read and replace them, and the
- * finalize path would later recursively destroy it.
+ * These directories are made inside the top-level one, which mkdtemp()
+ * created for us, mode 0700 (see _claim_dir), so no one else can have
+ * put anything there. The check costs little and keeps the rule should a
+ * directory ever be composed somewhere else.
  *
  * The inspection is done through a descriptor so the directory checked
  * is the directory the path names at that moment: O_NOFOLLOW refuses a
- * symlink planted at the final component (the composed names never end
- * in a separator, which would defeat it). Nothing is done by path after
- * the check - another user cannot change the ownership or mode of a
- * directory we own, and the sticky bit on a shared root keeps them from
- * renaming it away. The root itself was handed to us by the user or the
- * system and is deliberately not examined.
+ * symlink at the final component (the composed names never end in a
+ * separator, which would defeat it).
  *
  * A directory we own is refused too if it is writable by group or
- * other: we never create one that way, and one that is carries the same
- * exposure as a foreign directory - someone else may already have put
- * files in it.
+ * other: we never create one that way.
  */
-static int _check_dir(const pmix_nspace_t nspace, const char *directory, bool report)
+static int _check_owner(const pmix_nspace_t nspace, const char *directory)
 {
     struct stat buf;
     int fd, save;
@@ -124,43 +114,30 @@ static int _check_dir(const pmix_nspace_t nspace, const char *directory, bool re
     fd = open(directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
     if (0 > fd) {
         save = errno;
-        if (report) {
-            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
-                           directory, strerror(save));
-        }
+        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
+                       directory, strerror(save));
         return PRTE_ERR_SILENT;
     }
     if (0 != fstat(fd, &buf)) {
         save = errno;
         close(fd);
-        if (report) {
-            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
-                           directory, strerror(save));
-        }
+        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
+                       directory, strerror(save));
         return PRTE_ERR_SILENT;
     }
     close(fd);
 
     if (buf.st_uid != geteuid()) {
-        if (report) {
-            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:owner", true,
-                           directory, (unsigned long) buf.st_uid, (unsigned long) geteuid());
-        }
+        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:owner", true,
+                       directory, (unsigned long) buf.st_uid, (unsigned long) geteuid());
         return PRTE_ERR_SILENT;
     }
     if (0 != (buf.st_mode & (S_IWGRP | S_IWOTH))) {
-        if (report) {
-            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:writable", true,
-                           directory, (unsigned int) (buf.st_mode & 07777));
-        }
+        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:writable", true,
+                       directory, (unsigned int) (buf.st_mode & 07777));
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;
-}
-
-static int _check_owner(const pmix_nspace_t nspace, const char *directory)
-{
-    return _check_dir(nspace, directory, true);
 }
 
 /*
@@ -193,63 +170,96 @@ static int _create_dir(const pmix_nspace_t nspace, const char *directory, bool *
 }
 
 /*
- * Claim a top-level directory - one whose name sits directly under a
- * shared temporary directory.
+ * The name of the empty file that says which node a top-level directory
+ * belongs to: node.<nodename>, with any '/' in the name made '_' so the
+ * file stays in the directory. Caller frees. NULL without a nodename.
+ */
+static char *_node_marker(void)
+{
+    char *name = NULL, *c;
+
+    if (NULL == prte_process_info.nodename ||
+        0 > pmix_asprintf(&name, "node.%s", prte_process_info.nodename)) {
+        return NULL;
+    }
+    for (c = name; '\0' != *c; c++) {
+        if ('/' == *c) {
+            *c = '_';
+        }
+    }
+    return name;
+}
+
+/*
+ * Make a top-level directory - one whose name sits directly under a
+ * shared temporary directory - and mark it with the node it belongs to.
  *
- * Such a name may already be taken by a directory we cannot use - one
- * left behind by another user's job that had the same pid, for
- * instance. Not using it is right (see _check_owner), but failing to
- * start because of it is not, since nothing depends on the name itself -
- * it is passed on, to PMIx and everything else, by value. So when the
- * name is taken, make a directory beside it: mkdtemp() creates one
- * atomically, mode 0700, under a unique name. The prefix is kept, so
- * whatever looks for our directories by prefix still finds them.
+ * `*directory` names the stem, <tmpdir>/<prefix>. The directory made is
+ * <stem>.XXXXXX, by mkdtemp(), and its name replaces the stem. mkdtemp()
+ * creates it atomically, mode 0700, under a name no other process has -
+ * on this node or, over a file system shared between nodes, on any
+ * other - so any number of instances of each tool can run at once,
+ * whatever their pids or pid namespaces, and a directory already there
+ * is never taken over. Nothing looks a session directory up by name: it
+ * is passed to PMIx (PMIX_SERVER_TMPDIR, PMIX_TMPDIR) and everywhere else
+ * by value, and PMIx finds rendezvous files by searching the tree below
+ * the temporary directory. The prefix is kept, so whatever looks for our
+ * directories by prefix still finds them.
  *
- * Only a top-level name needs this. The job and rank directories below
- * it are created inside a directory that is ours and that no one else
- * can write to.
+ * Inside it goes an empty file, node.<nodename> (_node_marker), so that
+ * whoever finds the directory - left behind on a file system shared
+ * between nodes, say - can tell which node it belongs to. Cleanup keeps
+ * it for as long as anything else is kept in the directory.
+ *
+ * Only a top-level directory needs this. The job and rank directories
+ * below it are created inside a directory that is ours and that no one
+ * else can write to.
  */
 static int _claim_dir(const pmix_nspace_t nspace, char **directory, bool *created)
 {
-    struct stat buf;
-    char *alt = NULL;
-    int ret;
+    char *dir = NULL, *marker = NULL, *path = NULL;
+    int fd, save;
 
     if (NULL != created) {
         *created = false;
     }
-    ret = pmix_os_dirpath_create(*directory, S_IRWXU);
-    if (PMIX_SUCCESS == ret || PMIX_ERR_EXISTS == ret) {
-        if (PRTE_SUCCESS == _check_dir(nspace, *directory, false)) {
-            if (PMIX_SUCCESS == ret && NULL != created) {
-                *created = true;
-            }
-            return PRTE_SUCCESS;
-        }
-    } else if (0 != lstat(*directory, &buf)) {
-        /* nothing is there - the directory simply could not be made */
-        PMIX_ERROR_LOG(ret);
-        return prte_pmix_convert_status(ret);
+    if (NULL == (marker = _node_marker())) {
+        return PRTE_ERR_BAD_PARAM;
     }
-
-    /* the name is taken by something we cannot use */
-    if (0 > pmix_asprintf(&alt, "%s.XXXXXX", *directory) || NULL == alt) {
+    if (0 > pmix_asprintf(&dir, "%s.XXXXXX", *directory) || NULL == dir) {
+        free(marker);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    if (NULL == mkdtemp(alt)) {
-        /* say why the name we wanted was refused - that is the problem
-         * to fix - and give up */
-        free(alt);
-        (void) _check_owner(nspace, *directory);
+    if (NULL == mkdtemp(dir)) {
+        save = errno;
+        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:create", true,
+                       dir, strerror(save));
+        free(dir);
+        free(marker);
         return PRTE_ERR_SILENT;
     }
-    ret = _check_owner(nspace, alt);
-    if (PRTE_SUCCESS != ret) {
-        free(alt);
-        return ret;
+    path = pmix_os_path(false, dir, marker, NULL);
+    free(marker);
+    if (NULL == path) {
+        (void) rmdir(dir);
+        free(dir);
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
+    /* the directory is ours and no one else can write to it */
+    fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR);
+    if (0 > fd) {
+        save = errno;
+        prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:create", true,
+                       path, strerror(save));
+        free(path);
+        (void) rmdir(dir);
+        free(dir);
+        return PRTE_ERR_SILENT;
+    }
+    close(fd);
+    free(path);
     free(*directory);
-    *directory = alt;
+    *directory = dir;
     if (NULL != created) {
         *created = true;
     }
@@ -264,10 +274,9 @@ int prte_session_dir_create(char **directory, bool *created)
 static int _setup_top_session_dir(void)
 {
     int rc = PRTE_SUCCESS;
-    /* get the effective uid */
-    pid_t pid = getpid();
 
-    /* construct the top_session_dir if we need */
+    /* construct the top_session_dir if we need - <tmpdir>/<prefix>,
+     * which _claim_dir makes unique */
     if (NULL == prte_process_info.top_session_dir) {
         if (NULL == prte_process_info.nodename ||
             NULL == prte_process_info.tmpdir_base) {
@@ -275,26 +284,11 @@ static int _setup_top_session_dir(void)
             rc = PRTE_ERR_BAD_PARAM;
             goto exit;
         }
-        if (prte_process_info.shared_fs) {
-            /* if it is a shared fs, then we need to include our nodename
-             * to avoid collisions */
-            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s.%s.%lu",
-                                  prte_process_info.tmpdir_base, prte_process_info.sessdir_prefix,
-                                  prte_process_info.nodename,
-                                  (unsigned long)pid)) {
-                prte_process_info.top_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        } else {
-            /* if not a shared fs, then we can just use our pid as that will be unique */
-            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s.%lu",
-                                  prte_process_info.tmpdir_base, prte_process_info.sessdir_prefix,
-                                  (unsigned long)pid)) {
-                prte_process_info.top_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
+        if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s",
+                              prte_process_info.tmpdir_base, prte_process_info.sessdir_prefix)) {
+            prte_process_info.top_session_dir = NULL;
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto exit;
         }
     }
     rc = _claim_dir(PRTE_PROC_MY_NAME->nspace, &prte_process_info.top_session_dir, NULL);
@@ -440,6 +434,44 @@ cleanup:
     return rc;
 }
 
+/*
+ * Remove a top-level directory's node marker once it is all that is
+ * left in it. While anything else is kept there - an output file, say -
+ * the marker stays, so whoever finds the directory can tell which node
+ * it belongs to.
+ */
+static void _drop_marker(const char *directory, const char *marker)
+{
+    DIR *dp;
+    struct dirent *ep;
+    int fd;
+    bool alone = true;
+
+    if (NULL == marker) {
+        return;
+    }
+    fd = open(directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    if (0 > fd) {
+        return;
+    }
+    if (NULL == (dp = fdopendir(fd))) {
+        close(fd);
+        return;
+    }
+    while (NULL != (ep = readdir(dp))) {
+        if (0 == strcmp(ep->d_name, ".") || 0 == strcmp(ep->d_name, "..") ||
+            0 == strcmp(ep->d_name, marker)) {
+            continue;
+        }
+        alone = false;
+        break;
+    }
+    if (alone) {
+        (void) unlinkat(dirfd(dp), marker, 0);
+    }
+    closedir(dp);
+}
+
 void prte_job_session_dir_finalize(prte_job_t *jdata)
 {
     if (prte_process_info.rm_session_dirs) {
@@ -461,7 +493,11 @@ void prte_job_session_dir_finalize(prte_job_t *jdata)
     if (NULL == jdata || PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
         if (prte_finalizing) {
             if (NULL != prte_process_info.top_session_dir) {
+                top_marker = _node_marker();
                 pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, _check_file);
+                _drop_marker(prte_process_info.top_session_dir, top_marker);
+                free(top_marker);
+                top_marker = NULL;
                 /* if the top session dir is now empty, remove it */
                 rmdir(prte_process_info.top_session_dir);
                 free(prte_process_info.top_session_dir);
@@ -487,6 +523,12 @@ static bool _check_file(const char *root, const char *path)
 {
     struct stat st;
     char *fullpath;
+
+    /* the top-level directory's node marker is left to _drop_marker */
+    if (NULL != top_marker && NULL != prte_process_info.top_session_dir &&
+        0 == strcmp(root, prte_process_info.top_session_dir) && 0 == strcmp(path, top_marker)) {
+        return false;
+    }
 
     /*
      * Keep:

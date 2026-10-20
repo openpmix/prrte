@@ -164,9 +164,9 @@ control-flow signal, not a failure.
 
 ## Session directories
 
-One tree per process, named for the **tool's own** session prefix and pid:
-`$TMPDIR/<sessdir_prefix>.<pid>/` for the top level, then `<local-jobid>/`,
-then `<rank>/`. Each tool has its own prefix (`prte`, `prterun`, `prted`), and
+One tree per process, named for the **tool's own** session prefix:
+`$TMPDIR/<sessdir_prefix>.XXXXXX/` for the top level (made by `mkdtemp()`, with
+an empty `node.<nodename>` file in it), then `<local-jobid>/`, then `<rank>/`. Each tool has its own prefix (`prte`, `prterun`, `prted`), and
 each holds a PMIx server rendezvous file — which is why a stale directory from
 a dead DVM makes the *next* `prun` report "multiple possible servers ...
 connection handles have been read from files named `pmix.*`" instead of
@@ -174,28 +174,32 @@ finding the live DVM. Anything that leaves a session directory behind is a
 bug, and `contrib/dockerswarm/run-tests.sh` clears all three prefixes between
 cases for exactly this reason.
 
-**The ownership check lives here, not in PMIx.** The top-level name is
-predictable by anyone on the node and sits under a world-writable root, so
-another user can create it first. `pmix_os_dirpath_create()` answers
-`PMIX_ERR_EXISTS` for such a directory and deliberately does not ask who owns
-it — its generic callers hand it `/tmp` itself and shared user-named output
-directories. `_check_owner()` therefore refuses any directory PRRTE composes
-(top, job, rank) that is not owned by our euid or is group/other-writable,
-inspecting it through an `O_NOFOLLOW` descriptor. It never examines
-`tmpdir_base`: that was handed to us, and on macOS it is reached through the
-root-owned `/tmp` symlink.
+**The top-level directory is always made, never found.**
+`prte_session_dir_create()` (`_claim_dir()`) takes the stem
+`<tmpdir>/<prefix>` and makes `<stem>.XXXXXX` with `mkdtemp()`: atomically,
+mode 0700, under a name no other process has - on this node or, over a file
+system shared between nodes, any other. So any number of instances of each
+tool run at once whatever their pids or pid namespaces, and a directory
+already in the tmpdir, whoever owns it, is never taken over. Nothing looks a
+session directory up by name - it is passed to PMIx (`PMIX_SERVER_TMPDIR`,
+`PMIX_TMPDIR`) and everywhere else by value, and PMIx finds rendezvous files
+by searching subdirectories. The prefix is kept, so cleanup by prefix
+(`/tmp/prte.*`, as `contrib/dockerswarm` does) still catches it. `prun`'s own
+session directory is made the same way.
 
-**A top-level name that is taken is not a reason to stop.** For the top
-directory, and for `prun`'s own session directory, `prte_session_dir_create()`
-(`_claim_dir()`) uses the name only if it is free or holds a directory of ours
-that passes that check; otherwise it creates `<name>.XXXXXX` with `mkdtemp()`
-and hands that name back in its place. Nothing looks a session directory up
-by name - it is passed to PMIx (`PMIX_SERVER_TMPDIR`, `PMIX_TMPDIR`) and
-everywhere else by value, and PMIx finds rendezvous files by searching
-subdirectories - so the only effect is that startup succeeds. The prefix is
-kept, so cleanup by prefix (`/tmp/prte.*`, as `contrib/dockerswarm` does)
-still catches it. The job and rank directories need none of this: they are
-made inside a directory that is ours and closed to everyone else. A job whose directory is refused must also forget
+**The node marker.** Inside the top-level directory `_claim_dir()` puts an
+empty file, `node.<nodename>` (`_node_marker()`, with any `/` made `_`), so a
+directory found later on a shared file system can be traced to its node. At
+finalize `_check_file()` keeps it, and `_drop_marker()` removes it only when
+nothing else is left - so a directory kept for its `output-*` files still
+says where it came from.
+
+**The ownership check is for the job and rank directories.** They are made
+inside the top-level directory, which no one else can write to, and
+`_check_owner()` still refuses one not owned by our euid or group/other
+writable, inspecting it through an `O_NOFOLLOW` descriptor - cheap, and it
+keeps the rule should a directory ever be composed elsewhere.
+A job whose directory is refused must also forget
 the path (`jdata->session_dir = NULL`), because finalize recursively destroys
 whatever that names. Verifying the foreign-owner refusal needs a second uid,
 so it was checked in the dockerswarm image as root planting the name for the
@@ -339,9 +343,10 @@ Not unit-testable, and deliberately left to the live smoke test: most of
 `session_dir` (it creates directories under the real `$TMPDIR`), `stacktrace`
 (installs signal handlers), `daemon_init` (forks), and `nidmap` (needs a
 populated DVM). The exception is claiming a top-level directory
-(`prte_session_dir_create()`), which takes the path it is given, so
+(`prte_session_dir_create()`), which takes the stem it is given, so
 `test/unit/util/test_session_dir.c` drives it inside a scratch directory:
-a free name, our own directory, and each kind of name it must pass over.
+the directory and its marker, a second instance, a directory already at the
+stem, the marker at finalize with and without a kept file, and the failures.
 A directory owned by another user needs a second uid, so that case is in
 `contrib/dockerswarm`'s `test_util` phase, which can make one as root.
 
