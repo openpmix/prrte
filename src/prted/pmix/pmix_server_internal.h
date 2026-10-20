@@ -649,7 +649,6 @@ typedef struct {
     bool remote_connections;
     bool tool_support;
     bool require_pid_match;
-    bool allow_client_clones;
     pmix_proc_t scheduler;
     /* PMIx directs a tool's client-side operations at whichever attached
      * server is currently PRIMARY, and only one server may be primary at a

@@ -532,13 +532,6 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.require_pid_match);
 
-    /* whether or not to allow multiple clients with same ID to connect */
-    prte_pmix_server_globals.allow_client_clones = false;
-    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "allow_client_clones",
-                                      "Whether or not to allow client clones",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_pmix_server_globals.allow_client_clones);
-
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
@@ -1174,14 +1167,6 @@ int pmix_server_init(void)
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
-    }
-
-    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_ALLOW_CLIENT_CLONES,
-                      (void*)&prte_pmix_server_globals.allow_client_clones, PMIX_BOOL);
-    if (PMIX_SUCCESS != prc) {
-        PMIX_INFO_LIST_RELEASE(ilist);
-        rc = prte_pmix_convert_status(prc);
-        return rc;
     }
 
     /* if we were launched by a debugger, then we need to have
