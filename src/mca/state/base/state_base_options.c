@@ -180,12 +180,6 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             }
         }
 
-        if (PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT)) {
-            /* nobody has said - take the default */
-            prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL,
-                                    prte_fwd_environment);
-        }
-
         /* check the apps for max restarts */
         if (0 < prte_state_base.max_restarts) {
             for (n = 0; n < jdata->apps->size; n++) {

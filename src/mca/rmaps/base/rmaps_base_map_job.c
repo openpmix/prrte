@@ -1154,6 +1154,12 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     // forward the environment if requested to do so
     astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT);
+    if (PRTE_ATTR_NOT_SET == astate &&
+        (NULL == parent ||
+         PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT))) {
+        /* nobody has said - take the default */
+        astate = prte_fwd_environment ? PRTE_ATTR_TRUE : PRTE_ATTR_FALSE;
+    }
     if (PRTE_ATTR_NOT_SET != astate) {
         if (PRTE_ATTR_TRUE == astate) {
             // forward the environment

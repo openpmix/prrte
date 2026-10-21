@@ -54,6 +54,7 @@
     "  echo ODLS_NEW=${ODLS_NEW-<unset>};"               \
     "  echo ODLS_GONE=${ODLS_GONE-<unset>};"             \
     "  echo ODLS_PATH=${ODLS_PATH-<unset>};"             \
+    "  echo ODLS_FWD=${ODLS_FWD-<unset>};"               \
     "  echo ODLS_HOST=$(hostname); } > " ODLS_REPORT
 
 static void load_envar(pmix_info_t *ip, const char *key, const char *name,
