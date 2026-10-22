@@ -387,6 +387,8 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    /* the launcher we spawn connects back to us as a tool */
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
