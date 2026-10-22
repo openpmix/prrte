@@ -521,7 +521,12 @@ int main(int argc, char **argv) {
     codes[1] = PMIX_ERR_DVM_MOD;
     PMIx_Register_event_handler(codes, 2, NULL, 0, completion_evh, reg_cb, &reglock);
     lock_wait(&reglock);
-    fprintf(stderr, "registered for PMIX_DVM_IS_READY / PMIX_ERR_DVM_MOD\n");
+    /* Do not name the codes here.  Every case in run-tests.sh decides a
+     * resize succeeded by finding PMIX_DVM_IS_READY in this tool's output,
+     * and naming it on a line every run prints made that true of every run -
+     * a failed grow included.  The only line that may name it is the one
+     * reporting the event that actually arrived. */
+    fprintf(stderr, "registered for the DVM size-change completion events\n");
 
     /* the spawn-carried form never issues a request of its own */
     if (0 == strcmp(op, "spawnalloc")) {
