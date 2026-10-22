@@ -18,6 +18,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/runtime.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/proc_info.h"
@@ -59,14 +60,33 @@
  * not the thread any caller below is on.  What is missing is a PMIx entry
  * point meaning "write this to my own stderr, with suppression", and it
  * belongs in PMIx beside pmix_show_help_norender() rather than as a second
- * suppression table here. */
+ * suppression table here.
+ *
+ * And once PMIx is up, handing it the message does not deliver it: PMIx
+ * thread-shifts it to its own progress thread and logs it from there, some
+ * time later.  While PRRTE is not initialized - starting up, or coming down
+ * - that is a message nobody will see.  A startup failure is the common
+ * case: prte_init() fails, and prte/prterun return from main without
+ * finalizing PMIx, so whatever PMIx had not yet written goes with the
+ * process.  "prte_if_exclude eth0" lost its "no usable network interfaces"
+ * diagnostic, and the "prte_init failed" one after it, on about three runs
+ * in five, leaving only the bare error-log lines.  So in that window write
+ * it ourselves, synchronously, and do not hand it to PMIx as well: where
+ * PMIx did get to it, it would be printed twice. */
 static void deliver_locally(const char *nspace, const char *filename,
                             const char *topic, const char *output,
                             bool emit_directly)
 {
-    if (emit_directly && 0 != PMIx_Initialized()) {
-        fprintf(stderr, "%s", output);
-        fflush(stderr);
+    if (0 != PMIx_Initialized()) {
+        if (!prte_initialized) {
+            fprintf(stderr, "%s", output);
+            fflush(stderr);
+            return;
+        }
+        if (emit_directly) {
+            fprintf(stderr, "%s", output);
+            fflush(stderr);
+        }
     }
     pmix_show_help_norender(nspace, filename, topic, output);
 }
