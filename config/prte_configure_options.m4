@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+dnl Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
 dnl $COPYRIGHT$
@@ -33,15 +33,16 @@ AC_DEFUN([PRTE_CONFIGURE_OPTIONS],[
 prte_show_subtitle "PRTE Configuration options"
 
 # A hint to tell us if we are working with a build from Git or a tarball.
-# Helpful when preparing diagnostic output.
-if test -e $PRTE_TOP_SRCDIR/.git; then
+# In a git worktree, .git is a file pointing at the real git dir, not a
+# directory, so check for both.
+if test -d ${PRTE_TOP_SRCDIR}/.git || test -f ${PRTE_TOP_SRCDIR}/.git; then
     AC_DEFINE_UNQUOTED([PRTE_GIT_REPO_BUILD], ["1"],
                        [If built from a git repo])
     prte_git_repo_build=yes
 else
     prte_git_repo_build=no
 fi
-
+AM_CONDITIONAL([PRTE_DEVEL_BUILD], [test "$prte_git_repo_build" = "yes"])
 
 #
 # Do we want prte's --prefix behavior to be enabled by default?
