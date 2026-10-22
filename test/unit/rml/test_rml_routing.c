@@ -521,6 +521,26 @@ static int test_grow_reparents_existing_daemon(void)
     CHECK("radix 2: after the grow 3's parent is the new daemon 13",
           13 == prte_rml_base.lifeline);
 
+    /* and the new parent need not be a grown daemon.  With 1, 5 and 9
+     * departed, 3 holds 1's slot and 11 holds 3's; 13 takes 1's slot, 3 falls
+     * back to its own, and 7 changes from one daemon it knows to another -
+     * which is why the xcast screen asks how many daemons the sender's tree
+     * spans rather than whether the sender is one we know */
+    bitmaps_reset();
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 1);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 5);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 9);
+    build_dvm(2, 12, 7);
+    CHECK("radix 2: before the grow 7's parent is 11", 11 == prte_rml_base.lifeline);
+    build_dvm(2, 12, 11);
+    CHECK("radix 2: before the grow 11's parent is 3", 3 == prte_rml_base.lifeline);
+    build_dvm(2, 14, 7);
+    CHECK("radix 2: after the grow 7's parent is the existing daemon 3",
+          3 == prte_rml_base.lifeline);
+    build_dvm(2, 14, 3);
+    CHECK("radix 2: after the grow 3's parent is the new daemon 13",
+          13 == prte_rml_base.lifeline);
+
     bitmaps_reset();
     if (0 == failures) {
         fprintf(stdout, "PASSED test_grow_reparents_existing_daemon\n");
