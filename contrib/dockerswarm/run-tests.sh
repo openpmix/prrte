@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -5684,6 +5685,50 @@ test_grpcomm() {
     test_fence_early_arrival
     test_low_radix_release
     test_low_radix_release_fault
+    test_xcast_grow_new_parent
+}
+
+test_xcast_grow_new_parent() {
+    local out n
+
+    if ! have_nodes 6; then
+        skp "xcast after a re-parenting grow: needs 6 nodes, this run has $NNODES"
+        return
+    fi
+
+    banner "grpcomm: a grow that hands an existing daemon a new parent"
+    # An existing daemon is given a parent it has not heard of, and the grow's
+    # WIREUP reaches it through that parent (see from_old_routing_parent() in
+    # src/grpcomm/grpcomm_xcast.c). The vpids at radix 2: grow node2,node3
+    # -> 1,2; grow node4 -> 3 (child of 1); shrink node2 -> 3 climbs into
+    # slot 1; grow node5,node6 -> 4,5, and 5 (right of 3 in slot 1's subtree)
+    # takes slot 1, so 3's parent goes 0 -> 5. node3 and node6 are controls:
+    # neither was re-parented by a daemon it had not heard of.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 \
+                    --prtemca rml_base_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 90 elastic grow node2:1,node3:1' >/dev/null 2>&1
+        RUN 'timeout 90 elastic grow node4:1' >/dev/null 2>&1
+        RUN 'timeout 90 elastic shrink node2' >/dev/null 2>&1; sleep 3
+        out=$(RUN 'timeout 90 elastic grow node5:1,node6:1' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "the grow that re-parents node4's daemon completed at radix 2" \
+            || bad "grow of node5,node6 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        for n in node3 node6 node4; do
+            # a prun that timed out leaves its rendezvous directory behind,
+            # and the next tool trips over it
+            RUN 'rm -rf /tmp/prun.*' >/dev/null 2>&1
+            out=$(RUN "timeout 40 prun --host $n:1 -n 1 hostname" 2>&1 | tr -d '\r')
+            [ "$out" = "$n" ] \
+                && ok "$n runs a job after the re-parenting grow" \
+                || bad "$n launched nothing after the grow (wireup from its new parent dropped): $out"
+        done
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the re-parenting grow test"
+    fi
+    cleanup_swarm
 }
 
 test_grpcomm_reuse() {

@@ -636,8 +636,9 @@ added here inherits them:
   one's slot and become its parent, and the grow's WIREUP then arrives
   through that new parent. So the screen (`from_old_routing_parent()`) passes
   any sender at or beyond `n_dmns` — vpids are never reused, so it cannot be
-  an old parent. `test_xcast_grow_new_parent` (`test/unit/grpcomm`) pins
-  it.
+  an old parent. `test_xcast_grow_new_parent` (`test/unit/grpcomm`) and the
+  dockerswarm case *"a grow that hands an existing daemon a new parent"*
+  cover it.
 - **Ack whoever asked** (`send_ack_to`, `op->upstream`), not whoever this
   daemon's own derivation currently calls its parent. Answering the wrong
   daemon costs nothing; failing to answer the right one hangs the broadcast.
