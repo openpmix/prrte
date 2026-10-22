@@ -634,11 +634,18 @@ added here inherits them:
 
   Even there a grow breaks the ordering: a grown daemon can take over an old
   one's slot and become its parent, and the grow's WIREUP then arrives
-  through that new parent. So the screen (`from_old_routing_parent()`) passes
-  any sender at or beyond `n_dmns` — vpids are never reused, so it cannot be
-  an old parent. `test_xcast_grow_new_parent` (`test/unit/grpcomm`) and the
-  dockerswarm case *"a grow that hands an existing daemon a new parent"*
-  cover it.
+  through that new parent. The displaced daemon falls back into a slot of its
+  own subtree and displaces *that* slot's holder, so the new parent may just
+  as well be a daemon the child already knows (radix 2, 12 → 14 daemons with
+  1, 5 and 9 departed: 7 goes from 11 to 3). Neither is told apart from a
+  superseded forward by who the sender is, so every forward and every ack
+  carries the daemon span its sender's tree was computed over (`pack_span()`,
+  next to the tree version), and the screen (`from_old_routing_parent()`)
+  passes any sender whose span exceeds ours. The span only grows — vpids are
+  never reused and a departure keeps its slot — so a larger one is always the
+  newer tree. `test_xcast_grow_new_parent` (`test/unit/grpcomm`),
+  `test_grow_reparents_existing_daemon` (`test/unit/rml`) and the dockerswarm
+  cases *"a grow that hands an existing daemon a new parent"* cover it.
 - **Ack whoever asked** (`send_ack_to`, `op->upstream`), not whoever this
   daemon's own derivation currently calls its parent. Answering the wrong
   daemon costs nothing; failing to answer the right one hangs the broadcast.
