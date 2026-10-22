@@ -5686,6 +5686,7 @@ test_grpcomm() {
     test_low_radix_release
     test_low_radix_release_fault
     test_xcast_grow_new_parent
+    test_xcast_grow_known_parent
 }
 
 test_xcast_grow_new_parent() {
@@ -5727,6 +5728,54 @@ test_xcast_grow_new_parent() {
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the re-parenting grow test"
+    fi
+    cleanup_swarm
+}
+
+test_xcast_grow_known_parent() {
+    local out n v
+
+    if ! have_nodes 10; then
+        skp "xcast after a grow that re-parents onto a known daemon: needs 10 nodes, this run has $NNODES"
+        return
+    fi
+
+    banner "grpcomm: a grow that hands an existing daemon a new parent it already knows"
+    # The new parent need not be a grown daemon (see from_old_routing_parent()
+    # in src/grpcomm/grpcomm_xcast.c). The vpids at radix 2: grow node2..node10
+    # one at a time -> 1..9; shrink the daemons 1, 2, 4, 5, 6 and 9, leaving
+    # 0, 3, 7 and 8; grow node2,node3 -> 10,11, where 3 holds 1's slot and 11
+    # holds 3's, so 7's parent is 11; grow node5,node6 -> 12,13, and 13 takes
+    # 1's slot, 3 falls back to its own, and 7's parent is now 3 - a daemon it
+    # knows, relaying a WIREUP it has not seen. node8 is daemon 7; node4 and
+    # node9 are re-parented onto grown daemons; node2 and node6 are controls.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 \
+                    --prtemca rml_base_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        for v in 2 3 4 5 6 7 8 9 10; do
+            RUN "timeout 90 elastic grow node$v:1" >/dev/null 2>&1
+        done
+        for n in node2 node3 node5 node6 node7 node10; do
+            RUN "timeout 90 elastic shrink $n" >/dev/null 2>&1; sleep 3
+        done
+        RUN 'timeout 90 elastic grow node2:1,node3:1' >/dev/null 2>&1; sleep 3
+        out=$(RUN 'timeout 90 elastic grow node5:1,node6:1' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "the grow that re-parents node8's daemon onto a known one completed at radix 2" \
+            || bad "grow of node5,node6 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        for n in node2 node6 node4 node9 node8; do
+            # a prun that timed out leaves its rendezvous directory behind,
+            # and the next tool trips over it
+            RUN 'rm -rf /tmp/prun.*' >/dev/null 2>&1
+            out=$(RUN "timeout 40 prun --host $n:1 -n 1 hostname" 2>&1 | tr -d '\r')
+            [ "$out" = "$n" ] \
+                && ok "$n runs a job after the re-parenting grow" \
+                || bad "$n launched nothing after the grow (wireup from its new parent dropped): $out"
+        done
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the known-parent grow test"
     fi
     cleanup_swarm
 }
