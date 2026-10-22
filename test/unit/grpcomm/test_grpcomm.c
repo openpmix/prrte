@@ -1637,7 +1637,8 @@ static int test_fence_release_failure(void)
 #if PRTE_TEST_GRPCOMM_INTERNALS
 /* A forward, packed the way pack_forward_msg() packs one. An op id of zero is
  * an originator's relay, which the controller numbers on receipt. */
-static pmix_data_buffer_t *xcast_forward(prte_grpcomm_topology_t topo, size_t op_id)
+static pmix_data_buffer_t *xcast_forward_from(prte_grpcomm_topology_t topo, size_t op_id,
+                                              pmix_rank_t span)
 {
     pmix_data_buffer_t *buf;
     uint8_t t = (uint8_t) topo;
@@ -1654,11 +1655,18 @@ static pmix_data_buffer_t *xcast_forward(prte_grpcomm_topology_t topo, size_t op
     (void) PMIx_Data_pack(NULL, buf, &t, 1, PMIX_UINT8);
     (void) PMIx_Data_pack(NULL, buf, &op_id, 1, PMIX_SIZE);
     (void) PMIx_Data_pack(NULL, buf, &version, 1, PMIX_UINT32);
+    (void) PMIx_Data_pack(NULL, buf, &span, 1, PMIX_PROC_RANK);
     (void) PMIx_Data_pack(NULL, buf, &ack_id, 1, PMIX_PROC_RANK);
     (void) PMIx_Data_pack(NULL, buf, &tag, 1, PRTE_RML_TAG);
     (void) PMIx_Data_pack(NULL, buf, &compressed, 1, PMIX_BOOL);
     (void) PMIx_Data_pack(NULL, buf, &bo, 1, PMIX_BYTE_OBJECT);
     return buf;
+}
+
+/* ...from a sender whose tree spans the daemons ours does */
+static pmix_data_buffer_t *xcast_forward(prte_grpcomm_topology_t topo, size_t op_id)
+{
+    return xcast_forward_from(topo, op_id, prte_rml_base.n_dmns);
 }
 #endif
 
@@ -1740,6 +1748,7 @@ static int test_xcast_tree_identity(void)
         bool is_request = false;
         (void) PMIx_Data_pack(NULL, buf, &t, 1, PMIX_UINT8);
         (void) PMIx_Data_pack(NULL, buf, &op_id, 1, PMIX_SIZE);
+        (void) PMIx_Data_pack(NULL, buf, &prte_rml_base.n_dmns, 1, PMIX_PROC_RANK);
         (void) PMIx_Data_pack(NULL, buf, &ack_id, 1, PMIX_PROC_RANK);
         (void) PMIx_Data_pack(NULL, buf, &is_request, 1, PMIX_BOOL);
     }
@@ -1770,37 +1779,14 @@ static int test_xcast_tree_identity(void)
     return failures;
 }
 
-/*
- * A daemon must take a routing-tree forward from a parent a grow gave it
- * before it has heard of the grow - see from_old_routing_parent().  A forward
- * from a daemon we do know and do not call our parent is still dropped.
- *
- * The daemon under test has a child of its own, so the op it accepts waits
- * for that child's ack instead of completing: completing would ack the new
- * parent, which needs the daemon count only a real wireup brings, and that is
- * not what is under test.  The routing shape is the radix-2 one from
- * test_rml_routing.
- */
-static int test_xcast_grow_new_parent(void)
-{
-    int failures = 0;
 #if PRTE_TEST_GRPCOMM_INTERNALS
-    pmix_data_buffer_t *buf;
-    pmix_proc_t sender;
-    size_t seen;
-    pmix_rank_t save_rank = PRTE_PROC_MY_NAME->rank;
-    pmix_rank_t save_ndaemons = prte_process_info.num_daemons;
-    prte_proc_type_t save_type = prte_process_info.proc_type;
-    int save_radix = prte_rml_base.radix;
+/* A daemon's view of a radix-2 DVM of ndmns daemons with dead[] departed,
+ * holding every routing broadcast up to op 10 */
+static void grow_view(pmix_rank_t me, pmix_rank_t ndmns,
+                      const pmix_rank_t *dead, size_t ndead)
+{
     prte_grpcomm_tree_state_t *routing;
-
-    /* delivery posts the payload and the forward to 7 is queued as a send -
-     * both need an event base, and nothing runs the loop, so neither is
-     * dispatched */
-    if (PRTE_SUCCESS != prte_event_base_open()) {
-        fprintf(stderr, "FAIL [xcast grow]: cannot open an event base\n");
-        return 1;
-    }
+    size_t i;
 
     PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops, prte_grpcomm_xcast_t);
     PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
@@ -1813,44 +1799,23 @@ static int test_xcast_grow_new_parent(void)
     pmix_bitmap_init(&prte_rml_base.revived_dmns, 64);
     PMIX_CONSTRUCT(&prte_rml_base.lateral_links, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.lateral_links, 64);
-    routing = &prte_grpcomm_globals.xcast_ops.tree[PRTE_GRPCOMM_TOPO_ROUTING];
-
-    /* daemon 3 before the grow */
-    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 1);
-    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 5);
+    for (i = 0; i < ndead; i++) {
+        pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, dead[i]);
+    }
     prte_process_info.proc_type = PRTE_PROC_DAEMON;
-    PRTE_PROC_MY_NAME->rank = 3;
-    prte_process_info.num_daemons = 8;
+    PRTE_PROC_MY_NAME->rank = me;
+    prte_process_info.num_daemons = ndmns;
     prte_rml_base.radix = 2;
     prte_rml_compute_routing_tree();
-    CHECK("xcast grow: before the grow 3's parent is the root",
-          0 == PRTE_PROC_MY_PARENT->rank);
-    CHECK("xcast grow: 3 has a child to wait on", 0 < prte_rml_base.n_children);
 
-    /* it has seen every routing broadcast up to the grow */
+    routing = &prte_grpcomm_globals.xcast_ops.tree[PRTE_GRPCOMM_TOPO_ROUTING];
     routing->op_id_inited = 10;
     routing->op_id_completed = 10;
     routing->op_id_completed_at_promotion = 0;
+}
 
-    /* the grow's first broadcast, relayed by 13 - 3's parent in the tree the
-     * controller computed with the new daemons in it */
-    PMIX_LOAD_PROCID(&sender, PRTE_PROC_MY_NAME->nspace, 13);
-    buf = xcast_forward(PRTE_GRPCOMM_TOPO_ROUTING, 11);
-    prte_grpcomm_xcast_recv(PRTE_SUCCESS, &sender, buf, PRTE_RML_TAG_XCAST, NULL);
-    PMIX_DATA_BUFFER_RELEASE(buf);
-    CHECK("xcast grow: a forward from a parent the grow added is accepted",
-          11 == routing->op_id_inited &&
-          1 == pmix_list_get_size(&prte_grpcomm_globals.xcast_ops.ops));
-
-    /* a daemon we know and do not call our parent is still an old parent */
-    seen = routing->op_id_inited;
-    PMIX_LOAD_PROCID(&sender, PRTE_PROC_MY_NAME->nspace, 2);
-    buf = xcast_forward(PRTE_GRPCOMM_TOPO_ROUTING, seen + 1);
-    prte_grpcomm_xcast_recv(PRTE_SUCCESS, &sender, buf, PRTE_RML_TAG_XCAST, NULL);
-    PMIX_DATA_BUFFER_RELEASE(buf);
-    CHECK("xcast grow: a known daemon that is not our parent is still screened",
-          seen == routing->op_id_inited);
-
+static void grow_view_release(void)
+{
     PMIX_DESTRUCT(&prte_grpcomm_globals.xcast_ops);
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
@@ -1858,6 +1823,83 @@ static int test_xcast_grow_new_parent(void)
     PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
     PMIX_DESTRUCT(&prte_rml_base.revived_dmns);
     PMIX_DESTRUCT(&prte_rml_base.lateral_links);
+}
+
+/* Hand the daemon a routing-tree forward of the op after the last it holds,
+ * from sender, stamped with span; report whether it was taken */
+static bool grow_forward_taken(pmix_rank_t sender, pmix_rank_t span)
+{
+    prte_grpcomm_tree_state_t *routing;
+    pmix_data_buffer_t *buf;
+    pmix_proc_t from;
+    size_t seen;
+
+    routing = &prte_grpcomm_globals.xcast_ops.tree[PRTE_GRPCOMM_TOPO_ROUTING];
+    seen = routing->op_id_inited;
+    PMIX_LOAD_PROCID(&from, PRTE_PROC_MY_NAME->nspace, sender);
+    buf = xcast_forward_from(PRTE_GRPCOMM_TOPO_ROUTING, seen + 1, span);
+    prte_grpcomm_xcast_recv(PRTE_SUCCESS, &from, buf, PRTE_RML_TAG_XCAST, NULL);
+    PMIX_DATA_BUFFER_RELEASE(buf);
+    return seen + 1 == routing->op_id_inited;
+}
+#endif
+
+/*
+ * A daemon must take a routing-tree forward from a parent a grow gave it
+ * before it has heard of the grow - see from_old_routing_parent().  The new
+ * parent may be a grown daemon or one the daemon already knows; what tells
+ * either apart from a superseded forward is that the sender's tree spans more
+ * daemons than ours.  A forward from a known daemon that is not our parent,
+ * over a tree the size of ours, is still dropped.
+ *
+ * 3 has a child of its own, so the op it accepts from 13 waits for that
+ * child's ack instead of completing: completing would ack 13, which needs the
+ * daemon count only a real wireup brings, and that is not what is under test.
+ * 7 has none, so the op it accepts completes and is acked to 3, a daemon it
+ * can already reach.  The routing shapes are the radix-2 ones from
+ * test_rml_routing.
+ */
+static int test_xcast_grow_new_parent(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    pmix_rank_t save_rank = PRTE_PROC_MY_NAME->rank;
+    pmix_rank_t save_ndaemons = prte_process_info.num_daemons;
+    prte_proc_type_t save_type = prte_process_info.proc_type;
+    int save_radix = prte_rml_base.radix;
+    const pmix_rank_t dead_15[] = {1, 5};
+    const pmix_rank_t dead_159[] = {1, 5, 9};
+
+    /* delivery posts the payload and the forward to a child is queued as a
+     * send - both need an event base, and nothing runs the loop, so neither
+     * is dispatched */
+    if (PRTE_SUCCESS != prte_event_base_open()) {
+        fprintf(stderr, "FAIL [xcast grow]: cannot open an event base\n");
+        return 1;
+    }
+
+    /* 3, before 8 daemons grow to 14: the grown 13 takes 1's slot from it */
+    grow_view(3, 8, dead_15, 2);
+    CHECK("xcast grow: before the grow 3's parent is the root",
+          0 == PRTE_PROC_MY_PARENT->rank);
+    CHECK("xcast grow: 3 has a child to wait on", 0 < prte_rml_base.n_children);
+    CHECK("xcast grow: a forward from a parent the grow added is accepted",
+          grow_forward_taken(13, 14));
+    CHECK("xcast grow: a known daemon over a tree like ours that is not our "
+          "parent is still screened", !grow_forward_taken(2, 8));
+    grow_view_release();
+
+    /* 7, before 12 daemons grow to 14: 13 takes 1's slot from 3, 3 takes its
+     * own back from 11, and 7 goes from 11 to 3 */
+    grow_view(7, 12, dead_159, 3);
+    CHECK("xcast grow: before the grow 7's parent is 11",
+          11 == PRTE_PROC_MY_PARENT->rank);
+    CHECK("xcast grow: a known daemon over a tree like ours that is not our "
+          "parent is screened", !grow_forward_taken(3, 12));
+    CHECK("xcast grow: the same daemon is accepted once its tree is the grown one",
+          grow_forward_taken(3, 14));
+    grow_view_release();
+
     prte_rml_base.radix = save_radix;
     prte_process_info.num_daemons = save_ndaemons;
     PRTE_PROC_MY_NAME->rank = save_rank;

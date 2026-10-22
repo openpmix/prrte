@@ -182,9 +182,13 @@ static void topo_children(prte_grpcomm_topology_t topo, pmix_rank_t **children,
 static size_t topo_n_children(prte_grpcomm_topology_t topo);
 static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo);
 /* Did this routing-tree forward or ack request come from an old parent? -
- * see the definition for the one sender that cannot be one. */
+ * see the definition for the senders that cannot be one. */
 static bool from_old_routing_parent(const signature_t *sig,
-                                    const pmix_proc_t *sender);
+                                    const pmix_proc_t *sender,
+                                    pmix_rank_t sender_span);
+/* (un)pack the daemon span the sender's tree was computed over */
+static int pack_span(pmix_data_buffer_t *buffer);
+static int unpack_span(pmix_data_buffer_t *buffer, pmix_rank_t *span);
 /* Is an edge of this tree sent direct rather than routed?  Registers the peer
  * as a lateral link when it is one - see the definition. */
 static bool edge_is_direct(prte_grpcomm_topology_t topo, pmix_rank_t dest);
@@ -393,6 +397,7 @@ void prte_grpcomm_xcast_recv(
 
     signature_t sig;
     uint32_t sender_version;
+    pmix_rank_t sender_span;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
     {
         /* treated like every other field of the forward - a broadcast that
@@ -407,6 +412,7 @@ void prte_grpcomm_xcast_recv(
             return;
         }
     }
+    if(PMIX_SUCCESS != unpack_span(buffer, &sender_span)) return;
 
     /* Ignore messages from old parents - but "parent" is a question about the
      * tree this broadcast is travelling, which is why the signature has to be
@@ -414,7 +420,8 @@ void prte_grpcomm_xcast_recv(
      * tree's parent, and on a routing tree of a different radix that daemon is
      * a sibling or a cousin rather than a parent. Screening on the routing
      * parent would discard every one of them. */
-    if (!PRTE_PROC_IS_MASTER && from_old_routing_parent(&sig, sender)) {
+    if (!PRTE_PROC_IS_MASTER &&
+        from_old_routing_parent(&sig, sender, sender_span)) {
         /* An old parent's forward, on the tree where "old" is a question this
          * daemon can answer.  The repair notice travels this tree, so by the
          * time a new parent relays anything we have already processed the
@@ -684,10 +691,12 @@ void prte_grpcomm_xcast_ack(
     int ret = PMIX_SUCCESS;
 
     signature_t sig;
+    pmix_rank_t sender_span;
     pmix_rank_t ack_id;
     bool is_request;
 
     if(PMIX_SUCCESS == ret) ret = unpack_sig(buffer, &sig);
+    if(PMIX_SUCCESS == ret) ret = unpack_span(buffer, &sender_span);
     if(PMIX_SUCCESS == ret) ret = unpack_ack_id(buffer, &ack_id);
     if(PMIX_SUCCESS == ret) ret = unpack_bool(buffer, &is_request);
     if(PMIX_SUCCESS != ret){
@@ -698,7 +707,7 @@ void prte_grpcomm_xcast_ack(
     op_t* op = find_op(&sig);
 
     if(is_request){
-        if (from_old_routing_parent(&sig, sender)) {
+        if (from_old_routing_parent(&sig, sender, sender_span)) {
             // Old message, or one from a daemon that is our parent in some
             // other tree than the one this op travels. Only asked of the
             // routing tree, for the reason given at the same screen in
@@ -1042,6 +1051,7 @@ static void send_ack_msg(
     pmix_data_buffer_t* msg = PMIx_Data_buffer_create();
     int ret = PMIX_SUCCESS;
     if(PMIX_SUCCESS == ret) ret = pack_sig(msg, sig);
+    if(PMIX_SUCCESS == ret) ret = pack_span(msg);
     if(PMIX_SUCCESS == ret) ret = pack_ack_id(msg, &ack_id);
     if(PMIX_SUCCESS == ret) ret = pack_bool(msg, &is_request);
     if(PMIX_SUCCESS != ret) {
@@ -1252,6 +1262,18 @@ static int unpack_bool(pmix_data_buffer_t* buffer, bool* boolean){
     return PMIX_SUCCESS;
 }
 
+/* The span a forward or an ack is stamped with is the daemon count its
+ * sender's routing tree was computed over - see from_old_routing_parent() for
+ * what the receiver reads into it. */
+static int pack_span(pmix_data_buffer_t* buffer){
+    DIRECT_XCAST_PACK(buffer, &prte_rml_base.n_dmns, PMIX_PROC_RANK);
+    return PMIX_SUCCESS;
+}
+static int unpack_span(pmix_data_buffer_t* buffer, pmix_rank_t* span){
+    DIRECT_XCAST_UNPACK(buffer, span, PMIX_PROC_RANK);
+    return PMIX_SUCCESS;
+}
+
 /* The relay from an originator to the controller.  A point-to-point send; the
  * receiver tells it from a forward by the op-id, which is zero here and
  * assigned by the controller. */
@@ -1261,6 +1283,7 @@ static int pack_relay_msg(pmix_data_buffer_t* buffer, op_t* op){
     if (PMIX_SUCCESS == rc) {
         rc = PMIx_Data_pack(NULL, buffer, &version, 1, PMIX_UINT32);
     }
+    if(PMIX_SUCCESS == rc) rc = pack_span(buffer);
     if(PMIX_SUCCESS == rc) rc = pack_ack_id(buffer, &op->ack_id_down);
     if(PMIX_SUCCESS == rc) rc = pack_msg(buffer, op);
     return rc;
@@ -1272,6 +1295,7 @@ static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
     if (PMIX_SUCCESS == rc) {
         rc = PMIx_Data_pack(NULL, buffer, &version, 1, PMIX_UINT32);
     }
+    if(PMIX_SUCCESS == rc) rc = pack_span(buffer);
     if(PMIX_SUCCESS == rc) rc = pack_ack_id(buffer, &op->ack_id_down);
     if(PMIX_SUCCESS == rc) rc = pack_msg(buffer, op);
     return rc;
@@ -1387,26 +1411,40 @@ static size_t topo_n_children(prte_grpcomm_topology_t topo)
  * "not my parent" may only mean "not heard yet", as the comment at the screen
  * in prte_grpcomm_xcast_recv explains.
  *
- * And on the routing tree, a sender beyond the daemons we know is never an
- * old parent.  An old parent is one we computed, so it is one of the daemons
- * we held a count for; a daemon outside that count can only have been added
- * by a grow we have not heard of yet - and the grow is precisely what makes
- * it our parent.  A dead slot goes to the first living daemon of its subtree,
- * right-first, so a daemon grown into a dead slot's subtree to the right of
- * the one holding it takes the slot over, and the old holder becomes its
- * child.  The broadcast that would tell the old holder so is the grow's
- * wireup, which travels the tree the controller computed with the new daemons
- * in it - and so arrives through the new parent.  The ordering argument the
- * screen rests on does not hold here, because the news of a new parent and
- * the first thing that parent relays are one and the same broadcast; screened,
- * it was dropped, and so was every broadcast through that parent after it.
+ * And on the routing tree, a sender whose tree spans more daemons than ours is
+ * never an old parent: it has processed a grow that we have not, and the grow
+ * is what can have made it our parent.  A dead slot goes to the first living
+ * daemon of its subtree, right-first, so a grow that adds a living daemon to a
+ * dead slot's subtree, to the right of the one holding it, moves the slot -
+ * and everything that slot was holding is re-parented with it.  The broadcast
+ * that would tell us so is the grow's wireup, which travels the tree the
+ * controller computed with the new daemons in it, and so arrives through the
+ * new parent.  The ordering argument the screen rests on does not hold here,
+ * because the news of a new parent and the first thing that parent relays are
+ * one and the same broadcast; screened, it was dropped, and so was every
+ * broadcast through that parent after it.
+ *
+ * The new parent is not necessarily one of the grown daemons: the daemon a
+ * grown one displaces moves down into a slot of its own subtree, and displaces
+ * that slot's holder in turn.  Radix 2, twelve daemons with 1, 5 and 9
+ * departed: 3 holds 1's slot and 11 holds 3's, so 7 is 11's child.  Grow to
+ * fourteen and 13 takes 1's slot, 3 falls back to its own, and 7 is now 3's
+ * child.  3 has processed the wireup and forwards it to 7, and to 7 the
+ * forward comes from a daemon it knows and does not call its parent.  Asking whether the SENDER is beyond our count cannot
+ * tell that apart from a superseded forward; asking whether the sender's TREE
+ * is can, which is why every forward and every ack carries the span it was
+ * computed over.  The span only grows - vpids are never reused, and a
+ * departure leaves its slot in the tree - so a larger one is always the newer
+ * tree, and between daemons that agree on it the screen is exactly what it
+ * was.
  *
  * Accepting such a forward loses nothing the screen protects: op_id still
  * decides whether we already hold it, the ack goes back to whoever sent it,
  * and the wireup is processed before it is forwarded, so we forward it on the
  * tree it describes. */
 static bool from_old_routing_parent(const signature_t *sig,
-                                    const pmix_proc_t *sender)
+                                    const pmix_proc_t *sender,
+                                    pmix_rank_t sender_span)
 {
     if (PRTE_GRPCOMM_TOPO_ROUTING != sig->topology) {
         return false;
@@ -1414,7 +1452,7 @@ static bool from_old_routing_parent(const signature_t *sig,
     if (sender->rank == topo_parent(sig->topology)) {
         return false;
     }
-    return sender->rank < prte_rml_base.n_dmns;
+    return sender_span <= prte_rml_base.n_dmns;
 }
 
 static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo)
