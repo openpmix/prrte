@@ -257,7 +257,10 @@ process exits — see the ownership note below.
   must keep that check.
 - **Tree-spawn only launches routing children.** The `children` loop in
   `launch_daemons` and `remote_spawn` depends on the RML routing tree
-  being current — `setup_vm` recomputes it, so don't reorder that.
+  being current — `setup_vm` recomputes it for the primary launch, so don't
+  reorder that. It deliberately does *not* recompute it for a grow (see
+  `plm/base/AGENTS.md`, "When the HNP's routing tree moves"), which is safe
+  only because of the next rule.
 - **Force `no_tree_spawn = true` after the primary launch.** Secondary/
   dynamic launches must be flat; the two force-assignments in
   `launch_daemons` and `remote_spawn` are load-bearing.
