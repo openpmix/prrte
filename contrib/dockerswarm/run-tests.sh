@@ -5687,6 +5687,7 @@ test_grpcomm() {
     test_low_radix_release_fault
     test_xcast_grow_new_parent
     test_xcast_grow_known_parent
+    test_grow_window_broadcast
 }
 
 test_xcast_grow_new_parent() {
@@ -5777,6 +5778,97 @@ test_xcast_grow_known_parent() {
     else
         bad "could not start an elastic DVM for the known-parent grow test"
     fi
+    cleanup_swarm
+}
+
+test_grow_window_broadcast() {
+    local out n uri e w
+
+    if ! have_nodes 6; then
+        skp "broadcast during a grow: needs 6 nodes, this run has $NNODES"
+        return
+    fi
+    if ! RUN "test -x $SESSCTL"; then
+        skp "broadcast during a grow: sessionctrl not installed -- re-run ./build.sh"
+        return
+    fi
+
+    banner "plm: a broadcast sent while a grow is in flight reaches a daemon it re-parents"
+    # The HNP used to switch to the grown routing tree when the grow began,
+    # while every other daemon switches only on the grow's WIREUP (see
+    # prte_plm_base_setup_virtual_machine).  At rml_base_radix 2 - grow
+    # node2,node3; grow node4; shrink node2; grow node5,node6 - the grown tree
+    # puts node4's daemon (3) under node6's (5), so a broadcast sent before
+    # node6's daemon has reported was forwarded to it, written off, and never
+    # reached node4.  The launch agent is a wrapper that waits before it runs
+    # ssh while armed, which holds that window open long enough to signal a
+    # session job on node4 inside it.
+    cleanup_swarm
+    for n in $(seq 1 "$NNODES"); do kill_stray "$n" sleep; done
+    w=$(mktemp)
+    printf '#!/bin/sh\n[ -f /tmp/prte-slowssh.arm ] && sleep 15\nexec ssh "$@"\n' > "$w"
+    for n in $(seq 1 6); do
+        COPY_IN "$w" "$n" /tmp/prte-slowssh >/dev/null 2>&1
+        ON "$n" 'chmod +x /tmp/prte-slowssh; rm -f /tmp/prte-slowssh.arm' >/dev/null 2>&1
+    done
+    rm -f "$w"
+    RUN 'rm -f /tmp/dvm.uri; nohup prte --daemonize --prtemca prte_elastic_mode 1 \
+                    --prtemca rml_base_radix 2 --prtemca plm_ssh_agent /tmp/prte-slowssh \
+                    --report-uri /tmp/dvm.uri >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start an elastic DVM for the grow-window test"
+        cleanup_swarm
+        return
+    fi
+    uri=$(RUN 'head -1 /tmp/dvm.uri' 2>/dev/null | tr -d '\r')
+    e="PRTE_DVM_URI='$uri'"
+    RUN "$e timeout 90 elastic grow node2:1,node3:1" >/dev/null 2>&1
+    RUN "$e timeout 90 elastic grow node4:1" >/dev/null 2>&1
+    RUN "$e timeout 90 elastic shrink node2" >/dev/null 2>&1; sleep 3
+    out=$(RUN "$e timeout 60 $SESSCTL instantiate 4260 --hosts node4:1 --np 1 -- /bin/sleep 240" 2>&1)
+    sleep 3
+    if ! echo "$out" | grep -q PMIX_SUCCESS || ! ON 4 'pgrep -x sleep >/dev/null'; then
+        bad "could not start a session job on node4: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    else
+        for n in $(seq 1 6); do ON "$n" 'touch /tmp/prte-slowssh.arm' >/dev/null 2>&1; done
+        EXEC_TOOL_BG 1 "$e timeout 120 elastic grow node5:1,node6:1 > /tmp/wgrow.out 2>&1"
+        sleep 5
+        if ON 5 'pgrep -x prted >/dev/null' || ON 6 'pgrep -x prted >/dev/null'; then
+            # without the window there is nothing to test - the launcher
+            # here does not go through the agent
+            skp "could not hold the grow window open (a new daemon was already up)"
+        else
+            out=$(RUN "$e timeout 60 $SESSCTL signal 4260 15" 2>&1)
+            echo "$out" | grep -q PMIX_SUCCESS \
+                || bad "the session signal was refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            sleep 4
+            ON 4 'pgrep -x sleep >/dev/null' \
+                && bad "a signal sent during the grow never reached node4's daemon" \
+                || ok "a signal sent during the grow reached node4's daemon"
+        fi
+        for _ in $(seq 60); do
+            RUN "grep -q 'PHASE 2' /tmp/wgrow.out" 2>/dev/null && break
+            sleep 1
+        done
+        RUN "grep -q PMIX_DVM_IS_READY /tmp/wgrow.out" 2>/dev/null \
+            && ok "...and the grow it was sent during completed" \
+            || bad "the grow held open by the launch agent did not complete"
+        if ON 4 'pgrep -x sleep >/dev/null'; then
+            # the session still holds node4, so no other job may use it
+            skp "node4 after the grow: still held by the session the signal missed"
+        else
+            # the session retires with its job, and gives node4 back
+            sleep 3
+            RUN 'rm -f /tmp/prun.*' >/dev/null 2>&1
+            out=$(RUN "$e timeout 40 prun --host node4:1 -n 1 hostname" 2>&1 | tr -d '\r')
+            [ "$out" = node4 ] \
+                && ok "node4 still runs a job after the grow" \
+                || bad "node4 launched nothing after the grow: $out"
+        fi
+    fi
+    for n in $(seq 1 6); do ON "$n" 'rm -f /tmp/prte-slowssh.arm' >/dev/null 2>&1; done
+    RUN "$e timeout -k 5 30 pterm" >/dev/null 2>&1
+    for n in $(seq 1 "$NNODES"); do kill_stray "$n" sleep; done
     cleanup_swarm
 }
 
@@ -8412,7 +8504,7 @@ test_include() {
 }
 
 test_resize_elastic() {
-    local out rc n
+    local out rc n w
 
     banner "ras: a DVM that is not elastic refuses to change size"
     # Outside elastic mode the DVM's daemons are fixed for its lifetime, and
@@ -8464,6 +8556,37 @@ test_resize_elastic() {
         [ "$rc" = 0 ] && ok "...and pterm takes it down" || bad "pterm failed after a failed grow (rc=$rc)"
     else
         bad "could not start an elastic DVM for the failed-grow test"
+    fi
+    cleanup_swarm
+
+    banner "plm: a grow that fails part-way takes down the daemon that did start"
+    # A launch agent that fails for node3 only - and only after a pause, so
+    # node2's daemon is up and has reported first.  The campaign rolls back,
+    # and node2's daemon must be told to go.  It is in nobody's routing tree:
+    # the grow never sent its WIREUP, and the HNP does not switch to the grown
+    # tree before it does (see prte_plm_base_setup_virtual_machine), so
+    # grow_rollback tells it directly.
+    w=$(mktemp)
+    printf '#!/bin/sh\ncase "$*" in *node3*) sleep 6; exit 1 ;; esac\nexec ssh "$@"\n' > "$w"
+    COPY_IN "$w" 1 /tmp/prte-failssh >/dev/null 2>&1
+    ON 1 'chmod +x /tmp/prte-failssh' >/dev/null 2>&1
+    rm -f "$w"
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca plm_ssh_agent /tmp/prte-failssh >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 90 elastic grow node2:1,node3:1' 2>&1); rc=$?
+        echo "$out" | grep -q 'PMIX_DVM_IS_READY' \
+            && bad "a grow with a node that cannot start reported success" \
+            || ok "a grow with a node that cannot start did not report success"
+        n=$(prted_settle 20 2)
+        [ "$n" = 0 ] && ok "...and the daemon that did start on node2 was taken down" \
+                     || bad "the daemon that started on node2 outlived the failed grow"
+        out=$(RUN 'timeout -k 5 30 prun -n 2 hostname' 2>&1); rc=$?
+        n=$(echo "$out" | grep -cE '^node1$')
+        [ "$rc" = 0 ] && [ "$n" = 2 ] && ok "...and the DVM still runs jobs" \
+                                      || bad "DVM unusable after a part-failed grow (rc=$rc, lines=$n)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the part-failed grow test"
     fi
     cleanup_swarm
 }
