@@ -99,7 +99,21 @@ libprrteutil_la_DEPENDENCIES = \
         hostfile/libprrteutilhostfile.la \
         rankfile/libprrteutilrankfile.la
 
-prte_show_help_content.c: prte-convert-help.py
+# The generator slurps every help-*.txt in the tree, so the prerequisite
+# list would be the tree; run it unconditionally instead. It rewrites
+# the output only when the content differs, so an unchanged tree leaves
+# the timestamp alone and nothing recompiles. A tarball ships the
+# generated file, so only a developer tree needs to rebuild it; leaving
+# it alone also keeps it out of a VPATH build directory, which matters
+# because distclean would not remove it there.
+if PRTE_DEVEL_BUILD
+prte_show_help_deps = FORCE
+else
+prte_show_help_deps = prte-convert-help.py
+endif
+
+prte_show_help_content.c: $(prte_show_help_deps)
+
 if PRTE_PICKY_COMPILERS
 	$(PRTE_V_GEN) $(PYTHON) $(abs_srcdir)/prte-convert-help.py \
 		--root $(abs_top_srcdir) \
@@ -111,6 +125,9 @@ else
 		--root $(abs_top_srcdir) \
 		--out prte_show_help_content.c
 endif
+
+
+FORCE:
 
 
 # Cross-check the tool help files against the schizo option tables. The
@@ -129,6 +146,9 @@ clean-local:
 
 MAINTAINERCLEANFILES = \
 	prte_show_help_content.c
+if PRTE_DEVEL_BUILD
+CLEANFILES += prte_show_help_content.c
+endif
 
 distclean-local:
 	rm -f prte_show_help_content.c
