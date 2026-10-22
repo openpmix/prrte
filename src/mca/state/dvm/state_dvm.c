@@ -462,6 +462,24 @@ static void vm_ready(int fd, short args, void *cbdata)
                 }
             }
 
+            /* A grow left our routing tree as it was until now - see
+             * prte_plm_base_setup_virtual_machine - so switch to the grown
+             * one here, immediately before the broadcast that switches every
+             * other daemon: it travels the grown tree, and each daemon moves
+             * to that tree on reading it, before relaying it on.
+             *
+             * The tree spans every vpid the DVM has handed out, which is the
+             * count the nidmap above gives the daemons.  num_daemons is not
+             * that here: a daemon lost since setup_virtual_machine took one
+             * off it, and building the tree from it would leave the highest
+             * rank out of ours and in everyone else's. */
+            if (prte_rml_base.n_dmns != jptr->num_procs) {
+                pmix_rank_t ndmns = prte_process_info.num_daemons;
+                prte_process_info.num_daemons = jptr->num_procs;
+                prte_rml_compute_routing_tree();
+                prte_process_info.num_daemons = ndmns;
+            }
+
             /* goes to all daemons */
             if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_WIREUP, &buf))) {
                 PRTE_ERROR_LOG(rc);

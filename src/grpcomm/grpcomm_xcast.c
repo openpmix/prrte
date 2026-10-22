@@ -1633,21 +1633,28 @@ static void forward_op(op_t* op){
  * send through this callback).  So the rc check in forward_op_to cannot see
  * it, and without this the op waits forever on a subtree it never reached.
  *
- * That is not a hypothetical.  The routing tree holds daemons that have not
- * yet reported home - setup_virtual_machine recomputes it at launch
- * *initiation*, and must, because plm/ssh tree-spawn is driven from it - so
- * every broadcast issued during a DVM grow forwards to a child there is as yet
- * no way to reach.  errmgr/dvm deliberately swallows that send failure (it is
- * not a daemon death), which is right for the daemon and left the op stuck:
- * the master's op_id_completed stopped advancing, every later broadcast tripped
- * PRTE_ERR_OUT_OF_ORDER_MSG in finish_op, and anything waiting on the
+ * That is not a hypothetical.  On the DVM's first launch the routing tree
+ * holds daemons that have not yet reported home - setup_virtual_machine
+ * recomputes it at launch *initiation*, and must, because plm/ssh tree-spawn
+ * is driven from it - so anything broadcast then forwards to a child there is
+ * as yet no way to reach.  errmgr/dvm deliberately swallows that send failure
+ * (it is not a daemon death), which is right for the daemon and left the op
+ * stuck: the master's op_id_completed stopped advancing, every later broadcast
+ * tripped PRTE_ERR_OUT_OF_ORDER_MSG in finish_op, and anything waiting on the
  * completion callback - the elastic shrink campaign - waited forever (#2617).
  *
  * Dropping the expectation is the answer rather than failing the broadcast,
  * because a daemon that joins after op N was never going to see op N anyway:
  * the late-joiner catch-up in prte_grpcomm_xcast_recv has it adopt ops
  * 1..N-1 as complete when it arrives.  This only makes the sender agree with
- * that.  A child that genuinely died is a separate story and still takes the
+ * that.
+ *
+ * Which is exactly why a grow must not put an unreported daemon in our tree:
+ * a grow can place EXISTING daemons under a new one, and they are not late
+ * joiners - they hold op N-1 and need op N, and writing off the subtree
+ * loses it for them for good.  So a grow leaves our tree alone until its
+ * WIREUP goes out (see prte_plm_base_setup_virtual_machine), and the subtree
+ * written off here only ever holds daemons that really are joining.  A child that genuinely died is a separate story and still takes the
  * fault handler's path, which recomputes nexpected and starts a fresh ack
  * round. */
 static void forward_lost(int status, pmix_proc_t *peer,

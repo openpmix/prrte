@@ -121,6 +121,27 @@ deliberately **not** called from `prte_plm_base_grow_drain(false)`, whose only
 caller is the DVM shutting down - releasing the cache there would launch jobs
 into a DVM on its way out.
 
+### When the HNP's routing tree moves
+
+`setup_virtual_machine` updates `num_daemons` at once, but it recomputes the
+routing tree **only on the DVM's first launch** (`prte_rml_base.n_dmns` still
+1): plm/ssh tree-spawns that launch off the tree, and nobody else is in it to
+be misled. A grow leaves the HNP's tree alone; `state/dvm`'s `vm_ready()`
+recomputes it immediately before the WIREUP xcast, over `num_procs` (the span
+the nidmap hands every daemon - `num_daemons` may have lost a daemon since).
+
+Switching early is a real bug, not a matter of taste. Existing daemons switch
+only when the WIREUP reaches them, and a grow can place one *under* a new
+daemon. With the grown tree in hand early, the HNP forwarded every broadcast
+of the window to new children it could not reach yet, `forward_lost` wrote off
+their subtrees, and the existing daemons in them never got the broadcast - a
+session signal was accepted and never delivered. Nothing in a grow needs the
+tree early: secondary launches are never tree-spawned, and new daemons report
+to the HNP directly. For the same reason `grow_rollback` sends its
+`PRTE_DAEMON_SHRINK_CMD` **directly** to each started target - a failed grow
+never sent a WIREUP, so the targets are in nobody's tree. The dockerswarm
+case `test_grow_window_broadcast` holds the window open and covers it.
+
 ---
 
 ## The daemon callback — `prte_plm_base_daemon_callback`

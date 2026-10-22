@@ -3352,18 +3352,28 @@ process:
     PMIX_LIST_DESTRUCT(&nodes);
 
     if (prte_process_info.num_daemons != daemons->num_procs) {
-        /* more daemons are being launched - update the routing tree to
-         * ensure that the HNP knows how to route messages via
-         * the daemon routing tree - this needs to be done
-         * here to avoid potential race conditions where the HNP
-         * hasn't unpacked its launch message prior to being
-         * asked to communicate.
-         */
         prte_process_info.num_daemons = daemons->num_procs;
 
-        /* ensure all routing plans are up-to-date - we need this
-         * so we know how to tree-spawn and/or xcast info */
-        prte_rml_compute_routing_tree();
+        /* Only the DVM's first launch moves the routing tree here.  plm/ssh
+         * tree-spawns that launch, and reads who launches whom off the tree,
+         * so the tree has to hold the new daemons before they are launched -
+         * and with nobody but us in it yet, there is no one for an early
+         * switch to mislead.
+         *
+         * A grow must not switch here.  Every existing daemon keeps the tree
+         * it has until the grow's WIREUP reaches it, and the WIREUP goes out
+         * only once every new daemon has reported (vm_ready).  A grow can
+         * place an existing daemon under a new one, so switching now has us
+         * forward anything we broadcast in the meantime to a new daemon we
+         * cannot reach yet - forward_lost then writes off its whole subtree,
+         * and the existing daemons in it never get the broadcast: a signal,
+         * a kill, a fence release.  Nothing in a grow needs the new tree
+         * before the WIREUP: a secondary launch is never tree-spawned, and
+         * the new daemons report to us directly.  So the switch is made in
+         * vm_ready, by the broadcast that tells everyone else to make it. */
+        if (1 >= prte_rml_base.n_dmns) {
+            prte_rml_compute_routing_tree();
+        }
     }
 
     /* mark that the daemon job changed */
@@ -3750,8 +3760,8 @@ void prte_plm_base_reset_dvm_node(prte_node_t *node)
  * daemon actually came up:
  *
  *   - a target that started (PRTE_PROC_FLAG_ALIVE) is terminated using the same
- *     PRTE_DAEMON_SHRINK_CMD machinery the DVM shrink path uses; its departure
- *     is then reconciled on the normal daemon-loss path as it exits;
+ *     PRTE_DAEMON_SHRINK_CMD the DVM shrink path uses, sent to it directly; its
+ *     departure is then reconciled on the normal daemon-loss path as it exits;
  *   - a target that never started has no daemon to signal, so its launch-time
  *     daemon-count bump is reverted here (no comm-failure event will arrive for
  *     it).
@@ -3822,27 +3832,37 @@ static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
         }
     }
 
-    if (0 < nkill) {
-        pmix_data_buffer_t msg;
+    /* Tell each started target to go, directly.  Not by broadcast: a failed
+     * grow never sent its WIREUP, so the targets are in nobody's routing tree
+     * - not even ours, which a grow leaves alone until the WIREUP (see
+     * prte_plm_base_setup_virtual_machine).  A broadcast would reach every
+     * existing daemon, none of which is named in it, and no target.  Each
+     * target has reported, so we have its contact info. */
+    for (t = 0; t < nkill; t++) {
+        pmix_data_buffer_t *msg;
         prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
-        pmix_status_t rc;
+        int32_t one = 1;
+        pmix_status_t prc;
+        int rc;
 
-        PMIX_DATA_BUFFER_CONSTRUCT(&msg);
-        rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
-        if (PMIX_SUCCESS == rc) {
-            rc = PMIx_Data_pack(NULL, &msg, &nkill, 1, PMIX_INT32);
+        PMIX_DATA_BUFFER_CREATE(msg);
+        prc = PMIx_Data_pack(NULL, msg, &cmd, 1, PMIX_UINT8);
+        if (PMIX_SUCCESS == prc) {
+            prc = PMIx_Data_pack(NULL, msg, &one, 1, PMIX_INT32);
         }
-        if (PMIX_SUCCESS == rc) {
-            rc = PMIx_Data_pack(NULL, &msg, kill, nkill, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS == prc) {
+            prc = PMIx_Data_pack(NULL, msg, &kill[t], 1, PMIX_PROC_RANK);
         }
-        if (PMIX_SUCCESS == rc) {
-            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg))) {
-                PRTE_ERROR_LOG(rc);
-            }
-        } else {
-            PMIX_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_RELEASE(msg);
+            continue;
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&msg);
+        PRTE_RML_SEND_DIRECT(rc, kill[t], msg, PRTE_RML_TAG_DAEMON);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(msg);
+        }
     }
     free(kill);
 }
