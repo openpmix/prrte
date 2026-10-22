@@ -631,6 +631,13 @@ added here inherits them:
   repaired parent replays to a child that has not heard yet. Both the forward
   and the ack-request screens are therefore asked only of
   `PRTE_GRPCOMM_TOPO_ROUTING`.
+
+  Even there a grow breaks the ordering: a grown daemon can take over an old
+  one's slot and become its parent, and the grow's WIREUP then arrives
+  through that new parent. So the screen (`from_old_routing_parent()`) passes
+  any sender at or beyond `n_dmns` — vpids are never reused, so it cannot be
+  an old parent. `test_xcast_grow_new_parent` (`test/unit/grpcomm`) pins
+  it.
 - **Ack whoever asked** (`send_ack_to`, `op->upstream`), not whoever this
   daemon's own derivation currently calls its parent. Answering the wrong
   daemon costs nothing; failing to answer the right one hangs the broadcast.
