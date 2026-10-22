@@ -10,6 +10,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -180,6 +181,10 @@ static void topo_children(prte_grpcomm_topology_t topo, pmix_rank_t **children,
                           size_t *n, bool *owned);
 static size_t topo_n_children(prte_grpcomm_topology_t topo);
 static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo);
+/* Did this routing-tree forward or ack request come from an old parent? -
+ * see the definition for the one sender that cannot be one. */
+static bool from_old_routing_parent(const signature_t *sig,
+                                    const pmix_proc_t *sender);
 /* Is an edge of this tree sent direct rather than routed?  Registers the peer
  * as a lateral link when it is one - see the definition. */
 static bool edge_is_direct(prte_grpcomm_topology_t topo, pmix_rank_t dest);
@@ -409,14 +414,13 @@ void prte_grpcomm_xcast_recv(
      * tree's parent, and on a routing tree of a different radix that daemon is
      * a sibling or a cousin rather than a parent. Screening on the routing
      * parent would discard every one of them. */
-    if (!PRTE_PROC_IS_MASTER &&
-        PRTE_GRPCOMM_TOPO_ROUTING == sig.topology &&
-        sender->rank != topo_parent(sig.topology)) {
+    if (!PRTE_PROC_IS_MASTER && from_old_routing_parent(&sig, sender)) {
         /* An old parent's forward, on the tree where "old" is a question this
          * daemon can answer.  The repair notice travels this tree, so by the
          * time a new parent relays anything we have already processed the
          * notice that made it our parent - the screen can only ever be
-         * rejecting a genuinely superseded message.
+         * rejecting a genuinely superseded message.  A grow is the exception,
+         * and from_old_routing_parent() lets it through: see there.
          *
          * On a derived tree that reasoning does not hold and the screen is
          * actively wrong: every daemon recomputes its own shape when the
@@ -600,7 +604,8 @@ void prte_grpcomm_xcast_recv(
      * The routing tree is exempt because it does not have the problem: its
      * repair notice travels the routing tree itself, so a daemon has always
      * processed the notice that gave it a new parent before anything that
-     * parent relays afterwards can arrive. */
+     * parent relays afterwards can arrive (a grow excepted - see
+     * from_old_routing_parent()). */
     if (PRTE_GRPCOMM_TOPO_ROUTING != sig.topology &&
         sender_version > prte_rml_tree_version() &&
         sender->rank != topo_parent(sig.topology)) {
@@ -693,8 +698,7 @@ void prte_grpcomm_xcast_ack(
     op_t* op = find_op(&sig);
 
     if(is_request){
-        if (PRTE_GRPCOMM_TOPO_ROUTING == sig.topology &&
-            sender->rank != topo_parent(sig.topology)) {
+        if (from_old_routing_parent(&sig, sender)) {
             // Old message, or one from a daemon that is our parent in some
             // other tree than the one this op travels. Only asked of the
             // routing tree, for the reason given at the same screen in
@@ -1376,6 +1380,41 @@ static size_t topo_n_children(prte_grpcomm_topology_t topo)
     }
     if (owned) { free(children); }
     return live;
+}
+
+/* The routing tree's screen against an old parent, for a forward and for an
+ * ack request alike.  Only the routing tree screens at all - on a derived tree
+ * "not my parent" may only mean "not heard yet", as the comment at the screen
+ * in prte_grpcomm_xcast_recv explains.
+ *
+ * And on the routing tree, a sender beyond the daemons we know is never an
+ * old parent.  An old parent is one we computed, so it is one of the daemons
+ * we held a count for; a daemon outside that count can only have been added
+ * by a grow we have not heard of yet - and the grow is precisely what makes
+ * it our parent.  A dead slot goes to the first living daemon of its subtree,
+ * right-first, so a daemon grown into a dead slot's subtree to the right of
+ * the one holding it takes the slot over, and the old holder becomes its
+ * child.  The broadcast that would tell the old holder so is the grow's
+ * wireup, which travels the tree the controller computed with the new daemons
+ * in it - and so arrives through the new parent.  The ordering argument the
+ * screen rests on does not hold here, because the news of a new parent and
+ * the first thing that parent relays are one and the same broadcast; screened,
+ * it was dropped, and so was every broadcast through that parent after it.
+ *
+ * Accepting such a forward loses nothing the screen protects: op_id still
+ * decides whether we already hold it, the ack goes back to whoever sent it,
+ * and the wireup is processed before it is forwarded, so we forward it on the
+ * tree it describes. */
+static bool from_old_routing_parent(const signature_t *sig,
+                                    const pmix_proc_t *sender)
+{
+    if (PRTE_GRPCOMM_TOPO_ROUTING != sig->topology) {
+        return false;
+    }
+    if (sender->rank == topo_parent(sig->topology)) {
+        return false;
+    }
+    return sender->rank < prte_rml_base.n_dmns;
 }
 
 static pmix_rank_t topo_parent(prte_grpcomm_topology_t topo)

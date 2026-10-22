@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -463,6 +464,66 @@ static int test_departed_ranks_survive_recompute(void)
     bitmaps_reset();
     if (0 == failures) {
         fprintf(stdout, "PASSED test_departed_ranks_survive_recompute\n");
+    }
+    return failures;
+}
+
+/*
+ * A grow can make an existing daemon the child of a daemon it does not know
+ * exists.  A dead slot is held by the first living daemon of its subtree,
+ * right-first, so when a grow adds a daemon to that subtree to the right of
+ * the current holder, the new daemon takes the slot over and the old holder
+ * becomes its child.  Until the grow's wireup reaches the old holder - and it
+ * arrives through that new parent - the two disagree about who its parent
+ * is.
+ *
+ * Checked at the default radix and at radix 2, the shape test_grpcomm drives
+ * the receive path with.
+ */
+static int test_grow_reparents_existing_daemon(void)
+{
+    int failures = 0;
+    const pmix_rank_t old_dmns = 126, new_dmns = 154;
+    pmix_rank_t r;
+
+    bitmaps_reset();
+    for (r = 1; r < old_dmns; r++) {
+        if (42 != r && 80 != r && 81 != r) {
+            pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
+        }
+    }
+
+    /* before the grow, as 80 and 81 see the DVM */
+    build_dvm(64, old_dmns, 80);
+    CHECK("before the grow 80's parent is the root", 0 == prte_rml_base.lifeline);
+    build_dvm(64, old_dmns, 81);
+    CHECK("before the grow 81's parent is the root", 0 == prte_rml_base.lifeline);
+
+    /* after it, as every daemon that has processed the wireup sees it */
+    build_dvm(64, new_dmns, 80);
+    CHECK("after the grow 80's parent is the new daemon 144",
+          144 == prte_rml_base.lifeline);
+    build_dvm(64, new_dmns, 81);
+    CHECK("after the grow 81's parent is the new daemon 145",
+          145 == prte_rml_base.lifeline);
+    build_dvm(64, new_dmns, 0);
+    CHECK("the root reaches 80 through 144", 144 == prte_rml_get_route(80));
+    CHECK("the root reaches 81 through 145", 145 == prte_rml_get_route(81));
+
+    /* the same at radix 2: 3 holds dead slot 1 until 13, grown into the
+     * departed 5's subtree to its right, takes it over */
+    bitmaps_reset();
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 1);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 5);
+    build_dvm(2, 8, 3);
+    CHECK("radix 2: before the grow 3's parent is the root", 0 == prte_rml_base.lifeline);
+    build_dvm(2, 14, 3);
+    CHECK("radix 2: after the grow 3's parent is the new daemon 13",
+          13 == prte_rml_base.lifeline);
+
+    bitmaps_reset();
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_grow_reparents_existing_daemon\n");
     }
     return failures;
 }
@@ -1847,6 +1908,7 @@ int main(void)
     failures += test_release_tree_matches_routing();
     failures += test_release_tree_matches_routing_failed();
     failures += test_departed_ranks_survive_recompute();
+    failures += test_grow_reparents_existing_daemon();
     failures += test_global_failures_survive_recompute();
     failures += test_reconcile_ancestry();
     failures += test_shrink_ranks();
