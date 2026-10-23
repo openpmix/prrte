@@ -401,36 +401,33 @@ file.  Never commit the build product itself; ignore it.  Check
 is left untracked, and match the nearest existing `.gitignore` pattern
 style (many component directories carry their own `.gitignore`).
 
-### GOLDEN RULE: regenerate `show_help` content after touching any help file
+### `show_help` content is generated, and a git clone regenerates it
 
 The `show_help` messages are embedded into the binary from a generated
-source file, `src/util/prte_show_help_content.c` (and its `src/include/`
-companion), produced by `src/util/prte-convert-help.py` from the
-`help-*.txt` files scattered across the tree.  The Make rule that builds
-this generated file depends only on the converter script — **not** on the
-individual `help-*.txt` files — so an ordinary `make` will **not** pick up
-changes to help content.
+source file, `src/util/prte_show_help_content.c`, produced by
+`src/util/prte-convert-help.py` from the `help-*.txt` files scattered
+across the tree.  In a git clone, configure enables a developer build
+(`PRTE_DEVEL_BUILD`) in which the converter runs on every `make`, so an
+add, delete, or modification of `show_help` content — including a
+brand-new `help-*.txt` file — is picked up by a plain `make`.  The
+converter rewrites the file only when its content changes, so an
+untouched tree does not recompile.  Never edit or commit the generated
+file.
 
-Therefore, after **any** add, delete, or modification of `show_help`
-content — including adding a brand-new `help-*.txt` file — you **must**
-force the generated source to be rebuilt:
+A tarball ships the generated file and does not regenerate it.  If you
+change help text in an unpacked tarball, delete it and rebuild:
 
 ```sh
-rm src/util/prte_show_help_content.*
+rm src/util/prte_show_help_content.c
 make
 ```
-
-Removing the stale generated file forces `make` to re-run the converter
-and pick up your help-text changes.  Skipping this step leaves the binary
-serving the old (or missing) messages even though the `.txt` source looks
-correct.
 
 The same converter also **cross-checks each tool's help file against that
 tool's `schizo` command-line option table** and fails the build when they
 disagree — a help file that documents an option the parser rejects, or a
-help topic for an option the tool does not accept.  Because of the
-dependency gap above, that check cannot rely on the generation rule
-firing, so it also runs on every `make check`.  If you add or remove a
+help topic for an option the tool does not accept.  Because a tarball
+build does not re-run the generation rule, that check also runs on every
+`make check`.  If you add or remove a
 command-line option, expect to touch both the option table and the
 matching `help-*.txt`; run the check directly with:
 

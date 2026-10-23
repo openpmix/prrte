@@ -217,9 +217,8 @@ The user-facing messages the components emit via `pmix_show_help`:
 | `node-died` | `dvm/proc_errors` | an individual daemon was lost after having reported |
 | `simple-message` | `prted/prted_abort` | this daemon is dying of an internal fault and wants the user to see why |
 
-Per the top-level GOLDEN RULE, if you touch this file you must
-`rm src/util/prte_show_help_content.* && make` to force the generated
-show-help content to be rebuilt.
+Its content is compiled into the binary; in a git clone a plain `make`
+regenerates it (see the top-level guide for a tarball).
 
 ---
 
