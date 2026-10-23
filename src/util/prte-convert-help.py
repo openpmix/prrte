@@ -789,10 +789,11 @@ def main():
 
     args = parser.parse_args()
 
-    # The generation rule depends solely on this script, so editing a help
-    # file or an option table does not re-run it - which is exactly why the
-    # drift this checks for went unnoticed.  --check-only lets "make check"
-    # run the cross-check every time, independent of that staleness.
+    # Outside a developer build the generation rule depends solely on this
+    # script, so editing a help file or an option table does not re-run it -
+    # which is exactly why the drift this checks for went unnoticed.
+    # --check-only lets "make check" run the cross-check every time,
+    # independent of that staleness.
     if args.check_only:
         args.purge = True
         args.dryrun = True
@@ -852,6 +853,18 @@ def main():
 
     if not args.dryrun:
         c_code = generate_c_code(outdata)
+
+        # A developer build runs this on every make, so leave an unchanged
+        # file alone - rewriting it would bump its timestamp and force a
+        # recompile and relink every time.
+        try:
+            with open(args.out) as f:
+                if f.read() == c_code:
+                    if args.verbose:
+                        print("Generated C code in ", args.out, " is unchanged")
+                    return
+        except OSError:
+            pass
 
         with open(args.out, "w") as f:
             f.write(c_code)
