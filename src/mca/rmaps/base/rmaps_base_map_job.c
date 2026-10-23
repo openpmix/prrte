@@ -642,6 +642,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_job_t *parent = NULL;
     prte_job_t *iof_parent = NULL;
     bool iof_declined = false;
+    bool fwd_inherit;
     prte_app_context_t *app;
     bool inherit = false;
     pmix_proc_t *nptr = NULL, *target_proc;
@@ -1153,9 +1154,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     // forward the environment if requested to do so
+    fwd_inherit = (NULL != parent && !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOINHERIT));
     astate = prte_get_bool_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT);
     if (PRTE_ATTR_NOT_SET == astate &&
-        (NULL == parent ||
+        (!fwd_inherit ||
          PRTE_ATTR_NOT_SET == prte_get_bool_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT))) {
         /* nobody has said - take the default */
         astate = prte_fwd_environment ? PRTE_ATTR_TRUE : PRTE_ATTR_FALSE;
@@ -1173,8 +1175,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 app->env = env;
             }
         }
-    } else if (NULL != parent) {
-        /* we always inherit a parent's fwd environment directive unless the job assigned it */
+    } else if (fwd_inherit) {
+        /* we always inherit a parent's fwd environment directive unless the job assigned it
+         * or refused inheritance */
         astate = prte_get_bool_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT);
         if (PRTE_ATTR_NOT_SET != astate) {
             if (PRTE_ATTR_TRUE == astate) {

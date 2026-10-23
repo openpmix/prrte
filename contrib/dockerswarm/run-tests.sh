@@ -7268,7 +7268,7 @@ test_errmgr() {
 ES=/opt/prte/prte/bin/envspawn
 
 test_odls() {
-    local out rc n c ns duri EL fwd rtos
+    local out rc n c ns duri EL fwd rtos mapby
 
     banner "odls: the envar directives reach the daemon that does the fork"
     # SET/ADD/UNSET/PREPEND/APPEND have no command-line surface at all: they
@@ -7313,13 +7313,16 @@ test_odls() {
     banner "odls: a spawned job inherits its parent's fwd-environment"
     # The child runs on node3, whose daemon does not have the launcher's
     # environment, so it sees ODLS_FWD only if the directive given to the
-    # parent job reached the child job.
-    for fwd in yes no; do
-        rtos=""
-        [ "$fwd" = yes ] && rtos="--runtime-options fwd-environment"
+    # parent job reached the child job. A child spawned with NOINHERIT
+    # must not inherit it.
+    for fwd in yes no noinherit; do
+        rtos="--runtime-options fwd-environment"
+        mapby=""
+        [ "$fwd" = no ] && rtos=""
+        [ "$fwd" = noinherit ] && mapby=":NOINHERIT"
         ON 3 'rm -f /tmp/odls-envspawn.out' >/dev/null 2>&1
         RUN "ODLS_FWD=forwarded timeout -k 5 60 prterun --host node2:1,node3:1 -np 1 $rtos \
-                 $ES node3" >/dev/null 2>&1
+                 $ES node3 $mapby" >/dev/null 2>&1
         out=$(ON 3 'cat /tmp/odls-envspawn.out' 2>&1)
         if ! echo "$out" | grep -q 'ODLS_HOST=node3'; then
             bad "the child did not run on node3 (fwd-environment=$fwd): $(echo "$out" | tr '\n' ' ')"
@@ -7327,10 +7330,14 @@ test_odls() {
             echo "$out" | grep -q 'ODLS_FWD=forwarded' \
                 && ok "the child inherited fwd-environment from its parent" \
                 || bad "the child did not inherit fwd-environment: $(echo "$out" | grep ODLS_FWD)"
-        else
+        elif [ "$fwd" = no ]; then
             echo "$out" | grep -q 'ODLS_FWD=<unset>' \
                 && ok "...and without the directive the environment is not forwarded" \
                 || bad "the environment was forwarded unasked: $(echo "$out" | grep ODLS_FWD)"
+        else
+            echo "$out" | grep -q 'ODLS_FWD=<unset>' \
+                && ok "...and a child spawned with NOINHERIT does not inherit it" \
+                || bad "a NOINHERIT child inherited fwd-environment: $(echo "$out" | grep ODLS_FWD)"
         fi
     done
     cleanup_swarm
