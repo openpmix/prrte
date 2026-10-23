@@ -234,7 +234,8 @@ and is refused. For example:
   in a per-app "--mapby" string it is taken to describe the job.
 
 * "NOINHERIT" means "!INHERIT". Note that this describes the whole job
-  (see above).
+  (see above). It also stops a child job from inheriting the parent's
+  "fwd-environment" runtime option.
 
 * "FILE=<path>" (path to file containing sequential or rankfile
   entries).

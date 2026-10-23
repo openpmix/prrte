@@ -12,10 +12,11 @@
  * APPEND) through a real PMIx_Spawn and print what the spawned process
  * actually ended up with.
  *
- *   envspawn <host>
+ *   envspawn <host> [mapby]
  *       Spawn "/bin/sh -c <print some vars>" pinned to <host>, carrying one
  *       of every envar directive, and let the child's output flow back
  *       through the IOF.  Waits for the child job to finish, then exits.
+ *       A mapby string is passed as the spawn's PMIX_MAPBY.
  *
  * Why this needs the swarm.  The directives are attached to the job on the
  * HNP, packed into the launch message, and applied by
@@ -75,11 +76,12 @@ int main(int argc, char **argv)
     pmix_status_t rc;
     pmix_app_t app;
     pmix_nspace_t child;
-    pmix_info_t jobinfo[1];
+    pmix_info_t jobinfo[2];
+    size_t njinfo = 1;
     const char *host;
 
     if (2 > argc) {
-        fprintf(stderr, "usage: envspawn <host>\n");
+        fprintf(stderr, "usage: envspawn <host> [mapby]\n");
         return 2;
     }
     host = argv[1];
@@ -136,8 +138,12 @@ int main(int argc, char **argv)
     /* the child reports through a file on its own node, so all we ask of
      * the job itself is that it not outlive us */
     PMIX_INFO_LOAD(&jobinfo[0], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
+    if (2 < argc) {
+        PMIX_INFO_LOAD(&jobinfo[njinfo], PMIX_MAPBY, argv[2], PMIX_STRING);
+        ++njinfo;
+    }
 
-    rc = PMIx_Spawn(jobinfo, 1, &app, 1, child);
+    rc = PMIx_Spawn(jobinfo, njinfo, &app, 1, child);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "ERROR PMIx_Spawn: %s\n", PMIx_Error_string(rc));
         PMIX_APP_DESTRUCT(&app);

@@ -224,7 +224,8 @@ while ``--mapby device=gpu,ndev=2`` names a device called
   per-app ``--mapby`` string it is taken to describe the job.
 
 * ``NOINHERIT`` means ``!INHERIT``. Note that this describes the whole
-  job (see above).
+  job (see above). It also stops a child job from inheriting the
+  parent's ``fwd-environment`` runtime option.
 
 * ``FILE=<path>`` (path to file containing sequential or rankfile entries).
 
