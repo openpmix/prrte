@@ -480,16 +480,14 @@ help-file cross-check.
 
 `prte_show_help_content.c` is built by `prte-convert-help.py` from **every**
 `help-*.txt` in the tree — including `help-prte-util.txt` here and the ones
-in `dash_host/` and `hostfile/`. The Make rule depends only on the converter
-script, so an ordinary `make` will **not** pick up a change to help text:
-
-```sh
-rm src/util/prte_show_help_content.*
-make
-```
-
-This is a top-level golden rule; it is repeated here because three of the
-tree's `help-*.txt` files live under this directory.
+in `dash_host/` and `hostfile/`. In a git clone (`PRTE_DEVEL_BUILD`) the
+Make rule depends on `FORCE`, so every `make` re-runs the converter, which
+writes the file only when its content changes. **Keep that comparison** —
+without it every `make` recompiles the file and relinks. A tarball ships
+the generated file and keeps the old rule, which depends only on the
+converter; there, `rm src/util/prte_show_help_content.c && make` picks up a
+help-text edit. `make clean` removes the file only in a developer build,
+so it never deletes the copy a tarball ships.
 
 `prte-convert-help.py --check-only` (run by `make check`, and by the
 generation rule under `--purge`) checks the calls against the help files:

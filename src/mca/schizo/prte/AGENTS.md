@@ -229,8 +229,8 @@ wider by mistake:
   and runtime-option changes usually need the ompi table/handler updated
   too, or the two personalities drift.
 - **Edit the matching `help-*.txt`** for any user-visible option change,
-  then follow the GOLDEN RULE (`rm src/util/prte_show_help_content.*`
-  and rebuild) or the binary serves stale help.
+  and rebuild; in a git clone a plain `make` regenerates the help
+  content.
 - **An option whose only consumer is a runtime option converts, it does
   not get its own consumer.** `--show-progress`,
   `--report-child-jobs-separately`, `--fwd-environment` and

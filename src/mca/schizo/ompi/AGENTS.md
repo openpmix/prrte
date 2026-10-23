@@ -214,5 +214,5 @@ counterpart in prte.
 - **Single-dash correction only runs in ompi.** If you rely on it
   elsewhere you're in the wrong personality.
 - **Edit `help-schizo-ompi.txt` / `schizo-ompi-cli.rstxt`** for
-  user-visible changes, then follow the GOLDEN RULE
-  (`rm src/util/prte_show_help_content.*` and rebuild) for the help text.
+  user-visible changes and rebuild; in a git clone a plain `make`
+  regenerates the help content.
