@@ -19,7 +19,7 @@ source files compiled straight into `libprrte`.
 | `hwloc-internal.h` | The whole public surface. Binding-policy word and its macros, the two cached-data classes, the globals, and every prototype. |
 | `hwloc.c` | MCA parameter registration, open/close, the `--bind-to` parser, the default-binding chooser, and the print-buffer ring. |
 | `hwloc_base_util.c` | Everything that takes a topology as an argument: topology acquisition, the NUMA summary, object counting/lookup, cpu-set and slot-list parsing, and the binding/topology renderers. |
-| `help-prte-hwloc-base.txt` | `show_help` content for this directory. Remember the [GOLDEN RULE](../../AGENTS.md) about regenerating `prte_show_help_content.*` after touching it. |
+| `help-prte-hwloc-base.txt` | `show_help` content for this directory. Compiled into the binary; a plain `make` in a git clone regenerates it (see the [top-level guide](../../AGENTS.md)). |
 
 Everything here is a **pure function of a topology plus a string**. There is
 no state beyond the globals listed below and the data cached on a topology's

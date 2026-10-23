@@ -505,10 +505,8 @@ priority-insert, dump the final priority list at verbosity > 4).
   have deliberately turned deprecation warnings off — which, for ompi,
   is the default.
 - **Help text is embedded, not read at runtime.** These `help-*.txt`
-  files feed the generated `show_help` content. Per the GOLDEN RULE in
-  the top-level guide, after editing any `help-*.txt` you must
-  `rm src/util/prte_show_help_content.*` and rebuild, or the binary
-  serves stale text.
+  files feed the generated `show_help` content, which a plain `make`
+  regenerates in a git clone (see the top-level guide for a tarball).
 - **A tool's help file and its option table are cross-checked.**
   `src/util/prte-convert-help.py` compares the options each tool's
   `[usage]` table documents against the option table that tool's
