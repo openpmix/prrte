@@ -3364,38 +3364,6 @@ test_pmix() {
                  || bad "$n daemons still running after pterm"
     cleanup_swarm
 
-    banner "pmix: a served server URI is actually reachable when remote connections are on"
-    # The point of the whole query.  By default the PMIx server listens on
-    # loopback, so what the master hands back is truthful but only usable by
-    # a tool ON that node.  With prte_pmix_remote_connections set, the server
-    # binds a routable interface -- and the URI the master serves for a
-    # REMOTE node must then carry that node's own address, not 127.0.0.1 and
-    # not the master's.  This is what makes the feature worth having, and it
-    # cannot be observed on one host.
-    if ! prted_dvm_start_mca 'node1:1,node2:1,node3:1' '--prtemca pmix_remote_connections 1'; then
-        bad "could not start a DVM with remote connections enabled"
-    else
-        out=$(PRUN "--host node1:1 -n 1 $PT serveruri node2" 2>&1)
-        u=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
-        # Through the transport, not a literal container name: every global
-        # name this harness claims is derived from $PRTE_SWARM (see
-        # docker-compose.yml), so a literal here asks a DIFFERENT swarm - or
-        # nothing at all - for the address, and the case fails against an
-        # unrelated container's IP.  On a cluster it asks the node itself.
-        n2ip=$(NODE_IP 2)
-        if [ -z "$u" ]; then
-            bad "no server URI for node2 with remote connections on: $(echo "$out" | grep -E '^ERR' | tr '\n' ' ' | tail -c 200)"
-        elif echo "$u" | grep -q '127\.0\.0\.1'; then
-            bad "node2's server URI came back as loopback despite remote connections: $u"
-        elif [ -n "$n2ip" ] && echo "$u" | grep -qF "$n2ip"; then
-            ok "node2's server URI names node2's own address ($n2ip)"
-        else
-            bad "node2's server URI does not name node2 ($n2ip): $u"
-        fi
-        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
-    fi
-    cleanup_swarm
-
     banner "pmix: server URIs follow the DVM across a grow and a shrink"
     # The URIs ride along in the WIREUP xcast that vm_ready() builds, and
     # vm_ready() runs on VM_READY -- which fires again every time the daemon

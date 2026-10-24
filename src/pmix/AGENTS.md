@@ -249,12 +249,10 @@ Consequences to keep in mind:
   `continue`s.** It is a per-record field, so skipping it for a daemon whose
   `PMIX_PROC_URI` we already have would leave it in the buffer and the next
   iteration would read that string as a `pmix_proc_t`.
-- **The URI is only useful to a remote tool if the server accepts remote
-  connections** (`--prtemca pmix_remote_connections 1`,
-  `prte_pmix_server_globals.remote_connections`). Off — the default — every
-  server binds loopback, so the answer is truthful but only usable by a tool
-  on that node. That is the requester's business, not the DVM's; serve what
-  we have.
+- **The URI is only useful to a tool on that node.** Every server binds
+  loopback and takes connections from its own node only, so the answer is
+  truthful but cannot be dialled from elsewhere. That is the requester's
+  business, not the DVM's; serve what we have.
 - This closes the half-built feature from commit `6e481fbb95` (2019), whose
   message promised the collection but whose diff only ever contained the
   query side and the example.

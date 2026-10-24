@@ -646,7 +646,6 @@ typedef struct {
      * prte_pmix_set_scheduler_directives(). */
     pmix_info_t *scheduler_directives;
     size_t nscheddirs;
-    bool remote_connections;
     bool tool_support;
     bool require_pid_match;
     pmix_proc_t scheduler;

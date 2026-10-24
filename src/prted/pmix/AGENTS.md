@@ -1652,15 +1652,13 @@ codes that has to survive grow, shrink and daemon loss.
 - **Widths on the wire.** Pack what the receiver unpacks. Handing PMIx
   the address of a `size_t` with `PMIX_INT32` reads the wrong four bytes
   on a big-endian machine.
-- **The tool listener follows the OOB's interface selection - but only
-  when it is on the network.** `pmix_server_init()` passes
-  `prte_if_include`/`prte_if_exclude` to PMIx as `PMIX_TCP_IF_INCLUDE`/
-  `PMIX_TCP_IF_EXCLUDE` when `prte_pmix_server_globals.remote_connections`
-  is set, so a DVM confined to some interfaces does not expose its tool
-  port on another. Never pass them otherwise: without remote connections
-  PMIx binds loopback and insists the list leave it one, so an include
-  list naming only real interfaces (the ordinary way to pick the DVM's
-  network) would fail the server's init.
+- **The tool listener does not follow the OOB's interface selection.**
+  The PMIx server takes connections from its own node only, on loopback.
+  Never pass `prte_if_include`/`prte_if_exclude` to it as
+  `PMIX_TCP_IF_INCLUDE`/`PMIX_TCP_IF_EXCLUDE`: PMIx insists the list leave
+  it a loopback interface, so an include list naming only real interfaces
+  (the ordinary way to pick the DVM's network) would fail the server's
+  init.
 - **Verbose output is free.** Everything here is behind
   `pmix_output_verbose(N, prte_pmix_server_globals.output, ...)`; add
   traces liberally at level 2.

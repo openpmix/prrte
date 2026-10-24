@@ -715,14 +715,6 @@ is `proctable`, and it asserts:
   never the generic `PMIX_ERROR` that the wrong-direction conversion used to
   manufacture out of every failure on this path.
 
-- a served URI is **actually reachable**. With `--prtemca
-  pmix_remote_connections 1` the servers bind a routable interface, and the
-  URI served for a *remote* node must carry that node's own address — not
-  loopback, and not the master's. Off (the default) every server binds
-  loopback, so the answer is truthful but only usable by a tool on that
-  node. This is the assertion that says the feature is worth having, and one
-  host cannot make it.
-
 - the URIs **follow the DVM across a grow and a shrink**. `vm_ready()` runs
   on every `VM_READY` and re-sends the whole set, so a grow redistributes
   with no code of its own — asserted rather than assumed. A shrink needs
