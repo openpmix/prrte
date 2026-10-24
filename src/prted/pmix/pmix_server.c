@@ -506,14 +506,6 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.tool_support);
 
-    /* whether or not to support remote connections */
-    prte_pmix_server_globals.remote_connections = false;
-    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "remote_connections",
-                                      "Whether or not to support remote connections (the "
-                                      "listener then honors prte_if_include/prte_if_exclude)",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_pmix_server_globals.remote_connections);
-
     /* whether a failure that terminates one job of a connected assemblage
      * terminates the rest of it.  The PMIx definition of "connected" asks a
      * host that terminates an application when one of its processes fails to
@@ -1139,35 +1131,11 @@ int pmix_server_init(void)
                            (void*)&prte_bind_progress_thread_reqd, PMIX_BOOL);
     }
 
-    /* tell if we allow remote tool connections */
-    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS,
-                       (void*)&prte_pmix_server_globals.remote_connections, PMIX_BOOL);
-    if (PMIX_SUCCESS != prc) {
-        PMIX_INFO_LIST_RELEASE(ilist);
-        rc = prte_pmix_convert_status(prc);
-        return rc;
-    }
-
-    /* A server that accepts remote tool connections listens on a network
-     * interface, and it has to be one the user permitted: the OOB honors
-     * prte_if_include/prte_if_exclude, and a tool listener that ignored them
-     * would still expose a port on an interface the user excluded.  Without
-     * remote connections the listener is on loopback, where no network
-     * selection applies - and passing one there would do harm, since PMIx
-     * then insists the list leave it a loopback interface, and an include
-     * list naming only real interfaces would fail the server's init. */
-    if (prte_pmix_server_globals.remote_connections) {
-        if (NULL != prte_if_include) {
-            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TCP_IF_INCLUDE, prte_if_include, PMIX_STRING);
-        } else if (NULL != prte_if_exclude) {
-            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TCP_IF_EXCLUDE, prte_if_exclude, PMIX_STRING);
-        }
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
-    }
+    /* The PMIx server takes connections from its own node only, on
+     * loopback, where no network selection applies - so the OOB's
+     * prte_if_include/prte_if_exclude are not passed to it: PMIx insists a
+     * list leave it a loopback interface, and an include list naming only
+     * real interfaces would fail the server's init. */
 
     /* if we were launched by a debugger, then we need to have
      * notification of our termination sent */

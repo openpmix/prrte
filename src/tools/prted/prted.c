@@ -683,9 +683,9 @@ int main(int argc, char *argv[])
      * it uses. This one exists solely so the master can answer a TOOL that
      * asks "where is the PMIx server on node X?" (a hostname- or
      * nodeid-qualified PMIX_SERVER_URI query - see pmix_server_queries.c
-     * and examples/tool.c). Only useful to a remote tool when the server
-     * was told to accept remote connections, but that is the requester's
-     * business, not ours.
+     * and examples/tool.c). Only useful to a tool on that node - the
+     * server takes connections from its own node only - but that is the
+     * requester's business, not ours.
      *
      * A PMIx that will not tell us our own server URI is not a reason to
      * fail the launch - this is auxiliary information. Pack a NULL and let
