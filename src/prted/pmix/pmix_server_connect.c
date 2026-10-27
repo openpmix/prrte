@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,12 +51,17 @@ static void cncon(prte_pmix_server_connection_t *p)
 {
     p->members = NULL;
     p->nmembers = 0;
+    p->collapsed = NULL;
+    p->ncollapsed = 0;
     p->terminating = false;
 }
 static void cndes(prte_pmix_server_connection_t *p)
 {
     if (NULL != p->members) {
         PMIX_PROC_FREE(p->members, p->nmembers);
+    }
+    if (NULL != p->collapsed) {
+        PMIX_PROC_FREE(p->collapsed, p->ncollapsed);
     }
 }
 PMIX_CLASS_INSTANCE(prte_pmix_server_connection_t,
@@ -128,6 +134,121 @@ static bool same_membership(prte_pmix_server_connection_t *cptr,
     return true;
 }
 
+/* Does this list name every proc of this job?
+ *
+ * Only a job whose membership is fixed qualifies (prte_job_t::procs_fixed):
+ * its table then holds every proc PMIx will ever know in its namespace, so
+ * naming all of them is naming the job.  A tool or singleton job can gain
+ * ranks later and is never collapsed. */
+static bool names_whole_job(const pmix_proc_t *members, size_t nmembers,
+                            const pmix_nspace_t nspace)
+{
+    prte_job_t *jdata;
+    bool *seen;
+    int nprocs = 0, nseen = 0, size, r;
+    size_t i;
+
+    jdata = prte_get_job_data_object(nspace);
+    if (NULL == jdata || !jdata->procs_fixed) {
+        return false;
+    }
+    size = jdata->procs->size;
+    for (r = 0; r < size; r++) {
+        if (NULL != pmix_pointer_array_get_item(jdata->procs, r)) {
+            ++nprocs;
+        }
+    }
+    if (0 == nprocs) {
+        return false;
+    }
+    seen = (bool *) calloc(size, sizeof(bool));
+    if (NULL == seen) {
+        return false;
+    }
+    for (i = 0; i < nmembers; i++) {
+        if (!same_nspace(members[i].nspace, nspace) ||
+            (pmix_rank_t) size <= members[i].rank) {
+            continue;
+        }
+        r = (int) members[i].rank;
+        if (!seen[r] && NULL != pmix_pointer_array_get_item(jdata->procs, r)) {
+            seen[r] = true;
+            ++nseen;
+        }
+    }
+    free(seen);
+    return (nseen == nprocs);
+}
+
+static bool nspace_listed(char **list, const pmix_nspace_t nspace)
+{
+    int i;
+
+    for (i = 0; NULL != list && NULL != list[i]; i++) {
+        if (same_nspace(list[i], nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Replace the ranks of any job the list names in full with that job's
+ * wildcard.
+ *
+ * Both forms cover the same procs, and names_whole_job() collapses only a
+ * job whose membership is fixed, so the result covers exactly what the
+ * list did.  A departure reads this form of a record: every departure
+ * merges and broadcasts the memberships covering it, and a client may name a
+ * job by listing its ranks (Open MPI does, from any communicator but
+ * MPI_COMM_WORLD).  Returns a list the caller frees, or NULL if out of
+ * memory. */
+static pmix_proc_t *collapse_whole_jobs(const pmix_proc_t *members, size_t nmembers,
+                                        size_t *nout)
+{
+    pmix_proc_t *out, wild;
+    char **whole = NULL, **partial = NULL;
+    size_t i, j, n = 0;
+    bool have;
+
+    PMIX_PROC_CREATE(out, nmembers);
+    if (NULL == out) {
+        return NULL;
+    }
+    for (i = 0; i < nmembers; i++) {
+        if (nspace_listed(whole, members[i].nspace)) {
+            /* already stands as one wildcard */
+            continue;
+        }
+        if (PMIX_RANK_VALID < members[i].rank ||
+            nspace_listed(partial, members[i].nspace)) {
+            memcpy(&out[n++], &members[i], sizeof(pmix_proc_t));
+            continue;
+        }
+        if (!names_whole_job(members, nmembers, members[i].nspace)) {
+            PMIx_Argv_append_nosize(&partial, members[i].nspace);
+            memcpy(&out[n++], &members[i], sizeof(pmix_proc_t));
+            continue;
+        }
+        PMIx_Argv_append_nosize(&whole, members[i].nspace);
+        /* the list may have named the job by wildcard as well */
+        PMIX_LOAD_PROCID(&wild, members[i].nspace, PMIX_RANK_WILDCARD);
+        have = false;
+        for (j = 0; j < n; j++) {
+            if (same_proc(&out[j], &wild)) {
+                have = true;
+                break;
+            }
+        }
+        if (!have) {
+            memcpy(&out[n++], &wild, sizeof(pmix_proc_t));
+        }
+    }
+    PMIx_Argv_free(whole);
+    PMIx_Argv_free(partial);
+    *nout = n;
+    return out;
+}
+
 void prte_pmix_server_connection_record(const pmix_proc_t *members, size_t nmembers)
 {
     prte_pmix_server_connection_t *cptr;
@@ -149,6 +270,12 @@ void prte_pmix_server_connection_record(const pmix_proc_t *members, size_t nmemb
     cptr->nmembers = nmembers;
     PMIX_PROC_CREATE(cptr->members, cptr->nmembers);
     memcpy(cptr->members, members, nmembers * sizeof(pmix_proc_t));
+    cptr->collapsed = collapse_whole_jobs(members, nmembers, &cptr->ncollapsed);
+    if (NULL == cptr->collapsed) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIX_RELEASE(cptr);
+        return;
+    }
     pmix_list_append(&prte_pmix_server_globals.connections, &cptr->super);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -292,8 +419,8 @@ static bool connection_covers(prte_pmix_server_connection_t *cptr,
 {
     size_t n;
 
-    for (n = 0; n < cptr->nmembers; n++) {
-        if (member_covers(&cptr->members[n], proc)) {
+    for (n = 0; n < cptr->ncollapsed; n++) {
+        if (member_covers(&cptr->collapsed[n], proc)) {
             return true;
         }
     }
@@ -342,9 +469,9 @@ void prte_pmix_server_connection_terminated(prte_proc_t *proc)
         if (!connection_covers(cptr, &proc->name)) {
             continue;
         }
-        if (ntargets + cptr->nmembers > cap) {
+        if (ntargets + cptr->ncollapsed > cap) {
             pmix_proc_t *tmp;
-            cap = ntargets + cptr->nmembers;
+            cap = ntargets + cptr->ncollapsed;
             tmp = (pmix_proc_t *) realloc(targets, cap * sizeof(pmix_proc_t));
             if (NULL == tmp) {
                 /* assigning through the same pointer would lose the block we
@@ -354,16 +481,16 @@ void prte_pmix_server_connection_terminated(prte_proc_t *proc)
             }
             targets = tmp;
         }
-        for (i = 0; i < cptr->nmembers; i++) {
+        for (i = 0; i < cptr->ncollapsed; i++) {
             have = false;
             for (j = 0; j < ntargets; j++) {
-                if (same_proc(&targets[j], &cptr->members[i])) {
+                if (same_proc(&targets[j], &cptr->collapsed[i])) {
                     have = true;
                     break;
                 }
             }
             if (!have) {
-                memcpy(&targets[ntargets], &cptr->members[i], sizeof(pmix_proc_t));
+                memcpy(&targets[ntargets], &cptr->collapsed[i], sizeof(pmix_proc_t));
                 ++ntargets;
             }
         }
