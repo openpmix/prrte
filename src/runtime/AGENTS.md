@@ -143,6 +143,18 @@ you were handed can be handed to somebody else later.
 The lookups are linear scans over the whole array. That is fine at DVM
 scale, but do not put one inside a per-proc loop on a launch path.
 
+### A job's proc table is written through `prte_job_add_proc()`
+
+The mapper sets `prte_job_t::procs_fixed` on the master once it has placed
+every proc of a job, before anything is launched, and
+`prte_job_add_proc()` refuses to add to a fixed job. So every PMIx client
+in an app namespace is in its table, and code may rely on that.
+`prte_plm_base_reset_proc_map()` clears the mark for a held job it remaps.
+Tool and singleton jobs, and the daemon job, are never fixed, since they
+gain ranks after launch. Writing `NULL` to remove a proc is fine.
+[`test/unit/check_job_procs.py`](../../test/unit/check_job_procs.py) fails
+`make check` on any other write to a job's table.
+
 ### What a registry holds is not what it is authoritative for
 
 A `prted` has all three registries, and parts of all three are stale on it

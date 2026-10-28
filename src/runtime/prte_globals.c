@@ -323,6 +323,26 @@ int prte_set_job_data_object(prte_job_t *jdata)
     return PRTE_SUCCESS;
 }
 
+int prte_job_add_proc(prte_job_t *jdata, pmix_rank_t rank, prte_proc_t *proc)
+{
+    pmix_status_t rc;
+
+    if (NULL == jdata || NULL == proc || PMIX_RANK_VALID < rank) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (jdata->procs_fixed) {
+        pmix_output(0, "%s refusing to add rank %u to job %s: its membership "
+                    "is fixed", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rank,
+                    PRTE_JOBID_PRINT(jdata->nspace));
+        return PRTE_ERR_PERM;
+    }
+    rc = pmix_pointer_array_set_item(jdata->procs, (int) rank, proc);
+    if (PMIX_SUCCESS != rc) {
+        return prte_pmix_convert_status(rc);
+    }
+    return PRTE_SUCCESS;
+}
+
 prte_session_t *prte_get_session_object(const uint32_t session_id)
 {
     prte_session_t *session;
@@ -852,6 +872,7 @@ static void prte_job_construct(prte_job_t *job)
     job->ntraces = 0;
     job->traces = NULL;
     job->traces_requested = false;
+    job->procs_fixed = false;
     PMIX_CONSTRUCT(&job->cli, pmix_cli_result_t);
 }
 

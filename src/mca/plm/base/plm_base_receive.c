@@ -532,7 +532,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 proc = PMIX_NEW(prte_proc_t);
                 memcpy(&proc->name, &name, sizeof(pmix_proc_t));
                 proc->state = PRTE_PROC_STATE_RUNNING;
-                pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+                prte_job_add_proc(jdata, name.rank, proc);
                 jdata->num_procs++;
             }
             ret = PMIX_SUCCESS;
@@ -601,7 +601,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             memcpy(&proc->name, &name, sizeof(pmix_proc_t));
             proc->pid = pid;
             proc->state = PRTE_PROC_STATE_RUNNING;
-            pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+            prte_job_add_proc(jdata, name.rank, proc);
             /* Find the node the tool is on: it connected through the daemon
              * that is reporting it, so ask that DAEMON where it is.
              *

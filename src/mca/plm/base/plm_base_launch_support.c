@@ -3283,7 +3283,7 @@ process:
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         /* add the daemon to the daemon job object */
         if (0
-            > (rc = pmix_pointer_array_set_item(daemons->procs, proc->name.rank, (void *) proc))) {
+            > (rc = prte_job_add_proc(daemons, proc->name.rank, proc))) {
             PRTE_ERROR_LOG(rc);
             PMIX_RELEASE(proc);
             free(new_vpids);
@@ -4031,4 +4031,6 @@ void prte_plm_base_reset_proc_map(prte_job_t *jdata)
     }
     jdata->num_procs = 0;
     jdata->num_launched = 0;
+    /* nothing of this job is running, and the mapper refills the table */
+    jdata->procs_fixed = false;
 }

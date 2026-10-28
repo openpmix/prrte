@@ -1862,6 +1862,10 @@ ranking:
         prte_rmaps_base_report_bindings(jdata, &options);
     }
 
+    /* every proc this job will have is now in its table, and none has been
+     * launched */
+    jdata->procs_fixed = true;
+
     /* set the job state to the next position */
     map_succeeded = true;
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_COMPLETE);
