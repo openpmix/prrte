@@ -334,7 +334,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_MEMBIND                    (PRTE_JOB_START_KEY + 138) // uint16_t - the job's "--membind": the prte_hwloc_base_memattr_t
                                                                        // to bind its procs' memory by, unless an app gives its own
                                                                        // (PRTE_APP_MEMBIND). Takes precedence over the
-                                                                       // hwloc_default_mem_bind_attribute MCA parameter
+                                                                       // hwloc_default_membind MCA parameter
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

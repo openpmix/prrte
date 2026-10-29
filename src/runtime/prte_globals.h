@@ -168,8 +168,8 @@ PRTE_EXPORT extern int prte_exit_status;
 
 /* Spawn directive carrying the "--membind" value, for the whole job or for
  * one app exactly as "--bind-to" is (see distribute_directive()).  PMIx
- * has no attribute for binding memory by hwloc memory attribute.  The value
- * is a string in prte_hwloc_base_parse_membind() syntax. */
+ * has no attribute for it.  The value is a string in
+ * prte_hwloc_base_parse_membind() syntax. */
 #define PRTE_MEMBIND "prte.membind"
 
 /* State Machine lists */

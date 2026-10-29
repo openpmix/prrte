@@ -171,12 +171,11 @@ static bool membind_supported(void)
    one syscall with no arguments to compute.
 
    The nodeset normally comes from the process' cpuset: the nodes local to
-   it.  With a memory attribute requested (--membind, or
-   hwloc_default_mem_bind_attribute) it comes instead from
-   prte_hwloc_base_get_membind_nodeset() - the local node(s) with the best
-   value of that attribute as seen from the cpuset - which is how a process
-   reaches memory that no cpu is local to.  Either way the child receives a
-   finished nodemask and cannot tell the difference.
+   it.  With a memory binding requested (--membind, or hwloc_default_membind)
+   it comes instead from prte_hwloc_base_get_membind_nodeset() - the local
+   node(s) best by the chosen measure as seen from the cpuset - which is how
+   a process reaches memory that no cpu is local to.  Either way the child
+   receives a finished nodemask and cannot tell the difference.
 
    On failure this records the errno hwloc would have produced in
    cd->membind_prep_errno, and the child reports it exactly as if the call had

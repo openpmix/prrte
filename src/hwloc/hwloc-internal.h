@@ -178,15 +178,18 @@ PRTE_EXPORT extern prte_hwloc_base_memattr_t prte_hwloc_base_memattr;
 
 /**
  * Parse a memory-binding directive: the --membind command-line option and
- * the hwloc_default_mem_bind_attribute MCA parameter share this one
- * grammar, so the two spellings of a request cannot be answered
- * differently:
+ * the hwloc_default_membind MCA parameter share this one grammar, so the
+ * two spellings of a request cannot be answered differently:
  *
- *     none | attr:<name>     name = capacity | locality | bandwidth | latency
+ *     none | capacity | locality | bandwidth | latency
  *
- * Words are matched against prte_cli_membinders and prte_cli_memattrs the
- * way every other directive is, through prte_cli_match(): case insensitive,
- * and any unique abbreviation will do.
+ * These are PRRTE's own directives, and this is where they are translated
+ * into the hwloc memory attribute that implements each one: should
+ * something other than hwloc ever implement them, the directives stay and
+ * only the translation changes. The word is matched against
+ * prte_cli_membinders the way every other directive is, through
+ * prte_cli_match(): case insensitive, and any unique abbreviation will do.
+ * None takes a qualifier, so a ':' anywhere is refused.
  *
  * Reports what is wrong itself, under "nspace" and naming "option" - the
  * spelling the user wrote - and then returns PRTE_ERR_SILENT, leaving
@@ -197,7 +200,7 @@ PRTE_EXPORT int prte_hwloc_base_parse_membind(const char *nspace, const char *op
                                               prte_hwloc_base_memattr_t *memattr);
 
 /**
- * The canonical spelling of a memory binding - "NONE", "ATTR:BANDWIDTH" -
+ * The canonical spelling of a memory binding - "NONE", "BANDWIDTH" -
  * which prte_hwloc_base_parse_membind() reads back as the same value. A
  * static string: never freed, safe to use twice in one argument list.
  */
@@ -206,8 +209,8 @@ PRTE_EXPORT const char *prte_hwloc_base_print_membind(prte_hwloc_base_memattr_t 
 /**
  * The memory binding a process of app "app" in job "jdata" asked for: the
  * app's --membind (PRTE_APP_MEMBIND), else the job's (PRTE_JOB_MEMBIND),
- * else the hwloc_default_mem_bind_attribute MCA parameter. Reads attribute
- * lists, so it is for the progress thread. "app" may be NULL.
+ * else the hwloc_default_membind MCA parameter. Reads attribute lists, so
+ * it is for the progress thread. "app" may be NULL.
  *
  * The arguments are a prte_job_t and a prte_app_context_t, typed void * as
  * prte_hwloc_base_set_default_binding()'s are, to keep this header free of
