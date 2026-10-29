@@ -140,3 +140,9 @@ Example:
 Here the memory of "app1" processes is bound to the node with the
 highest bandwidth from their core, and that of "app2" processes to the
 node with the most memory, all within the same job.
+
+The same directives can be supplied via the PMIx_Spawn API with the
+"PMIX_MEMBIND" key: in the job-level info array for the whole job, or in
+the info array of a pmix_app_t for that app alone. On that path there is
+no "first app" rule: the array a key was written in says what it
+describes.

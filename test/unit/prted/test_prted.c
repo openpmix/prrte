@@ -1766,9 +1766,9 @@ static int test_membind_distribution(void)
         }
         app0 = (prte_pmix_app_t *) pmix_list_get_first(&apps);
         app1 = (prte_pmix_app_t *) pmix_list_get_next(&app0->super);
-        CHECK(c->desc, c->on_job == list_has_key(&jobdata, PRTE_MEMBIND));
-        CHECK(c->desc, c->on_app0 == app_has_key(app0, PRTE_MEMBIND));
-        CHECK(c->desc, c->on_app1 == app_has_key(app1, PRTE_MEMBIND));
+        CHECK(c->desc, c->on_job == list_has_key(&jobdata, PMIX_MEMBIND));
+        CHECK(c->desc, c->on_app0 == app_has_key(app0, PMIX_MEMBIND));
+        CHECK(c->desc, c->on_app1 == app_has_key(app1, PMIX_MEMBIND));
 
     next:
         PMIX_LIST_DESTRUCT(&apps);
@@ -1792,10 +1792,10 @@ static int test_membind_distribution(void)
 }
 
 /*
- * The spawn translators turn PRTE_MEMBIND into the attribute the odls reads:
+ * The spawn translators turn PMIX_MEMBIND into the attribute the odls reads:
  * a job's into PRTE_JOB_MEMBIND, an app's into PRTE_APP_MEMBIND, either way
- * already parsed.  The key is PRRTE's own but any tool can send it, so a bad
- * value or a wrong type is refused with the request, not carried to a daemon.
+ * already parsed.  Any tool can send it, so a bad value or a wrong type is
+ * refused with the request, not carried to a daemon.
  */
 static int test_xfer_membind(void)
 {
@@ -1809,7 +1809,7 @@ static int test_xfer_membind(void)
 
     /* job level */
     jdata = fresh_job();
-    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "BANDWIDTH", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[0], PMIX_MEMBIND, "BANDWIDTH", PMIX_STRING);
     CHECK("membind/job-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
     CHECK("membind/job-set",
           prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
@@ -1820,7 +1820,7 @@ static int test_xfer_membind(void)
     /* "none" is a real answer, recorded as such: it overrides an MCA default */
     jdata = fresh_job();
     u16 = UINT16_MAX;
-    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "none", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[0], PMIX_MEMBIND, "none", PMIX_STRING);
     CHECK("membind/none-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
     CHECK("membind/none-set",
           prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
@@ -1830,7 +1830,7 @@ static int test_xfer_membind(void)
 
     /* a value the parser refuses is refused with the request */
     jdata = fresh_job();
-    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "fastest", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[0], PMIX_MEMBIND, "fastest", PMIX_STRING);
     CHECK("membind/bad-value-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
     CHECK("membind/bad-value-records-nothing",
           !prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
@@ -1842,8 +1842,8 @@ static int test_xfer_membind(void)
     {
         pmix_info_t two[2];
 
-        PMIX_INFO_LOAD(&two[0], PRTE_MEMBIND, "bandwidth", PMIX_STRING);
-        PMIX_INFO_LOAD(&two[1], PRTE_MEMBIND, "capacity", PMIX_STRING);
+        PMIX_INFO_LOAD(&two[0], PMIX_MEMBIND, "bandwidth", PMIX_STRING);
+        PMIX_INFO_LOAD(&two[1], PMIX_MEMBIND, "capacity", PMIX_STRING);
         CHECK("membind/redefined-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, two, 2));
         PMIX_INFO_DESTRUCT(&two[0]);
         PMIX_INFO_DESTRUCT(&two[1]);
@@ -1852,8 +1852,17 @@ static int test_xfer_membind(void)
 
     /* so is a value of the wrong type, rather than read as a string */
     jdata = fresh_job();
-    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, &u32, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[0], PMIX_MEMBIND, &u32, PMIX_UINT32);
     CHECK("membind/bad-type-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* and a string loaded with nothing, which arrives as a NULL string */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_MEMBIND, NULL, PMIX_STRING);
+    CHECK("membind/null-value-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    CHECK("membind/null-value-records-nothing",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_RELEASE(jdata);
 
@@ -1865,7 +1874,7 @@ static int test_xfer_membind(void)
     papp.maxprocs = 1;
     PMIX_INFO_CREATE(papp.info, 1);
     papp.ninfo = 1;
-    PMIX_INFO_LOAD(&papp.info[0], PRTE_MEMBIND, "cap", PMIX_STRING);
+    PMIX_INFO_LOAD(&papp.info[0], PMIX_MEMBIND, "cap", PMIX_STRING);
     CHECK("membind/app-rc", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
     CHECK("membind/app-present", NULL != app);

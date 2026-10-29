@@ -1151,7 +1151,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         if (PMIx_Check_key(iprteinfo->info.key, PMIX_MAPBY) ||
             PMIx_Check_key(iprteinfo->info.key, PMIX_RANKBY) ||
             PMIx_Check_key(iprteinfo->info.key, PMIX_BINDTO) ||
-            PMIx_Check_key(iprteinfo->info.key, PRTE_MEMBIND)) {
+            PMIx_Check_key(iprteinfo->info.key, PMIX_MEMBIND)) {
             PMIX_INFO_LIST_XFER(ret, jinfo, &iprteinfo->info);
         }
     }

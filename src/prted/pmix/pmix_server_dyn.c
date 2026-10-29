@@ -253,6 +253,7 @@ static const directive_type_t job_directive_types[] = {
     {PMIX_COLOCATE_PROCS, PMIX_DATA_ARRAY, PMIX_PROC},
     {PMIX_RANKBY, PMIX_STRING, PMIX_UNDEF},
     {PMIX_BINDTO, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MEMBIND, PMIX_STRING, PMIX_UNDEF},
     {PMIX_RUNTIME_OPTIONS, PMIX_STRING, PMIX_UNDEF},
     {PMIX_EXEC_AGENT, PMIX_STRING, PMIX_UNDEF},
     {PRTE_XTERM_RANKS, PMIX_STRING, PMIX_UNDEF},
@@ -286,6 +287,7 @@ static const directive_type_t app_directive_types[] = {
     {PMIX_MAPBY, PMIX_STRING, PMIX_UNDEF},
     {PMIX_RANKBY, PMIX_STRING, PMIX_UNDEF},
     {PMIX_BINDTO, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MEMBIND, PMIX_STRING, PMIX_UNDEF},
     {PMIX_SET_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
     {PMIX_ADD_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
     {PMIX_UNSET_ENVAR, PMIX_STRING, PMIX_UNDEF},
@@ -328,12 +330,13 @@ static int directive_refuse(prte_job_t *jdata, const pmix_info_t *info, pmix_dat
     return PRTE_ERR_BAD_PARAM;
 }
 
-/* "--membind", whichever level it was given at: parsed here, where a bad
+/* PMIX_MEMBIND, whichever level it was given at: parsed here, where a bad
  * value can still be refused with the whole request, and recorded as the
  * attribute the odls reads - the parsed value, so no daemon parses it again.
- * The key is PRRTE's own, but nothing stops a tool from sending it, so its
- * type is checked rather than assumed; and like a second --bindto, a second
- * one for the same job or app is a conflict, never an overwrite. */
+ * directive_check() has already held its type to a string; a string loaded
+ * with nothing arrives as NULL, which the parser refuses and reports. Like a
+ * second PMIX_BINDTO, a second one for the same job or app is a conflict,
+ * never an overwrite. */
 static int xfer_membind(prte_job_t *jdata, pmix_info_t *info,
                         pmix_list_t *attributes, prte_attribute_key_t key)
 {
@@ -341,10 +344,7 @@ static int xfer_membind(prte_job_t *jdata, pmix_info_t *info,
     uint16_t u16, prior = 0, *priorptr = &prior;
     int rc;
 
-    if (PMIX_STRING != info->value.type || NULL == info->value.data.string) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-    rc = prte_hwloc_base_parse_membind(PRTE_JOB_NSPACE(jdata), "--membind",
+    rc = prte_hwloc_base_parse_membind(PRTE_JOB_NSPACE(jdata), "PMIX_MEMBIND",
                                        info->value.data.string, &memattr);
     if (PRTE_SUCCESS != rc) {
         return rc;
@@ -676,7 +676,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                                info->value.data.string, PMIX_STRING);
 
             /***   MEMBIND   ***/
-        } else if (PMIX_CHECK_KEY(info, PRTE_MEMBIND)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MEMBIND)) {
             rc = xfer_membind(jdata, info, &jdata->attributes, PRTE_JOB_MEMBIND);
             if (PRTE_SUCCESS != rc) {
                 return rc;
@@ -1223,7 +1223,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 }
 
                 /***   MEMBIND (per-app)   ***/
-            } else if (PMIX_CHECK_KEY(info, PRTE_MEMBIND)) {
+            } else if (PMIX_CHECK_KEY(info, PMIX_MEMBIND)) {
                 rc = xfer_membind(jdata, info, &app->attributes, PRTE_APP_MEMBIND);
                 if (PRTE_SUCCESS != rc) {
                     return rc;

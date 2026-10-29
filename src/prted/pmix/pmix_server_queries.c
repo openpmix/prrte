@@ -714,6 +714,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIx_Argv_append_nosize(&ans, PMIX_MAPBY);
                 PMIx_Argv_append_nosize(&ans, PMIX_RANKBY);
                 PMIx_Argv_append_nosize(&ans, PMIX_BINDTO);
+                PMIx_Argv_append_nosize(&ans, PMIX_MEMBIND);
                 PMIx_Argv_append_nosize(&ans, PMIX_COSPAWN_APP);
                 /* create the return kv */
                 tmp = PMIx_Argv_join(ans, ',');
