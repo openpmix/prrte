@@ -1956,7 +1956,7 @@ void prte_odls_base_process_envars(prte_job_t *jdata,
 }
 
 /* The memory binding a child is to get: its app's "--membind", else its
- * job's, else the DVM's hwloc_default_mem_bind_attribute. It is applied by
+ * job's, else the DVM's hwloc_default_membind. It is applied by
  * prte_odls_base_prepare_binding() only if the mapper gave the child a
  * cpuset; the HNP has already warned, once per app, about the children it
  * did not. Reads attribute lists, so progress thread only (see

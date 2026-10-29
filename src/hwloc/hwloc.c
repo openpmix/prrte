@@ -16,6 +16,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/include/constants.h"
@@ -56,7 +57,7 @@ static bool bind_to_socket = false;
  * each reports the other's value. */
 static char *mem_alloc_policy = NULL;
 static char *mem_bind_failure_action = NULL;
-static char *mem_bind_attribute = NULL;
+static char *default_membind = NULL;
 
 int prte_hwloc_base_register(void)
 {
@@ -149,31 +150,31 @@ int prte_hwloc_base_register(void)
         }
     }
 
-    /* hwloc_default_mem_bind_attribute */
+    /* hwloc_default_membind */
     prte_hwloc_base_memattr = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
-    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "mem_bind_attribute",
-                                     "Default memory binding for launched processes, in the same syntax as the "
-                                     "--membind option: \"none\" (the default), or \"attr:<name>\" to bind each "
-                                     "process' memory to the NUMA node(s) with the best value of the hwloc memory "
-                                     "attribute <name> - capacity, locality, bandwidth or latency - among the nodes "
-                                     "local to the process' own cpuset. So \"attr:bandwidth\" binds the process to "
-                                     "the local node with the highest bandwidth from the cores it is bound to - "
-                                     "which may be a node with no cpus of its own, such as HBM - and "
-                                     "\"attr:locality\" to every node local to its cpuset. A job's or app's "
-                                     "--membind takes precedence. It only applies to processes bound to cpus - "
-                                     "by --bind-to, by the binding --map-by derives, or by the default one; a "
+    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "membind",
+                                     "Default memory binding for launched processes, taking the same directives "
+                                     "as the --membind option: \"none\" (the default), or one of capacity, "
+                                     "locality, bandwidth or latency to bind each process' memory to the NUMA "
+                                     "node(s) best by that measure among the nodes local to the process' own "
+                                     "cpuset. So \"bandwidth\" binds the process to the local node with the "
+                                     "highest bandwidth from the cores it is bound to - which may be a node with "
+                                     "no cpus of its own, such as HBM - and \"locality\" to every node local to "
+                                     "its cpuset. A job's or app's --membind takes precedence. It only applies "
+                                     "to processes bound to cpus - by --bind-to, by the binding --map-by "
+                                     "derives, or by the default one; a "
                                      "warning is printed for those left unbound. When applied, it replaces "
                                      "mem_alloc_policy, and a failure to bind is handled according to "
                                      "mem_bind_failure_action. Requires hwloc 2.3 or later.",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                     &mem_bind_attribute);
+                                     &default_membind);
     if (0 > ret) {
         return ret;
     }
-    if (NULL != mem_bind_attribute &&
+    if (NULL != default_membind &&
         PRTE_SUCCESS != prte_hwloc_base_parse_membind(PRTE_PROC_MY_NAME->nspace,
-                                                      "hwloc_default_mem_bind_attribute",
-                                                      mem_bind_attribute, &prte_hwloc_base_memattr)) {
+                                                      "hwloc_default_membind",
+                                                      default_membind, &prte_hwloc_base_memattr)) {
         /* the parser has already said what is wrong with the value */
         return PRTE_ERR_SILENT;
     }
@@ -761,87 +762,55 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
                                   const char *spec, prte_hwloc_base_memattr_t *memattr)
 {
-    prte_hwloc_base_memattr_t result = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
-    char **fields = NULL;
-    int rc, tag, nfields, ncolons;
-    const char *p;
+    prte_hwloc_base_memattr_t result;
+    int rc, tag;
 
     if (NULL == option || NULL == memattr) {
         return PRTE_ERR_BAD_PARAM;
     }
-    if (NULL == spec || '\0' == spec[0]) {
+    /* a directive is one word: none of them takes a qualifier, so a ':'
+     * means the value is wrong, not that the rest of it can be ignored */
+    if (NULL == spec || '\0' == spec[0] || NULL != strchr(spec, ':')) {
         goto bad;
     }
 
-    /* every ':' must separate two words - an empty field ("attr:",
-     * "attr::bandwidth") is not a value that was written by mistake and
-     * can be ignored, it is a value that is wrong */
-    for (ncolons = 0, p = spec; '\0' != *p; p++) {
-        if (':' == *p) {
-            ++ncolons;
-        }
-    }
-    fields = PMIx_Argv_split(spec, ':');
-    nfields = PMIx_Argv_count(fields);
-    if (0 == nfields || ncolons != nfields - 1) {
-        goto bad;
-    }
-
-    rc = prte_cli_match(nspace, option, fields[0], prte_cli_membinders, &tag);
+    rc = prte_cli_match(nspace, option, spec, prte_cli_membinders, &tag);
     if (PRTE_ERR_NOT_FOUND == rc) {
         goto bad;
     } else if (PRTE_SUCCESS != rc) {
         /* ambiguous, or a value where none belongs - already reported */
-        goto done;
+        return rc;
     }
 
-    if (PRTE_MEMBINDER_NONE == tag) {
-        if (1 != nfields) {
-            goto bad;
-        }
+    /* translate the directive into what implements it */
+    switch (tag) {
+    case PRTE_MEMBINDER_NONE:
         result = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
-    } else {
-        /* attr names exactly one attribute */
-        if (2 != nfields) {
-            goto bad;
-        }
-        rc = prte_cli_match(nspace, option, fields[1], prte_cli_memattrs, &tag);
-        if (PRTE_ERR_NOT_FOUND == rc) {
-            goto bad;
-        } else if (PRTE_SUCCESS != rc) {
-            goto done;
-        }
-        switch (tag) {
-        case PRTE_MEMATTR_CAPACITY:
-            result = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
-            break;
-        case PRTE_MEMATTR_LOCALITY:
-            result = PRTE_HWLOC_BASE_MEMATTR_LOCALITY;
-            break;
-        case PRTE_MEMATTR_BANDWIDTH:
-            result = PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH;
-            break;
-        case PRTE_MEMATTR_LATENCY:
-            result = PRTE_HWLOC_BASE_MEMATTR_LATENCY;
-            break;
-        default:
-            /* a word in the table with no meaning here */
-            goto bad;
-        }
+        break;
+    case PRTE_MEMBINDER_CAPACITY:
+        result = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
+        break;
+    case PRTE_MEMBINDER_LOCALITY:
+        result = PRTE_HWLOC_BASE_MEMATTR_LOCALITY;
+        break;
+    case PRTE_MEMBINDER_BANDWIDTH:
+        result = PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH;
+        break;
+    case PRTE_MEMBINDER_LATENCY:
+        result = PRTE_HWLOC_BASE_MEMATTR_LATENCY;
+        break;
+    default:
+        /* a word in the table with no meaning here */
+        goto bad;
     }
 
     *memattr = result;
-    rc = PRTE_SUCCESS;
-    goto done;
+    return PRTE_SUCCESS;
 
 bad:
     prte_show_help(nspace, "help-prte-hwloc-base.txt", "invalid binding_policy", true,
                    "memory binding", (NULL == spec) ? "" : spec);
-    rc = PRTE_ERR_SILENT;
-
-done:
-    PMIx_Argv_free(fields);
-    return rc;
+    return PRTE_ERR_SILENT;
 }
 
 const char *prte_hwloc_base_print_membind(prte_hwloc_base_memattr_t memattr)
@@ -850,13 +819,13 @@ const char *prte_hwloc_base_print_membind(prte_hwloc_base_memattr_t memattr)
     case PRTE_HWLOC_BASE_MEMATTR_DISABLED:
         return "NONE";
     case PRTE_HWLOC_BASE_MEMATTR_CAPACITY:
-        return "ATTR:CAPACITY";
+        return "CAPACITY";
     case PRTE_HWLOC_BASE_MEMATTR_LOCALITY:
-        return "ATTR:LOCALITY";
+        return "LOCALITY";
     case PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH:
-        return "ATTR:BANDWIDTH";
+        return "BANDWIDTH";
     case PRTE_HWLOC_BASE_MEMATTR_LATENCY:
-        return "ATTR:LATENCY";
+        return "LATENCY";
     default:
         return "UNKNOWN";
     }

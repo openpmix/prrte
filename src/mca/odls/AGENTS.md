@@ -555,11 +555,12 @@ Three decisions the parent makes so the child has only the one call left:
   than guessing. If a third memory policy is ever added, this is what has
   to grow with it.
 
-**Memory binding by attribute (`--membind attr:<name>`) changes only where
-the nodeset comes from.** Which attribute applies to a child is resolved
-on the progress thread into `cd->membind_memattr` - the app's
+**Memory binding by directive (`--membind bandwidth`, etc.) changes only
+where the nodeset comes from.** Which directive applies to a child is
+resolved on the progress thread into `cd->membind_memattr` - the hwloc
+memory attribute that implements it, taken from the app's
 `PRTE_APP_MEMBIND`, else the job's `PRTE_JOB_MEMBIND`, else the
-`hwloc_default_mem_bind_attribute` MCA default
+`hwloc_default_membind` MCA default
 (`prte_hwloc_base_membind_resolve()`) - because it reads attribute lists,
 which a worker must not walk. It is applied only to a child the mapper
 gave a cpuset, explicit or derived; a child without one (`--bind-to none`,

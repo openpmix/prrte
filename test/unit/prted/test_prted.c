@@ -1705,14 +1705,14 @@ static int test_directive_distribution(void)
  */
 static distrib_case_t membind_cases[] = {
     {"membind on the first app only -> the job",
-     {"prterun", "--membind", "attr:bandwidth", "-n", "2", "app1", ":", "-n", "2", "app2", NULL},
+     {"prterun", "--membind", "bandwidth", "-n", "2", "app1", ":", "-n", "2", "app2", NULL},
      true, false, false},
     {"membind on the second app only -> that app alone",
-     {"prterun", "-n", "2", "app1", ":", "--membind", "attr:capacity", "-n", "2", "app2", NULL},
+     {"prterun", "-n", "2", "app1", ":", "--membind", "capacity", "-n", "2", "app2", NULL},
      false, false, true},
     {"membind on both apps -> each its own",
-     {"prterun", "--membind", "attr:bandwidth", "-n", "2", "app1", ":",
-      "--membind", "attr:capacity", "-n", "2", "app2", NULL},
+     {"prterun", "--membind", "bandwidth", "-n", "2", "app1", ":",
+      "--membind", "capacity", "-n", "2", "app2", NULL},
      false, true, true},
     {"no membind at all",
      {"prterun", "--bindto", "core", "-n", "2", "app1", ":", "-n", "2", "app2", NULL},
@@ -1726,12 +1726,12 @@ static const struct {
     const char *desc;
     const char *argv[12];
 } membind_refusals[] = {
-    {"an unknown attribute", {"prterun", "--membind", "attr:fastest", "-n", "1", "app1", NULL}},
-    {"an ambiguous attribute", {"prterun", "--membind", "attr:l", "-n", "1", "app1", NULL}},
-    {"a bare attribute name", {"prterun", "--membind", "bandwidth", "-n", "1", "app1", NULL}},
-    {"attr without a name", {"prterun", "--membind", "attr", "-n", "1", "app1", NULL}},
+    {"an unknown directive", {"prterun", "--membind", "fastest", "-n", "1", "app1", NULL}},
+    {"an ambiguous directive", {"prterun", "--membind", "l", "-n", "1", "app1", NULL}},
+    {"a qualifier on a directive", {"prterun", "--membind", "bandwidth:latency", "-n", "1", "app1", NULL}},
+    {"the old attr: prefix", {"prterun", "--membind", "attr:bandwidth", "-n", "1", "app1", NULL}},
     {"two --membind in one segment",
-     {"prterun", "--membind", "attr:bandwidth", "--membind", "attr:capacity", "-n", "1", "app1", NULL}},
+     {"prterun", "--membind", "bandwidth", "--membind", "capacity", "-n", "1", "app1", NULL}},
     {NULL, {NULL}},
 };
 
@@ -1809,7 +1809,7 @@ static int test_xfer_membind(void)
 
     /* job level */
     jdata = fresh_job();
-    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "ATTR:BANDWIDTH", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "BANDWIDTH", PMIX_STRING);
     CHECK("membind/job-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
     CHECK("membind/job-set",
           prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
@@ -1830,7 +1830,7 @@ static int test_xfer_membind(void)
 
     /* a value the parser refuses is refused with the request */
     jdata = fresh_job();
-    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "attr:fastest", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[0], PRTE_MEMBIND, "fastest", PMIX_STRING);
     CHECK("membind/bad-value-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
     CHECK("membind/bad-value-records-nothing",
           !prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16));
@@ -1842,8 +1842,8 @@ static int test_xfer_membind(void)
     {
         pmix_info_t two[2];
 
-        PMIX_INFO_LOAD(&two[0], PRTE_MEMBIND, "attr:bandwidth", PMIX_STRING);
-        PMIX_INFO_LOAD(&two[1], PRTE_MEMBIND, "attr:capacity", PMIX_STRING);
+        PMIX_INFO_LOAD(&two[0], PRTE_MEMBIND, "bandwidth", PMIX_STRING);
+        PMIX_INFO_LOAD(&two[1], PRTE_MEMBIND, "capacity", PMIX_STRING);
         CHECK("membind/redefined-refused", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, two, 2));
         PMIX_INFO_DESTRUCT(&two[0]);
         PMIX_INFO_DESTRUCT(&two[1]);
@@ -1865,7 +1865,7 @@ static int test_xfer_membind(void)
     papp.maxprocs = 1;
     PMIX_INFO_CREATE(papp.info, 1);
     papp.ninfo = 1;
-    PMIX_INFO_LOAD(&papp.info[0], PRTE_MEMBIND, "a:cap", PMIX_STRING);
+    PMIX_INFO_LOAD(&papp.info[0], PRTE_MEMBIND, "cap", PMIX_STRING);
     CHECK("membind/app-rc", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
     CHECK("membind/app-present", NULL != app);

@@ -201,7 +201,6 @@ BEGIN_C_DECLS
 
 // Memory binding directives
 // PRTE_CLI_NONE reused here
-#define PRTE_CLI_ATTR       "attr"
 #define PRTE_CLI_CAPACITY   "capacity"
 #define PRTE_CLI_LOCALITY   "locality"
 #define PRTE_CLI_BANDWIDTH  "bandwidth"
@@ -402,22 +401,17 @@ typedef enum {
 } prte_cli_binder_t;
 PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_binders[];
 
-/* --membind: the policy word. "none", or "attr" followed by the hwloc
- * memory attribute that chooses the node(s) - "attr:bandwidth". */
+/* --membind: the directive that chooses the node(s) a process' memory is
+ * bound to. These are PRRTE's directives, not the names of whatever
+ * implements them - prte_hwloc_base_parse_membind() translates them. */
 typedef enum {
     PRTE_MEMBINDER_NONE,
-    PRTE_MEMBINDER_ATTR
+    PRTE_MEMBINDER_CAPACITY,
+    PRTE_MEMBINDER_LOCALITY,
+    PRTE_MEMBINDER_BANDWIDTH,
+    PRTE_MEMBINDER_LATENCY
 } prte_cli_membinder_t;
 PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_membinders[];
-
-/* --membind attr:<name>: the attribute */
-typedef enum {
-    PRTE_MEMATTR_CAPACITY,
-    PRTE_MEMATTR_LOCALITY,
-    PRTE_MEMATTR_BANDWIDTH,
-    PRTE_MEMATTR_LATENCY
-} prte_cli_memattr_t;
-PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_memattrs[];
 
 /* --bind-to: the qualifiers */
 typedef enum {
