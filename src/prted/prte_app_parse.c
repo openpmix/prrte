@@ -978,7 +978,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
         return rc;
     }
     rc = distribute_directive(jdata, jobdata,
-                              offsetof(prte_pmix_app_t, membind), PRTE_MEMBIND);
+                              offsetof(prte_pmix_app_t, membind), PMIX_MEMBIND);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
