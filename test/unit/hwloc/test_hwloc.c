@@ -96,8 +96,8 @@
  *    cannot discover them from one.
  *
  *  - prte_hwloc_base_parse_membind() is the one grammar behind --membind,
- *    the hwloc_default_mem_bind_attribute MCA parameter and the spawn key,
- *    matched through prte_cli_match() like every other directive: case
+ *    the hwloc_default_membind MCA parameter and the spawn key, matched
+ *    through prte_cli_match() like every other directive: case
  *    insensitive, any unique abbreviation, an ambiguous one refused, and a
  *    refusal leaves the caller's value alone. test_membind_parse() holds it
  *    to that, and to reading back what prte_hwloc_base_print_membind()
@@ -1597,8 +1597,9 @@ static int test_hwloc_print(void)
 /* memory binding by memory attribute                                 */
 /* ------------------------------------------------------------------ */
 
-/* --membind's grammar: "none" | "attr:<name>". It does not depend on the
- * hwloc version - an old hwloc refuses the binding later, not the spelling. */
+/* --membind's grammar: "none" | "capacity" | "locality" | "bandwidth" |
+ * "latency". It does not depend on the hwloc version - an old hwloc refuses
+ * the binding later, not the spelling. */
 static int test_membind_parse(void)
 {
     static const struct {
@@ -1608,30 +1609,28 @@ static int test_membind_parse(void)
         {"none", PRTE_HWLOC_BASE_MEMATTR_DISABLED},
         {"NONE", PRTE_HWLOC_BASE_MEMATTR_DISABLED},
         {"n", PRTE_HWLOC_BASE_MEMATTR_DISABLED},
-        {"attr:bandwidth", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
-        {"ATTR:BANDWIDTH", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
-        {"Attr:BandWidth", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
-        {"a:b", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
-        {"attr:capacity", PRTE_HWLOC_BASE_MEMATTR_CAPACITY},
-        {"attr:cap", PRTE_HWLOC_BASE_MEMATTR_CAPACITY},
-        {"attr:locality", PRTE_HWLOC_BASE_MEMATTR_LOCALITY},
-        {"attr:lo", PRTE_HWLOC_BASE_MEMATTR_LOCALITY},
-        {"attr:latency", PRTE_HWLOC_BASE_MEMATTR_LATENCY},
-        {"attr:la", PRTE_HWLOC_BASE_MEMATTR_LATENCY},
+        {"bandwidth", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"BANDWIDTH", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"BandWidth", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"b", PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH},
+        {"capacity", PRTE_HWLOC_BASE_MEMATTR_CAPACITY},
+        {"cap", PRTE_HWLOC_BASE_MEMATTR_CAPACITY},
+        {"locality", PRTE_HWLOC_BASE_MEMATTR_LOCALITY},
+        {"lo", PRTE_HWLOC_BASE_MEMATTR_LOCALITY},
+        {"latency", PRTE_HWLOC_BASE_MEMATTR_LATENCY},
+        {"la", PRTE_HWLOC_BASE_MEMATTR_LATENCY},
     };
     static const char *bad[] = {
-        "attr:l",                   /* locality or latency - refused, not guessed */
-        "bandwidth",                /* a name needs its directive */
+        "l",                        /* locality or latency - refused, not guessed */
         "disabled",                 /* not a word of this vocabulary */
-        "attr",                     /* attr names exactly one attribute */
-        "attr:",
+        "fastest",
+        "attr:bandwidth",           /* directives, not hwloc attribute names */
+        "attr",
+        "bandwidth:",               /* no directive takes a qualifier */
         ":bandwidth",
-        "attr::bandwidth",          /* an empty field is not ignorable */
-        "attr:bandwidth:",
-        "attr:bandwidth:latency",
-        "none:bandwidth",           /* none takes nothing */
-        "attr:fastest",
-        "attr=bandwidth",           /* attr takes no value */
+        "bandwidth:latency",
+        "none:bandwidth",
+        "bandwidth=1",              /* nor a value */
         "",
         NULL
     };

@@ -859,10 +859,8 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     }
 
     /* --membind is checked by the parser the server and the MCA parameter
-     * use, rather than by check_directives(): its second field is a value
-     * of the first, not a qualifier, so only that parser can say whether
-     * "attr:bandwidth" means anything - and the front door must not accept
-     * what the server would then refuse */
+     * use, so the front door cannot accept what the server would then
+     * refuse */
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_MEMBIND);
     if (NULL != opt) {
         prte_hwloc_base_memattr_t memattr;

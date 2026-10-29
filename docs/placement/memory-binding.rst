@@ -1,7 +1,7 @@
 .. _placement-memory-binding-label:
 
-Binding memory by attribute
-===========================
+Binding memory
+===============
 
 On a machine with more than one kind of memory, e.g
 DDR next to HBM, the NUMA node on which a process is cpu-bound to
@@ -14,16 +14,17 @@ custom allocator libraries (e.g. ``memkind``), by explicit C API and system
 calls (``hwloc``, ``mbind()``, ``set_mempolicy()``) or with command-line
 binding tools like ``numactl``.
 
-PRRTE can memory-bind each process to the NUMA node(s) with the best value
-of a chosen (hwloc) memory attribute, among the nodes local to the cores the
-process is bound to. This is separate from, and complementary to, cpu-binding
+PRRTE can memory-bind each process to the NUMA node(s) best suited to it by
+a chosen measure |mdash| capacity, locality, bandwidth or latency |mdash|
+among the nodes local to the cores the process is bound to. This is separate from, and complementary to, cpu-binding
 a process to cores (``--bind-to``). The cpu-binding defines where the process
 runs, while the memory-binding decides where its memory is allocated.
 
-.. note:: Memory attributes need **hwloc 2.3 or later**. PRRTE itself builds
-   with hwloc 2.1 or later, but with an older hwloc this feature is
-   unavailable: asking for an attribute is reported as a memory-binding
-   failure (see `Failure handling`_).
+.. note:: PRRTE currently implements these directives with hwloc's memory
+   attributes, which need **hwloc 2.3 or later**. PRRTE itself builds with
+   hwloc 2.1 or later, but with an older hwloc this feature is unavailable:
+   asking for a memory binding is reported as a memory-binding failure (see
+   `Failure handling`_).
 
 
 Usage
@@ -34,27 +35,27 @@ Per job or per app, with the ``--membind`` option of ``mpirun``,
 
 .. code-block:: sh
 
-   mpirun --membind attr:bandwidth -n 4 ./a.out
-   mpirun --map-by numa --membind attr:bandwidth -n 4 ./a.out
-   mpirun --bind-to core --membind attr:bandwidth -n 4 ./a.out
+   mpirun --membind bandwidth -n 4 ./a.out
+   mpirun --map-by numa --membind bandwidth -n 4 ./a.out
+   mpirun --bind-to core --membind bandwidth -n 4 ./a.out
 
 All three bind memory: the first relies on PRRTE's default cpu binding,
 the second on the binding ``--map-by`` derives, the third on an explicit
 one. What matters is that each process ends up bound to cpus: see
 `The process must be bound to cpus`_.
 
-Currently supported attributes are: ``bandwidth``, ``latency``,
-``locality`` and ``capacity``.
+Currently supported directives are: ``bandwidth``, ``latency``,
+``locality`` and ``capacity`` (and ``none``, the default).
 
 As the default for every job a DVM runs, use the
-``hwloc_default_mem_bind_attribute`` MCA parameter, which takes the same
+``hwloc_default_membind`` MCA parameter, which takes the same
 values. It is a PRRTE parameter, so it is given with ``--prtemca`` or in
-the environment as ``PRTE_MCA_hwloc_default_mem_bind_attribute`` |mdash|
+the environment as ``PRTE_MCA_hwloc_default_membind`` |mdash|
 ``PRTE_MCA_``, not ``OMPI_MCA_``:
 
 .. code-block:: sh
 
-   prte --prtemca hwloc_default_mem_bind_attribute attr:bandwidth ...
+   prte --prtemca hwloc_default_membind bandwidth ...
 
 A process is bound by its app's ``--membind`` if it has one, else by its
 job's, else by the MCA parameter.
@@ -77,12 +78,12 @@ Candidates the PRRTE daemon may not itself use (for example because of a
 cgroup) are dropped *before* the choice is made, since the process inherits
 that restriction: if the best node is forbidden, the best permitted one is
 chosen. Nodes tied for the best value are all kept. If no candidate is left,
-or none has a value for the attribute, the process' memory is not bound,
+or none has a value for the chosen measure, the process' memory is not bound,
 which is handled as a failure (see `Failure handling`_).
 
 .. note:: ``BANDWIDTH`` and ``LATENCY`` are only as good as the values hwloc
    has. On platforms that do not expose the HMAT information, or inside a
-   container that hides it, hwloc has nothing to compare and the attribute
+   container that hides it, hwloc has nothing to compare and the directive
    cannot be resolved - which is handled as a failure below.
 
 
@@ -107,7 +108,7 @@ unbound:
 
 .. code-block:: sh
 
-   $ mpirun --bind-to none --membind attr:bandwidth -n 4 ./a.out
+   $ mpirun --bind-to none --membind bandwidth -n 4 ./a.out
    A memory binding was requested for processes that are not bound to
    cpus:
    ...
@@ -119,7 +120,7 @@ its memory is then not bound either, without a warning of its own.
 **mem_alloc_policy.** ``hwloc_default_mem_alloc_policy`` is PRRTE's older,
 coarser control: it either does nothing (``none``) or restricts a process
 to its local NUMA domain (``local_only``). A memory binding requested by
-``--membind`` or ``hwloc_default_mem_bind_attribute`` takes precedence, for
+``--membind`` or ``hwloc_default_membind`` takes precedence, for
 every process it applies to.
 
 **Topology files.** A topology read from a file with ``hwloc_use_topo_file``
@@ -138,7 +139,7 @@ the same parameter that governs ``local_only``:
   possibly with degraded performance.
 * ``error`` - abort the job.
 
-This covers the attribute being unavailable (an hwloc older than 2.3, or no
+This covers the directive being unavailable (an hwloc older than 2.3, or no
 data for it), no usable local node, as well as the operating system
 refusing the request. Many container runtimes deny the system call that
 sets a memory policy; inside one, use ``silent`` or ``warn`` unless the job
@@ -154,7 +155,7 @@ process:
 .. code-block:: sh
 
    prterun --prtemca hwloc_base_verbose 40 \
-           --bind-to core --membind attr:bandwidth -n 2 ./a.out
+           --bind-to core --membind bandwidth -n 2 ./a.out
 
 and inspect the running process on its node: the mappings in
 ``/proc/<pid>/numa_maps`` carry a ``bind:`` entry naming the node(s), and
