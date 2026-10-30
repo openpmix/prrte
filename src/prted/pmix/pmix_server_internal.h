@@ -19,6 +19,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -437,6 +438,7 @@ PRTE_EXPORT extern void pmix_server_query_resp(int status, pmix_proc_t *sender,
                                                pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                                void *cbdata);
 
+PRTE_EXPORT extern int prte_pmix_server_tool_may_join(prte_job_t *jdata, pmix_rank_t rank);
 PRTE_EXPORT extern int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
                                                       pmix_op_cbfunc_t cbfunc, void *cbdata);
 

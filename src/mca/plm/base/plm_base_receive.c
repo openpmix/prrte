@@ -54,6 +54,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
+#include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -525,32 +526,26 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         }
         // see if we already have this job
         jdata = prte_get_job_data_object(name.nspace);
-        if (NULL != jdata) {
+        rc = prte_pmix_server_tool_may_join(jdata, name.rank);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
+                                 "%s refusing tool %s: %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&name),
+                                 prte_strerror(rc)));
+            ret = prte_pmix_convert_rc(rc);
+
+        } else if (NULL != jdata) {
             // we do - check if we already have this proc
             proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, name.rank);
-            if (NULL == proc && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                /* A tool may take a rank a job already has - one started
-                 * from a job script inherits it - but may not add one: a
-                 * tool's departure retires its rank only in a tool's
-                 * namespace, so the job could never complete. EXISTS makes
-                 * a tool that took its name from its environment connect
-                 * again under a namespace of its own. */
-                PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
-                                     "%s refusing tool %s: %s is not a tool's namespace",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&name),
-                                     PRTE_JOBID_PRINT(name.nspace)));
-                ret = PMIX_ERR_EXISTS;
-            } else {
-                if (NULL == proc) {
-                    // new rank for this tool - add it
-                    proc = PMIX_NEW(prte_proc_t);
-                    memcpy(&proc->name, &name, sizeof(pmix_proc_t));
-                    proc->state = PRTE_PROC_STATE_RUNNING;
-                    pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
-                    jdata->num_procs++;
-                }
-                ret = PMIX_SUCCESS;
+            if (NULL == proc) {
+                // new rank for this tool - add it
+                proc = PMIX_NEW(prte_proc_t);
+                memcpy(&proc->name, &name, sizeof(pmix_proc_t));
+                proc->state = PRTE_PROC_STATE_RUNNING;
+                pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+                jdata->num_procs++;
             }
+            ret = PMIX_SUCCESS;
 
         } else {
             // unpack the cmd line

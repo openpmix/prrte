@@ -22,6 +22,7 @@
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1062,6 +1063,30 @@ errout:
     return rc;
 }
 
+/* May a connecting tool take this rank of this namespace?  jdata is the
+ * namespace's job, or NULL for a namespace not yet known.  Both the master's
+ * own tool registration and its relay for a tool attached to another daemon
+ * ask this, so both refuse the same attaches.
+ *
+ * A tool may take a rank a job already has - one started from a job script
+ * inherits it - but may add one only to a tool's namespace: a tool's
+ * departure retires its rank only there, so a rank added to an application
+ * job would keep the job from ever completing.
+ * PRTE_EXISTS reaches the tool as PMIX_ERR_EXISTS, and its PMIx_tool_init
+ * fails - unless the refused name came from its environment, when PMIx
+ * connects it again under a namespace of its own. */
+int prte_pmix_server_tool_may_join(prte_job_t *jdata, pmix_rank_t rank)
+{
+    if (PMIX_RANK_VALID <= rank) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (NULL != jdata && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
+        NULL == pmix_pointer_array_get_item(jdata->procs, rank)) {
+        return PRTE_EXISTS;
+    }
+    return PRTE_SUCCESS;
+}
+
 /* add any info that the tool couldn't self-assign.  Follows the same
  * asynchronous completion contract as prte_pmix_server_register_nspace
  * above, with one difference the caller has to tolerate: when the job is
@@ -1083,6 +1108,10 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
 
     // see if we already did this
     jdata = prte_get_job_data_object(cd->target.nspace);
+    rc = prte_pmix_server_tool_may_join(jdata, cd->target.rank);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
     if (NULL != jdata) {
         // we did - the caller must tolerate the callback being
         // invoked prior to our return
@@ -1101,15 +1130,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
      * tool's job when it departs.  Filed at zero, a tool with any other rank
      * was never found there, so its namespace never terminated - and with
      * it, the inheritance disposition of any allocation it had reserved.
-     *
-     * Screen the rank before building anything.  It arrived from the
-     * connecting process, and the sentinel ranks are not subscripts: handing
-     * PMIX_RANK_UNDEF to pmix_pointer_array_set_item() asks it to grow to
-     * four billion entries. */
-    if (PMIX_RANK_VALID <= cd->target.rank) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
+     * prte_pmix_server_tool_may_join() above has already screened it. */
 
     // create a job tracker for it
     jdata = PMIX_NEW(prte_job_t);

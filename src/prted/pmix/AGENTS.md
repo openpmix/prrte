@@ -1546,6 +1546,10 @@ in a job script works and must keep working. Adding one would leave a rank
 that never retires, since a tool's departure is acted on only in a tool's
 namespace, and the job could never complete. So such an attach is refused
 with `PMIX_ERR_EXISTS` (see `src/mca/plm/AGENTS.md`, `TOOL_ATTACHED_CMD`).
+`prte_pmix_server_tool_may_join()` is the one place that decides it, together
+with the sentinel-rank screen, and both the master's own registration
+(`prte_pmix_server_register_tool()`) and its relay for a tool attached
+elsewhere call it, so both refuse the same attaches.
 
 `lost_connection_hdlr()` in `pmix_server.c` is the other half — the
 *abnormal* departure — and it is registered at the end of
