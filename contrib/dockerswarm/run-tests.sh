@@ -4676,7 +4676,9 @@ test_tools() {
     # ...and the same from a job script under prterun, whose DVM is its own.
     # prterun writes the output of the jobs in it to the terminal, and the
     # prun that started a step writes the step's too - so the step's output
-    # was printed twice.
+    # was printed twice.  And the step's status is the prun's to return to
+    # the script: prterun returns the script's, not the first failure of
+    # every job it ran.
     out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 echo STEP-OUTPUT; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
     echo "$out" | grep -q 'INNER RC=0' && echo "$out" | grep -q 'OUTER RC=0' \
         && ok "a prun in a prterun job script returns, and so does prterun" \
@@ -4685,6 +4687,10 @@ test_tools() {
     [ "$n" = 1 ] \
         && ok "...and the step's output is printed once" \
         || bad "the step's output was printed $n times: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 false; echo INNER RC=\$?; exit 0' 2>&1; echo OUTER RC=\$?")
+    echo "$out" | grep -q 'INNER RC=1' && echo "$out" | grep -q 'OUTER RC=0' \
+        && ok "a failed step is the job script's to handle: prterun returns the script's status" \
+        || bad "prterun did not return its job script's status: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     cleanup_swarm
 }
 

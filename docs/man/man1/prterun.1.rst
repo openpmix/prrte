@@ -257,6 +257,13 @@ EXIT STATUS
   own |mdash| a job that could not be mapped or launched, for instance.
   Do not attach meaning to the particular value beyond "not zero".
 
+A job that a tool started is not part of that outcome. When the job
+``prterun`` launched is a script that runs a step with
+:ref:`prun(1) <man1-prun>`, the step's output and exit status go to that
+``prun``, which reports them and returns the status to the script; the
+script decides what comes of a failed step, and ``prterun`` returns the
+script's status.
+
 A failure to start the DVM, or an invalid command line, also exits
 non-zero.
 
