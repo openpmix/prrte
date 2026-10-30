@@ -430,9 +430,10 @@ void prte_pmix_server_connection_drop(const pmix_proc_t *members, size_t nmember
 
 /* Broadcast an event to the assemblage.
  *
- * The targets are the members as named, wildcards and all, which is what the
- * custom range wants: PMIx delivers to whoever registered for the code and
- * falls within it, so a member that has already gone simply matches nothing.
+ * The targets are a record's collapsed members, wildcards and all, which is
+ * what the custom range wants: PMIx delivers to whoever registered for the
+ * code and falls within it, so a member that has already gone simply matches
+ * nothing.
  *
  * "affected" is what the event is about.  One entry goes as
  * PMIX_EVENT_AFFECTED_PROC, as it always has: a proc for a departure, or
@@ -558,8 +559,8 @@ static bool names_job(prte_pmix_server_connection_t *cptr, const pmix_nspace_t n
 {
     size_t n;
 
-    for (n = 0; n < cptr->nmembers; n++) {
-        if (same_nspace(cptr->members[n].nspace, nspace)) {
+    for (n = 0; n < cptr->ncollapsed; n++) {
+        if (same_nspace(cptr->collapsed[n].nspace, nspace)) {
             return true;
         }
     }
@@ -913,20 +914,6 @@ done:
     PMIX_PROC_RELEASE(proxy);
 }
 
-/* Is this job already coming down - the one the failure happened in, or one
- * an earlier pass of the sweep below has already ordered killed? */
-static bool nspace_condemned(char **condemned, const pmix_nspace_t nspace)
-{
-    int i;
-
-    for (i = 0; NULL != condemned && NULL != condemned[i]; i++) {
-        if (same_nspace(condemned[i], nspace)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 /* The failure that is bringing this job down, and who is owed the news.
  *
  * Every other proc of the job is being killed on the master's orders, and
@@ -1065,9 +1052,9 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
              * naming the original failure instead would point the user at a
              * job this assemblage was never connected to */
             cause = NULL;
-            for (n = 0; n < cptr->nmembers; n++) {
-                if (nspace_condemned(condemned, cptr->members[n].nspace)) {
-                    cause = cptr->members[n].nspace;
+            for (n = 0; n < cptr->ncollapsed; n++) {
+                if (nspace_listed(condemned, cptr->collapsed[n].nspace)) {
+                    cause = cptr->collapsed[n].nspace;
                     break;
                 }
             }
@@ -1082,14 +1069,14 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
             cptr->terminating = true;
             swept = true;
 
-            for (n = 0; n < cptr->nmembers; n++) {
+            for (n = 0; n < cptr->ncollapsed; n++) {
                 /* a namespace can appear more than once in a membership - one
                  * entry per rank - and it is to be killed once.  The condemned
                  * list is what keeps it to one, here and on every later pass */
-                if (nspace_condemned(condemned, cptr->members[n].nspace)) {
+                if (nspace_listed(condemned, cptr->collapsed[n].nspace)) {
                     continue;
                 }
-                jptr = prte_get_job_data_object(cptr->members[n].nspace);
+                jptr = prte_get_job_data_object(cptr->collapsed[n].nspace);
                 if (NULL == jptr || PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_ABORTED) ||
                     PRTE_JOB_STATE_TERMINATED <= jptr->state) {
                     /* Already gone, or already on its way - and deliberately
@@ -1101,7 +1088,7 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
                      * no longer there to take down peers that survived it. */
                     continue;
                 }
-                PMIx_Argv_append_nosize(&condemned, cptr->members[n].nspace);
+                PMIx_Argv_append_nosize(&condemned, cptr->collapsed[n].nspace);
 
                 /* the user is about to lose a job they did not ask about, so say
                  * why - "connected" is not a property they can see in ps */
@@ -1140,7 +1127,7 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
     for (i = 0; NULL != condemned[i] && NULL != condemned[i + 1]; i++) {
         cptr = (prte_pmix_server_connection_t *) pmix_pointer_array_get_item(&told, i);
         PMIX_LOAD_PROCID(&target, condemned[i + 1], PMIX_RANK_WILDCARD);
-        notify_assemblage(cptr->members, cptr->nmembers, PMIX_ERR_JOB_TERM_WO_SYNC,
+        notify_assemblage(cptr->collapsed, cptr->ncollapsed, PMIX_ERR_JOB_TERM_WO_SYNC,
                           &target, 1, -1);
     }
     PMIX_DESTRUCT(&told);
@@ -1155,16 +1142,16 @@ static int count_jobs(prte_pmix_server_connection_t *cptr, const char *except, b
     const char *seen = NULL;
     size_t n;
 
-    for (n = 0; n < cptr->nmembers; n++) {
-        if (NULL != except && same_nspace(cptr->members[n].nspace, except)) {
+    for (n = 0; n < cptr->ncollapsed; n++) {
+        if (NULL != except && same_nspace(cptr->collapsed[n].nspace, except)) {
             continue;
         }
-        if (only_live && NULL == prte_get_job_data_object(cptr->members[n].nspace)) {
+        if (only_live && NULL == prte_get_job_data_object(cptr->collapsed[n].nspace)) {
             continue;
         }
         if (NULL == seen) {
-            seen = cptr->members[n].nspace;
-        } else if (!same_nspace(seen, cptr->members[n].nspace)) {
+            seen = cptr->collapsed[n].nspace;
+        } else if (!same_nspace(seen, cptr->collapsed[n].nspace)) {
             return 2;
         }
     }
