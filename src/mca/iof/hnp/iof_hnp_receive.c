@@ -74,6 +74,8 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     int rc;
     unsigned char *stdindata = NULL;
     pmix_iof_channel_t pchan;
+    const pmix_info_t *dirs;
+    size_t ndirs;
     prte_iof_deliver_t *p;
     prte_job_t *jdata;
     pmix_status_t prc;
@@ -287,7 +289,8 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                                numbytes, sender->rank);
 
     /* output this thru our PMIx server */
-    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
+    dirs = prte_iof_hnp_deliver_directives(&p->source, &ndirs);
+    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, dirs, ndirs, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_RELEASE(p);

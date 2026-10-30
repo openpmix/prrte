@@ -192,6 +192,51 @@ static void relay_one(pmix_rank_t dmn,
 }
 #endif
 
+/* Our PMIx server writes the output it is handed to our own stdout/stderr
+ * only when we are a one-shot DVM - prterun, at the user's terminal (see
+ * PMIX_IOF_LOCAL_OUTPUT in pmix_server_init()) - and it also delivers every
+ * chunk to the tools that asked for that job's output. A job a tool asked
+ * for has its output delivered to that tool, which writes it out itself, so
+ * writing it here too printed every line twice: a prun in a prterun job
+ * script showed its step's output once from itself and once from prterun.
+ * Such a chunk is handed over with PMIX_IOF_LOCAL_OUTPUT=false, which the
+ * relay to a tool's daemon already uses for the same reason: deliver it to
+ * whoever asked, do not write it out. prterun's own job is not one a tool
+ * asked for - prterun spawns it through its own server - so it is written
+ * here as before (see prte_job_requested_by_tool()); and a persistent DVM
+ * writes nothing here at all, so it pays for no lookup. */
+const pmix_info_t *prte_iof_hnp_deliver_directives(const pmix_proc_t *source, size_t *ndirs)
+{
+#if PRTE_PMIX_IOF_DELIVER_LOCAL
+    static pmix_info_t not_here;
+    static bool not_here_ready = false;
+    bool flag = false;
+    prte_job_t *jdata;
+
+    *ndirs = 0;
+    if (prte_persistent) {
+        return NULL;
+    }
+    jdata = prte_get_job_data_object(source->nspace);
+    if (!prte_job_requested_by_tool(jdata)) {
+        return NULL;
+    }
+    /* the delivery is non-blocking and PMIx reads this on its own thread
+     * after we return, so it has to outlive the call - one static, built
+     * once, serves them all */
+    if (!not_here_ready) {
+        PMIX_INFO_LOAD(&not_here, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        not_here_ready = true;
+    }
+    *ndirs = 1;
+    return &not_here;
+#else
+    PRTE_HIDE_UNUSED_PARAMS(source);
+    *ndirs = 0;
+    return NULL;
+#endif
+}
+
 void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
                                 prte_iof_tag_t stream,
                                 unsigned char *data, int numbytes,
