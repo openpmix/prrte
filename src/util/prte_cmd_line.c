@@ -1,6 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -123,6 +124,15 @@ const pmix_cli_choice_t prte_cli_binders[] = {
     PMIX_CLI_CHOICE(PRTE_CLI_L3CACHE, PRTE_BINDER_L3CACHE, NOVAL),
     PMIX_CLI_CHOICE(PRTE_CLI_NUMA, PRTE_BINDER_NUMA, NOVAL),
     PMIX_CLI_CHOICE(PRTE_CLI_PACKAGE, PRTE_BINDER_PACKAGE, NOVAL),
+    PMIX_CLI_CHOICE_END
+};
+
+const pmix_cli_choice_t prte_cli_membinders[] = {
+    PMIX_CLI_CHOICE(PRTE_CLI_NONE, PRTE_MEMBINDER_NONE, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_CAPACITY, PRTE_MEMBINDER_CAPACITY, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_LOCALITY, PRTE_MEMBINDER_LOCALITY, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_BANDWIDTH, PRTE_MEMBINDER_BANDWIDTH, NOVAL),
+    PMIX_CLI_CHOICE(PRTE_CLI_LATENCY, PRTE_MEMBINDER_LATENCY, NOVAL),
     PMIX_CLI_CHOICE_END
 };
 

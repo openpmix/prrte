@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,19 +18,24 @@
  *   roletool <uri> parent <nspace> <rank>
  *   roletool <uri> instantiate <session-id> <hosts>
  *   roletool <uri> pset <name> <nspace> <rank>
+ *   roletool <uri> impersonate <nspace> <rank>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
- * DVM's rendezvous files are readable by its own user only.
+ * DVM's rendezvous files are readable by its own user only. A <uri> of "-"
+ * connects to the daemon on this node by its rendezvous file instead, which
+ * is how a tool reaches a non-master daemon.
  *
  *   scheduler    connect declaring itself the DVM's scheduler, then leave
  *   spawn        start /bin/true, naming no parent
  *   parent       start /bin/true, naming <nspace>:<rank> as its parent
  *   instantiate  create session <session-id> holding <hosts>
  *   pset         define process set <name> holding <nspace>:<rank>
+ *   impersonate  connect naming itself <nspace>:<rank>, then leave
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
  *   ROLE INIT <status>
+ *   ROLE NAME <nspace> <rank>    (impersonate: the name it connected under)
  *   ROLE SPAWN <status>
  *   ROLE SESSION <status>
  *   ROLE PSET <status>
@@ -39,6 +45,7 @@
  * which needs a second user, a live connection, and the DVM's own server.
  */
 
+#include <errno.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -96,7 +103,8 @@ static void usage(const char *name)
 {
     fprintf(stderr,
             "usage: %s <uri> scheduler | spawn | parent <nspace> <rank> |"
-            " instantiate <session-id> <hosts> | pset <name> <nspace> <rank>\n",
+            " instantiate <session-id> <hosts> | pset <name> <nspace> <rank> |"
+            " impersonate <nspace> <rank>\n",
             name);
 }
 
@@ -120,13 +128,31 @@ int main(int argc, char **argv)
     op = argv[2];
     if ((0 == strcmp(op, "parent") && 5 != argc) ||
         (0 == strcmp(op, "instantiate") && 5 != argc) ||
-        (0 == strcmp(op, "pset") && 6 != argc)) {
+        (0 == strcmp(op, "pset") && 6 != argc) ||
+        (0 == strcmp(op, "impersonate") && 5 != argc)) {
         usage(argv[0]);
         return 1;
     }
 
-    PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_SERVER_URI, argv[1], PMIX_STRING);
-    if (0 == strcmp(op, "scheduler")) {
+    if (0 != strcmp(argv[1], "-")) {
+        PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_SERVER_URI, argv[1], PMIX_STRING);
+    }
+    if (0 == strcmp(op, "impersonate")) {
+        /* a tool chooses its own name, including one that is taken */
+        char *end;
+        unsigned long ul;
+        pmix_rank_t rank;
+
+        errno = 0;
+        ul = strtoul(argv[4], &end, 10);
+        if (0 != errno || end == argv[4] || '\0' != *end || PMIX_RANK_VALID <= ul) {
+            fprintf(stderr, "%s: impersonate: '%s' is not a rank\n", argv[0], argv[4]);
+            return 1;
+        }
+        rank = (pmix_rank_t) ul;
+        PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_TOOL_NSPACE, argv[3], PMIX_STRING);
+        PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
+    } else if (0 == strcmp(op, "scheduler")) {
         /* a scheduler names itself */
         pmix_rank_t rank = 0;
         PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_SERVER_SCHEDULER, &flag, PMIX_BOOL);
@@ -141,6 +167,11 @@ int main(int argc, char **argv)
     }
 
     if (0 == strcmp(op, "scheduler")) {
+        rc = PMIX_SUCCESS;
+
+    } else if (0 == strcmp(op, "impersonate")) {
+        /* PMIx may have connected it under a fresh name instead */
+        printf("ROLE NAME %s %u\n", myproc.nspace, myproc.rank);
         rc = PMIX_SUCCESS;
 
     } else if (0 == strcmp(op, "spawn") || 0 == strcmp(op, "parent")) {

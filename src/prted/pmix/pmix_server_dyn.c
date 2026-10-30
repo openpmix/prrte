@@ -19,6 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -252,6 +253,7 @@ static const directive_type_t job_directive_types[] = {
     {PMIX_COLOCATE_PROCS, PMIX_DATA_ARRAY, PMIX_PROC},
     {PMIX_RANKBY, PMIX_STRING, PMIX_UNDEF},
     {PMIX_BINDTO, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MEMBIND, PMIX_STRING, PMIX_UNDEF},
     {PMIX_RUNTIME_OPTIONS, PMIX_STRING, PMIX_UNDEF},
     {PMIX_EXEC_AGENT, PMIX_STRING, PMIX_UNDEF},
     {PRTE_XTERM_RANKS, PMIX_STRING, PMIX_UNDEF},
@@ -285,6 +287,7 @@ static const directive_type_t app_directive_types[] = {
     {PMIX_MAPBY, PMIX_STRING, PMIX_UNDEF},
     {PMIX_RANKBY, PMIX_STRING, PMIX_UNDEF},
     {PMIX_BINDTO, PMIX_STRING, PMIX_UNDEF},
+    {PMIX_MEMBIND, PMIX_STRING, PMIX_UNDEF},
     {PMIX_SET_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
     {PMIX_ADD_ENVAR, PMIX_ENVAR, PMIX_UNDEF},
     {PMIX_UNSET_ENVAR, PMIX_STRING, PMIX_UNDEF},
@@ -325,6 +328,36 @@ static int directive_refuse(prte_job_t *jdata, const pmix_info_t *info, pmix_dat
     prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-runtime.txt", "spawn-directive-type", true,
                    info->key, PMIx_Data_type_string(want), PMIx_Data_type_string(info->value.type));
     return PRTE_ERR_BAD_PARAM;
+}
+
+/* PMIX_MEMBIND, whichever level it was given at: parsed here, where a bad
+ * value can still be refused with the whole request, and recorded as the
+ * attribute the odls reads - the parsed value, so no daemon parses it again.
+ * directive_check() has already held its type to a string; a string loaded
+ * with nothing arrives as NULL, which the parser refuses and reports. Like a
+ * second PMIX_BINDTO, a second one for the same job or app is a conflict,
+ * never an overwrite. */
+static int xfer_membind(prte_job_t *jdata, pmix_info_t *info,
+                        pmix_list_t *attributes, prte_attribute_key_t key)
+{
+    prte_hwloc_base_memattr_t memattr;
+    uint16_t u16, prior = 0, *priorptr = &prior;
+    int rc;
+
+    rc = prte_hwloc_base_parse_membind(PRTE_JOB_NSPACE(jdata), "PMIX_MEMBIND",
+                                       info->value.data.string, &memattr);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    if (prte_get_attribute(attributes, key, (void **) &priorptr, PMIX_UINT16)) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "redefining-policy", true,
+                       "memory binding", info->value.data.string,
+                       prte_hwloc_base_print_membind((prte_hwloc_base_memattr_t) prior));
+        return PRTE_ERR_BAD_PARAM;
+    }
+    u16 = (uint16_t) memattr;
+    prte_set_attribute(attributes, key, PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
+    return PRTE_SUCCESS;
 }
 
 int prte_pmix_xfer_job_info(prte_job_t *jdata,
@@ -641,6 +674,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PRTE_XTERM_RANKS)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_XTERM, PRTE_ATTR_GLOBAL,
                                info->value.data.string, PMIX_STRING);
+
+            /***   MEMBIND   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_MEMBIND)) {
+            rc = xfer_membind(jdata, info, &jdata->attributes, PRTE_JOB_MEMBIND);
+            if (PRTE_SUCCESS != rc) {
+                return rc;
+            }
 
             /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
@@ -1178,6 +1218,13 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 /***   BIND-TO (per-app)   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
                 rc = prte_rmaps_base_set_app_binding_policy(app, info->value.data.string);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
+
+                /***   MEMBIND (per-app)   ***/
+            } else if (PMIX_CHECK_KEY(info, PMIX_MEMBIND)) {
+                rc = xfer_membind(jdata, info, &app->attributes, PRTE_APP_MEMBIND);
                 if (PRTE_SUCCESS != rc) {
                     return rc;
                 }

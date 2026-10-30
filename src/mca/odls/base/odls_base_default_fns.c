@@ -20,6 +20,7 @@
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1954,6 +1955,17 @@ void prte_odls_base_process_envars(prte_job_t *jdata,
     }
 }
 
+/* The memory binding a child is to get: its app's "--membind", else its
+ * job's, else the DVM's hwloc_default_membind. It is applied by
+ * prte_odls_base_prepare_binding() only if the mapper gave the child a
+ * cpuset; the HNP has already warned, once per app, about the children it
+ * did not. Reads attribute lists, so progress thread only (see
+ * prte_odls_spawn_caddy_t). */
+static prte_hwloc_base_memattr_t membind_resolve(prte_job_t *jobdat, prte_app_context_t *app)
+{
+    return prte_hwloc_base_membind_resolve(jobdat, app);
+}
+
 /* Resolve the job attributes the fork path consults onto a caddy, and copy
  * them from one caddy to another.  Progress thread only. */
 static void spawn_caddy_resolve(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat)
@@ -2416,6 +2428,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd->fork_local = fork_local;
             cd->index_argv = index_argv;
             spawn_caddy_copy(cd, &proto);
+            /* per app, so not part of the job-level prototype */
+            cd->membind_memattr = membind_resolve(jobdat, app);
             if (PRTE_SUCCESS != (rc = xterm_select(cd, jobdat, child))) {
                 child->exit_code = rc;
                 PMIX_RELEASE(cd);
@@ -3187,6 +3201,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     cd->child = child;
     cd->fork_local = fork_local;
     spawn_caddy_resolve(cd, jobdat);
+    cd->membind_memattr = membind_resolve(jobdat, app);
     if (PRTE_SUCCESS != (rc = xterm_select(cd, jobdat, child))) {
         child->exit_code = rc;
         PMIX_RELEASE(cd);

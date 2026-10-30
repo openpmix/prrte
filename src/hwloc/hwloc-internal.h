@@ -158,6 +158,123 @@ typedef enum {
 PRTE_EXPORT extern prte_hwloc_base_mbfa_t prte_hwloc_base_mbfa;
 
 /**
+ * Enum for which hwloc memory attribute selects the NUMA node(s) that a
+ * launched process is bound to. The values map onto the hwloc_memattr_id_t
+ * HWLOC_MEMATTR_ID_*; DISABLED (zero) means no attribute-based binding.
+ */
+typedef enum {
+    PRTE_HWLOC_BASE_MEMATTR_DISABLED,
+    PRTE_HWLOC_BASE_MEMATTR_CAPACITY,
+    PRTE_HWLOC_BASE_MEMATTR_LOCALITY,
+    PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH,
+    PRTE_HWLOC_BASE_MEMATTR_LATENCY,
+    PRTE_HWLOC_BASE_MEMATTR_MAX
+} prte_hwloc_base_memattr_t;
+
+/**
+ * Global reflecting the memory attribute (set by MCA param).
+ */
+PRTE_EXPORT extern prte_hwloc_base_memattr_t prte_hwloc_base_memattr;
+
+/**
+ * Parse a memory-binding directive: the --membind command-line option and
+ * the hwloc_default_membind MCA parameter share this one grammar, so the
+ * two spellings of a request cannot be answered differently:
+ *
+ *     none | capacity | locality | bandwidth | latency
+ *
+ * These are PRRTE's own directives, and this is where they are translated
+ * into the hwloc memory attribute that implements each one: should
+ * something other than hwloc ever implement them, the directives stay and
+ * only the translation changes. The word is matched against
+ * prte_cli_membinders the way every other directive is, through
+ * prte_cli_match(): case insensitive, and any unique abbreviation will do.
+ * None takes a qualifier, so a ':' anywhere is refused.
+ *
+ * Reports what is wrong itself, under "nspace" and naming "option" - the
+ * spelling the user wrote - and then returns PRTE_ERR_SILENT, leaving
+ * *memattr untouched. Returns PRTE_SUCCESS with *memattr set otherwise.
+ */
+PRTE_EXPORT int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
+                                              const char *spec,
+                                              prte_hwloc_base_memattr_t *memattr);
+
+/**
+ * The canonical spelling of a memory binding - "NONE", "BANDWIDTH" -
+ * which prte_hwloc_base_parse_membind() reads back as the same value. A
+ * static string: never freed, safe to use twice in one argument list.
+ */
+PRTE_EXPORT const char *prte_hwloc_base_print_membind(prte_hwloc_base_memattr_t memattr);
+
+/**
+ * The memory binding a process of app "app" in job "jdata" asked for: the
+ * app's --membind (PRTE_APP_MEMBIND), else the job's (PRTE_JOB_MEMBIND),
+ * else the hwloc_default_membind MCA parameter. Reads attribute lists, so
+ * it is for the progress thread. "app" may be NULL.
+ *
+ * The arguments are a prte_job_t and a prte_app_context_t, typed void * as
+ * prte_hwloc_base_set_default_binding()'s are, to keep this header free of
+ * the job definitions.
+ */
+PRTE_EXPORT prte_hwloc_base_memattr_t prte_hwloc_base_membind_resolve(void *jdata, void *app);
+
+/**
+ * Count the processes of app "app_idx" in job "jdata" that the mapper did
+ * not bind to a cpuset (prte_proc_t.cpuset NULL or empty). A memory binding
+ * by attribute is computed from that cpuset, so the daemons cannot apply it
+ * to these processes. That happens with --bind-to none, and when the mapper
+ * drops the default binding of an oversubscribed node. Whether the binding
+ * was asked for or derived (from --map-by, or the default core binding)
+ * does not matter: only the cpuset does. Reads the job's proc array, so
+ * HNP side, after mapping.
+ */
+PRTE_EXPORT int prte_hwloc_base_membind_count_unbound(void *jdata, int app_idx);
+
+/**
+ * Compute the NUMA nodeset a process whose cpuset is "cpuset" should be
+ * memory-bound to, given the hwloc memory attribute "memattr".
+ *
+ * The candidates are the NUMA nodes local to the cpuset - those whose
+ * locality contains it, or is contained in it - less any not in "allowed".
+ * LOCALITY selects all of them; the other attributes select the one(s) with
+ * the best value as seen from the cpuset, all of them when tied. The
+ * choice is never made across the whole machine: CAPACITY and LOCALITY
+ * have no initiator in hwloc, and judged globally they would send every
+ * process to the same node.
+ *
+ * A pure function of the topology and its arguments: it reads no process
+ * state and changes no binding, so it is safe to call against any topology
+ * - though the result only means something when the topology is the one the
+ * process will run on. It allocates and may log, so it belongs on the
+ * daemon side of the fork.
+ *
+ * memattr: the attribute. PRTE_HWLOC_BASE_MEMATTR_DISABLED yields an empty
+ *          nodeset and PRTE_SUCCESS.
+ * cpuset:  the cpuset the process is bound to (PU OS indices, as in
+ *          prte_proc_t.cpuset once parsed). NULL means "unbound", i.e. the
+ *          topology's allowed cpuset.
+ * allowed: if not NULL, the nodes the process may use; candidates outside
+ *          it are dropped before the choice is made. The odls passes the
+ *          topology's allowed nodeset.
+ * nodeset: caller-allocated, overwritten with the result, and left EMPTY on
+ *          any error.
+ *
+ * Returns PRTE_SUCCESS with a non-empty nodeset when a node was chosen,
+ * PRTE_ERR_NOT_FOUND when no local, allowed node has a value for the
+ * attribute (BANDWIDTH and LATENCY need HMAT data), and
+ * PRTE_ERR_NOT_SUPPORTED from a build against hwloc older than 2.3, which
+ * has no memory attribute interface. This deliberately works on every NUMA
+ * node hwloc reports, not only the CPU ones that
+ * prte_hwloc_base_get_nbobjs_by_type() counts: selecting the node with the
+ * best bandwidth is how a process reaches memory that no cpu is local to.
+ */
+PRTE_EXPORT int prte_hwloc_base_get_membind_nodeset(hwloc_topology_t topo,
+                                                    prte_hwloc_base_memattr_t memattr,
+                                                    hwloc_const_cpuset_t cpuset,
+                                                    hwloc_const_nodeset_t allowed,
+                                                    hwloc_nodeset_t nodeset);
+
+/**
  * Discover / load the hwloc topology (i.e., call hwloc_topology_init() and
  * hwloc_topology_load()).
  */

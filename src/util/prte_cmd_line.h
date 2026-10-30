@@ -16,6 +16,7 @@
  *                         reserved.
  * Copyright (c) 2017-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -136,6 +137,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_MAPBY                  "mapby"                     // required
 #define PRTE_CLI_RANKBY                 "rankby"                    // required
 #define PRTE_CLI_BINDTO                 "bindto"                    // required
+#define PRTE_CLI_MEMBIND                "membind"                   // required
 
 // Runtime options
 #define PRTE_CLI_RTOS                   "rtos"           			// required
@@ -196,6 +198,13 @@ BEGIN_C_DECLS
 // PRTE_CLI_SLOT, PRTE_CLI_NODE, PRTE_CLI_SPAN reused here
 #define PRTE_CLI_FILL       "fill"
 #define PRTE_CLI_OBJ        "object"
+
+// Memory binding directives
+// PRTE_CLI_NONE reused here
+#define PRTE_CLI_CAPACITY   "capacity"
+#define PRTE_CLI_LOCALITY   "locality"
+#define PRTE_CLI_BANDWIDTH  "bandwidth"
+#define PRTE_CLI_LATENCY    "latency"
 
 
 // Output directives
@@ -391,6 +400,18 @@ typedef enum {
     PRTE_BINDER_PACKAGE
 } prte_cli_binder_t;
 PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_binders[];
+
+/* --membind: the directive that chooses the node(s) a process' memory is
+ * bound to. These are PRRTE's directives, not the names of whatever
+ * implements them - prte_hwloc_base_parse_membind() translates them. */
+typedef enum {
+    PRTE_MEMBINDER_NONE,
+    PRTE_MEMBINDER_CAPACITY,
+    PRTE_MEMBINDER_LOCALITY,
+    PRTE_MEMBINDER_BANDWIDTH,
+    PRTE_MEMBINDER_LATENCY
+} prte_cli_membinder_t;
+PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_membinders[];
 
 /* --bind-to: the qualifiers */
 typedef enum {

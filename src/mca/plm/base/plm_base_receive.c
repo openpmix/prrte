@@ -18,6 +18,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,6 +54,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
+#include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -524,7 +526,15 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         }
         // see if we already have this job
         jdata = prte_get_job_data_object(name.nspace);
-        if (NULL != jdata) {
+        rc = prte_pmix_server_tool_may_join(jdata, name.rank);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
+                                 "%s refusing tool %s: %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&name),
+                                 prte_strerror(rc)));
+            ret = prte_pmix_convert_rc(rc);
+
+        } else if (NULL != jdata) {
             // we do - check if we already have this proc
             proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, name.rank);
             if (NULL == proc) {

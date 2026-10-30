@@ -1551,6 +1551,18 @@ and a `PMIX_CMD_LINE` that never arrived leaves a NULL that
 `PMIx_Argv_split()` turns into a NULL `argv`. `test_tool_registration` pins
 the checks that can be reached without a live PMIx server.
 
+**A tool may not add a rank to an application job.** A tool started by one
+of a job's processes inherits the job's identity, and PMIx lets it claim a
+rank of that job, existing or not. Taking an existing rank is how a `prun`
+in a job script works and must keep working. Adding one would leave a rank
+that never retires, since a tool's departure is acted on only in a tool's
+namespace, and the job could never complete. So such an attach is refused
+with `PMIX_ERR_EXISTS` (see `src/mca/plm/AGENTS.md`, `TOOL_ATTACHED_CMD`).
+`prte_pmix_server_tool_may_join()` is the one place that decides it, together
+with the sentinel-rank screen, and both the master's own registration
+(`prte_pmix_server_register_tool()`) and its relay for a tool attached
+elsewhere call it, so both refuse the same attaches.
+
 `lost_connection_hdlr()` in `pmix_server.c` is the other half — the
 *abnormal* departure — and it is registered at the end of
 `pmix_server_init()`. Watch what precedes that registration: an early

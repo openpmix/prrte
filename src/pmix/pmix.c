@@ -617,6 +617,7 @@ static void acon(prte_pmix_app_t *p)
     p->mapby = NULL;
     p->rankby = NULL;
     p->bindto = NULL;
+    p->membind = NULL;
     p->output = NULL;
     p->display = NULL;
     p->rtos = NULL;
@@ -628,6 +629,7 @@ static void ades(prte_pmix_app_t *p)
     free(p->mapby);
     free(p->rankby);
     free(p->bindto);
+    free(p->membind);
     free(p->output);
     free(p->display);
     free(p->rtos);

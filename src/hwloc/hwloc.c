@@ -4,6 +4,7 @@
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -15,6 +16,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/include/constants.h"
@@ -37,6 +39,7 @@ bool prte_hwloc_base_inited = false;
 hwloc_topology_t prte_hwloc_topology = NULL;
 prte_hwloc_base_map_t prte_hwloc_base_map = PRTE_HWLOC_BASE_MAP_NONE;
 prte_hwloc_base_mbfa_t prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_WARN;
+prte_hwloc_base_memattr_t prte_hwloc_base_memattr = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
 prte_binding_policy_t prte_hwloc_default_binding_policy = 0;
 char *prte_hwloc_default_cpu_list = NULL;
 char *prte_hwloc_base_topo_file = NULL;
@@ -54,6 +57,7 @@ static bool bind_to_socket = false;
  * each reports the other's value. */
 static char *mem_alloc_policy = NULL;
 static char *mem_bind_failure_action = NULL;
+static char *default_membind = NULL;
 
 int prte_hwloc_base_register(void)
 {
@@ -144,6 +148,35 @@ int prte_hwloc_base_register(void)
                            "memory bind failure action", mem_bind_failure_action);
             return PRTE_ERR_SILENT;
         }
+    }
+
+    /* hwloc_default_membind */
+    prte_hwloc_base_memattr = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
+    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "membind",
+                                     "Default memory binding for launched processes, taking the same directives "
+                                     "as the --membind option: \"none\" (the default), or one of capacity, "
+                                     "locality, bandwidth or latency to bind each process' memory to the NUMA "
+                                     "node(s) best by that measure among the nodes local to the process' own "
+                                     "cpuset. So \"bandwidth\" binds the process to the local node with the "
+                                     "highest bandwidth from the cores it is bound to - which may be a node with "
+                                     "no cpus of its own, such as HBM - and \"locality\" to every node local to "
+                                     "its cpuset. A job's or app's --membind takes precedence. It only applies "
+                                     "to processes bound to cpus - by --bind-to, by the binding --map-by "
+                                     "derives, or by the default one; a "
+                                     "warning is printed for those left unbound. When applied, it replaces "
+                                     "mem_alloc_policy, and a failure to bind is handled according to "
+                                     "mem_bind_failure_action. Requires hwloc 2.3 or later.",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &default_membind);
+    if (0 > ret) {
+        return ret;
+    }
+    if (NULL != default_membind &&
+        PRTE_SUCCESS != prte_hwloc_base_parse_membind(PRTE_PROC_MY_NAME->nspace,
+                                                      "hwloc_default_membind",
+                                                      default_membind, &prte_hwloc_base_memattr)) {
+        /* the parser has already said what is wrong with the value */
+        return PRTE_ERR_SILENT;
     }
 
     /* NOTE: for future developers and readers of this code, the binding policies are strictly
@@ -725,6 +758,324 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     }
     return PRTE_SUCCESS;
 }
+
+int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
+                                  const char *spec, prte_hwloc_base_memattr_t *memattr)
+{
+    prte_hwloc_base_memattr_t result;
+    int rc, tag;
+
+    if (NULL == option || NULL == memattr) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* a directive is one word: none of them takes a qualifier, so a ':'
+     * means the value is wrong, not that the rest of it can be ignored */
+    if (NULL == spec || '\0' == spec[0] || NULL != strchr(spec, ':')) {
+        goto bad;
+    }
+
+    rc = prte_cli_match(nspace, option, spec, prte_cli_membinders, &tag);
+    if (PRTE_ERR_NOT_FOUND == rc) {
+        goto bad;
+    } else if (PRTE_SUCCESS != rc) {
+        /* ambiguous, or a value where none belongs - already reported */
+        return rc;
+    }
+
+    /* translate the directive into what implements it */
+    switch (tag) {
+    case PRTE_MEMBINDER_NONE:
+        result = PRTE_HWLOC_BASE_MEMATTR_DISABLED;
+        break;
+    case PRTE_MEMBINDER_CAPACITY:
+        result = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
+        break;
+    case PRTE_MEMBINDER_LOCALITY:
+        result = PRTE_HWLOC_BASE_MEMATTR_LOCALITY;
+        break;
+    case PRTE_MEMBINDER_BANDWIDTH:
+        result = PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH;
+        break;
+    case PRTE_MEMBINDER_LATENCY:
+        result = PRTE_HWLOC_BASE_MEMATTR_LATENCY;
+        break;
+    default:
+        /* a word in the table with no meaning here */
+        goto bad;
+    }
+
+    *memattr = result;
+    return PRTE_SUCCESS;
+
+bad:
+    prte_show_help(nspace, "help-prte-hwloc-base.txt", "invalid binding_policy", true,
+                   "memory binding", (NULL == spec) ? "" : spec);
+    return PRTE_ERR_SILENT;
+}
+
+const char *prte_hwloc_base_print_membind(prte_hwloc_base_memattr_t memattr)
+{
+    switch (memattr) {
+    case PRTE_HWLOC_BASE_MEMATTR_DISABLED:
+        return "NONE";
+    case PRTE_HWLOC_BASE_MEMATTR_CAPACITY:
+        return "CAPACITY";
+    case PRTE_HWLOC_BASE_MEMATTR_LOCALITY:
+        return "LOCALITY";
+    case PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH:
+        return "BANDWIDTH";
+    case PRTE_HWLOC_BASE_MEMATTR_LATENCY:
+        return "LATENCY";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+prte_hwloc_base_memattr_t prte_hwloc_base_membind_resolve(void *jd, void *ap)
+{
+    prte_job_t *jdata = (prte_job_t *) jd;
+    prte_app_context_t *app = (prte_app_context_t *) ap;
+    uint16_t u16 = 0, *u16ptr = &u16;
+
+    if (NULL != app &&
+        prte_get_attribute(&app->attributes, PRTE_APP_MEMBIND, (void **) &u16ptr, PMIX_UINT16)) {
+        return (prte_hwloc_base_memattr_t) u16;
+    }
+    if (NULL != jdata &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_MEMBIND, (void **) &u16ptr, PMIX_UINT16)) {
+        return (prte_hwloc_base_memattr_t) u16;
+    }
+    return prte_hwloc_base_memattr;
+}
+
+int prte_hwloc_base_membind_count_unbound(void *jd, int app_idx)
+{
+    prte_job_t *jdata = (prte_job_t *) jd;
+    prte_proc_t *proc;
+    int n, count = 0;
+
+    if (NULL == jdata || NULL == jdata->procs) {
+        return 0;
+    }
+    for (n = 0; n < jdata->procs->size; n++) {
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, n);
+        if (NULL == proc || app_idx != (int) proc->app_idx) {
+            continue;
+        }
+        if (NULL == proc->cpuset || '\0' == proc->cpuset[0]) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+/* hwloc_memattr_*, hwloc_get_local_numanode_objs() and struct hwloc_location
+ * only exist since hwloc 2.3 - PRRTE's floor is 2.1 */
+#if HWLOC_API_VERSION >= 0x00020300
+
+#define PRTE_HWLOC_MEMATTR_ID_NONE ((hwloc_memattr_id_t)(~0U))
+
+// translate prte_hwloc_base_memattr_t => hwloc_memattr_id_t
+static const struct {
+    hwloc_memattr_id_t attr;
+    const char *str;
+} memattr_table[PRTE_HWLOC_BASE_MEMATTR_MAX] = {
+    [PRTE_HWLOC_BASE_MEMATTR_DISABLED]  = {.attr = PRTE_HWLOC_MEMATTR_ID_NONE,  .str = "disabled" },
+    [PRTE_HWLOC_BASE_MEMATTR_CAPACITY]  = {.attr = HWLOC_MEMATTR_ID_CAPACITY,   .str = "capacity" },
+    [PRTE_HWLOC_BASE_MEMATTR_LOCALITY]  = {.attr = HWLOC_MEMATTR_ID_LOCALITY,   .str = "locality" },
+    [PRTE_HWLOC_BASE_MEMATTR_BANDWIDTH] = {.attr = HWLOC_MEMATTR_ID_BANDWIDTH,  .str = "bandwidth" },
+    [PRTE_HWLOC_BASE_MEMATTR_LATENCY]   = {.attr = HWLOC_MEMATTR_ID_LATENCY,    .str = "latency" }
+};
+
+/* Log a nodeset at the given verbosity, if the hwloc output is that verbose.
+ * Allocates, so daemon side only - which is the only side that calls it. */
+static void log_nodeset(int level, const char *label, hwloc_const_nodeset_t set)
+{
+    char *list = NULL;
+
+    if (level > pmix_output_get_verbosity(prte_hwloc_base_output)) {
+        return;
+    }
+    if (0 > hwloc_bitmap_list_asprintf(&list, set) || NULL == list) {
+        pmix_output_verbose(level, prte_hwloc_base_output, "%s: <unprintable>", label);
+    } else {
+        pmix_output_verbose(level, prte_hwloc_base_output, "%s: [%s]", label, list);
+    }
+    free(list);
+}
+
+int prte_hwloc_base_get_membind_nodeset(hwloc_topology_t topo,
+                                        prte_hwloc_base_memattr_t memattr,
+                                        hwloc_const_cpuset_t cpuset,
+                                        hwloc_const_nodeset_t allowed,
+                                        hwloc_nodeset_t nodeset)
+{
+    int ret = PRTE_SUCCESS;
+    hwloc_memattr_id_t id;
+    const char *idstr;
+    unsigned long attr_flags = 0;
+    struct hwloc_location loc;
+    hwloc_bitmap_t my_cpuset = NULL;
+    hwloc_obj_t *cands = NULL;
+    unsigned ncands = 0, i;
+    hwloc_uint64_t value, best_value = 0;
+    bool found = false, higher_first;
+
+    /* bozo check */
+    if (NULL == topo || NULL == nodeset || 0 > (int) memattr || PRTE_HWLOC_BASE_MEMATTR_MAX <= memattr) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    id = memattr_table[memattr].attr;
+    idstr = memattr_table[memattr].str;
+
+    /* an empty result means "nothing selected" - set it first, so that
+     * every return below leaves it empty unless a node was chosen */
+    hwloc_bitmap_zero(nodeset);
+
+    if (PRTE_HWLOC_BASE_MEMATTR_DISABLED == memattr) {
+        return PRTE_SUCCESS;
+    }
+
+    /* an unbound process may run anywhere it is allowed to. hwloc keeps a
+     * non-const cpuset in a location, so give it a copy of ours rather
+     * than casting the const away */
+    my_cpuset = hwloc_bitmap_dup(NULL != cpuset ? cpuset : hwloc_topology_get_allowed_cpuset(topo));
+    if (NULL == my_cpuset) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    loc.type = HWLOC_LOCATION_TYPE_CPUSET;
+    loc.location.cpuset = my_cpuset;
+
+    pmix_output_verbose(PMIX_MCA_BASE_VERBOSE_INFO, prte_hwloc_base_output,
+                        "%s: memattr=%d(%s)", __func__, (int) memattr, idstr);
+
+    /* Step 1: the candidates are the NUMA nodes local to the cpuset. Both
+     * directions are needed: LARGER keeps the node(s) whose locality holds
+     * a narrow binding (a core sits inside its DDR node, and inside the
+     * CPU-less HBM node that shares that locality), SMALLER keeps the nodes
+     * inside a wide one (a process bound to a whole package sees each of
+     * its nodes). Without this step CAPACITY and LOCALITY, which hwloc
+     * defines without an initiator, would be judged across the whole
+     * machine, and every process would land on the same node however far
+     * from its cores. */
+    if (0 != hwloc_get_local_numanode_objs(topo, &loc, &ncands, NULL,
+                                           HWLOC_LOCAL_NUMANODE_FLAG_LARGER_LOCALITY
+                                           | HWLOC_LOCAL_NUMANODE_FLAG_SMALLER_LOCALITY)) {
+        pmix_output_verbose(PMIX_MCA_BASE_VERBOSE_ERROR, prte_hwloc_base_output,
+                            "%s: hwloc_get_local_numanode_objs() failed: %s",
+                            __func__, strerror(errno));
+        ret = PRTE_ERROR;
+        goto quit;
+    }
+    if (0 == ncands) {
+        ret = PRTE_ERR_NOT_FOUND;
+        goto quit;
+    }
+    cands = (hwloc_obj_t *) malloc(ncands * sizeof(hwloc_obj_t));
+    if (NULL == cands) {
+        ret = PRTE_ERR_OUT_OF_RESOURCE;
+        goto quit;
+    }
+    if (0 != hwloc_get_local_numanode_objs(topo, &loc, &ncands, cands,
+                                           HWLOC_LOCAL_NUMANODE_FLAG_LARGER_LOCALITY
+                                           | HWLOC_LOCAL_NUMANODE_FLAG_SMALLER_LOCALITY)) {
+        pmix_output_verbose(PMIX_MCA_BASE_VERBOSE_ERROR, prte_hwloc_base_output,
+                            "%s: hwloc_get_local_numanode_objs() failed: %s",
+                            __func__, strerror(errno));
+        ret = PRTE_ERROR;
+        goto quit;
+    }
+
+    /* Step 2: drop the candidates the process may not use. Doing this
+     * before choosing means a forbidden best node yields the best
+     * permitted one, not nothing at all. */
+    if (NULL != allowed) {
+        unsigned kept = 0;
+        for (i = 0; i < ncands; i++) {
+            if (hwloc_bitmap_isincluded(cands[i]->nodeset, allowed)) {
+                cands[kept++] = cands[i];
+            }
+        }
+        ncands = kept;
+    }
+
+    /* Step 3: choose among them */
+    if (PRTE_HWLOC_BASE_MEMATTR_LOCALITY == memattr) {
+        /* every local node - LOCALITY ranks nodes by how many PUs they
+         * serve, which says nothing about this process' own */
+        for (i = 0; i < ncands; i++) {
+            hwloc_bitmap_or(nodeset, nodeset, cands[i]->nodeset);
+        }
+    } else {
+        /* the best value of the attribute, in the direction hwloc says
+         * is better; nodes tied for best are all kept. A node with no
+         * value for this initiator (no HMAT data for it, say) cannot
+         * compete and is skipped. */
+        if (0 != hwloc_memattr_get_flags(topo, id, &attr_flags)) {
+            ret = PRTE_ERROR;
+            goto quit;
+        }
+        higher_first = (0 != (attr_flags & HWLOC_MEMATTR_FLAG_HIGHER_FIRST));
+        for (i = 0; i < ncands; i++) {
+            if (0 != hwloc_memattr_get_value(topo, id, cands[i], &loc, 0, &value)) {
+                continue;
+            }
+            pmix_output_verbose(PMIX_MCA_BASE_VERBOSE_DEBUG, prte_hwloc_base_output,
+                                "%s: node %u %s=%llu", __func__, cands[i]->os_index, idstr,
+                                (unsigned long long) value);
+            if (!found || (higher_first ? value > best_value : value < best_value)) {
+                hwloc_bitmap_copy(nodeset, cands[i]->nodeset);
+                best_value = value;
+                found = true;
+            } else if (value == best_value) {
+                hwloc_bitmap_or(nodeset, nodeset, cands[i]->nodeset);
+            }
+        }
+    }
+
+    if (hwloc_bitmap_iszero(nodeset)) {
+        /* no local, permitted node - or none with a value to compare */
+        ret = PRTE_ERR_NOT_FOUND;
+        goto quit;
+    }
+    log_nodeset(PMIX_MCA_BASE_VERBOSE_INFO, "membind nodeset", nodeset);
+
+quit:
+    if (PRTE_ERR_NOT_FOUND == ret) {
+        pmix_output_verbose(PMIX_MCA_BASE_VERBOSE_WARN, prte_hwloc_base_output,
+                            "%s: no usable NUMA node local to the cpuset for %s", __func__, idstr);
+    }
+    free(cands);
+    hwloc_bitmap_free(my_cpuset);
+    if (PRTE_SUCCESS != ret) {
+        // never hand back a half-computed set
+        hwloc_bitmap_zero(nodeset);
+    }
+    return ret;
+}
+
+#else /* HWLOC_API_VERSION < 0x00020300 */
+
+int prte_hwloc_base_get_membind_nodeset(hwloc_topology_t topo,
+                                        prte_hwloc_base_memattr_t memattr,
+                                        hwloc_const_cpuset_t cpuset __prte_attribute_unused__,
+                                        hwloc_const_nodeset_t allowed __prte_attribute_unused__,
+                                        hwloc_nodeset_t nodeset)
+{
+    if (NULL == topo || NULL == nodeset || 0 > (int) memattr || PRTE_HWLOC_BASE_MEMATTR_MAX <= memattr) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    hwloc_bitmap_zero(nodeset);
+    if (PRTE_HWLOC_BASE_MEMATTR_DISABLED == memattr) {
+        return PRTE_SUCCESS;
+    }
+    pmix_output_verbose(PMIX_MCA_BASE_VERBOSE_WARN, prte_hwloc_base_output,
+        "%s:%d: hwloc >= 2.3 is required for memattr-based memory binding\n",
+        __FUNCTION__, __LINE__);
+    return PRTE_ERR_NOT_SUPPORTED;
+}
+
+#endif /* HWLOC_API_VERSION */
 
 static void topo_data_const(prte_hwloc_topo_data_t *ptr)
 {

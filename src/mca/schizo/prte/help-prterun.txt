@@ -125,6 +125,9 @@ option to the help request as "--help <option>".
 | "--bindto <type>" |  | Binding policy for job or for individual app  |
 | "--bind-to <type>"   |                                               |
 +----------------------+-----------------------------------------------+
+| "--membind <type>"   | Memory binding policy for job or for          |
+|                      | individual app                                |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Launch Options                                |
@@ -999,6 +1002,11 @@ rank 0). Any other value is refused.
 [bindto]
 
 #include#help-bindto.txt#bindto
+
+#
+[membind]
+
+#include#help-prte-hwloc-base.txt#membind
 
 #
 [runtime-options]

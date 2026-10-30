@@ -1142,14 +1142,16 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     /* setup to capture job-level info */
     PMIX_INFO_LIST_START(jinfo);
 
-    /* Carry over the mapping/ranking/binding directives the app parser
-     * determined belong to the job rather than to any one app - a directive
-     * given once applies to the whole job, however many apps were given.
+    /* Carry over the mapping/ranking/binding and memory-binding directives
+     * the app parser determined belong to the job rather than to any one
+     * app - a directive given once applies to the whole job, however many
+     * apps were given.
      * The rest of the jobdata list (prefixes) is examined separately above. */
     PMIX_LIST_FOREACH(iprteinfo, &jobdata, prte_info_item_t) {
         if (PMIx_Check_key(iprteinfo->info.key, PMIX_MAPBY) ||
             PMIx_Check_key(iprteinfo->info.key, PMIX_RANKBY) ||
-            PMIx_Check_key(iprteinfo->info.key, PMIX_BINDTO)) {
+            PMIx_Check_key(iprteinfo->info.key, PMIX_BINDTO) ||
+            PMIx_Check_key(iprteinfo->info.key, PMIX_MEMBIND)) {
             PMIX_INFO_LIST_XFER(ret, jinfo, &iprteinfo->info);
         }
     }

@@ -642,3 +642,21 @@ type (e.g., HWTHREAD, CORE, a cache level, PACKAGE or NUMA):
   Rank policy:  %s
 
 Please specify a supported combination and try again.
+#
+[membind-unbound]
+A memory binding was requested for processes that are not bound to
+cpus:
+
+  Memory binding:    %s
+  Application:       %s
+  Unbound processes: %s of %s
+
+A memory binding (--membind, or the hwloc_default_membind MCA
+parameter) chooses among the NUMA node(s) local to the cpus a process
+is bound to, so it cannot be applied to a process that is bound to
+none. That happens with "--bind-to none", and when PRRTE drops its
+default binding because a node is oversubscribed.
+
+The job will run, but the memory of these processes will not be
+bound. To bind it, bind the processes to cpus - for example with
+"--bind-to core" and no more processes per node than it has cores.
