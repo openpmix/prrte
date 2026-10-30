@@ -2679,7 +2679,7 @@ static void add_procs(prte_job_t *jdata, int n)
         }
         pptr = PMIX_NEW(prte_proc_t);
         PMIX_LOAD_PROCID(&pptr->name, jdata->nspace, r);
-        prte_job_add_proc(jdata, r, pptr);
+        pmix_pointer_array_set_item(jdata->procs, r, pptr);
     }
     jdata->num_procs = n;
 }
@@ -2840,7 +2840,6 @@ static int test_connections(void)
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-conn@3");
     add_procs(jdata, 3);
-    jdata->procs_fixed = true;
     CHECK("the listed job registers", PRTE_SUCCESS == prte_set_job_data_object(jdata));
     PMIX_LOAD_PROCID(&listed[0], "unit-test-conn@3", 2);
     PMIX_LOAD_PROCID(&listed[1], "unit-test-conn@3", 0);
@@ -2877,10 +2876,10 @@ static int test_connections(void)
     pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
     PMIX_RELEASE(jdata);
 
-    /* A job whose membership is not fixed - a tool, which gains a rank
-     * whenever another of its processes attaches - is addressed as listed
-     * even when the list names every rank it has today: its wildcard would
-     * also reach the ranks that attach later. */
+    /* A tool's namespace gains a rank whenever another of its processes
+     * attaches, so it is addressed as listed even when the list names every
+     * rank it has today: its wildcard would also reach the ranks that attach
+     * later. */
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-conn@3");
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
@@ -2889,7 +2888,7 @@ static int test_connections(void)
     prte_pmix_server_connection_record(listed, 4);
     cptr = (prte_pmix_server_connection_t *)
         pmix_list_get_first(&prte_pmix_server_globals.connections);
-    CHECK("a job not fixed is addressed rank by rank",
+    CHECK("a tool job is addressed rank by rank",
           NULL != cptr && 4 == cptr->ncollapsed);
     add_procs(jdata, 4);
     PMIX_LOAD_PROCID(&proc, "unit-test-conn@3", 3);
@@ -2898,6 +2897,26 @@ static int test_connections(void)
     prte_pmix_server_connection_drop(listed, 4);
     pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
     PMIX_RELEASE(jdata);
+
+    /* ...and so is the daemons' namespace, which a grow adds to */
+    {
+        pmix_proc_t saved = *PRTE_PROC_MY_NAME;
+
+        PMIX_LOAD_PROCID(PRTE_PROC_MY_NAME, "unit-test-conn@3", 0);
+        jdata = PMIX_NEW(prte_job_t);
+        PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-conn@3");
+        add_procs(jdata, 3);
+        CHECK("the daemon job registers", PRTE_SUCCESS == prte_set_job_data_object(jdata));
+        prte_pmix_server_connection_record(listed, 4);
+        cptr = (prte_pmix_server_connection_t *)
+            pmix_list_get_first(&prte_pmix_server_globals.connections);
+        CHECK("the daemon job is addressed rank by rank",
+              NULL != cptr && 4 == cptr->ncollapsed);
+        prte_pmix_server_connection_drop(listed, 4);
+        pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+        PMIX_RELEASE(jdata);
+        *PRTE_PROC_MY_NAME = saved;
+    }
 
     /* a proc that belongs to nothing is not connected, and reporting its
      * termination is a no-op rather than a walk off the end of an empty list */

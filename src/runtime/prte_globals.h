@@ -569,12 +569,6 @@ typedef struct prte_job_t {
     uint32_t ntraces;
     char **traces;
     bool traces_requested;
-    /* The mapper has placed every proc this job will have. Set on the master
-     * when mapping completes, before anything is launched, so every PMIx
-     * client in this namespace is in procs. prte_job_add_proc() refuses to
-     * add to the job from then on. Cleared only by a remap of a job with
-     * nothing running. HNP-local; never packed. */
-    bool procs_fixed;
     // store the result of parsing this app's cmd line
     pmix_cli_result_t cli;
 } prte_job_t;
@@ -726,16 +720,6 @@ PRTE_EXPORT prte_job_t *prte_get_job_data_object(const pmix_nspace_t job);
  * to the array
  */
 PRTE_EXPORT int prte_set_job_data_object(prte_job_t *jdata);
-
-/**
- * Store a proc in a job's proc table at the given rank.
- *
- * Every non-NULL write to a job's procs goes through here
- * (test/unit/check_job_procs.py). Refuses with PRTE_ERR_PERM once the job's
- * membership is fixed (see prte_job_t::procs_fixed).
- */
-PRTE_EXPORT int prte_job_add_proc(prte_job_t *jdata, pmix_rank_t rank,
-                                  prte_proc_t *proc);
 
 /** What a packed job carries.
  *

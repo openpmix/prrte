@@ -1715,7 +1715,7 @@ static int prep_singleton(const char *name)
     /* link it to the node - the backpointer is borrowed, not retained */
     proc->node = node;
     /* add it to the job */
-    prte_job_add_proc(jdata, rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, rank, proc);
     jdata->num_procs = 1;
     jdata->num_local_procs = 1;
     /* add it to the node */

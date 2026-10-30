@@ -97,7 +97,7 @@ static prte_proc_t *get_proc(prte_job_t *jptr, pmix_rank_t rank)
             return NULL;
         }
         PMIX_LOAD_PROCID(&proc->name, jptr->nspace, rank);
-        prte_job_add_proc(jptr, rank, proc);
+        pmix_pointer_array_set_item(jptr->procs, (int) rank, proc);
     }
     return proc;
 }
