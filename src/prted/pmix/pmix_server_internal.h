@@ -566,6 +566,9 @@ typedef struct {
     size_t nmembers;
     pmix_proc_t *collapsed;
     size_t ncollapsed;
+    /* how many connects over exactly this membership are live - each
+     * disconnect covering it ends one */
+    unsigned refs;
     /* this assemblage is already being torn down after a member's failure,
      * so a second failure inside it must not drive the teardown again */
     bool terminating;
@@ -573,10 +576,10 @@ typedef struct {
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_pmix_server_connection_t);
 
 /* Record/forget an assemblage.  Both are driven by the connect and disconnect
- * collectives as they complete on the DVM master, and both are no-ops
- * anywhere else.  Recording an assemblage that is already recorded, or
- * dropping one that is not, is not an error: the two collectives are the only
- * things that call these, and a repeat of either is harmless. */
+ * collectives as they converge on the DVM master - once per operation - and
+ * both are no-ops anywhere else.  Recording an assemblage that is already
+ * recorded counts a second connection over it, which a disconnect then ends
+ * one at a time; dropping one that is not recorded is not an error. */
 PRTE_EXPORT void prte_pmix_server_connection_record(const pmix_proc_t *members, size_t nmembers);
 PRTE_EXPORT void prte_pmix_server_connection_drop(const pmix_proc_t *members, size_t nmembers);
 
@@ -605,18 +608,6 @@ PRTE_EXPORT void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspa
  * left in it to notify. */
 PRTE_EXPORT void prte_pmix_server_connection_purge(const pmix_nspace_t nspace);
 
-/* Report a completed connect/disconnect to the DVM master, which is where the
- * membership is held.  Called on each daemon that had a participant, from the
- * completion of the collective that carried the operation. */
-PRTE_EXPORT void prte_pmix_server_connection_report(const pmix_proc_t *members, size_t nmembers);
-PRTE_EXPORT void prte_pmix_server_connection_report_drop(const pmix_proc_t *members,
-                                                         size_t nmembers);
-
-/* Receive such a report - registered on PRTE_RML_TAG_CONNECTED by the DVM
- * master. */
-PRTE_EXPORT void prte_pmix_server_connection_recv(int status, pmix_proc_t *sender,
-                                                  pmix_data_buffer_t *buffer,
-                                                  prte_rml_tag_t tag, void *cbdata);
 
 typedef struct {
     bool initialized;

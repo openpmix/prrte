@@ -123,12 +123,25 @@ PRTE_EXPORT int prte_grpcomm_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg);
 PRTE_EXPORT int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
                                       prte_grpcomm_xcast_complete_fn_t cbfunc, void *cbdata);
 
+/* What a fence is being run for.  A connect and a disconnect are fences as
+ * far as the collective goes, but the DVM master has to act on each exactly
+ * once when it converges - recording or dropping the assemblage - so the
+ * collective carries which one it is.  UNKNOWN is "no contribution has said
+ * yet", not a fourth purpose. */
+typedef enum {
+    PRTE_GRPCOMM_FENCE_FOR_UNKNOWN = 0,
+    PRTE_GRPCOMM_FENCE_FOR_FENCE,
+    PRTE_GRPCOMM_FENCE_FOR_CONNECT,
+    PRTE_GRPCOMM_FENCE_FOR_DISCONNECT
+} prte_grpcomm_fence_purpose_t;
+
 /* Non-blocking allgather/barrier across the daemons hosting procs.  A barrier
  * supplies no data.  cbfunc is invoked with the gathered buffer on completion.
  * Returns PRTE_SUCCESS once the request has been queued. */
 PRTE_EXPORT int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
                                    const pmix_info_t info[], size_t ninfo, char *data,
-                                   size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata);
+                                   size_t ndata, prte_grpcomm_fence_purpose_t purpose,
+                                   pmix_modex_cbfunc_t cbfunc, void *cbdata);
 
 /* PMIx group construct/destruct/cancel.  Basically a fence, but with enough
  * differences - context-id assignment, membership assembly, bootstrap - to

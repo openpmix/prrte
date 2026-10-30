@@ -417,6 +417,9 @@ typedef struct {
     // rather than re-derived, so that a participant that disagrees can be
     // caught saying so instead of quietly running the other collective.
     prte_grpcomm_fence_op_t op;
+    // What it is for, carried and checked the same way - see
+    // prte_grpcomm_fence_purpose_t.
+    prte_grpcomm_fence_purpose_t purpose;
     // ---- the tracker's identity ----
     //
     // A tracker is identified by its signature AND its generation, not by the
@@ -573,6 +576,7 @@ typedef struct {
     size_t ninfo;
     char *data;
     size_t ndata;
+    prte_grpcomm_fence_purpose_t purpose;
     pmix_modex_cbfunc_t cbfunc;
     void *cbdata;
 } prte_pmix_fence_caddy_t;
@@ -644,6 +648,14 @@ prte_grpcomm_fence_op_t prte_grpcomm_fence_op_from_info(const pmix_info_t info[]
 PRTE_EXPORT
 bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
                                  prte_grpcomm_fence_op_t incoming);
+
+/* The same for the fence's purpose: a connect, a disconnect and a plain fence
+ * over the same participants are different collectives, and participants
+ * that ask for two of them at once are refused the same way.  Exported so the
+ * unit test can drive it. */
+PRTE_EXPORT
+bool prte_grpcomm_fence_purpose_merge(prte_grpcomm_fence_t *coll,
+                                      prte_grpcomm_fence_purpose_t incoming);
 
 /* The number of the next fence over this signature - one past the last
  * generation released here - or PRTE_GRPCOMM_FENCE_GEN_UNKNOWN if this daemon

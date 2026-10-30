@@ -53,6 +53,7 @@ static void cncon(prte_pmix_server_connection_t *p)
     p->nmembers = 0;
     p->collapsed = NULL;
     p->ncollapsed = 0;
+    p->refs = 0;
     p->terminating = false;
 }
 static void cndes(prte_pmix_server_connection_t *p)
@@ -257,16 +258,26 @@ void prte_pmix_server_connection_record(const pmix_proc_t *members, size_t nmemb
         return;
     }
 
-    /* a repeat is not an error - it just means the same set connected again
-     * without having disconnected, which changes nothing */
+    /* A repeat is the same set connecting again without having disconnected -
+     * two MPI_Comm_connect/accept pairs between the same two jobs, say, each
+     * an intercommunicator the application will disconnect on its own.  Each
+     * is a connection of its own, and the first disconnect must not end the
+     * second, so a repeat is counted rather than ignored.  This is called once
+     * per connect: the master records where the connect's fence converges. */
     PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
                       prte_pmix_server_connection_t) {
         if (same_membership(cptr, members, nmembers)) {
+            cptr->refs++;
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s connection across %d participants made again (%u)",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nmembers,
+                                cptr->refs);
             return;
         }
     }
 
     cptr = PMIX_NEW(prte_pmix_server_connection_t);
+    cptr->refs = 1;
     cptr->nmembers = nmembers;
     PMIX_PROC_CREATE(cptr->members, cptr->nmembers);
     memcpy(cptr->members, members, nmembers * sizeof(pmix_proc_t));
@@ -330,6 +341,11 @@ void prte_pmix_server_connection_drop(const pmix_proc_t *members, size_t nmember
     PMIX_LIST_FOREACH_SAFE(cptr, next, &prte_pmix_server_globals.connections,
                            prte_pmix_server_connection_t) {
         if (membership_covered(cptr, members, nmembers)) {
+            /* one disconnect ends one of the connects that made it */
+            if (1 < cptr->refs) {
+                cptr->refs--;
+                continue;
+            }
             pmix_list_remove_item(&prte_pmix_server_globals.connections, &cptr->super);
             PMIX_RELEASE(cptr);
             pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -733,118 +749,4 @@ void prte_pmix_server_connection_purge(const pmix_nspace_t nspace)
             PMIX_RELEASE(cptr);
         }
     }
-}
-
-/* Tell the DVM master what just connected (or disconnected).
- *
- * Every daemon holding a participant runs this, and the master takes the
- * first report and ignores the rest - deliberately, rather than electing one
- * daemon to speak for the others.  There is no cheap election here that does
- * not depend on some particular daemon still being alive, and the reports are
- * a few dozen bytes each on an operation that has just paid for a DVM-wide
- * collective.  Reporting from the completion of that collective, rather than
- * from its start, is what keeps a connect that failed from being recorded.
- */
-static void report_connection(const pmix_proc_t *members, size_t nmembers, bool connected)
-{
-    pmix_data_buffer_t *buf;
-    pmix_status_t rc;
-    uint8_t flag;
-    int ret;
-
-    if (NULL == members || 0 == nmembers) {
-        return;
-    }
-
-    if (PRTE_PROC_IS_MASTER) {
-        /* no need to send it to ourselves */
-        if (connected) {
-            prte_pmix_server_connection_record(members, nmembers);
-        } else {
-            prte_pmix_server_connection_drop(members, nmembers);
-        }
-        return;
-    }
-
-    PMIX_DATA_BUFFER_CREATE(buf);
-    flag = connected ? 1 : 0;
-    rc = PMIx_Data_pack(NULL, buf, &flag, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, buf, &nmembers, 1, PMIX_SIZE);
-    }
-    if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, buf, (pmix_proc_t *) members, nmembers, PMIX_PROC);
-    }
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return;
-    }
-
-    PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_CONNECTED);
-    if (PRTE_SUCCESS != ret) {
-        PRTE_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-    }
-}
-
-void prte_pmix_server_connection_report(const pmix_proc_t *members, size_t nmembers)
-{
-    report_connection(members, nmembers, true);
-}
-
-void prte_pmix_server_connection_report_drop(const pmix_proc_t *members, size_t nmembers)
-{
-    report_connection(members, nmembers, false);
-}
-
-/* Receive a report from a daemon.  Runs on the DVM master, on the PRRTE
- * progress thread. */
-void prte_pmix_server_connection_recv(int status, pmix_proc_t *sender,
-                                      pmix_data_buffer_t *buffer,
-                                      prte_rml_tag_t tag, void *cbdata)
-{
-    pmix_proc_t *members = NULL;
-    size_t nmembers;
-    uint8_t flag;
-    int32_t cnt;
-    pmix_status_t rc;
-    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
-
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_UINT8);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
-    }
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &nmembers, &cnt, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
-    }
-    if (0 == nmembers) {
-        return;
-    }
-    PMIX_PROC_CREATE(members, nmembers);
-    if (NULL == members) {
-        /* nmembers came off the wire, so this is reachable by a peer asking
-         * for more than we can hold rather than only by genuine exhaustion */
-        PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
-        return;
-    }
-    cnt = nmembers;
-    rc = PMIx_Data_unpack(NULL, buffer, members, &cnt, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_PROC_FREE(members, nmembers);
-        return;
-    }
-
-    if (0 != flag) {
-        prte_pmix_server_connection_record(members, nmembers);
-    } else {
-        prte_pmix_server_connection_drop(members, nmembers);
-    }
-    PMIX_PROC_FREE(members, nmembers);
 }
