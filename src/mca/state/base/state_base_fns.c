@@ -893,6 +893,8 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
              * never told a job had ended, so nothing was ever reclaimed
              * from it short of the DVM shutting down */
             prte_state_base_purge_nspace(jdata->nspace);
+            /* and whatever the job's assemblages are still owed about it */
+            prte_pmix_server_connection_job_ended(jdata);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
         }
     }

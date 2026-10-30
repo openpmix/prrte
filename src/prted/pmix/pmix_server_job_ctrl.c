@@ -167,6 +167,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                         continue;
                     }
                     mark_cancelled(jdata);
+                    prte_pmix_server_connection_teardown(jdata->nspace);
                     proc = PMIX_NEW(prte_proc_t);
                     if (NULL == proc) {
                         continue;
@@ -182,6 +183,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                      * its own accord */
                     mark_cancelled(prte_get_job_data_object(targets[n].nspace));
                     if (PMIX_RANK_WILDCARD == targets[n].rank) {
+                        prte_pmix_server_connection_teardown(targets[n].nspace);
                         /* create an object */
                         proc = PMIX_NEW(prte_proc_t);
                         if (NULL == proc) {

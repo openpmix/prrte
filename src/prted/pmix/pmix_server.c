@@ -906,7 +906,7 @@ int pmix_server_init(void)
     PMIX_CONSTRUCT(&prte_pmix_server_globals.departed_jobs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.users, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
+    prte_pmix_server_connection_init();
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
     pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.remote_reqs, pmix_pointer_array_t);
@@ -1459,7 +1459,7 @@ void pmix_server_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.departed_jobs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
-    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.connections);
+    prte_pmix_server_connection_finalize();
 
     /* shutdown the local server */
     prte_pmix_server_globals.initialized = false;

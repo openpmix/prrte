@@ -1225,17 +1225,69 @@ request only covers a member it names, and a wildcard member is covered only
 by a wildcard.
 
 A proc in more than one assemblage — a spawned child that also connects
-explicitly — produces **one** event, addressed to the union of the
-memberships, not one per assemblage. It does, though, produce that event
-**per proc**, and each one is a DVM-wide xcast: `notify_assemblage()`
-broadcasts to every daemon and lets PMIx's custom range decide who hears
-it. That is the PMIx definition — the promise is made to each member about
-each departure — but it means an `MPI_Comm_spawn`ed job of N ranks pays N
-broadcasts as it ends, since a child is connected to its parent by default
-and running to completion is *not* a disconnect. The registry check comes
-first, so a DVM with no assemblages pays nothing at all; see
-[`docs/todo.rst`](../../../docs/todo.rst) for what a cheaper shape would
-have to preserve.
+explicitly — produces **one** announcement, addressed to the union of the
+memberships, not one per assemblage. And departures are **not announced one
+proc at a time**: each event is a DVM-wide xcast (`notify_assemblage()`
+broadcasts to every daemon and lets PMIx's custom range decide who hears it),
+and an `MPI_Comm_spawn`ed job of N ranks ends without disconnecting — a child
+is connected to its parent by default, and running to completion is *not* a
+disconnect — so one event per departure was N broadcasts per job.
+`prte_pmix_server_connection_terminated()` therefore gathers departures into
+**sets** (`prte_pmix_server_departure_t`), one per job *and* audience, and
+announces each set as one event:
+
+- **The key is the audience as well as the job.** Two ranks of one job can
+  belong to different assemblages, and an event goes to everyone in its
+  range, so folding them together would tell a member about a proc it was
+  never connected to. A spurious `PROC_TERM_WO_SYNC` is not harmless: an Open
+  MPI process built without fault tolerance aborts on one.
+- **A set is sent when the current pass of the event loop ends**
+  (`schedule_flush()`), not on a timer. A daemon reports the normal ends of
+  its procs in one `UPDATE_PROC_STATE` per job, and the master activates a
+  termination for each proc in it back to back, so an event activated by the
+  first runs after the last: one report becomes one event per audience, with
+  no added delay. Abnormal ends are reported one message each and gain
+  nothing here, which is what the next point is for.
+- **A job the master has ordered down is held for its end.** Once
+  `_terminate_job()` (through `connection_job_failed()`) or a whole-job
+  `PMIx_Job_control` kill has sent the kill, every remaining departure from
+  that job is known to be coming. They are held
+  (`prte_pmix_server_connection_teardown()`) until the job's last proc is
+  gone (`prte_pmix_server_connection_job_ended()`, from `track_procs`), and go
+  as one event.
+- **A set holding every proc of its job names the job**, as
+  `PMIX_EVENT_AFFECTED_PROC = <nspace>/WILDCARD`. A partial set goes as a
+  `PMIX_EVENT_AFFECTED_PROCS` array; repeating `PMIX_EVENT_AFFECTED_PROC`
+  would not do, because PMIx keeps only the last of them. A lone departure
+  looks exactly as it always has. The exit code travels only when every proc
+  in the set shares it.
+- **The proc whose failure brings a job down is announced by the failure,
+  not by its own termination**, from `connection_job_failed()`
+  (`find_culprit()`, reading `PRTE_JOB_ABORTED_PROC`). Its termination
+  arrives after the teardown has begun, when it would be held or silenced
+  with the rest, and the sweep's `JOB_TERM_WO_SYNC` events name the jobs it
+  kills, never the one the failure began in. Who is owed it is found before
+  the sweep, since the sweep marks what it condemns `terminating`.
+- **Every kill is ordered before anybody hears why.** `_terminate_job()`
+  kills the failed job first and calls `connection_job_failed()` after;
+  the sweep orders each condemned job killed and only then sends the
+  culprit and its `JOB_TERM_WO_SYNC` events. Kill and news travel down the
+  same daemon tree, so news sent first can arrive first - and a process
+  told its peer failed can act on it and finish the run it was to be
+  stopped from finishing (the swarm's `test_connect` "a failure in one
+  member terminates the assemblage" is the case that caught it).
+- **A condemned assemblage is told nothing more about its procs.** Once the
+  sweep has marked it `terminating`, every live member is being killed and
+  has been told why; `departure_targets()` leaves it out, so the procs coming
+  down with it announce themselves to nobody.
+
+The consumer has to read the batched forms: Open MPI's fault-tolerance
+handler did not, and needs the matching change to expand a wildcard and walk
+the array. `test_connection_departures()` in
+[`test/unit/prted/`](../../../test/unit/prted/) reads each case off the wire
+through `prte_pmix_server_connection_xcast`. The registry check comes first,
+so a DVM with no assemblages pays nothing at all; see
+[`docs/todo.rst`](../../../docs/todo.rst) for what is left of the cost.
 
 Note what this depends on: PMIx used to execute a connect or disconnect whose
 participants were **all local** without calling the host at all, which left
