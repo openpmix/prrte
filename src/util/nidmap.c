@@ -567,7 +567,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             proc->state = PRTE_PROC_STATE_RUNNING;
             PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_ALIVE);
             daemons->num_procs++;
-            pmix_pointer_array_set_item(daemons->procs, proc->name.rank, proc);
+            prte_job_add_proc(daemons, proc->name.rank, proc);
         }
         /* the node backpointer is borrowed, not retained (see
          * prte_proc_destruct) */

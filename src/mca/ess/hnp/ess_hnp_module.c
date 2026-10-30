@@ -212,7 +212,7 @@ static int rte_init(int argc, char **argv)
     proc->state = PRTE_PROC_STATE_RUNNING;
     /* the node backpointer is borrowed, not retained */
     proc->node = node;
-    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
+    prte_job_add_proc(jdata, PRTE_PROC_MY_NAME->rank, proc);
 
     /* record that the daemon (i.e., us) is on this node
      * NOTE: we do not add the proc object to the node's

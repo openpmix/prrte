@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1034,6 +1035,33 @@ static int test_late_report_keeps_termination(void)
     return failures;
 }
 
+/* A held job that needs remapping goes back through the mapper, which
+ * refills its proc table, so the remap has to lift the fixed mark. */
+static int test_reset_proc_map_unfixes(void)
+{
+    int failures = 0;
+    prte_job_t *jdata = PMIX_NEW(prte_job_t);
+    prte_proc_t *proc = PMIX_NEW(prte_proc_t);
+
+    PMIX_LOAD_NSPACE(jdata->nspace, "plm-test-remap");
+    PMIX_LOAD_PROCID(&proc->name, "plm-test-remap", 0);
+    CHECK("a proc is added before mapping completes",
+          PRTE_SUCCESS == prte_job_add_proc(jdata, 0, proc));
+    jdata->num_procs = 1;
+    jdata->procs_fixed = true;
+
+    prte_plm_base_reset_proc_map(jdata);
+    CHECK("a remap empties the table",
+          NULL == pmix_pointer_array_get_item(jdata->procs, 0) && 0 == jdata->num_procs);
+    CHECK("a remap clears the fixed mark", !jdata->procs_fixed);
+
+    PMIX_RELEASE(jdata);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_reset_proc_map_unfixes\n");
+    }
+    return failures;
+}
+
 /*
  * A daemon whose launch failed is reported to the HNP on
  * PRTE_RML_TAG_REPORT_REMOTE_LAUNCH by plm/ssh - from ssh_wait_daemon (a
@@ -1136,6 +1164,7 @@ int main(void)
     failures += test_state_update_wire();
     failures += test_remote_launch_wire();
     failures += test_late_report_keeps_termination();
+    failures += test_reset_proc_map_unfixes();
     /* leaves the global job/node pools populated, so run it last */
     failures += test_setup_vm();
 

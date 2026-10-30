@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,7 +13,8 @@
  * real, multi-node DVM, and see whether the runtime keeps the one promise
  * that "connected" makes.
  *
- *   connector [--child-host <node>] [--disconnect] [--abort] [--wait <s>]
+ *   connector [--child-host <node>] [--disconnect] [--abort] [--by-rank]
+ *             [--wait <s>]
  *   connector --siblings [--child-host <node>] [--wait <s>]
  *
  * The parent (no PMIX_PARENT_ID in its job info) spawns one copy of itself,
@@ -44,6 +46,12 @@
  * the event in the first case and must not in the second, and the difference
  * can only come from the runtime having recorded who connected to whom.
  *
+ * --by-rank names every rank of both jobs in the connect and the disconnect,
+ * where the default names each job by wildcard; Open MPI does the same from
+ * any communicator but MPI_COMM_WORLD.  The child then runs two procs, so
+ * "every rank" is more than one, and is spawned with PMIX_SPAWN_CHILD_SEP,
+ * so the rank-listed connect is its only assemblage.
+ *
  * Output lines, all prefixed CNCT so the harness can grep:
  *
  *   CNCT <role> <rank> HOST <hostname>
@@ -71,6 +79,9 @@
 #include <unistd.h>
 
 #include <pmix.h>
+
+/* procs in the child under --by-rank; the parent is always one */
+#define BY_RANK_NCHILD 2
 
 static pmix_proc_t myproc;
 static const char *role = "parent";
@@ -143,7 +154,8 @@ int main(int argc, char **argv)
 {
     pmix_status_t rc;
     pmix_value_t *val = NULL;
-    pmix_proc_t parent, procs[2];
+    pmix_proc_t parent, procs[2 + BY_RANK_NCHILD];
+    size_t nprocs = 2;
     pmix_app_t app;
     pmix_info_t jobinfo[2];
     pmix_nspace_t child;
@@ -153,6 +165,7 @@ int main(int argc, char **argv)
     bool ischild = false;
     bool siblings = false;
     bool bystander = false;
+    bool byrank = false;
     pmix_nspace_t sibling;
     int wait_secs = 15;
     char *child_host = NULL;
@@ -168,6 +181,8 @@ int main(int argc, char **argv)
             siblings = true;
         } else if (0 == strcmp(argv[i], "--bystander")) {
             bystander = true;
+        } else if (0 == strcmp(argv[i], "--by-rank")) {
+            byrank = true;
         } else if (0 == strcmp(argv[i], "--child-host") && i + 1 < argc) {
             child_host = argv[++i];
         } else if (0 == strcmp(argv[i], "--wait") && i + 1 < argc) {
@@ -274,8 +289,11 @@ int main(int argc, char **argv)
          * asked about */
         PMIX_APP_CONSTRUCT(&app);
         app.cmd = strdup(argv[0]);
-        app.maxprocs = 1;
+        app.maxprocs = byrank ? BY_RANK_NCHILD : 1;
         PMIx_Argv_append_nosize(&app.argv, argv[0]);
+        if (byrank) {
+            PMIx_Argv_append_nosize(&app.argv, "--by-rank");
+        }
         if (disconnect) {
             PMIx_Argv_append_nosize(&app.argv, "--disconnect");
         }
@@ -285,14 +303,28 @@ int main(int argc, char **argv)
         /* the child says where it landed, so a run that never left this node
          * cannot pass as one that did */
         if (NULL != child_host) {
+            char *hosts = NULL;
+
+            /* a host given without a count offers one slot */
+            if (byrank && 0 > asprintf(&hosts, "%s:%d", child_host, BY_RANK_NCHILD)) {
+                hosts = NULL;
+            }
             PMIX_INFO_CREATE(app.info, 1);
-            PMIX_INFO_LOAD(&app.info[0], PMIX_HOST, child_host, PMIX_STRING);
+            PMIX_INFO_LOAD(&app.info[0], PMIX_HOST, NULL == hosts ? child_host : hosts,
+                           PMIX_STRING);
             app.ninfo = 1;
+            free(hosts);
         }
 
         PMIX_INFO_LOAD(&jobinfo[0], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
-        rc = PMIx_Spawn(jobinfo, 1, &app, 1, child);
+        if (byrank) {
+            PMIX_INFO_LOAD(&jobinfo[1], PMIX_SPAWN_CHILD_SEP, NULL, PMIX_BOOL);
+        }
+        rc = PMIx_Spawn(jobinfo, byrank ? 2 : 1, &app, 1, child);
         PMIX_INFO_DESTRUCT(&jobinfo[0]);
+        if (byrank) {
+            PMIX_INFO_DESTRUCT(&jobinfo[1]);
+        }
         PMIX_APP_DESTRUCT(&app);
         if (PMIX_SUCCESS != rc) {
             printf("CNCT %s %u DONE %d\n", role, myproc.rank, rc);
@@ -308,8 +340,17 @@ int main(int argc, char **argv)
         PMIX_LOAD_PROCID(&procs[0], parent.nspace, PMIX_RANK_WILDCARD);
         PMIX_LOAD_PROCID(&procs[1], myproc.nspace, PMIX_RANK_WILDCARD);
     }
+    if (byrank) {
+        /* the parent is rank 0 of a one-proc job */
+        procs[0].rank = 0;
+        for (i = 0; i < BY_RANK_NCHILD; i++) {
+            PMIX_LOAD_PROCID(&procs[1 + i], ischild ? myproc.nspace : child,
+                             (pmix_rank_t) i);
+        }
+        nprocs = 1 + BY_RANK_NCHILD;
+    }
 
-    rc = PMIx_Connect(procs, 2, NULL, 0);
+    rc = PMIx_Connect(procs, nprocs, NULL, 0);
     printf("CNCT %s %u CONNECT %s\n", role, myproc.rank, PMIx_Error_string(rc));
     fflush(stdout);
     if (PMIX_SUCCESS != rc) {
@@ -324,7 +365,7 @@ int main(int argc, char **argv)
      * only the departing side issues never completes.  Whether it happens at
      * all is what the two runs of this program differ in. */
     if (disconnect) {
-        rc = PMIx_Disconnect(procs, 2, NULL, 0);
+        rc = PMIx_Disconnect(procs, nprocs, NULL, 0);
         printf("CNCT %s %u DISCONNECT %s\n", role, myproc.rank, PMIx_Error_string(rc));
         fflush(stdout);
     }

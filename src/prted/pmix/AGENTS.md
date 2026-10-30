@@ -1138,6 +1138,18 @@ design:
   connect expressed one way with a connect expressed the other. A disconnect
   naming a set that was never recorded must fail to find it rather than drop
   somebody else's.
+- **A departure reads a collapsed copy.** Each record also keeps
+  `collapsed`: its members with every wholly listed job rewritten to
+  `A/WILDCARD` (`collapse_whole_jobs()`). Each departure merges and
+  broadcasts the memberships covering it, and a client may name a job by
+  listing its ranks (Open MPI does, from any communicator but
+  `MPI_COMM_WORLD`), so reading the collapsed copy keeps that to a handful of
+  entries per record instead of every rank.
+  Matching a connect or a disconnect still reads the members as named.
+  Only a job whose membership is fixed (`prte_job_t::procs_fixed`, see
+  [`src/runtime/AGENTS.md`](../../runtime/AGENTS.md)) is collapsed: a tool
+  namespace gains ranks after it connects, and its wildcard would cover
+  them.
 - **A record outlives one member's job.** The survivors are still connected
   to each other and still owed an event apiece, so a record is dropped only
   by a disconnect or when nothing named in it exists any more

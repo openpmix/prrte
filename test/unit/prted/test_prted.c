@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * Copyright (c) 2026      SiPearl.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -2665,12 +2666,30 @@ static int test_tool_registration(void)
     return failures;
 }
 
+/* give a job a proc at every rank below n it does not have yet */
+static void add_procs(prte_job_t *jdata, int n)
+{
+    prte_proc_t *pptr;
+    int r;
+
+    for (r = 0; r < n; r++) {
+        if (NULL != pmix_pointer_array_get_item(jdata->procs, r)) {
+            continue;
+        }
+        pptr = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&pptr->name, jdata->nspace, r);
+        prte_job_add_proc(jdata, r, pptr);
+    }
+    jdata->num_procs = n;
+}
+
 static int test_connections(void)
 {
     int failures = 0;
-    pmix_proc_t members[2], other[2], proc;
+    pmix_proc_t members[2], other[2], proc, listed[4];
     prte_proc_t pdata;
     prte_job_t *jdata;
+    prte_pmix_server_connection_t *cptr;
     bool made_array = false;
 
     /* the registry lives in the server globals, which a full
@@ -2767,6 +2786,73 @@ static int test_connections(void)
     CHECK("a disconnect of one rank leaves a whole-job connection alone",
           1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
     prte_pmix_server_connection_drop(members, 2);
+
+    /* A connect that lists every rank of a job keeps its members as named,
+     * and is addressed as the job: a departure reads one entry per job, not
+     * one per rank.  Matching still reads the members as named, so the same
+     * jobs connected by wildcard are a second assemblage, and a disconnect
+     * listing the same ranks dissolves only the first. */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-conn@3");
+    add_procs(jdata, 3);
+    jdata->procs_fixed = true;
+    CHECK("the listed job registers", PRTE_SUCCESS == prte_set_job_data_object(jdata));
+    PMIX_LOAD_PROCID(&listed[0], "unit-test-conn@3", 2);
+    PMIX_LOAD_PROCID(&listed[1], "unit-test-conn@3", 0);
+    PMIX_LOAD_PROCID(&listed[2], "unit-test-conn@3", 1);
+    listed[3] = members[1];
+    prte_pmix_server_connection_record(listed, 4);
+    cptr = (prte_pmix_server_connection_t *)
+        pmix_list_get_first(&prte_pmix_server_globals.connections);
+    CHECK("a wholly listed job keeps its members as named",
+          NULL != cptr && 4 == cptr->nmembers);
+    CHECK("...and is addressed as the job",
+          NULL != cptr && 2 == cptr->ncollapsed &&
+          PMIX_RANK_WILDCARD == cptr->collapsed[0].rank &&
+          PMIX_CHECK_NSPACE_STRICT(cptr->collapsed[0].nspace, "unit-test-conn@3"));
+    PMIX_LOAD_PROCID(&proc, "unit-test-conn@3", 1);
+    CHECK("...which still covers each of its ranks", prte_pmix_server_is_connected(&proc));
+    PMIX_LOAD_PROCID(&other[0], "unit-test-conn@3", PMIX_RANK_WILDCARD);
+    other[1] = members[1];
+    prte_pmix_server_connection_record(other, 2);
+    CHECK("the same jobs connected by wildcard are another assemblage",
+          2 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+    prte_pmix_server_connection_drop(listed, 4);
+    CHECK("a disconnect listing the ranks dissolves only the listed one",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+    prte_pmix_server_connection_drop(other, 2);
+
+    /* ...and a job not wholly listed is addressed as listed */
+    prte_pmix_server_connection_record(&listed[1], 3);
+    cptr = (prte_pmix_server_connection_t *)
+        pmix_list_get_first(&prte_pmix_server_globals.connections);
+    CHECK("a job not wholly listed is addressed rank by rank",
+          NULL != cptr && 3 == cptr->ncollapsed);
+    prte_pmix_server_connection_drop(&listed[1], 3);
+    pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+    PMIX_RELEASE(jdata);
+
+    /* A job whose membership is not fixed - a tool, which gains a rank
+     * whenever another of its processes attaches - is addressed as listed
+     * even when the list names every rank it has today: its wildcard would
+     * also reach the ranks that attach later. */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-conn@3");
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+    add_procs(jdata, 3);
+    CHECK("the tool job registers", PRTE_SUCCESS == prte_set_job_data_object(jdata));
+    prte_pmix_server_connection_record(listed, 4);
+    cptr = (prte_pmix_server_connection_t *)
+        pmix_list_get_first(&prte_pmix_server_globals.connections);
+    CHECK("a job not fixed is addressed rank by rank",
+          NULL != cptr && 4 == cptr->ncollapsed);
+    add_procs(jdata, 4);
+    PMIX_LOAD_PROCID(&proc, "unit-test-conn@3", 3);
+    CHECK("...so a rank it gains later is not covered",
+          !prte_pmix_server_is_connected(&proc));
+    prte_pmix_server_connection_drop(listed, 4);
+    pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+    PMIX_RELEASE(jdata);
 
     /* a proc that belongs to nothing is not connected, and reporting its
      * termination is a no-op rather than a walk off the end of an empty list */

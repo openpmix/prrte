@@ -470,7 +470,7 @@ static int lsf_map(prte_job_t *jdata,
             }
             /* insert the proc into the proper place */
             PMIX_RETAIN(proc);
-            rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+            rc = prte_job_add_proc(jdata, proc->name.rank, proc);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_RELEASE(proc);

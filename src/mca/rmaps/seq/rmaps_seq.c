@@ -496,8 +496,8 @@ process:
             proc->app_rank = apprank;
             apprank++;
             PMIX_RETAIN(proc);
-            rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
-            if (PMIX_SUCCESS != rc) {
+            rc = prte_job_add_proc(jdata, proc->name.rank, proc);
+            if (PRTE_SUCCESS != rc) {
                 PMIX_RELEASE(proc);
                 goto error;
             }

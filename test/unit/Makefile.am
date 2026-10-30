@@ -14,6 +14,7 @@ SUBDIRS = rmaps runtime common errmgr ess event filem grpcomm hwloc include odls
 # than letting the two drift.  Their baselines differ, being records of
 # two different code bases, and are not interchangeable.
 dist_check_SCRIPTS = check_static_init.pl check_query_authority.py \
+                     check_job_procs.py \
                      check_query_qualifiers.py \
                      check_ctor_coverage.py check_attr_pairing.py
 
@@ -22,5 +23,6 @@ dist_check_SCRIPTS = check_static_init.pl check_query_authority.py \
 EXTRA_DIST = ctor_coverage_baseline.txt
 
 TESTS = check_static_init.pl check_query_authority.py \
+        check_job_procs.py \
         check_query_qualifiers.py check_ctor_coverage.py \
         check_attr_pairing.py
