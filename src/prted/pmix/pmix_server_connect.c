@@ -1115,11 +1115,34 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
     PMIx_Argv_free(condemned);
 }
 
+/* How many distinct jobs does this assemblage name - and, with only_live,
+ * how many of those other than "except" still exist?  Counting stops at two,
+ * which is all purge needs to know. */
+static int count_jobs(prte_pmix_server_connection_t *cptr, const char *except, bool only_live)
+{
+    const char *seen = NULL;
+    size_t n;
+
+    for (n = 0; n < cptr->nmembers; n++) {
+        if (NULL != except && same_nspace(cptr->members[n].nspace, except)) {
+            continue;
+        }
+        if (only_live && NULL == prte_get_job_data_object(cptr->members[n].nspace)) {
+            continue;
+        }
+        if (NULL == seen) {
+            seen = cptr->members[n].nspace;
+        } else if (!same_nspace(seen, cptr->members[n].nspace)) {
+            return 2;
+        }
+    }
+    return (NULL == seen) ? 0 : 1;
+}
+
 void prte_pmix_server_connection_purge(const pmix_nspace_t nspace)
 {
     prte_pmix_server_connection_t *cptr, *next;
-    size_t n;
-    bool live;
+    int live;
 
     if (!registry_live()) {
         return;
@@ -1129,23 +1152,24 @@ void prte_pmix_server_connection_purge(const pmix_nspace_t nspace)
     flush_departures(nspace);
     teardown_done(nspace);
 
-    /* An assemblage outlives the departure of one member's job: the members
-     * that remain are still connected to each other, and still owed an event
-     * apiece when they go.  It is only once nothing named in it exists any
-     * more that the record has no one left to serve. */
+    /* An assemblage outlives the departure of one member's job while two or
+     * more of its jobs remain: those are still connected to each other, and
+     * still owed an event apiece when they go.
+     *
+     * Once a connection between jobs is down to one, it is over.  Keeping it
+     * would announce each of that job's procs to the rest of the job - a
+     * DVM-wide broadcast per exit, about the job's own procs, to an audience
+     * that never asked to be connected to itself.  The commonest case is a
+     * spawn: the record {parent, child} would otherwise stay until the
+     * parent's job ended, so every parent proc's exit after its children had
+     * gone was still announced.
+     *
+     * An assemblage within a single job never had another job in it, so it
+     * lasts until that job has gone. */
     PMIX_LIST_FOREACH_SAFE(cptr, next, &prte_pmix_server_globals.connections,
                            prte_pmix_server_connection_t) {
-        live = false;
-        for (n = 0; n < cptr->nmembers; n++) {
-            if (same_nspace(cptr->members[n].nspace, nspace)) {
-                continue;
-            }
-            if (NULL != prte_get_job_data_object(cptr->members[n].nspace)) {
-                live = true;
-                break;
-            }
-        }
-        if (!live) {
+        live = count_jobs(cptr, nspace, true);
+        if (0 == live || (1 == live && 1 < count_jobs(cptr, NULL, false))) {
             pmix_list_remove_item(&prte_pmix_server_globals.connections, &cptr->super);
             PMIX_RELEASE(cptr);
         }
