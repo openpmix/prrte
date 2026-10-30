@@ -2295,6 +2295,7 @@ static int test_tool_registration(void)
     int failures = 0;
     prte_pmix_server_req_t *req;
     prte_job_t *jdata;
+    prte_proc_t *proc;
     bool made_array = false;
     int rc;
 
@@ -2328,11 +2329,12 @@ static int test_tool_registration(void)
     CHECK("an empty namespace is refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(req);
 
-    /* A namespace we already hold is answered at once - and the caller has
-     * to tolerate the callback firing before the call returns, which is why
-     * this one is passed none. */
+    /* A tool namespace we already hold is answered at once - and the caller
+     * has to tolerate the callback firing before the call returns, which is
+     * why this one is passed none. */
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-tool@2");
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
     if (PRTE_SUCCESS != prte_set_job_data_object(jdata)) {
         fprintf(stderr, "FAIL [test_tool_registration]: could not register a job\n");
         PMIX_RELEASE(jdata);
@@ -2349,6 +2351,27 @@ static int test_tool_registration(void)
           PRTE_SUCCESS == rc);
     CHECK("...and the job object we had is the one still there",
           jdata == prte_get_job_data_object(req->target.nspace));
+    PMIX_RELEASE(req);
+
+    /* An application job: a tool may take a rank the job has, as one started
+     * from a job script does, but may not add one - the rank would never
+     * retire and the job could never complete.  The relay on the master asks
+     * the same question, through prte_pmix_server_tool_may_join(). */
+    PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_TOOL);
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
+    CHECK("a tool may not add a rank to an application job",
+          PRTE_EXISTS == prte_pmix_server_register_tool(req, NULL, NULL));
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, "unit-test-tool@2", 0);
+    pmix_pointer_array_set_item(jdata->procs, 0, proc);
+    CHECK("...but may take one it already has",
+          PRTE_SUCCESS == prte_pmix_server_register_tool(req, NULL, NULL));
+    req->target.rank = PMIX_RANK_UNDEF;
+    CHECK("...and a sentinel rank is refused for a known namespace too",
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_register_tool(req, NULL, NULL));
+    CHECK("the may-join check refuses the same sentinel on the relay's behalf",
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, PMIX_RANK_WILDCARD));
     PMIX_RELEASE(req);
 
     pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
