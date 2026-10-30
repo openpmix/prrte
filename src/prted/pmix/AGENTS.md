@@ -1153,10 +1153,11 @@ design:
   `MPI_COMM_WORLD`), so reading the collapsed copy keeps that to a handful of
   entries per record instead of every rank.
   Matching a connect or a disconnect still reads the members as named.
-  Only a job whose membership is fixed (`prte_job_t::procs_fixed`, see
-  [`src/runtime/AGENTS.md`](../../runtime/AGENTS.md)) is collapsed: a tool
-  namespace gains ranks after it connects, and its wildcard would cover
-  them.
+  PRRTE grows an allocation, never a job, so a job's table is complete
+  once it is mapped. The two kinds of namespace that do gain ranks later -
+  a tool's, as further tool processes attach, and the daemons', on a grow -
+  are never collapsed: their wildcard would cover ranks the list never
+  named.
 - **A record outlives one member's job, but not the last but one.** While
   two or more of its jobs remain they are still connected to each other and
   still owed an event apiece. Once a record that named several jobs is down

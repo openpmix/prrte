@@ -204,7 +204,7 @@ int prte_ess_base_prted_setup(void)
     PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->pid = prte_process_info.pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    prte_job_add_proc(jdata, proc->name.rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;

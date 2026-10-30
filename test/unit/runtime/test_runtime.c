@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2026      Nanook Consulting  All rights reserved.
- * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -533,54 +532,6 @@ static int test_proc_lookups(void)
 /* ------------------------------------------------------------------ */
 /* proc runtime-state authority                                       */
 /* ------------------------------------------------------------------ */
-
-/* prte_job_add_proc() fills a job's table until the mapper marks the job's
- * membership fixed, and refuses from then on.  A remap clears the mark. */
-static int test_job_add_proc(void)
-{
-    int failures = 0;
-    prte_job_t *jdata;
-    prte_proc_t *p0, *p1, *late;
-
-    reset_globals();
-
-    jdata = make_job("app.fixed");
-    prte_set_job_data_object(jdata);
-    CHECK("add_proc: a new job is not fixed", !jdata->procs_fixed);
-
-    p0 = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&p0->name, "app.fixed", 0);
-    p1 = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&p1->name, "app.fixed", 1);
-    CHECK("add_proc: rank 0 is stored",
-          PRTE_SUCCESS == prte_job_add_proc(jdata, 0, p0)
-              && p0 == pmix_pointer_array_get_item(jdata->procs, 0));
-    CHECK("add_proc: rank 1 is stored",
-          PRTE_SUCCESS == prte_job_add_proc(jdata, 1, p1)
-              && p1 == pmix_pointer_array_get_item(jdata->procs, 1));
-    CHECK("add_proc: a sentinel rank is refused",
-          PRTE_ERR_BAD_PARAM == prte_job_add_proc(jdata, PMIX_RANK_WILDCARD, p0));
-
-    /* what the mapper does once every proc is placed */
-    jdata->procs_fixed = true;
-    late = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&late->name, "app.fixed", 2);
-    CHECK("add_proc: a fixed job refuses a new rank",
-          PRTE_ERR_PERM == prte_job_add_proc(jdata, 2, late)
-              && NULL == pmix_pointer_array_get_item(jdata->procs, 2));
-    CHECK("add_proc: a fixed job refuses a rank it already has",
-          PRTE_ERR_PERM == prte_job_add_proc(jdata, 1, late)
-              && p1 == pmix_pointer_array_get_item(jdata->procs, 1));
-
-    /* a remap empties the table and clears the mark */
-    jdata->procs_fixed = false;
-    CHECK("add_proc: a job no longer fixed takes a rank again",
-          PRTE_SUCCESS == prte_job_add_proc(jdata, 2, late)
-              && late == pmix_pointer_array_get_item(jdata->procs, 2));
-
-    reset_globals();
-    return failures;
-}
 
 /* A daemon's copy of a job carries a prte_proc_t for every proc, but it
  * only ever advances pid, state and exit_code for the procs it hosts:
@@ -2800,7 +2751,6 @@ int main(void)
     failures += test_session_ownership();
     failures += test_session_job_backref();
     failures += test_proc_lookups();
-    failures += test_job_add_proc();
     failures += test_proc_runtime_authority();
     failures += test_node_matching();
     failures += test_node_copy();

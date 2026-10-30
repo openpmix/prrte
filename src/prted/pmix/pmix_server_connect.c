@@ -194,10 +194,11 @@ static bool same_membership(prte_pmix_server_connection_t *cptr,
 
 /* Does this list name every proc of this job?
  *
- * Only a job whose membership is fixed qualifies (prte_job_t::procs_fixed):
- * its table then holds every proc PMIx will ever know in its namespace, so
- * naming all of them is naming the job.  A tool or singleton job can gain
- * ranks later and is never collapsed. */
+ * PRRTE grows an allocation, never a job: every spawn is a new namespace,
+ * and a job's table is complete once it is mapped, before anything has been
+ * launched to connect.  Naming all of its procs is then naming the job.  Two
+ * kinds of namespace do gain ranks later, and are never collapsed: a tool's,
+ * as further tool processes attach, and the daemons', on a grow. */
 static bool names_whole_job(const pmix_proc_t *members, size_t nmembers,
                             const pmix_nspace_t nspace)
 {
@@ -207,7 +208,9 @@ static bool names_whole_job(const pmix_proc_t *members, size_t nmembers,
     size_t i;
 
     jdata = prte_get_job_data_object(nspace);
-    if (NULL == jdata || !jdata->procs_fixed) {
+    if (NULL == jdata ||
+        PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) ||
+        same_nspace(nspace, PRTE_PROC_MY_NAME->nspace)) {
         return false;
     }
     size = jdata->procs->size;
@@ -254,8 +257,8 @@ static bool nspace_listed(char **list, const pmix_nspace_t nspace)
  * wildcard.
  *
  * Both forms cover the same procs, and names_whole_job() collapses only a
- * job whose membership is fixed, so the result covers exactly what the
- * list did.  A departure reads this form of a record: every departure
+ * job that cannot gain ranks, so the result covers exactly what the list
+ * did.  A departure reads this form of a record: every departure
  * merges and broadcasts the memberships covering it, and a client may name a
  * job by listing its ranks (Open MPI does, from any communicator but
  * MPI_COMM_WORLD).  Returns a list the caller frees, or NULL if out of
