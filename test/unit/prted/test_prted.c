@@ -2688,7 +2688,7 @@ static int test_connections(void)
 {
     int failures = 0;
     pmix_proc_t members[2], other[2], trio[3], proc, listed[4];
-    prte_proc_t pdata;
+    prte_proc_t pdata, *pptr;
     prte_job_t *jdata, *third;
     prte_pmix_server_connection_t *cptr;
     bool made_array = false;
@@ -2871,6 +2871,43 @@ static int test_connections(void)
     cptr = (prte_pmix_server_connection_t *)
         pmix_list_get_first(&prte_pmix_server_globals.connections);
     CHECK("a job not wholly listed is addressed rank by rank",
+          NULL != cptr && 3 == cptr->ncollapsed);
+    prte_pmix_server_connection_drop(&listed[1], 3);
+
+    /* A proc that has terminated never comes back, so the survivors of a job
+     * some procs have left are the whole job: a list naming them all is
+     * addressed as the job, and a listed proc that has gone does not count
+     * towards naming them all. */
+    add_procs(jdata, 4);
+    pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, 3);
+    pptr->state = PRTE_PROC_STATE_TERMINATED;
+    PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_RECORDED);
+    prte_pmix_server_connection_record(listed, 4);
+    cptr = (prte_pmix_server_connection_t *)
+        pmix_list_get_first(&prte_pmix_server_globals.connections);
+    CHECK("a job's survivors listed in full are addressed as the job",
+          NULL != cptr && 2 == cptr->ncollapsed);
+    prte_pmix_server_connection_drop(listed, 4);
+    PMIX_LOAD_PROCID(&other[0], "unit-test-conn@3", 3);
+    other[1] = listed[1];
+    prte_pmix_server_connection_record(other, 2);
+    cptr = (prte_pmix_server_connection_t *)
+        pmix_list_get_first(&prte_pmix_server_globals.connections);
+    CHECK("...but naming a proc that has gone does not name the survivors",
+          NULL != cptr && 2 == cptr->ncollapsed &&
+          PMIX_RANK_WILDCARD != cptr->collapsed[0].rank &&
+          PMIX_RANK_WILDCARD != cptr->collapsed[1].rank);
+    prte_pmix_server_connection_drop(other, 2);
+
+    /* A proc that has failed but whose termination is not yet recorded has
+     * not left: its departure is still to be reported, and a wildcard would
+     * cover it. */
+    ((prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, 2))->state =
+        PRTE_PROC_STATE_ABORTED_BY_SIG;
+    prte_pmix_server_connection_record(&listed[1], 3);
+    cptr = (prte_pmix_server_connection_t *)
+        pmix_list_get_first(&prte_pmix_server_globals.connections);
+    CHECK("...nor does leaving out a proc that is still on its way out",
           NULL != cptr && 3 == cptr->ncollapsed);
     prte_pmix_server_connection_drop(&listed[1], 3);
     pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);

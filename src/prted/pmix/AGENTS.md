@@ -1154,7 +1154,11 @@ design:
   entries per record instead of every rank.
   Matching a connect or a disconnect still reads the members as named.
   PRRTE grows an allocation, never a job, so a job's table is complete
-  once it is mapped. The two kinds of namespace that do gain ranks later -
+  once it is mapped, and a terminated proc is never relaunched, so "wholly
+  listed" means every proc whose termination is not yet recorded
+  (`PRTE_PROC_FLAG_RECORDED`, not the state, which the errmgr writes first):
+  the survivors of a job some procs have left collapse too. The two kinds of namespace that do gain
+  ranks later -
   a tool's, as further tool processes attach, and the daemons', on a grow -
   are never collapsed: their wildcard would cover ranks the list never
   named.
