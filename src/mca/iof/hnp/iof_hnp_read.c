@@ -72,6 +72,8 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
     prte_iof_deliver_t *p;
     pmix_iof_channel_t pchan;
+    const pmix_info_t *dirs;
+    size_t ndirs;
     pmix_status_t prc;
     PRTE_HIDE_UNUSED_PARAMS(event);
 
@@ -142,7 +144,8 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
      * sees the output of the children we forked ourselves - send it a copy */
     prte_iof_hnp_relay_to_tool(&proct->name, rev->tag, data, numbytes,
                                PRTE_PROC_MY_NAME->rank);
-    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
+    dirs = prte_iof_hnp_deliver_directives(&p->source, &ndirs);
+    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, dirs, ndirs, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_RELEASE(p);

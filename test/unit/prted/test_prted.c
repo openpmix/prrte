@@ -3517,6 +3517,7 @@ static int test_tool_spawn_parent(void)
     int failures = 0;
     prte_job_t *script = NULL, *child = NULL, *step = NULL;
     pmix_proc_t proxy;
+    pmix_nspace_t saved_nspace;
     bool made_array = false;
 
     PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
@@ -3561,6 +3562,24 @@ static int test_tool_spawn_parent(void)
     CHECK("a tool's own job still parents what it launches",
           script == prte_get_spawn_parent(step));
     PRTE_FLAG_UNSET(script, PRTE_JOB_FLAG_TOOL);
+
+    /* whose results a job's are: the step's belong to the tool that asked
+     * for it - which said it was a tool - and the script's child's to the
+     * DVM; and prterun's own job is not a tool's even when it carries the
+     * mark, since prterun asked for it itself */
+    CHECK("a job a process spawned is not a tool's", !prte_job_requested_by_tool(child));
+    prte_set_bool_attribute(&step->attributes, PRTE_JOB_DVM_JOB, PRTE_ATTR_GLOBAL, true);
+    CHECK("a job a tool asked for is the tool's", prte_job_requested_by_tool(step));
+    /* this binary has no DVM, so give the master a name for the case */
+    PMIX_LOAD_NSPACE(saved_nspace, PRTE_PROC_MY_NAME->nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "unit-test-step-dvm");
+    PMIX_LOAD_PROCID(&proxy, PRTE_PROC_MY_NAME->nspace, 0);
+    prte_set_attribute(&child->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL,
+                       &proxy, PMIX_PROC);
+    prte_set_bool_attribute(&child->attributes, PRTE_JOB_DVM_JOB, PRTE_ATTR_GLOBAL, true);
+    CHECK("prterun's own job is not a tool's, mark or no mark",
+          !prte_job_requested_by_tool(child));
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, saved_nspace);
 
 cleanup:
     if (NULL != script) {
