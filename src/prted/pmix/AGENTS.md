@@ -1145,7 +1145,7 @@ design:
   connect expressed one way with a connect expressed the other. A disconnect
   naming a set that was never recorded must fail to find it rather than drop
   somebody else's.
-- **A departure reads a collapsed copy.** Each record also keeps
+- **A departure or a failure reads a collapsed copy.** Each record also keeps
   `collapsed`: its members with every wholly listed job rewritten to
   `A/WILDCARD` (`collapse_whole_jobs()`). Each departure merges and
   broadcasts the memberships covering it, and a client may name a job by
