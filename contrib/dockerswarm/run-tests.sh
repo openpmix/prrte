@@ -4648,8 +4648,13 @@ test_tools() {
     # The job script runs on node2, so the inner prun attaches to node2's
     # daemon and its request reaches the master by relay; the step runs on
     # node3.  The inner timeout is what a regression reports, as 124.
+    #
+    # The harness lets ITS commands run as root through their environment,
+    # which a job's environment does not carry on to a prun inside it - so
+    # the inner one is given the same two variables itself.
+    INNERPRUN="env PRTE_ALLOW_RUN_AS_ROOT=1 PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 $BINDIR/prun"
     if prted_dvm_start 'node1:2,node2:2,node3:2'; then
-        out=$(RUN "timeout -k 5 90 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 echo STEP-OUTPUT; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
+        out=$(RUN "timeout -k 5 90 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout -k 5 30 $INNERPRUN --host node3:1 -n 1 echo STEP-OUTPUT; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
         echo "$out" | grep -q 'INNER RC=0' \
             && ok "a prun in a job script returns once its step has ended" \
             || bad "a prun in a job script did not return (issue #2862): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
@@ -4660,8 +4665,8 @@ test_tools() {
             && ok "...and the job script completed" \
             || bad "...but the job script did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
 
-        out=$(RUN "timeout -k 5 90 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 sh -c \\\"exit 3\\\"; echo INNER RC=\$?; echo SCRIPT CONTINUED' 2>&1; echo OUTER RC=\$?")
-        echo "$out" | grep -q 'INNER RC=3' \
+        out=$(RUN "timeout -k 5 90 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout -k 5 30 $INNERPRUN --host node3:1 -n 1 false; echo INNER RC=\$?; echo SCRIPT CONTINUED' 2>&1; echo OUTER RC=\$?")
+        echo "$out" | grep -q 'INNER RC=1' \
             && ok "a failing step's status comes back to the job script" \
             || bad "a failing step's status did not come back: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         echo "$out" | grep -q 'SCRIPT CONTINUED' && echo "$out" | grep -q 'OUTER RC=0' \
@@ -4679,7 +4684,7 @@ test_tools() {
     # was printed twice.  And the step's status is the prun's to return to
     # the script: prterun returns the script's, not the first failure of
     # every job it ran.
-    out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 echo STEP-OUTPUT; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
+    out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $INNERPRUN --host node3:1 -n 1 echo STEP-OUTPUT; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
     echo "$out" | grep -q 'INNER RC=0' && echo "$out" | grep -q 'OUTER RC=0' \
         && ok "a prun in a prterun job script returns, and so does prterun" \
         || bad "a prun in a prterun job script hung: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
@@ -4687,7 +4692,7 @@ test_tools() {
     [ "$n" = 1 ] \
         && ok "...and the step's output is printed once" \
         || bad "the step's output was printed $n times: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
-    out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 false; echo INNER RC=\$?; exit 0' 2>&1; echo OUTER RC=\$?")
+    out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $INNERPRUN --host node3:1 -n 1 false; echo INNER RC=\$?; exit 0' 2>&1; echo OUTER RC=\$?")
     echo "$out" | grep -q 'INNER RC=1' && echo "$out" | grep -q 'OUTER RC=0' \
         && ok "a failed step is the job script's to handle: prterun returns the script's status" \
         || bad "prterun did not return its job script's status: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
