@@ -39,6 +39,11 @@ is identical.
           job's status decide the command's exit status, with a spawned job's
           non-zero status reported on its own instead.
 
+          A job a *tool* starts is not in that tree. A ``prun`` run from a
+          job script launches a step, not a child of the script: ``prun``
+          waits for the step, and the step's output and exit status are
+          returned to it, for the script to act on.
+
 
 .. toctree::
    :maxdepth: 1

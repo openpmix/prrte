@@ -874,8 +874,19 @@ static void check_complete_resume(int fd, short args, void *cbdata)
          * same status and PRTE_UPDATE_EXIT_STATUS keeps the first non-zero
          * one, which is the documented default.  The primary job is the one
          * the launcher created, local jobid 1; anything above that was
-         * spawned by it. */
-        if (report_child_jobs_separately() && 1 != PRTE_LOCAL_JOBID(jdata->nspace)) {
+         * spawned by it.
+         *
+         * A job a tool asked for - a prun in a prterun job script - is
+         * neither. Its status went back to that tool, which has reported it
+         * and handed it to the script to act on, so it is not ours to return
+         * and its abnormal termination is not ours to report: the script's
+         * own status says what came of it. */
+        if (prte_job_requested_by_tool(jdata)) {
+            PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                 "%s state:dvm job %s ended with status %d - its tool has it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_JOBID_PRINT(jdata->nspace), jdata->exit_code));
+        } else if (report_child_jobs_separately() && 1 != PRTE_LOCAL_JOBID(jdata->nspace)) {
             if (0 != jdata->exit_code) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "child-job-status", true,
                                PRTE_LOCAL_JOBID_PRINT(jdata->nspace), jdata->exit_code);
@@ -884,7 +895,7 @@ static void check_complete_resume(int fd, short args, void *cbdata)
             PRTE_UPDATE_EXIT_STATUS(jdata->exit_code);
         }
         /* if this is an abnormal termination, report it */
-        if (jdata->state > PRTE_JOB_STATE_ERROR) {
+        if (jdata->state > PRTE_JOB_STATE_ERROR && !prte_job_requested_by_tool(jdata)) {
             char *msg;
             msg = prte_dump_aborted_procs(jdata);
             if (NULL != msg) {
