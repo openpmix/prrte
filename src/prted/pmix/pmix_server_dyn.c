@@ -1309,6 +1309,19 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     return PRTE_SUCCESS;
 }
 
+/* did the request name the job's parent itself? */
+static bool parent_named(const pmix_info_t *info, size_t ninfo)
+{
+    size_t n;
+
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_PARENT_ID)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void interim(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -1412,6 +1425,24 @@ static void interim(int sd, short args, void *cbdata)
                 PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
             }
         }
+    }
+
+    /* A tool asked for this job for itself, and a tool is no parent: it is
+     * not a member of a job and has no procs to be spawned by. Its name
+     * does not settle that - a tool started by one of a job's processes
+     * takes that process's identity from its environment, which is how a
+     * prun in a job script stays inside its job's allocation - so the
+     * requester's job cannot be the test. The job is therefore not linked
+     * into its requester's spawn tree, not connected to it, and not told it
+     * has a PMIX_PARENT_ID, unless the tool named a parent with
+     * PMIX_PARENT_ID, as prterun's proxy does. Without this, a prun in a
+     * job script waited for its own job to end before returning, and a
+     * step that failed took the whole script down by fate sharing. Its
+     * session, user and output still follow the requester. */
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DVM_JOB) &&
+        !parent_named(cd->info, cd->ninfo)) {
+        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC,
+                                PRTE_ATTR_GLOBAL, true);
     }
 
     /* indicate the requestor so bookmarks can be correctly set */

@@ -714,6 +714,7 @@ PRTE_EXPORT void prte_session_add_owner(prte_session_t *session,
  * service
  */
 PRTE_EXPORT prte_job_t *prte_get_job_data_object(const pmix_nspace_t job);
+PRTE_EXPORT prte_job_t *prte_get_spawn_parent(prte_job_t *jdata);
 
 /**
  * Set a job data object - returns an error if it cannot add the object

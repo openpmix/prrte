@@ -931,6 +931,13 @@ int prun_common(pmix_cli_result_t *results,
     flag = true;
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
 
+    /* and the DVM is to know a tool is asking. Our name may be an
+     * application process's - started from a job script, we took that
+     * process's identity from the environment - but the job we launch is
+     * not that process's child. A PMIx server that follows the Standard
+     * says so itself, and replaces this; one that does not passes it on */
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, &flag, PMIX_BOOL);
+
     /* pickup any relevant envars */
     ninfo = 4;
     PMIX_INFO_CREATE(iptr, ninfo);

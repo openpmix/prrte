@@ -899,6 +899,11 @@ void prte_pmix_server_connection_spawned(prte_job_t *jdata)
     if (NULL == parent || PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
         goto done;
     }
+    /* nor is there one when a tool asked for the job for itself, whatever
+     * name it holds - see PRTE_JOB_NO_PARENT_PROC */
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC)) {
+        goto done;
+    }
     /* PMIX_SPAWN_CHILD_SEP opts the child out of being connected to its
      * parent.  Only an explicit TRUE does so: not having said is not an
      * opt-out, and the PMIx default is that a spawn connects the two. */

@@ -4635,6 +4635,50 @@ test_tools() {
     fi
     for n in 1 2 3; do ON $n 'rm -rf /tmp/dyn' >/dev/null 2>&1; done
     cleanup_swarm
+
+    banner "tools: a prun in a job script launches a step, not a child of its job"
+    # A prun started by one of a job's processes takes that process's identity
+    # from its environment - which is how it stays inside the job's
+    # allocation.  Its spawn therefore reached the DVM as one by that
+    # process, and the step was made a child of the job running the script:
+    #  - the step joined the script's spawn tree, so prun waited for the
+    #    script to end, and the script waited for prun (issue #2862);
+    #  - the spawn connected the step to the script, so a step that failed
+    #    took the whole script down by fate sharing.
+    # The job script runs on node2, so the inner prun attaches to node2's
+    # daemon and its request reaches the master by relay; the step runs on
+    # node3.  The inner timeout is what a regression reports, as 124.
+    if prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        out=$(RUN "timeout -k 5 90 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 echo STEP-OUTPUT; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
+        echo "$out" | grep -q 'INNER RC=0' \
+            && ok "a prun in a job script returns once its step has ended" \
+            || bad "a prun in a job script did not return (issue #2862): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'STEP-OUTPUT' \
+            && ok "...having forwarded the step's output" \
+            || bad "...but the step's output never arrived: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'OUTER RC=0' \
+            && ok "...and the job script completed" \
+            || bad "...but the job script did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        out=$(RUN "timeout -k 5 90 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 sh -c \\\"exit 3\\\"; echo INNER RC=\$?; echo SCRIPT CONTINUED' 2>&1; echo OUTER RC=\$?")
+        echo "$out" | grep -q 'INNER RC=3' \
+            && ok "a failing step's status comes back to the job script" \
+            || bad "a failing step's status did not come back: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'SCRIPT CONTINUED' && echo "$out" | grep -q 'OUTER RC=0' \
+            && ok "...and the script carries on: the step was never connected to it" \
+            || bad "a failing step took its job script down: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+        sleep 3
+    else
+        bad "could not start a persistent DVM for the job-script step case"
+    fi
+
+    # ...and the same from a job script under prterun, whose DVM is its own
+    out=$(RUN "timeout -k 5 90 prterun --host node2:1,node3:1 -n 1 sh -c 'timeout -k 5 30 $BINDIR/prun --host node3:1 -n 1 true; echo INNER RC=\$?' 2>&1; echo OUTER RC=\$?")
+    echo "$out" | grep -q 'INNER RC=0' && echo "$out" | grep -q 'OUTER RC=0' \
+        && ok "a prun in a prterun job script returns, and so does prterun" \
+        || bad "a prun in a prterun job script hung: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
 }
 
 ########################################################################
