@@ -131,8 +131,6 @@ static void _terminate_job(pmix_nspace_t jobid)
         return;
     }
 
-    prte_pmix_server_connection_job_failed(jobid);
-
     PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
     pmix_pointer_array_init(&procs, 1, 1, 1);
     PMIX_CONSTRUCT(&pobj, prte_proc_t);
@@ -141,6 +139,12 @@ static void _terminate_job(pmix_nspace_t jobid)
     prte_plm.terminate_procs(&procs);
     PMIX_DESTRUCT(&procs);
     PMIX_DESTRUCT(&pobj);
+
+    /* only once the kill is on its way: the news of this failure travels
+     * down the same daemon tree, so a process told of it is one whose
+     * daemon already has its orders - it cannot learn why it is going and
+     * carry on before they arrive */
+    prte_pmix_server_connection_job_failed(jobid);
 }
 
 static void job_errors(int fd, short args, void *cbdata)

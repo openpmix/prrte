@@ -31,10 +31,13 @@
 #include "constants.h"
 #include "types.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "src/class/pmix_list.h"
+#include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
 #include "src/grpcomm/grpcomm.h"
@@ -67,6 +70,60 @@ static void cndes(prte_pmix_server_connection_t *p)
 PMIX_CLASS_INSTANCE(prte_pmix_server_connection_t,
                     pmix_list_item_t,
                     cncon, cndes);
+
+static void dpcon(prte_pmix_server_departure_t *p)
+{
+    PMIX_LOAD_NSPACE(p->nspace, NULL);
+    p->targets = NULL;
+    p->ntargets = 0;
+    p->procs = NULL;
+    p->nprocs = 0;
+    p->cap = 0;
+    p->exit_code = 0;
+    p->exit_uniform = true;
+    p->held = false;
+}
+static void dpdes(prte_pmix_server_departure_t *p)
+{
+    if (NULL != p->targets) {
+        free(p->targets);
+    }
+    if (NULL != p->procs) {
+        free(p->procs);
+    }
+}
+PMIX_CLASS_INSTANCE(prte_pmix_server_departure_t,
+                    pmix_list_item_t,
+                    dpcon, dpdes);
+
+/* The broadcast, as a pointer so that the unit test can read what a departure
+ * puts on the wire without a DVM to carry it. */
+int (*prte_pmix_server_connection_xcast)(prte_rml_tag_t tag,
+                                         pmix_data_buffer_t *msg) = prte_grpcomm_xcast;
+
+/* the pass-end flush of the departures - see schedule_flush() */
+static prte_event_t flush_ev;
+static bool flush_queued = false;
+
+void prte_pmix_server_connection_init(void)
+{
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.departures, pmix_list_t);
+    prte_pmix_server_globals.teardowns = NULL;
+    flush_queued = false;
+}
+
+void prte_pmix_server_connection_finalize(void)
+{
+    if (flush_queued) {
+        prte_event_del(&flush_ev);
+        flush_queued = false;
+    }
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.departures);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.connections);
+    PMIx_Argv_free(prte_pmix_server_globals.teardowns);
+    prte_pmix_server_globals.teardowns = NULL;
+}
 
 /* The registry exists on the DVM master, and only while its PMIx server is
  * up: every one of these entry points is also reachable from a unit test, and
@@ -344,28 +401,49 @@ void prte_pmix_server_connection_drop(const pmix_proc_t *members, size_t nmember
  * The targets are the members as named, wildcards and all, which is what the
  * custom range wants: PMIx delivers to whoever registered for the code and
  * falls within it, so a member that has already gone simply matches nothing.
- * The source is the affected proc rather than ourselves - naming ourselves
- * would have our own PMIx server upcall the event straight back to us.
  *
- * "affected" is a proc for a departure and <nspace>/WILDCARD for a job that
- * was terminated because of one; exit_code is passed as -1 where there is
- * none to report. */
+ * "affected" is what the event is about.  One entry goes as
+ * PMIX_EVENT_AFFECTED_PROC, as it always has: a proc for a departure, or
+ * <nspace>/WILDCARD for a whole job - one that was terminated because of a
+ * departure, or one whose every proc has now gone.  Several entries are
+ * departures from one job announced together, and go as the
+ * PMIX_EVENT_AFFECTED_PROCS array PMIx defines for exactly that; repeating
+ * PMIX_EVENT_AFFECTED_PROC instead would not do, because PMIx keeps only the
+ * last of them.
+ *
+ * The source is the affected proc, or the job's wildcard where there are
+ * several - naming ourselves would have our own PMIx server upcall the event
+ * straight back to us.  exit_code is passed as -1 where there is none to
+ * report. */
 static void notify_assemblage(const pmix_proc_t *members, size_t nmembers,
                               pmix_status_t event,
-                              const pmix_proc_t *affected,
+                              const pmix_proc_t *affected, size_t naffected,
                               int exit_code)
 {
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
-    pmix_data_array_t darray;
+    pmix_data_array_t darray, aarray;
+    pmix_proc_t source;
     pmix_info_t *info;
     size_t ninfo;
     pmix_data_buffer_t pbkt;
     pmix_status_t rc;
     int ret;
 
+    if (0 == naffected) {
+        return;
+    }
     ninfo = (0 <= exit_code) ? 3 : 2;
     PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, (pmix_proc_t *) affected, PMIX_PROC);
+    if (1 == naffected) {
+        PMIX_XFER_PROCID(&source, &affected[0]);
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, &source, PMIX_PROC);
+    } else {
+        PMIX_LOAD_PROCID(&source, affected[0].nspace, PMIX_RANK_WILDCARD);
+        aarray.type = PMIX_PROC;
+        aarray.array = (pmix_proc_t *) affected;
+        aarray.size = naffected;
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROCS, &aarray, PMIX_DATA_ARRAY);
+    }
     darray.type = PMIX_PROC;
     darray.array = (pmix_proc_t *) members;
     darray.size = nmembers;
@@ -384,7 +462,7 @@ static void notify_assemblage(const pmix_proc_t *members, size_t nmembers,
         rc = PMIx_Data_pack(NULL, &pbkt, &event, 1, PMIX_STATUS);
     }
     if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, &pbkt, (pmix_proc_t *) affected, 1, PMIX_PROC);
+        rc = PMIx_Data_pack(NULL, &pbkt, &source, 1, PMIX_PROC);
     }
     if (PMIX_SUCCESS == rc) {
         rc = PMIx_Data_pack(NULL, &pbkt, &range, 1, PMIX_DATA_RANGE);
@@ -403,11 +481,11 @@ static void notify_assemblage(const pmix_proc_t *members, size_t nmembers,
     }
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s notifying connected assemblage of %s affecting %s",
+                        "%s notifying connected assemblage of %s affecting %s (%d procs)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PMIx_Error_string(event),
-                        PRTE_NAME_PRINT(affected));
+                        PRTE_NAME_PRINT(&source), (int) naffected);
 
-    ret = prte_grpcomm_xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt);
+    ret = prte_pmix_server_connection_xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
     }
@@ -443,30 +521,48 @@ bool prte_pmix_server_is_connected(const pmix_proc_t *proc)
     return false;
 }
 
-void prte_pmix_server_connection_terminated(prte_proc_t *proc)
+/* Does this assemblage name any proc of this job? */
+static bool names_job(prte_pmix_server_connection_t *cptr, const pmix_nspace_t nspace)
+{
+    size_t n;
+
+    for (n = 0; n < cptr->nmembers; n++) {
+        if (same_nspace(cptr->members[n].nspace, nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Who is owed the news that this proc has gone - or, with by_job, that its
+ * job has.
+ *
+ * A proc can belong to more than one assemblage - a spawned job is connected
+ * to its parent by the spawn itself, and the two may then connect explicitly
+ * as well - and its departure is one event, not one per assemblage.  Address
+ * it to the union of the memberships, so everyone who was promised the news
+ * gets it exactly once.
+ *
+ * An assemblage already marked terminating is left out.  The sweep in
+ * connection_job_failed() is killing every live member of it and has told
+ * them why, and each proc coming down with it would otherwise announce itself
+ * to an audience that is dying alongside it - one DVM-wide broadcast per
+ * proc, to nobody who can use it.
+ *
+ * Returns the number of targets in *out, which the caller frees. */
+static size_t departure_targets(const pmix_proc_t *proc, bool by_job, pmix_proc_t **out)
 {
     prte_pmix_server_connection_t *cptr;
     pmix_proc_t *targets = NULL;
     size_t ntargets = 0, cap = 0, i, j;
     bool have;
 
-    if (!registry_live() ||
-        0 == pmix_list_get_size(&prte_pmix_server_globals.connections)) {
-        return;
-    }
-    /* nobody is left to hear it, and the DVM is on its way out */
-    if (prte_finalizing || prte_dvm_abort_ordered || prte_prteds_term_ordered) {
-        return;
-    }
-
-    /* A proc can belong to more than one assemblage - a spawned job is
-     * connected to its parent by the spawn itself, and the two may then
-     * connect explicitly as well - and its departure is one event, not one
-     * per assemblage.  Address it to the union of the memberships, so
-     * everyone who was promised the news gets it exactly once. */
     PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
                       prte_pmix_server_connection_t) {
-        if (!connection_covers(cptr, &proc->name)) {
+        if (cptr->terminating) {
+            continue;
+        }
+        if (by_job ? !names_job(cptr, proc->nspace) : !connection_covers(cptr, proc)) {
             continue;
         }
         if (ntargets + cptr->ncollapsed > cap) {
@@ -495,14 +591,231 @@ void prte_pmix_server_connection_terminated(prte_proc_t *proc)
             }
         }
     }
+    *out = targets;
+    return ntargets;
+}
 
-    if (0 < ntargets) {
-        notify_assemblage(targets, ntargets, PMIX_ERR_PROC_TERM_WO_SYNC,
-                          &proc->name, proc->exit_code);
+/* Two target lists address the same members.  Neither holds a repeat - a
+ * departure_targets() union never does - so equal sizes and one inclusion are
+ * enough. */
+static bool same_targets(const pmix_proc_t *a, size_t na, const pmix_proc_t *b, size_t nb)
+{
+    size_t i, j;
+    bool found;
+
+    if (na != nb) {
+        return false;
     }
-    if (NULL != targets) {
+    for (i = 0; i < na; i++) {
+        found = false;
+        for (j = 0; j < nb; j++) {
+            if (same_proc(&a[i], &b[j])) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Has the master ordered this job down?  Its departures are then known to be
+ * coming, all of them, and are held for the job's end - see
+ * prte_pmix_server_connection_teardown(). */
+static bool teardown_ordered(const pmix_nspace_t nspace)
+{
+    int i;
+
+    for (i = 0; NULL != prte_pmix_server_globals.teardowns &&
+                NULL != prte_pmix_server_globals.teardowns[i]; i++) {
+        if (same_nspace(prte_pmix_server_globals.teardowns[i], nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void teardown_done(const pmix_nspace_t nspace)
+{
+    int i, argc;
+
+    for (i = 0; NULL != prte_pmix_server_globals.teardowns &&
+                NULL != prte_pmix_server_globals.teardowns[i]; i++) {
+        if (same_nspace(prte_pmix_server_globals.teardowns[i], nspace)) {
+            argc = PMIx_Argv_count(prte_pmix_server_globals.teardowns);
+            pmix_argv_delete(&argc, &prte_pmix_server_globals.teardowns, i, 1);
+            return;
+        }
+    }
+}
+
+/* Send one set of departures.  A set holding every proc of its job is
+ * announced as the job's wildcard, which is what lets a whole job's exit
+ * reach its assemblage as one event; the exit code travels only when every
+ * proc in the set shares it. */
+static void announce(prte_pmix_server_departure_t *dptr)
+{
+    prte_job_t *jdata;
+    pmix_proc_t whole;
+    int exit_code = dptr->exit_uniform ? dptr->exit_code : -1;
+
+    jdata = prte_get_job_data_object(dptr->nspace);
+    if (1 < dptr->nprocs && NULL != jdata &&
+        dptr->nprocs == (size_t) jdata->num_procs) {
+        PMIX_LOAD_PROCID(&whole, dptr->nspace, PMIX_RANK_WILDCARD);
+        notify_assemblage(dptr->targets, dptr->ntargets, PMIX_ERR_PROC_TERM_WO_SYNC,
+                          &whole, 1, exit_code);
+    } else {
+        notify_assemblage(dptr->targets, dptr->ntargets, PMIX_ERR_PROC_TERM_WO_SYNC,
+                          dptr->procs, dptr->nprocs, exit_code);
+    }
+}
+
+/* Announce the departures that are waiting: with no nspace, every set not
+ * held for its job's end; with one, every set of that job, held or not.  Sets
+ * go out in the order they were opened. */
+static void flush_departures(const char *nspace)
+{
+    prte_pmix_server_departure_t *dptr, *next;
+    bool quiet = (prte_finalizing || prte_dvm_abort_ordered || prte_prteds_term_ordered);
+
+    PMIX_LIST_FOREACH_SAFE(dptr, next, &prte_pmix_server_globals.departures,
+                           prte_pmix_server_departure_t) {
+        if (NULL == nspace ? dptr->held : !same_nspace(dptr->nspace, nspace)) {
+            continue;
+        }
+        pmix_list_remove_item(&prte_pmix_server_globals.departures, &dptr->super);
+        if (!quiet) {
+            /* nobody is left to hear it once the DVM is on its way out */
+            announce(dptr);
+        }
+        PMIX_RELEASE(dptr);
+    }
+}
+
+static void flush_cb(int fd, short args, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
+
+    flush_queued = false;
+    if (registry_live()) {
+        flush_departures(NULL);
+    }
+}
+
+/* Announce what has gathered once the current pass of the event loop is done.
+ *
+ * A daemon reports the normal ends of its procs in one message per job, sent
+ * once all of that job's local procs have gone, and the master activates a
+ * termination for each proc in it back to back.  An event activated now runs
+ * after every one of those, so the whole report reaches the assemblage as one
+ * event per audience rather than one per proc - and adds no delay, since it
+ * fires as soon as the loop comes round. */
+static void schedule_flush(void)
+{
+    if (flush_queued) {
+        return;
+    }
+    flush_queued = true;
+    prte_event_set(prte_event_base, &flush_ev, -1, PRTE_EV_WRITE, flush_cb, NULL);
+    prte_event_active(&flush_ev, PRTE_EV_WRITE, 1);
+}
+
+void prte_pmix_server_connection_terminated(prte_proc_t *proc)
+{
+    prte_pmix_server_departure_t *dptr, *match = NULL;
+    pmix_proc_t *targets = NULL, *tmp;
+    size_t ntargets;
+    bool held;
+
+    if (!registry_live() ||
+        0 == pmix_list_get_size(&prte_pmix_server_globals.connections)) {
+        return;
+    }
+    /* nobody is left to hear it, and the DVM is on its way out */
+    if (prte_finalizing || prte_dvm_abort_ordered || prte_prteds_term_ordered) {
+        return;
+    }
+
+    ntargets = departure_targets(&proc->name, false, &targets);
+    if (0 == ntargets) {
+        if (NULL != targets) {
+            free(targets);
+        }
+        return;
+    }
+
+    /* Departures are gathered into sets that share both a job and an
+     * audience, and each set is announced as one event.  The audience is part
+     * of the key, not just the job: two ranks of one job can belong to
+     * different assemblages, and an event naming a proc goes to everyone in
+     * its range, so folding them together would tell a member about a proc it
+     * was never connected to.  A spurious PROC_TERM_WO_SYNC is not harmless -
+     * an Open MPI process built without fault tolerance aborts on one.
+     *
+     * A job the master has ordered down keeps its departures in a set of its
+     * own, held until the job has ended. */
+    held = teardown_ordered(proc->name.nspace);
+    PMIX_LIST_FOREACH(dptr, &prte_pmix_server_globals.departures,
+                      prte_pmix_server_departure_t) {
+        if (dptr->held == held && same_nspace(dptr->nspace, proc->name.nspace) &&
+            same_targets(dptr->targets, dptr->ntargets, targets, ntargets)) {
+            match = dptr;
+            break;
+        }
+    }
+    if (NULL == match) {
+        match = PMIX_NEW(prte_pmix_server_departure_t);
+        PMIX_LOAD_NSPACE(match->nspace, proc->name.nspace);
+        match->targets = targets;
+        match->ntargets = ntargets;
+        match->held = held;
+        match->exit_code = proc->exit_code;
+        targets = NULL;
+        pmix_list_append(&prte_pmix_server_globals.departures, &match->super);
+    } else {
         free(targets);
     }
+    if (match->nprocs == match->cap) {
+        tmp = (pmix_proc_t *) realloc(match->procs,
+                                      (match->cap + 8) * sizeof(pmix_proc_t));
+        if (NULL == tmp) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return;
+        }
+        match->procs = tmp;
+        match->cap += 8;
+    }
+    PMIX_XFER_PROCID(&match->procs[match->nprocs], &proc->name);
+    match->nprocs++;
+    if (match->exit_code != proc->exit_code) {
+        match->exit_uniform = false;
+    }
+
+    if (!held) {
+        schedule_flush();
+    }
+}
+
+void prte_pmix_server_connection_teardown(const pmix_nspace_t nspace)
+{
+    if (!registry_live() || PMIX_NSPACE_INVALID(nspace) ||
+        0 == pmix_list_get_size(&prte_pmix_server_globals.connections) ||
+        teardown_ordered(nspace)) {
+        return;
+    }
+    PMIx_Argv_append_nosize(&prte_pmix_server_globals.teardowns, nspace);
+}
+
+void prte_pmix_server_connection_job_ended(prte_job_t *jdata)
+{
+    if (!registry_live() || NULL == jdata) {
+        return;
+    }
+    flush_departures(jdata->nspace);
+    teardown_done(jdata->nspace);
 }
 
 /* A job has launched successfully.  If it was spawned by an application
@@ -582,12 +895,78 @@ static bool nspace_condemned(char **condemned, const pmix_nspace_t nspace)
     return false;
 }
 
+/* The failure that is bringing this job down, and who is owed the news.
+ *
+ * Every other proc of the job is being killed on the master's orders, and
+ * its departure is either held for the job's end or - where the sweep below
+ * condemns its assemblages - not announced at all.  So this one cannot wait
+ * for its own termination: by then it would be suppressed along with the
+ * rest, and it is the only departure naming the job where the trouble began
+ * (the sweep's JOB_TERM_WO_SYNC events name the jobs it kills, never this
+ * one).
+ *
+ * The culprit is PRTE_JOB_ABORTED_PROC, which every abort arm of the error
+ * manager sets before terminating the job.  One that has already terminated
+ * was announced as it went.  A job that failed as a whole has no culprit, and
+ * when the sweep will silence its departures it is announced as a job.
+ *
+ * Who is owed it has to be found before the sweep, which marks every
+ * assemblage it condemns as terminating - and departure_targets() passes
+ * those by.  It is sent after: see prte_pmix_server_connection_job_failed(). */
+typedef struct {
+    pmix_status_t event;
+    pmix_proc_t affected;
+    int exit_code;
+    pmix_proc_t *targets;
+    size_t ntargets;
+} prte_pmix_server_culprit_t;
+
+static void find_culprit(const pmix_nspace_t nspace, prte_pmix_server_culprit_t *culprit)
+{
+    prte_job_t *jdata;
+    prte_proc_t *pptr = NULL;
+
+    culprit->targets = NULL;
+    culprit->ntargets = 0;
+
+    jdata = prte_get_job_data_object(nspace);
+    if (NULL != jdata &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, (void **) &pptr,
+                           PMIX_POINTER) &&
+        NULL != pptr && same_nspace(pptr->name.nspace, nspace)) {
+        if (PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_RECORDED)) {
+            return;
+        }
+        culprit->event = PMIX_ERR_PROC_TERM_WO_SYNC;
+        PMIX_XFER_PROCID(&culprit->affected, &pptr->name);
+        culprit->exit_code = pptr->exit_code;
+        culprit->ntargets = departure_targets(&pptr->name, false, &culprit->targets);
+    } else if (prte_pmix_server_globals.terminate_connected) {
+        culprit->event = PMIX_ERR_JOB_TERM_WO_SYNC;
+        PMIX_LOAD_PROCID(&culprit->affected, nspace, PMIX_RANK_WILDCARD);
+        culprit->exit_code = -1;
+        culprit->ntargets = departure_targets(&culprit->affected, true, &culprit->targets);
+    }
+}
+
+static void announce_culprit(prte_pmix_server_culprit_t *culprit)
+{
+    if (0 < culprit->ntargets) {
+        notify_assemblage(culprit->targets, culprit->ntargets, culprit->event,
+                          &culprit->affected, 1, culprit->exit_code);
+    }
+    free(culprit->targets);
+    culprit->targets = NULL;
+    culprit->ntargets = 0;
+}
+
 void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
 {
     prte_pmix_server_connection_t *cptr;
+    prte_pmix_server_culprit_t culprit;
     prte_job_t *jptr;
     pmix_proc_t target;
-    pmix_pointer_array_t procs;
+    pmix_pointer_array_t procs, told;
     prte_proc_t *pobj;
     char **condemned = NULL;
     const char *cause;
@@ -595,7 +974,8 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
     bool swept;
     int i;
 
-    if (!registry_live() || !prte_pmix_server_globals.terminate_connected) {
+    if (!registry_live() ||
+        0 == pmix_list_get_size(&prte_pmix_server_globals.connections)) {
         return;
     }
     if (prte_finalizing || prte_dvm_abort_ordered || prte_prteds_term_ordered) {
@@ -603,8 +983,25 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
         return;
     }
 
+    /* what was already owed goes out ahead of the news of this failure */
+    flush_departures(NULL);
+    find_culprit(nspace, &culprit);
+    /* and the rest of the job is coming down on our orders */
+    prte_pmix_server_connection_teardown(nspace);
+
+    if (!prte_pmix_server_globals.terminate_connected) {
+        /* the failed job's own kill is already on its way, and nobody else
+         * is to be killed - so the news can go now */
+        announce_culprit(&culprit);
+        return;
+    }
+
     /* the closure starts with the job the failure actually happened in */
     PMIx_Argv_append_nosize(&condemned, nspace);
+    /* and the assemblage to tell of each job it then condemns: told[i] is
+     * told of condemned[i + 1], once every kill has been ordered */
+    PMIX_CONSTRUCT(&told, pmix_pointer_array_t);
+    pmix_pointer_array_init(&told, 4, INT_MAX, 4);
 
     /* Fate sharing has to be transitive.  Killing a job because a job it was
      * connected to failed is itself the loss of that job, so whatever *it*
@@ -648,7 +1045,8 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
 
             /* the rest of this assemblage is coming down with it, and each of
              * those jobs will report its own procs failing as it goes - none of
-             * which should drive this again */
+             * which should drive this again, or be announced to an assemblage
+             * that is being told here why it is going (departure_targets()) */
             cptr->terminating = true;
             swept = true;
 
@@ -678,10 +1076,9 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
                 prte_show_help(PRTE_JOB_NSPACE(jptr), "help-prted.txt", "connected-term", true,
                                cause, jptr->nspace);
 
-                PMIX_LOAD_PROCID(&target, jptr->nspace, PMIX_RANK_WILDCARD);
-                notify_assemblage(cptr->members, cptr->nmembers,
-                                  PMIX_ERR_JOB_TERM_WO_SYNC, &target, -1);
+                pmix_pointer_array_add(&told, cptr);
 
+                PMIX_LOAD_PROCID(&target, jptr->nspace, PMIX_RANK_WILDCARD);
                 PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
                 pmix_pointer_array_init(&procs, 1, 1, 1);
                 pobj = PMIX_NEW(prte_proc_t);
@@ -699,6 +1096,22 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
         }
     } while (swept);
 
+    /* Only now does anybody hear why.  Every process told is one this sweep
+     * is killing, and the news travels down the same daemon tree as its
+     * kill, so sent first it could arrive first - and a process that learns
+     * its peer failed can act on it, run to the end of its own work, and be
+     * reported as having finished when the host was to bring it down.
+     * Behind the kills, it reaches nobody who has not already been given
+     * their orders.  (Nothing here removes an assemblage, so told[] still
+     * points into the list.) */
+    announce_culprit(&culprit);
+    for (i = 0; NULL != condemned[i] && NULL != condemned[i + 1]; i++) {
+        cptr = (prte_pmix_server_connection_t *) pmix_pointer_array_get_item(&told, i);
+        PMIX_LOAD_PROCID(&target, condemned[i + 1], PMIX_RANK_WILDCARD);
+        notify_assemblage(cptr->members, cptr->nmembers, PMIX_ERR_JOB_TERM_WO_SYNC,
+                          &target, 1, -1);
+    }
+    PMIX_DESTRUCT(&told);
     PMIx_Argv_free(condemned);
 }
 
@@ -711,6 +1124,10 @@ void prte_pmix_server_connection_purge(const pmix_nspace_t nspace)
     if (!registry_live()) {
         return;
     }
+
+    /* anything of this job's still waiting was owed when its procs went */
+    flush_departures(nspace);
+    teardown_done(nspace);
 
     /* An assemblage outlives the departure of one member's job: the members
      * that remain are still connected to each other, and still owed an event
