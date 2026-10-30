@@ -3912,6 +3912,50 @@ test_prted() {
     fi
     cleanup_swarm
 
+    banner "prted: a tool may not add a rank to an application job"
+    # A tool started by one of a job's own processes inherits the job's PMIx
+    # identity, and PMIx lets it claim an unused rank of that job. Attached
+    # through a non-master daemon, the attach reaches the master as
+    # PRTE_PLM_TOOL_ATTACHED_CMD, which used to add the rank to the job. A
+    # tool's departure retires its rank only in a tool's namespace, so the job
+    # could never complete and prun waited for the life of the DVM. The master
+    # now refuses the attach with PMIX_ERR_EXISTS - asserted exactly, since a
+    # tool that cannot connect at all would also fail to initialize. The job
+    # runs on node2 so that the tool attaches through node2's daemon rather
+    # than the master's. The second case is the attach that must still work:
+    # a tool taking the rank its job script already has, as a prun started
+    # from a job script does. The job's process is a shell, which holds no
+    # PMIx connection; were the rank connected, PMIx would refuse the tool
+    # itself and connect it under a fresh name, never asking PRRTE. So the
+    # case checks that the tool kept the job's name.
+    if ! RUN "test -x $ROLETOOL"; then
+        skp "roletool not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2'; then
+        bad "could not start a DVM for the tool-rank test"
+    else
+        out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout 20 $ROLETOOL - impersonate \$PMIX_NAMESPACE 7; true' 2>&1; echo RC=\$?")
+        echo "$out" | grep -q 'ROLE INIT PMIX_ERR_EXISTS' \
+            && ok "a tool naming an unused rank of an application job was refused" \
+            || bad "a tool naming an unused rank of an application job was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'RC=0' \
+            && ok "...and the job completed" \
+            || bad "...but the job never completed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'echo JOB \$PMIX_NAMESPACE \$PMIX_RANK; timeout 20 $ROLETOOL - impersonate \$PMIX_NAMESPACE \$PMIX_RANK; true' 2>&1; echo RC=\$?")
+        job=$(echo "$out" | tr -d '\r' | sed -n 's/^JOB //p')
+        name=$(echo "$out" | tr -d '\r' | sed -n 's/^ROLE NAME //p')
+        echo "$out" | grep -q 'ROLE INIT PMIX_SUCCESS' \
+            && ok "a tool taking the rank its job script has still attaches" \
+            || bad "a tool taking the rank its job script has was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        [ -n "$job" ] && [ "$job" = "$name" ] \
+            && ok "...under the job's own name" \
+            || bad "...but not under the job's name ('$job' vs '$name'), so PRRTE was never asked"
+        echo "$out" | grep -q 'RC=0' \
+            && ok "...and that job completed" \
+            || bad "...but that job never completed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "prted: a malformed --singleton is refused, not a crash"
     # The value is handed straight down to PMIx_server_init as PMIX_SINGLETON,
     # which faults on anything that is not "<nspace>.<rank>", so prte has to
