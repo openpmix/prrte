@@ -1364,11 +1364,6 @@ void pmix_server_start(void)
          * state and the session table live only here */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_QUERY,
                       PRTE_RML_PERSISTENT, pmix_server_query_request, NULL);
-        /* setup recv for the membership of connected assemblages, which is
-         * held here because we are the one process that sees every proc in
-         * the DVM terminate */
-        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_CONNECTED,
-                      PRTE_RML_PERSISTENT, prte_pmix_server_connection_recv, NULL);
     }
 }
 
@@ -1398,7 +1393,6 @@ void pmix_server_finalize(void)
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_QUERY);
-        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_CONNECTED);
     }
 
     /* finalize our local data server */

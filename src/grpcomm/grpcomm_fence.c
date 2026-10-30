@@ -51,8 +51,10 @@ static int fence_sig_pack(pmix_data_buffer_t *bkt,
 static int fence_sig_unpack(pmix_data_buffer_t *buffer,
                             prte_grpcomm_fence_signature_t **sig);
 static void check_complete(prte_grpcomm_fence_t *coll);
-static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op);
-static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op);
+static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op,
+                         prte_grpcomm_fence_purpose_t purpose);
+static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op,
+                           prte_grpcomm_fence_purpose_t *purpose);
 static bool fence_sig_same(prte_grpcomm_fence_signature_t *a,
                            prte_grpcomm_fence_signature_t *b);
 static void relcb(void *cbdata);
@@ -101,6 +103,19 @@ bool prte_grpcomm_fence_op_merge(prte_grpcomm_fence_t *coll,
         return true;
     }
     return (coll->op == incoming);
+}
+
+bool prte_grpcomm_fence_purpose_merge(prte_grpcomm_fence_t *coll,
+                                      prte_grpcomm_fence_purpose_t incoming)
+{
+    if (PRTE_GRPCOMM_FENCE_FOR_UNKNOWN == incoming) {
+        return true;
+    }
+    if (PRTE_GRPCOMM_FENCE_FOR_UNKNOWN == coll->purpose) {
+        coll->purpose = incoming;
+        return true;
+    }
+    return (coll->purpose == incoming);
 }
 
 /* Two signatures name the same collective when they name the same procs in
@@ -308,13 +323,17 @@ static int fence_gen_unpack(pmix_data_buffer_t *buffer, uint32_t *gen)
 /* The operation rides every contribution as a byte of its own rather than as
  * one more optional directive, because unlike the timeout and the collective
  * status it is not optional: every contribution has an operation, and a reader
- * that has to cope with its absence cannot tell "barrier" from "nobody said". */
-static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op)
+ * that has to cope with its absence cannot tell "barrier" from "nobody said".
+ * The purpose follows it as a second byte, for the same reason. */
+static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op,
+                         prte_grpcomm_fence_purpose_t purpose)
 {
-    uint8_t val = (uint8_t) op;
+    uint8_t val[2];
     pmix_status_t rc;
 
-    rc = PMIx_Data_pack(NULL, bkt, &val, 1, PMIX_UINT8);
+    val[0] = (uint8_t) op;
+    val[1] = (uint8_t) purpose;
+    rc = PMIx_Data_pack(NULL, bkt, val, 2, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -322,17 +341,26 @@ static int fence_op_pack(pmix_data_buffer_t *bkt, prte_grpcomm_fence_op_t op)
     return PRTE_SUCCESS;
 }
 
-static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op)
+static int fence_op_unpack(pmix_data_buffer_t *buffer, prte_grpcomm_fence_op_t *op,
+                           prte_grpcomm_fence_purpose_t *purpose)
 {
-    uint8_t val;
-    int32_t cnt = 1;
+    uint8_t vals[2], val;
+    int32_t cnt = 2;
     pmix_status_t rc;
 
-    rc = PMIx_Data_unpack(NULL, buffer, &val, &cnt, PMIX_UINT8);
+    rc = PMIx_Data_unpack(NULL, buffer, vals, &cnt, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
+    /* a purpose is screened like an operation, and UNKNOWN is never sent */
+    if (PRTE_GRPCOMM_FENCE_FOR_FENCE != (prte_grpcomm_fence_purpose_t) vals[1] &&
+        PRTE_GRPCOMM_FENCE_FOR_CONNECT != (prte_grpcomm_fence_purpose_t) vals[1] &&
+        PRTE_GRPCOMM_FENCE_FOR_DISCONNECT != (prte_grpcomm_fence_purpose_t) vals[1]) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *purpose = (prte_grpcomm_fence_purpose_t) vals[1];
+    val = vals[0];
     /* screen it before it is compared: a value no release ever assigned would
      * otherwise agree with nothing and disagree with nothing, and be taken for
      * a mismatch by every daemon that saw it - which reports a user error for
@@ -382,7 +410,8 @@ static void set_nexpected(prte_grpcomm_fence_t *coll)
 
 int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
                               const pmix_info_t info[], size_t ninfo, char *data,
-                              size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata)
+                              size_t ndata, prte_grpcomm_fence_purpose_t purpose,
+                              pmix_modex_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_fence_caddy_t *cd;
 
@@ -402,6 +431,8 @@ int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
     cd->ninfo = ninfo;
     cd->data = data;
     cd->ndata = ndata;
+    cd->purpose = (PRTE_GRPCOMM_FENCE_FOR_UNKNOWN == purpose) ? PRTE_GRPCOMM_FENCE_FOR_FENCE
+                                                              : purpose;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
 
@@ -719,7 +750,8 @@ static void fence(int sd, short args, void *cbdata)
      * daemon is a participant like any other, and if it is the second one to
      * reach a tracker its answer has to agree with the first. */
     if (!prte_grpcomm_fence_op_merge(coll,
-                                     prte_grpcomm_fence_op_from_info(cd->info, cd->ninfo))) {
+                                     prte_grpcomm_fence_op_from_info(cd->info, cd->ninfo)) ||
+        !prte_grpcomm_fence_purpose_merge(coll, cd->purpose)) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt", "fence-op-mismatch", true,
                        prte_process_info.nodename);
         if (PMIX_SUCCESS == coll->status) {
@@ -739,7 +771,7 @@ static void fence(int sd, short args, void *cbdata)
     }
 
     /* say which operation this contribution belongs to */
-    rc = fence_op_pack(relay, coll->op);
+    rc = fence_op_pack(relay, coll->op, coll->purpose);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
@@ -923,6 +955,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
      * a compiler that cannot see across the unpack has to assume they might
      * be read, and if one ever were, silence is the only safe answer. */
     prte_grpcomm_fence_op_t op = PRTE_GRPCOMM_FENCE_OP_UNKNOWN;
+    prte_grpcomm_fence_purpose_t purpose = PRTE_GRPCOMM_FENCE_FOR_UNKNOWN;
     uint32_t gen = PRTE_GRPCOMM_FENCE_GEN_UNKNOWN;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -966,7 +999,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     /* Which operation and which round this contribution belongs to.  Both are
      * read before the tracker is looked up, because whether we want a tracker
      * at all depends on the round. */
-    rc = fence_op_unpack(buffer, &op);
+    rc = fence_op_unpack(buffer, &op, &purpose);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(sig);
@@ -1039,7 +1072,8 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     }
     PMIX_RELEASE(sig);
 
-    if (!prte_grpcomm_fence_op_merge(coll, op)) {
+    if (!prte_grpcomm_fence_op_merge(coll, op) ||
+        !prte_grpcomm_fence_purpose_merge(coll, purpose)) {
         /* The participants asked for different collectives.  Report it and
          * carry on: the contribution still has to be counted or the fence
          * never converges, and it is convergence that carries the failure
@@ -1284,6 +1318,19 @@ static int tree_gather_answer(prte_grpcomm_fence_t *coll)
                 return prte_pmix_convert_status(rc);
             }
         }
+        /* A connect or disconnect that converged here has happened, once:
+         * this is the one place in the DVM that sees each round of the
+         * collective complete exactly once, whichever daemons host its
+         * participants - so it is where the assemblage is recorded or
+         * dropped.  Doing it before the release goes out means no
+         * participant can be released, and depart, ahead of its record. */
+        if (PMIX_SUCCESS == coll->status) {
+            if (PRTE_GRPCOMM_FENCE_FOR_CONNECT == coll->purpose) {
+                prte_pmix_server_connection_record(coll->sig->signature, coll->sig->sz);
+            } else if (PRTE_GRPCOMM_FENCE_FOR_DISCONNECT == coll->purpose) {
+                prte_pmix_server_connection_drop(coll->sig->signature, coll->sig->sz);
+            }
+        }
         /* xcast copies the payload, so the buffer is still ours to free */
         rc = prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -1309,7 +1356,7 @@ static int tree_gather_answer(prte_grpcomm_fence_t *coll)
     /* the aggregate travels as a contribution like any other, so it names its
      * operation like any other - this is the merged answer for our whole
      * subtree, which is what our parent has to agree with */
-    rc = fence_op_pack(reply, coll->op);
+    rc = fence_op_pack(reply, coll->op, coll->purpose);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
