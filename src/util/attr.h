@@ -335,6 +335,11 @@ typedef uint16_t prte_job_flags_t;
                                                                        // to bind its procs' memory by, unless an app gives its own
                                                                        // (PRTE_APP_MEMBIND). Takes precedence over the
                                                                        // hwloc_default_membind MCA parameter
+#define PRTE_JOB_NO_PARENT_PROC             (PRTE_JOB_START_KEY + 139) // bool - a tool asked for this job for itself, so it has no
+                                                                       // parent process - even when the tool holds an application
+                                                                       // process's identity, as a prun in a job script does. Not
+                                                                       // linked into its requester's spawn tree, connected to it,
+                                                                       // or told it has a PMIX_PARENT_ID
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

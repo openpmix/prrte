@@ -1148,7 +1148,6 @@ release:
 
 static void cleanup_job(int sd, short args, void *cbdata)
 {
-    pmix_proc_t *nptr;
     prte_job_t *parent;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
@@ -1160,22 +1159,14 @@ static void cleanup_job(int sd, short args, void *cbdata)
         prte_plm.terminate_orteds();
     }
     if (NULL != caddy->jdata) {
-        /* if the job had a spawn parent remove it from the parents child list.
-         * Seed the pointer and check it: prte_get_attribute() returns true for
-         * a key it found even when the unload that follows failed, and the
-         * PMIX_PROC arm fails by leaving a NULL behind (PMIX_PROC_CREATE came
-         * back empty).  job_started() and ready_for_debug() read this same
-         * attribute and both guard it; these two did not. */
-        nptr = NULL;
-        if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
-            && NULL != nptr) {
-            if(NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
-            !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)){
-                pmix_list_remove_item(&parent->children, &caddy->jdata->super);
-                /* We retained the jdata before adding it to the list - maintain ref count */
-                PMIX_RELEASE(caddy->jdata);
-            }
-            PMIX_PROC_RELEASE(nptr);
+        /* if the job had a spawn parent remove it from the parents child
+         * list - asking the same question that put it there, so a job that
+         * was never linked (a tool's launch under a job's name) is not
+         * removed from a list it is not on */
+        if (NULL != (parent = prte_get_spawn_parent(caddy->jdata))) {
+            pmix_list_remove_item(&parent->children, &caddy->jdata->super);
+            /* We retained the jdata before adding it to the list - maintain ref count */
+            PMIX_RELEASE(caddy->jdata);
         }
         /* From here on, the answer to a question about this job is "not
          * found" rather than "wait" - and the difference is a hang.  A
