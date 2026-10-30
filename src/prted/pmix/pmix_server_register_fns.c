@@ -762,6 +762,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         if (NULL != parent && PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
             parent = NULL;
         }
+        /* a tool holding an application process's name is still a tool -
+         * see PRTE_JOB_NO_PARENT_PROC */
+        if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC)) {
+            parent = NULL;
+        }
         if (NULL == parent) {
             /* release it here: the tail of this function only releases it
              * when a parent was found, so every rejecting path must clean up

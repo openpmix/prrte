@@ -892,9 +892,12 @@ moveon:
         prte_set_job_session(jdata, session);
         pmix_pointer_array_add(jdata->session->jobs, jdata);
 
-        /* get the parent's job object */
-        if (NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
-            !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        /* get the parent's job object - which a job a tool asked for for
+         * itself does not have, whatever name the tool holds: linked in, a
+         * prun's step would join its job script's spawn tree and the prun
+         * would wait for its own script to end. cleanup_job() unlinks by the
+         * same answer. */
+        if (NULL != (parent = prte_get_spawn_parent(jdata))) {
             /* link the spawned job to the spawner */
             PMIX_RETAIN(jdata);
             pmix_list_append(&parent->children, &jdata->super);

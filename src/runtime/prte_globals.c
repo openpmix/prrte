@@ -285,6 +285,37 @@ prte_job_t *prte_get_job_data_object(const pmix_nspace_t job)
     return NULL;
 }
 
+/* The job a spawned job is linked under - on its children list, its spawn
+ * tree rooted where that job's is - or NULL for one with no parent job.
+ * That is the job of whoever asked for it (PRTE_JOB_LAUNCH_PROXY), never
+ * the daemons', and not the job whose name a tool holds when the tool asked
+ * for the job for itself (PRTE_JOB_NO_PARENT_PROC): a prun in a job script
+ * spawns no child of the script. A tool's own job is a parent here, as it
+ * always was - a tool's tree is rooted at the tool.
+ *
+ * Linking and unlinking both ask this, so they cannot disagree about whether
+ * a job is on a list. Returns a borrowed pointer. */
+prte_job_t *prte_get_spawn_parent(prte_job_t *jdata)
+{
+    pmix_proc_t *proxy = NULL;
+    prte_job_t *parent = NULL;
+
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &proxy,
+                            PMIX_PROC) ||
+        NULL == proxy) {
+        return NULL;
+    }
+    if (!PMIX_CHECK_NSPACE_STRICT(proxy->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        parent = prte_get_job_data_object(proxy->nspace);
+    }
+    PMIX_PROC_RELEASE(proxy);
+    if (NULL != parent && !PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) &&
+        PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC)) {
+        parent = NULL;
+    }
+    return parent;
+}
+
 int prte_set_job_data_object(prte_job_t *jdata)
 {
     prte_job_t *jptr;

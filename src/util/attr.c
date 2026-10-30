@@ -597,6 +597,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "XTERM";
         case PRTE_JOB_MEMBIND:
             return "JOB-MEMBIND";
+        case PRTE_JOB_NO_PARENT_PROC:
+            return "JOB-NO-PARENT-PROC";
         case PRTE_JOB_OWNER_UID:
             return "JOB-OWNER-UID";
         case PRTE_JOB_OWNER_GID:

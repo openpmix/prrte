@@ -3503,6 +3503,92 @@ cleanup:
 }
 
 /*
+ * prte_pmix_server_connection_spawned(): which launches have a parent
+ * process to connect to.
+ *
+ * A spawn by an application process connects the child to it.  A tool's
+ * launch does not - and a tool started from a job script holds the name of
+ * one of that job's processes, so the requester's name cannot be the test:
+ * PRTE_JOB_NO_PARENT_PROC is (issue #2862).  Connected, a failing step took
+ * the job script down with it by fate sharing.
+ */
+static int test_tool_spawn_parent(void)
+{
+    int failures = 0;
+    prte_job_t *script = NULL, *child = NULL, *step = NULL;
+    pmix_proc_t proxy;
+    bool made_array = false;
+
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
+    prte_pmix_server_globals.initialized = true;
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
+        made_array = true;
+    }
+
+    script = fate_job("unit-test-step@1");
+    child = fate_job("unit-test-step@2");
+    step = fate_job("unit-test-step@3");
+    CHECK("the job-script jobs register", NULL != script && NULL != child && NULL != step);
+    if (NULL == script || NULL == child || NULL == step) {
+        goto cleanup;
+    }
+    PMIX_LOAD_PROCID(&proxy, script->nspace, 0);
+
+    /* rank 0 of the script spawns: a child, connected to it */
+    prte_set_attribute(&child->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL,
+                       &proxy, PMIX_PROC);
+    prte_pmix_server_connection_spawned(child);
+    CHECK("a process's spawn connects the child to it",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    /* a prun the script started, under rank 0's name, launches a step */
+    prte_set_attribute(&step->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL,
+                       &proxy, PMIX_PROC);
+    prte_set_bool_attribute(&step->attributes, PRTE_JOB_NO_PARENT_PROC, PRTE_ATTR_GLOBAL, true);
+    prte_pmix_server_connection_spawned(step);
+    CHECK("a tool's launch under that same name connects nothing",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    /* ...and only the child is linked under the script: the step does not
+     * join its spawn tree, which is what kept prun waiting for its own
+     * script to end */
+    CHECK("the script is its child's spawn parent", script == prte_get_spawn_parent(child));
+    CHECK("...and not the parent of the tool's step", NULL == prte_get_spawn_parent(step));
+    /* a tool with a namespace of its own still roots its launches' tree */
+    PRTE_FLAG_SET(script, PRTE_JOB_FLAG_TOOL);
+    CHECK("a tool's own job still parents what it launches",
+          script == prte_get_spawn_parent(step));
+    PRTE_FLAG_UNSET(script, PRTE_JOB_FLAG_TOOL);
+
+cleanup:
+    if (NULL != script) {
+        pmix_pointer_array_set_item(prte_job_data, script->index, NULL);
+        PMIX_RELEASE(script);
+    }
+    if (NULL != child) {
+        pmix_pointer_array_set_item(prte_job_data, child->index, NULL);
+        PMIX_RELEASE(child);
+    }
+    if (NULL != step) {
+        pmix_pointer_array_set_item(prte_job_data, step->index, NULL);
+        PMIX_RELEASE(step);
+    }
+    prte_pmix_server_globals.initialized = false;
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.connections);
+    if (made_array) {
+        PMIX_RELEASE(prte_job_data);
+        prte_job_data = NULL;
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_tool_spawn_parent\n");
+    }
+    return failures;
+}
+
+/*
  * prte_parse_uint_option(): the numeric option values.
  *
  * strtoul() reports success and zero for a string with no digits in it, and
@@ -4146,6 +4232,7 @@ int main(void)
     failures += test_monitor_accounting();
     failures += test_connections();
     failures += test_connection_fate_sharing();
+    failures += test_tool_spawn_parent();
     failures += test_tool_registration();
     failures += test_query_qualifiers();
     failures += test_group_left();
