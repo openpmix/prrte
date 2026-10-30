@@ -316,6 +316,30 @@ prte_job_t *prte_get_spawn_parent(prte_job_t *jdata)
     return parent;
 }
 
+/* Did a tool ask for this job - a prun, say - as opposed to an application
+ * process, or the DVM itself? Such a job's results are the tool's: its output
+ * is delivered to it and its exit status returned to it, for it to act on.
+ * PRTE_JOB_DVM_JOB says the requester was a tool; prterun also marks its own
+ * job so when something launched prterun, but prterun is the requester there
+ * (the launch proxy is our own daemon), and that job is not a tool's. */
+bool prte_job_requested_by_tool(prte_job_t *jdata)
+{
+    pmix_proc_t *proxy = NULL;
+    bool tool;
+
+    if (NULL == jdata || !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_DVM_JOB)) {
+        return false;
+    }
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &proxy,
+                            PMIX_PROC) ||
+        NULL == proxy) {
+        return false;
+    }
+    tool = !PMIX_CHECK_NSPACE_STRICT(proxy->nspace, PRTE_PROC_MY_NAME->nspace);
+    PMIX_PROC_RELEASE(proxy);
+    return tool;
+}
+
 int prte_set_job_data_object(prte_job_t *jdata)
 {
     prte_job_t *jptr;

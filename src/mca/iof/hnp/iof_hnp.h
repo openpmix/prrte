@@ -95,6 +95,11 @@ void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
                                 unsigned char *data, int numbytes,
                                 pmix_rank_t already_delivered);
 
+/* The directives for handing SOURCE's output to our own PMIx server: none,
+ * or one that says to deliver it to the tools that asked for it without
+ * writing it out here. Never to be freed. */
+const pmix_info_t *prte_iof_hnp_deliver_directives(const pmix_proc_t *source, size_t *ndirs);
+
 END_C_DECLS
 
 #endif
