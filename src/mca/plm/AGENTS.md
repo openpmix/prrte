@@ -357,6 +357,14 @@ thread-safe on the progress thread) and switches on
   procs launched (pid + state); advances to `STARTED` on the first and
   `RUNNING` when `num_launched == num_procs`.
 - **`PRTE_PLM_TOOL_ATTACHED_CMD`** — register a connecting tool as a job.
+  A tool naming an existing namespace may take a rank it already has (a
+  tool started from a job script inherits one), but may add a rank only to
+  a tool's namespace: a rank added to an application job never retires, so
+  the job never completes. That attach is refused with `PMIX_ERR_EXISTS`,
+  and the tool's `PMIx_tool_init` fails with it. PMIx connects a tool again
+  under a namespace of its own only when the refused name is the one in its
+  environment, which here means an environment naming a rank the job does
+  not have.
 - **`PRTE_PLM_TOOL_DEPARTED_CMD`** — the partner of the above: a tool the
   master registered has gone. Only the master holds a tool's job object, so
   a daemon the tool connected *through* has nothing local to retire and

@@ -18,6 +18,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -527,15 +528,29 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         if (NULL != jdata) {
             // we do - check if we already have this proc
             proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, name.rank);
-            if (NULL == proc) {
-                // new rank for this tool - add it
-                proc = PMIX_NEW(prte_proc_t);
-                memcpy(&proc->name, &name, sizeof(pmix_proc_t));
-                proc->state = PRTE_PROC_STATE_RUNNING;
-                pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
-                jdata->num_procs++;
+            if (NULL == proc && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                /* A tool may take a rank a job already has - one started
+                 * from a job script inherits it - but may not add one: a
+                 * tool's departure retires its rank only in a tool's
+                 * namespace, so the job could never complete. EXISTS makes
+                 * a tool that took its name from its environment connect
+                 * again under a namespace of its own. */
+                PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
+                                     "%s refusing tool %s: %s is not a tool's namespace",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&name),
+                                     PRTE_JOBID_PRINT(name.nspace)));
+                ret = PMIX_ERR_EXISTS;
+            } else {
+                if (NULL == proc) {
+                    // new rank for this tool - add it
+                    proc = PMIX_NEW(prte_proc_t);
+                    memcpy(&proc->name, &name, sizeof(pmix_proc_t));
+                    proc->state = PRTE_PROC_STATE_RUNNING;
+                    pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+                    jdata->num_procs++;
+                }
+                ret = PMIX_SUCCESS;
             }
-            ret = PMIX_SUCCESS;
 
         } else {
             // unpack the cmd line
