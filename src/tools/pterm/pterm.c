@@ -444,6 +444,22 @@ int main(int argc, char *argv[])
         PRTE_PMIX_WAIT_THREAD(&lock);
         rc = lock.status;
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
+        /* The DVM's acknowledgement can be lost on its way out: it answers
+         * and then halts, and a PMIx server that finalizes before the
+         * queued answer is written drops it - so the request fails with
+         * the connection, as though the DVM had refused. It went away
+         * because we told it to, which is what we wait for below anyway:
+         * losing the connection is how we know it is gone. Every PMIx
+         * through 7.0 can do this, intermittently and mostly under load,
+         * and CI caught it. */
+        if (PMIX_ERR_COMM_FAILURE == rc || PMIX_ERR_LOST_CONNECTION == rc ||
+            PMIX_ERR_UNREACH == rc) {
+            if (verbose) {
+                pmix_output(0, "PTERM: the DVM went away before acknowledging (%s)",
+                            PMIx_Error_string(rc));
+            }
+            rc = PMIX_SUCCESS;
+        }
         if (PMIX_SUCCESS == rc || PMIX_OPERATION_SUCCEEDED == rc) {
             /* wait for the connection to depart, which is how we know the
              * DVM actually went away and not just that it heard us */
