@@ -1150,11 +1150,15 @@ design:
   [`src/runtime/AGENTS.md`](../../runtime/AGENTS.md)) is collapsed: a tool
   namespace gains ranks after it connects, and its wildcard would cover
   them.
-- **A record outlives one member's job.** The survivors are still connected
-  to each other and still owed an event apiece, so a record is dropped only
-  by a disconnect or when nothing named in it exists any more
-  (`prte_pmix_server_connection_purge()`, from
-  `prte_pmix_server_job_departed()`).
+- **A record outlives one member's job, but not the last but one.** While
+  two or more of its jobs remain they are still connected to each other and
+  still owed an event apiece. Once a record that named several jobs is down
+  to one, it is dropped (`prte_pmix_server_connection_purge()`, from
+  `prte_pmix_server_job_departed()`): kept, it would announce each of that
+  job's procs to the rest of its own job, which is how a spawning parent's
+  ranks went on broadcasting their exits after the children had gone. A
+  record that only ever named one job lasts until that job has gone.
+  Otherwise a record is dropped only by a disconnect.
 
 Two things follow from that record, and they are the rest of the definition:
 

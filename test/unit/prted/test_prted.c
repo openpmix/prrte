@@ -2687,9 +2687,9 @@ static void add_procs(prte_job_t *jdata, int n)
 static int test_connections(void)
 {
     int failures = 0;
-    pmix_proc_t members[2], other[2], proc, listed[4];
+    pmix_proc_t members[2], other[2], trio[3], proc, listed[4];
     prte_proc_t pdata;
-    prte_job_t *jdata;
+    prte_job_t *jdata, *third;
     prte_pmix_server_connection_t *cptr;
     bool made_array = false;
 
@@ -2739,14 +2739,43 @@ static int test_connections(void)
     CHECK("a different set does not drop this one",
           1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
 
-    /* a job of the assemblage ends, but the other is still running: the
-     * survivors are still connected to each other and still owed an event
-     * apiece, so the record has to stay */
+    /* a job of a two-job assemblage ends while the other runs on: the
+     * connection between them is over, and the survivor is not connected to
+     * itself - kept, the record would broadcast each of its procs' exits to
+     * the rest of its own job */
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-conn@2");
     CHECK("the surviving job registers", PRTE_SUCCESS == prte_set_job_data_object(jdata));
     prte_pmix_server_connection_purge(members[0].nspace);
-    CHECK("a connection outlives one member's job",
+    CHECK("a connection between two jobs ends with one of them",
+          0 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    /* with three, the two that remain are still connected to each other and
+     * still owed an event apiece */
+    PMIX_LOAD_PROCID(&trio[0], "unit-test-conn@1", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&trio[1], "unit-test-conn@2", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&trio[2], "unit-test-conn@3", PMIX_RANK_WILDCARD);
+    third = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(third->nspace, "unit-test-conn@3");
+    CHECK("the third job registers", PRTE_SUCCESS == prte_set_job_data_object(third));
+    prte_pmix_server_connection_record(trio, 3);
+    prte_pmix_server_connection_purge(trio[0].nspace);
+    CHECK("a connection outlives one member's job while two remain",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+    pmix_pointer_array_set_item(prte_job_data, third->index, NULL);
+    PMIX_RELEASE(third);
+    prte_pmix_server_connection_purge(trio[2].nspace);
+    CHECK("and ends when only one does",
+          0 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    /* a connection within one job never had another job in it: it lasts
+     * while that job does, and the end of an unrelated job leaves it alone */
+    PMIX_LOAD_PROCID(&other[0], "unit-test-conn@2", 0);
+    PMIX_LOAD_PROCID(&other[1], "unit-test-conn@2", 1);
+    prte_pmix_server_connection_record(other, 2);
+    PMIX_LOAD_PROCID(&proc, "unit-test-conn@9", 0);
+    prte_pmix_server_connection_purge(proc.nspace);
+    CHECK("a connection within one job outlives another job's end",
           1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
 
     /* ...and once nothing named in it is left, it has nobody to serve */
@@ -3179,6 +3208,7 @@ static int test_connection_departures(void)
     int failures = 0;
     pmix_proc_t members[2];
     prte_job_t *a = NULL, *b = NULL, *p = NULL, *c = NULL, *x = NULL, *y = NULL;
+    prte_job_t *s = NULL, *k = NULL;
     prte_proc_t *culprit;
     prte_plm_base_module_t saved_plm;
     bool made_array = false;
@@ -3350,6 +3380,30 @@ static int test_connection_departures(void)
     CHECK("no job is killed without fate sharing", NULL == fate_killed ||
           !fate_was_killed(c->nspace));
 
+    /* a spawn: once the children have gone, the parent is connected to
+     * nobody, and its own procs' exits are nobody else's news */
+    s = dep_job("unit-test-dep@7", 1);
+    k = dep_job("unit-test-dep@8", 2);
+    if (NULL == s || NULL == k) {
+        CHECK("the spawn jobs register", false);
+        goto cleanup;
+    }
+    PMIX_LOAD_PROCID(&members[0], s->nspace, 0);
+    PMIX_LOAD_PROCID(&members[1], k->nspace, PMIX_RANK_WILDCARD);
+    prte_pmix_server_connection_record(members, 2);
+    dep_nevents = 0;
+    for (r = 0; r < 2; r++) {
+        dep_depart(k, r, 0);
+    }
+    dep_drain();
+    CHECK("the children's exit is announced to the parent", 1 == dep_nevents);
+    dep_drop_job(k);
+    k = NULL;
+    prte_pmix_server_connection_purge(members[1].nspace);
+    dep_depart(s, 0, 0);
+    dep_drain();
+    CHECK("the parent's own exit afterwards is not", 1 == dep_nevents);
+
 cleanup:
     prte_plm = saved_plm;
     PMIx_Argv_free(fate_killed);
@@ -3361,6 +3415,8 @@ cleanup:
     dep_drop_job(c);
     dep_drop_job(x);
     dep_drop_job(y);
+    dep_drop_job(s);
+    dep_drop_job(k);
     prte_pmix_server_globals.initialized = false;
     prte_pmix_server_globals.terminate_connected = true;
     prte_pmix_server_connection_finalize();
