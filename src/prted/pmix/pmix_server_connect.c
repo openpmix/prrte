@@ -192,13 +192,26 @@ static bool same_membership(prte_pmix_server_connection_t *cptr,
     return true;
 }
 
-/* Does this list name every proc of this job?
+/* Is rank r of this job a proc whose termination has not been recorded?
+ * Not its state: the errmgr writes a failed proc's state before its
+ * termination is recorded and its departure reported. */
+static bool live_proc(prte_job_t *jdata, int r)
+{
+    prte_proc_t *proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, r);
+
+    return (NULL != proc && !PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_RECORDED));
+}
+
+/* Does this list name every live proc of this job?
  *
  * PRRTE grows an allocation, never a job: every spawn is a new namespace,
  * and a job's table is complete once it is mapped, before anything has been
- * launched to connect.  Naming all of its procs is then naming the job.  Two
- * kinds of namespace do gain ranks later, and are never collapsed: a tool's,
- * as further tool processes attach, and the daemons', on a grow. */
+ * launched to connect.  A terminated proc is never relaunched, so the procs
+ * whose termination is not yet recorded are all the job's wildcard can still
+ * reach, and naming them is naming the job - which lets the survivors of a
+ * job that some procs have left collapse too.  Two kinds of namespace do
+ * gain ranks later, and are never collapsed: a tool's, as further tool
+ * processes attach, and the daemons', on a grow. */
 static bool names_whole_job(const pmix_proc_t *members, size_t nmembers,
                             const pmix_nspace_t nspace)
 {
@@ -215,7 +228,7 @@ static bool names_whole_job(const pmix_proc_t *members, size_t nmembers,
     }
     size = jdata->procs->size;
     for (r = 0; r < size; r++) {
-        if (NULL != pmix_pointer_array_get_item(jdata->procs, r)) {
+        if (live_proc(jdata, r)) {
             ++nprocs;
         }
     }
@@ -232,7 +245,7 @@ static bool names_whole_job(const pmix_proc_t *members, size_t nmembers,
             continue;
         }
         r = (int) members[i].rank;
-        if (!seen[r] && NULL != pmix_pointer_array_get_item(jdata->procs, r)) {
+        if (!seen[r] && live_proc(jdata, r)) {
             seen[r] = true;
             ++nseen;
         }
