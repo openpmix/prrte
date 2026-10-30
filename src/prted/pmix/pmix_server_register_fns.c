@@ -1185,7 +1185,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
     proc->app_rank = 0;
     proc->local_rank = 0;
     proc->node_rank = 0;
-    prte_job_add_proc(jdata, cd->target.rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, cd->target.rank, proc);
     // find the node it is on - the tool is on our node, and our node is
     // whichever one carries our own daemon proc. Our vpid is not a subscript
     // into the node pool: the pool is indexed by node identity, and in a DVM
