@@ -1683,6 +1683,18 @@ codes that has to survive grow, shrink and daemon loss.
   it a loopback interface, so an include list naming only real interfaces
   (the ordinary way to pick the DVM's network) would fail the server's
   init.
+- **Accepting other users' tools has to open a path to the socket.** A
+  PMIx that takes local connections on a unix socket makes the socket,
+  and its directory beneath the session directory, for this user alone,
+  and `mkdtemp()` made the session directory the same way - so
+  `prte_pmix_no_foreign_tools 0` on its own lets nobody in.
+  `open_to_foreign_tools()` widens exactly that path when the parameter is
+  off: `PMIX_SOCKET_MODE` lets anyone connect (PMIx then opens the
+  socket's directory to match), and the session directory gains search
+  permission but not read, so it can be passed through but not listed.
+  Every directory PRRTE makes inside it stays `0700`. Only the master
+  does this, since only the master is told to allow foreign tools; the
+  swarm's `test_requesters` is the case that reaches it.
 - **Verbose output is free.** Everything here is behind
   `pmix_output_verbose(N, prte_pmix_server_globals.output, ...)`; add
   traces liberally at level 2.
