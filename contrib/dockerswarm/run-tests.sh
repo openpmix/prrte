@@ -5366,6 +5366,32 @@ test_connect() {
         && ok "...and heard nothing when the child disconnected before leaving" \
         || bad "an event was sent about a child that had disconnected: $(echo "$out" | grep CNCT | tr '\n' ' ' | tail -c 400)"
 
+    banner "connect: an assemblage named rank by rank is reported the same way"
+    # Open MPI names a job by wildcard only from MPI_COMM_WORLD and lists its
+    # ranks from any other communicator.  The master addresses a departure
+    # from such a record by job rather than by rank, so the event still has
+    # to reach the parent.  --by-rank lists every rank of both jobs, gives
+    # the child two procs, and spawns it CHILD_SEP so this connect is its
+    # only assemblage.
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --by-rank --wait 20" 2>&1)
+    echo "$out" | grep -q 'CNCT parent 0 CONNECT PMIX_SUCCESS' \
+        && ok "the parent connected to both ranks of its child" \
+        || bad "the rank-by-rank connect did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    n=$(echo "$out" | awk '$1=="CNCT" && $2=="parent" && $4=="EVENTS" {print $5}')
+    [ "${n:-0}" -ge 1 ] \
+        && ok "...and was told when the child left without disconnecting" \
+        || bad "no PMIX_ERR_PROC_TERM_WO_SYNC reached the parent: $(echo "$out" | grep CNCT | tr '\n' ' ' | tail -c 400)"
+
+    banner "connect: a disconnect naming the same ranks dissolves it"
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --by-rank --disconnect --wait 10" 2>&1)
+    echo "$out" | grep -q 'CNCT parent 0 DISCONNECT PMIX_SUCCESS' \
+        && ok "the parent disconnected from both ranks of its child" \
+        || bad "the rank-by-rank disconnect did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    n=$(echo "$out" | awk '$1=="CNCT" && $2=="parent" && $4=="EVENTS" {print $5}')
+    [ "${n:-1}" = 0 ] \
+        && ok "...and heard nothing when the child left" \
+        || bad "an event was sent about a child that had disconnected: $(echo "$out" | grep CNCT | tr '\n' ' ' | tail -c 400)"
+
     banner "connect: a failure in one member terminates the assemblage"
     # The other half of the definition: the host is to treat the assemblage
     # as a single application, so a failure that terminates one member's job

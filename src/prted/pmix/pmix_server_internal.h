@@ -557,11 +557,15 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_pmix_server_pset_t);
  * left to report.
  *
  * The members are the participant array exactly as the connect named it, so
- * an entry may be a wildcard rank standing for a whole namespace. */
+ * an entry may be a wildcard rank standing for a whole namespace.  Matching
+ * a connect or a disconnect reads them.  A departure reads collapsed: the
+ * same members with every wholly listed job named by its wildcard. */
 typedef struct {
     pmix_list_item_t super;
     pmix_proc_t *members;
     size_t nmembers;
+    pmix_proc_t *collapsed;
+    size_t ncollapsed;
     /* this assemblage is already being torn down after a member's failure,
      * so a second failure inside it must not drive the teardown again */
     bool terminating;
