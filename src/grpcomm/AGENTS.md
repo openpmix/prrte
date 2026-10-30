@@ -113,7 +113,7 @@ Plain functions, all `PRTE_EXPORT`, declared in `grpcomm.h`:
 | `prte_grpcomm_fault_handler(status)` | Invoked on **every** daemon by `src/rml/routed_radix.c` when the routing tree changes. Called twice per death (LOCAL scope then GLOBAL scope); which scope a collective keys on depends on what it needs, so read *Surviving a daemon failure* before adding a third. |
 | `prte_grpcomm_xcast(tag, msg)` | Broadcast to **every** daemon, delivered at `tag`. Non-destructive to `msg`. Returns `PRTE_SUCCESS` on *acceptance*, not completion. |
 | `prte_grpcomm_xcast_nb(tag, msg, cbfunc, cbdata)` | As above, but `cbfunc` fires on the **master** once the whole DVM has confirmed receipt — or, if the broadcast is abandoned before it is ever emitted, as soon as that is known (`abandon_xcast`), because a caller waiting on it would otherwise wait forever. It carries no status, so it means only "stop waiting". `cbfunc`/`cbdata` are ignored on non-master daemons. `xcast` is just `xcast_nb(tag, msg, NULL, NULL)`. |
-| `prte_grpcomm_fence(procs, nprocs, info, ninfo, data, ndata, cbfunc, cbdata)` | Non-blocking allgather/barrier across the daemons hosting `procs`. A barrier supplies no data. Returns `PRTE_SUCCESS` once queued. |
+| `prte_grpcomm_fence(procs, nprocs, info, ninfo, data, ndata, purpose, cbfunc, cbdata)` | Non-blocking allgather/barrier across the daemons hosting `procs`. A barrier supplies no data. `purpose` says whether it is a plain fence, a connect or a disconnect - see *What a fence is for*. Returns `PRTE_SUCCESS` once queued. |
 | `prte_grpcomm_group(op, grpid, procs, nprocs, directives, ndirs, cbfunc, cbdata)` | PMIx group construct/destruct/cancel. |
 
 ### The one indirection: `prte_grpcomm_release_bcast`
@@ -1003,6 +1003,27 @@ PMIx compares a collect-flag byte per contribution inside `store_modex` and
 raises `collection-mismatch`, but a barrier no longer puts anything on the wire
 for it to compare, so PRRTE is now the only thing that can see the two answers
 together.
+
+### What a fence is for
+
+`PMIx_Connect` and `PMIx_Disconnect` are fences as far as the collective goes,
+and the DVM master has to act on each **exactly once**: record the assemblage
+the connect formed, or drop the one the disconnect leaves (see
+[`src/prted/pmix/AGENTS.md`](../prted/pmix/AGENTS.md), *Connected
+assemblages*). So the caller says which it is running
+(`prte_grpcomm_fence_purpose_t`), the purpose rides every contribution as a
+second byte beside the operation, and `prte_grpcomm_fence_purpose_merge()`
+holds the participants to agreeing on it exactly as the operation merge does
+- a connect and a plain fence over the same procs are two collectives, and a
+mismatch fails the fence the same way.
+
+The controller acts on it in `tree_gather_answer()`, on success only and
+**before** the release is broadcast. That is the one point in the DVM that sees
+each round of a collective complete once, whichever daemons host its
+participants; having every participating daemon report the outcome instead
+cannot tell N daemons reporting one connect from one set of procs connecting N
+times. Acting before the release means no participant can be released, and
+depart, ahead of its record.
 
 ### One movement: rollup and release
 

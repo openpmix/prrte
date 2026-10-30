@@ -2719,6 +2719,13 @@ static int test_connections(void)
     prte_pmix_server_connection_record(other, 2);
     CHECK("the same set in another order is the same connection",
           1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+    /* ...made a second time, though, and each disconnect ends one of them:
+     * two connect/accept pairs between the same jobs are two
+     * intercommunicators, and disconnecting one leaves the other connected */
+    prte_pmix_server_connection_drop(members, 2);
+    CHECK("one disconnect ends one of two connects",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+    prte_pmix_server_connection_record(members, 2);
 
     /* a wildcard member stands for every proc of that namespace - which is
      * how a connect between two jobs is nearly always expressed, so getting
@@ -2783,6 +2790,14 @@ static int test_connections(void)
     PMIX_RELEASE(jdata);
     prte_pmix_server_connection_purge(members[1].nspace);
     CHECK("and is forgotten when nothing named in it is left",
+          0 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    /* the second disconnect of a twice-made connection ends it */
+    prte_pmix_server_connection_record(members, 2);
+    prte_pmix_server_connection_record(members, 2);
+    prte_pmix_server_connection_drop(members, 2);
+    prte_pmix_server_connection_drop(members, 2);
+    CHECK("two disconnects end two connects",
           0 == pmix_list_get_size(&prte_pmix_server_globals.connections));
 
     /* a disconnect of the set that was recorded does drop it */

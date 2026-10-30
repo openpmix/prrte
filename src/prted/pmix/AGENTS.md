@@ -1115,13 +1115,20 @@ design:
   every proc termination in the DVM — including the procs of a node whose
   daemon has died, which is exactly when an assemblage most wants telling,
   and exactly when a record kept on that daemon would have died with it.
-- **Each participating daemon reports it**, on `PRTE_RML_TAG_CONNECTED`,
-  from the *completion* of the connect collective (`connect_release`) rather
-  than from its start — so a connect that failed is never recorded. Every
-  such daemon reports, and the master takes the first and ignores the rest:
-  there is no cheap election here that does not depend on one particular
-  daemon still being alive, and the reports are a few dozen bytes on an
-  operation that has just paid for a DVM-wide collective.
+- **The master records it where the connect's fence converges**
+  (`tree_gather_answer()` in `grpcomm`, for a fence whose purpose is
+  `PRTE_GRPCOMM_FENCE_FOR_CONNECT`), and drops it where a disconnect's does.
+  That point sees each operation complete exactly once, whichever daemons
+  host its participants, and only on success - so a connect that failed is
+  never recorded, and the record exists before any participant is released.
+  Each participating daemon used to report the outcome instead, and the
+  master took the first report; that could not tell N daemons reporting one
+  connect from one set of procs connecting N times.
+- **A record counts the connects that made it** (`refs`). Two connects over
+  the same membership - two `MPI_Comm_connect`/`accept` pairs between the
+  same jobs - are two intercommunicators the application disconnects one at
+  a time, so the first disconnect must not end the second. A disconnect
+  covering a record ends one of its connects.
 - **Termination is noticed in one place**: the `PRTE_PROC_STATE_TERMINATED`
   arm of `prte_state_base_track_procs()`, behind the `PRTE_PROC_FLAG_RECORDED`
   guard that makes it exactly once per proc. Every death reaches it, whether

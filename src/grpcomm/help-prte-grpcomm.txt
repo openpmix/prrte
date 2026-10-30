@@ -23,6 +23,10 @@ passing different values from different participants asks the runtime
 for two collectives at once. The fence has been failed rather than
 completed with a result that only some participants would recognize.
 
+The same holds for what the fence is for. PMIx_Connect, PMIx_Disconnect
+and PMIx_Fence each run a fence, and some participants calling one while
+others call another over the same processes is the same error.
+
 Note that a participant contributing no data is NOT this error. An
 allgather over participants that happen to have nothing to publish is
 still an allgather, and is expected — only the directive decides.

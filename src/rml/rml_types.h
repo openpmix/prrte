@@ -224,9 +224,8 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
  * src/util/prte_show_help.c for why a prted cannot emit its own */
 #define PRTE_RML_TAG_SHOW_HELP            82
 
-/* the membership of a PMIx_Connect assemblage, on its way to the DVM master,
- * which is where it is held - see src/prted/pmix/pmix_server_connect.c */
-#define PRTE_RML_TAG_CONNECTED            83
+/* 83 was PRTE_RML_TAG_CONNECTED: the DVM master now records an assemblage
+ * where the connect's fence converges, so no daemon reports one */
 
 /* A PMIx query a daemon cannot answer, on its way to the DVM master, and the
  * master's answer coming back.  A prted holds only the identity half of the

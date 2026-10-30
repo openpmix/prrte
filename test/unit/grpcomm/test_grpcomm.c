@@ -191,6 +191,7 @@ static int test_classes(void)
      * UNKNOWN has to be distinct from "barrier", or the first contribution
      * to arrive would find its operation already decided for it */
     CHECK("fence trk op UNKNOWN", PRTE_GRPCOMM_FENCE_OP_UNKNOWN == fc->op);
+    CHECK("fence trk purpose UNKNOWN", PRTE_GRPCOMM_FENCE_FOR_UNKNOWN == fc->purpose);
     CHECK("fence trk dmns NULL", NULL == fc->dmns);
     CHECK("fence trk ndmns 0", 0 == fc->ndmns);
     CHECK("fence trk nexpected 0", 0 == fc->nexpected);
@@ -974,6 +975,26 @@ static int test_fence_operation(void)
           PRTE_GRPCOMM_FENCE_OP_BARRIER == coll->op);
     CHECK("merge: an allgather against a barrier disagrees",
           !prte_grpcomm_fence_op_merge(coll, PRTE_GRPCOMM_FENCE_OP_ALLGATHER));
+    PMIX_RELEASE(coll);
+
+    /* The purpose merges the same way.  It is what the DVM master acts on
+     * when the fence converges - a connect is recorded there and a disconnect
+     * dropped - so a connect and a plain fence over the same participants
+     * must not be allowed to run as one collective. */
+    coll = PMIX_NEW(prte_grpcomm_fence_t);
+    CHECK("purpose: an unknown tracker adopts",
+          prte_grpcomm_fence_purpose_merge(coll, PRTE_GRPCOMM_FENCE_FOR_CONNECT));
+    CHECK("purpose: and records it", PRTE_GRPCOMM_FENCE_FOR_CONNECT == coll->purpose);
+    CHECK("purpose: the same again agrees",
+          prte_grpcomm_fence_purpose_merge(coll, PRTE_GRPCOMM_FENCE_FOR_CONNECT));
+    CHECK("purpose: an unknown arrival cannot disagree",
+          prte_grpcomm_fence_purpose_merge(coll, PRTE_GRPCOMM_FENCE_FOR_UNKNOWN));
+    CHECK("purpose: a plain fence disagrees with a connect",
+          !prte_grpcomm_fence_purpose_merge(coll, PRTE_GRPCOMM_FENCE_FOR_FENCE));
+    CHECK("purpose: so does a disconnect",
+          !prte_grpcomm_fence_purpose_merge(coll, PRTE_GRPCOMM_FENCE_FOR_DISCONNECT));
+    CHECK("purpose: and a disagreement changes nothing",
+          PRTE_GRPCOMM_FENCE_FOR_CONNECT == coll->purpose);
     PMIX_RELEASE(coll);
 #endif
 
