@@ -330,10 +330,17 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                              * is never set and every collective involving the
                              * namespace hangs - and reports it as a hard
                              * error, so treating it as fatal here would fail a
-                             * registration that is in fact fine. */
+                             * registration that is in fact fine.  A PMIx that
+                             * updates a rank registered again says so with
+                             * PMIX_UPDATED instead. */
                             if (PMIX_ERR_DUPLICATE_KEY == ret) {
                                 ret = PMIX_SUCCESS;
                             }
+#ifdef PMIX_UPDATED
+                            if (PMIX_UPDATED == ret) {
+                                ret = PMIX_SUCCESS;
+                            }
+#endif
                             if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
                                 /* Anything else means our own PMIx server will
                                  * refuse this proc's PMIx_Init, so forking it

@@ -84,6 +84,8 @@ PRTE_EXPORT void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
                                                 prte_rml_tag_t tag, void *cbdata);
 
 PRTE_EXPORT int prte_plm_base_create_jobid(prte_job_t *jdata);
+/* Load nspace with the next "base@N" no job or tool of ours holds */
+PRTE_EXPORT int prte_plm_base_next_jobid(pmix_nspace_t nspace);
 PRTE_EXPORT int prte_plm_base_set_hnp_name(void);
 PRTE_EXPORT int prte_plm_base_setup_prted_cmd(int *argc, char ***argv);
 PRTE_EXPORT int prte_plm_base_setup_virtual_machine(prte_job_t *jdata);
