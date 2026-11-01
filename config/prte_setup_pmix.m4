@@ -269,15 +269,15 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                         [AC_MSG_RESULT([no])
                          AC_MSG_ERROR([PRRTE requires a PMIx that provides its access check (PMIX_CAP_ACCESS_CHECK). Please use a PMIx release of at least version $prte_pmix_min_version.])])
 
-    AC_MSG_CHECKING([for PMIx relayed-identity support])
-    PRTE_CHECK_PMIX_CAP([INFO_RELAYED],
+    AC_MSG_CHECKING([for PMIx relay origin support])
+    PRTE_CHECK_PMIX_CAP([ORIGIN_ID],
                         [AC_MSG_RESULT([yes])
-                         prte_pmix_have_info_relayed=1],
+                         prte_pmix_have_origin_id=1],
                         [AC_MSG_RESULT([no])
-                         prte_pmix_have_info_relayed=0])
-    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_INFO_RELAYED],
-                       [$prte_pmix_have_info_relayed],
-                       [Whether PMIx keeps a PMIX_USERID/PMIX_GRPID a server marks PMIX_INFO_RELAYED, so a relayed request is attributed to the process that made it])
+                         prte_pmix_have_origin_id=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_ORIGIN_ID],
+                       [$prte_pmix_have_origin_id],
+                       [Whether PMIx passes a relay's PMIX_ORIGIN_* claim to its host beside the relay's own identity, so the host can attribute a relayed request to the process that made it])
 
     AC_MSG_CHECKING([for PMIx command-line qualifier value support])
     PRTE_CHECK_PMIX_CAP([CLI_QUAL_VALUE],

@@ -40,6 +40,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
@@ -306,6 +307,8 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
 {
     prte_job_t *jdata;
     const pmix_info_t *proc = NULL, *ruid = NULL, *rgid = NULL;
+    const pmix_info_t *ouid = NULL, *ogid = NULL;
+    uint32_t claimed;
     size_t n;
 
     /* The whole claim is read in one pass, and applied after the caller's
@@ -313,7 +316,12 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
      * PMIX_USERID and PMIX_GRPID to every request it hands us, so a claimed
      * uid honored mid-scan would be overwritten by the relay's own a few
      * entries later.  Which of the two won would be a question about array
-     * order, which is no way to decide an identity. */
+     * order, which is no way to decide an identity.
+     *
+     * A relay says whom it acts for in PMIX_ORIGIN_USERID/_GRPID, which
+     * PMIx passes us untouched beside the relay's own identity, and - for
+     * a data server built against a PMIx that does not know those - in our
+     * own keys.  The first is used when both are there. */
     for (n = 0; n < ninfo; n++) {
         if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
             proc = &info[n];
@@ -321,7 +329,19 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
             ruid = &info[n];
         } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_GID)) {
             rgid = &info[n];
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+        } else if (PMIx_Check_key(info[n].key, PMIX_ORIGIN_USERID)) {
+            ouid = &info[n];
+        } else if (PMIx_Check_key(info[n].key, PMIX_ORIGIN_GRPID)) {
+            ogid = &info[n];
+#endif
         }
+    }
+    if (NULL != ouid) {
+        ruid = ouid;
+    }
+    if (NULL != ogid) {
+        rgid = ogid;
     }
     if (NULL == proc && NULL == ruid && NULL == rgid) {
         return;
@@ -342,6 +362,23 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: %s is not a tool - ignoring its "
                             "claim to act for another process",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(owner));
+        return;
+    }
+    /* Nor is being a tool enough to speak for another user: any user can
+     * connect one.  The tool's own uid - which PMIx established, and the
+     * caller has in *uid - has to be one trusted to relay for the user it
+     * names.  Claiming its own user claims nothing it does not have.  A
+     * purge passes no uid and reads no claimed one, so only the process
+     * named is at stake there, as before. */
+    if (NULL != uid && NULL != ruid &&
+        (PMIX_SUCCESS != PMIx_Value_get_number(&ruid->value, &claimed, PMIX_UINT32) ||
+         UINT32_MAX == *uid ||
+         !prte_pmix_server_relay_permitted((uid_t) *uid, (uid_t) claimed))) {
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: %s may not act for another user - "
+                            "ignoring its claim",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(owner));
         return;

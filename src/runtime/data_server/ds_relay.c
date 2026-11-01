@@ -291,27 +291,36 @@ pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
 
     /* ...and exactly one claim goes on.  A copied claim ahead of ours would
      * lose only because check_requestor keeps the last it sees, which is
-     * no way to decide an identity. */
-    *nout = ninfo - nclaims + 3;
+     * no way to decide an identity.  The identity PMIx stamped on the
+     * up-call is not copied either: the far end's PMIx stamps ours. */
+    for (n = 0; n < ninfo; n++) {
+        if (!is_claim(info[n].key) && prte_pmix_server_is_identity_key(info[n].key)) {
+            nclaims++;
+        }
+    }
+    *nout = ninfo - nclaims + 3 + ((PRTE_PMIX_HAVE_ORIGIN_ID) ? 2 : 0);
     PMIX_INFO_CREATE(*out, *nout);
     if (NULL == *out) {
         *nout = 0;
         return PMIX_ERR_NOMEM;
     }
     for (n = 0, m = 0; n < ninfo; n++) {
-        if (is_claim(info[n].key)) {
+        if (is_claim(info[n].key) || prte_pmix_server_is_identity_key(info[n].key)) {
             continue;
         }
         PMIX_INFO_XFER(&(*out)[m], (pmix_info_t *) &info[n]);
         m++;
     }
-    /* the identity our PMIx gave us for the process is theirs, not ours -
-     * a PMIx that keeps a relayed one attributes the operation to them
-     * directly; the private keys below say the same to one that does not */
-    prte_pmix_server_mark_relayed(*out, m);
+    /* whom we act for: in the attributes a PMIx that knows them passes to
+     * the far end's host as our claim, and in our own keys for a far end
+     * built against one that does not */
     PMIX_INFO_LOAD(&(*out)[m], PMIX_REQUESTOR, requestor, PMIX_PROC);
     PMIX_INFO_LOAD(&(*out)[m + 1], PRTE_PUBLISH_REQ_UID, &uid, PMIX_UINT32);
     PMIX_INFO_LOAD(&(*out)[m + 2], PRTE_PUBLISH_REQ_GID, &gid, PMIX_UINT32);
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+    PMIX_INFO_LOAD(&(*out)[m + 3], PMIX_ORIGIN_USERID, &uid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&(*out)[m + 4], PMIX_ORIGIN_GRPID, &gid, PMIX_UINT32);
+#endif
     return PMIX_SUCCESS;
 }
 

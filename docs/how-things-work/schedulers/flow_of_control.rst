@@ -33,6 +33,18 @@ PRRTE's role in the ``PMIx_Allocation_request`` flow is generally to
 pass the request on to the scheduler, and transport the reply back
 to the requestor.
 
+When PRRTE passes a request on - to the scheduler, or to another DVM's
+data server - the scheduler's PMIx tells it that PRRTE is asking, and
+PRRTE says whom it asks for in ``PMIX_ORIGIN_USERID``,
+``PMIX_ORIGIN_GRPID`` and the other ``PMIX_ORIGIN_*`` attributes, beside
+``PMIX_REQUESTOR``. Whether to believe that is the receiving host's
+decision. PRRTE, receiving a relayed request itself, believes it from a
+relay running as the same user it names, as root, as the user the DVM
+runs as, or as a user named by the ``prte_pmix_relay_uids`` MCA
+parameter (a comma-separated list of user names or numeric ids, for a
+privileged DVM that relays for its users under a service account of its
+own). Any other relay's request is taken as the relay's own.
+
 ``PMIX_ALLOC_ACTIVATE`` is the exception: PRRTE answers it itself,
 without involving any resource manager. It asks for a daemon on nodes
 the requestor **already holds** - an allocated node the DVM is not
