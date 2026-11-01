@@ -650,11 +650,12 @@ holds a reference on the job). "Registered" has to mean *PMIx has our
 answer*; a request arriving mid-flight would otherwise be told `NOT_FOUND`
 about data that was seconds from landing. That window is instead the one
 place a namespace can still be registered twice, which is why the client
-loop keeps `PMIX_ERR_DUPLICATE_KEY` as a tolerated status — PMIx must
-refuse a second add of a rank (a duplicate entry in its rank list puts that
-list permanently past `nlocalprocs`, so `all_registered` is never set and
-every collective involving the namespace hangs) and reports it as a hard
-error.
+loop tolerates a rank already registered. PMIx never adds a second entry
+for a rank (a duplicate in its rank list puts that list permanently past
+`nlocalprocs`, so `all_registered` is never set and every collective
+involving the namespace hangs). An older PMIx refuses the second
+registration as `PMIX_ERR_DUPLICATE_KEY`; one with `PMIX_UPDATED` updates
+the rank in place and returns that instead. Both are success here.
 
 **None of this is the lazy-procdata derivation.** That answers a request for
 a *per-proc* placement key (`prte_pmix_server_derivable_key()` — rank,
@@ -664,7 +665,8 @@ It never comes through the wildcard arm, and the wildcard arm has nothing to
 derive.
 
 **A client we cannot register is a launch failure, not a log line.** Every
-other status from `PMIx_server_register_client` aborts the registration and
+status from `PMIx_server_register_client` other than those aborts the
+registration and
 returns an error. Forking a proc our own PMIx server will refuse at
 `PMIx_Init` only moves the failure to where nobody can read it — the
 application sees an obscure error some way downstream of a launch that
