@@ -697,32 +697,18 @@ is `proctable`, and it asserts:
   making is that the two placements agree. It also requires the two
   survivors to still read as alive, since a table that called everything
   terminated would satisfy the first half.
-- **every daemon serves every node's `PMIX_SERVER_URI`**. The consumer here
-  is a **tool**, not a daemon — daemons reach each other over the RML and
-  never form PMIx connections to one another; see `examples/tool.c --uri
-  <nodename>`. Each daemon ships its own server URI to the master in its
-  `PRTED_CALLBACK` rollup, and the master puts the whole set into the
-  `WIREUP` xcast alongside the nidmap, so the answer does not depend on
-  which daemon the tool attached to. (Before that the query asked for a key
-  nobody published and answered `NOT_FOUND` for every node but the one being
-  asked — the producing half of commit `6e481fbb95` was never written.)
-
-  The case asks a **non-master** daemon about three other nodes — the case
-  that needs the xcast rather than just the rollup — and requires three
-  **distinct** URIs, so an implementation that echoed the local server back
-  would not pass. It then checks the master and a non-master agree on a
-  third node's URI. An unknown node must come back with a specific status,
-  never the generic `PMIX_ERROR` that the wrong-direction conversion used to
-  manufacture out of every failure on this path.
-
-- the URIs **follow the DVM across a grow and a shrink**. `vm_ready()` runs
-  on every `VM_READY` and re-sends the whole set, so a grow redistributes
-  with no code of its own — asserted rather than assumed. A shrink needs
-  nothing: the query resolves hostname → node → `node->daemon` and a shrink
-  NULLs that, so a departed node cannot be answered for at all. The case
-  shrinks node3 and requires its URI to stop being served while node2's is
-  unaffected, so that stays true rather than being an accident of the
-  current teardown order.
+- **a daemon reports its own `PMIX_SERVER_URI`, and no other node's**. The
+  consumer is a **tool**, not a daemon — daemons reach each other over the
+  RML and never form PMIx connections to one another. A PMIx server takes
+  connections from its own node only, so the DVM no longer collects every
+  daemon's URI (see `src/pmix/AGENTS.md`). The case asks a non-master
+  daemon for its own URI, unqualified and by its own node name, and
+  requires the two to match; then requires a non-master and the master
+  each to refuse the other's node with `PMIX_ERR_NOT_SUPPORTED`. One host
+  cannot show the refusal, since there every node is the local one. An
+  unknown node must come back with a specific status, never the generic
+  `PMIX_ERROR` that the wrong-direction conversion used to manufacture out
+  of every failure on this path.
 
 **The daemon body and the PMIx server host module (`src/prted`,
 `test_prted`)**: `src/prted` is where the DVM actually lives, and almost

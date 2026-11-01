@@ -30,10 +30,9 @@ action:
   **job catch-up** (`prte_util_decode_job_catchup` — the jobs already
   running in the DVM, which a daemon that just joined has never heard of;
   they used to lead the launch message instead), and then a
-  **three-field record per daemon** — name, `PMIX_PROC_URI` (RML contact
-  info), `PMIX_SERVER_URI` (that node's PMIx server rendezvous,
-  redistributed only so any daemon can answer a tool's query; PRRTE never
-  connects to it). The sender is `vm_ready()` in `state/dvm`. The loop
+  **two-field record per daemon** — name and `PMIX_PROC_URI` (RML contact
+  info). PMIx server URIs are not carried: a daemon answers only for its
+  own (see [`../pmix/AGENTS.md`](../pmix/AGENTS.md)). The sender is `vm_ready()` in `state/dvm`. The loop
   skips storing what it already knows, so mind the invariant: **every
   field of a record must be unpacked before any `continue`**, or the next
   iteration reads the leftover string as a `pmix_proc_t`.
