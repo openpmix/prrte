@@ -392,6 +392,16 @@ does not know:
 It must be a comma-separated list of user names or numeric user ids.
 Please correct it and try again.
 #
+[relay-uid-unknown]
+The "prte_pmix_relay_uids" MCA parameter names a user this system does
+not know:
+
+   User:   %s
+   Value:  %s
+
+It must be a comma-separated list of user names or numeric user ids.
+Please correct it and try again.
+#
 [spawn-env-entry]
 A request to start a job gave an application an environment entry that
 is not a NAME=value assignment:

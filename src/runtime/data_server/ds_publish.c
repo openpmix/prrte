@@ -40,6 +40,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
@@ -403,12 +404,20 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             ret = load_ids(&info[n].value, &data->agids, &data->nagids);
         } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR) ||
                    PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_UID) ||
-                   PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_GID)) {
+                   PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_GID) ||
+                   prte_pmix_server_is_identity_key(info[n].key)) {
             /* a relay publishing on behalf of a process in its own DVM.
              * Applied below, once this scan has finished - see
              * prte_ds_check_requestor().  Skipped here so it is not stored
-             * as published data. */
+             * as published data - and so is the rest of who asked, which
+             * PMIx adds to every request (the pid it saw) */
             continue;
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+        } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTED_GRPID)) {
+            /* a group to charge the work to - nothing to charge here, and
+             * not the publisher's data */
+            continue;
+#endif
         } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REPLACE)) {
             /* the publisher is updating something it published itself */
             replace = PMIX_INFO_TRUE(&info[n]);

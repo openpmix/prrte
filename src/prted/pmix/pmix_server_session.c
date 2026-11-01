@@ -383,14 +383,13 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             ctl->personality = info;
 
         } else if (PMIX_CHECK_KEY(info, PMIX_USERID)) {
-            uint32_t uid;
-            /* PMIx has no data type for uid_t, so read it as the unsigned
-             * 32-bit quantity every platform PRRTE builds on makes it */
-            rc = PMIx_Value_get_number(&info->value, &uid, PMIX_UINT32);
-            if (PMIX_SUCCESS != rc) {
+            /* whom the request is attributed to - the process PMIx says
+             * is asking, or the one a relay trusted to say so names (see
+             * prte_pmix_server_requester_uid). That reads the whole
+             * request, so where this entry sits does not matter */
+            if (!prte_pmix_server_requester_uid(req->info, req->ninfo, &ctl->uid)) {
                 return PMIX_ERR_BAD_PARAM;
             }
-            ctl->uid = (uid_t) uid;
             ctl->have_uid = true;
 
         } else if (PMIX_CHECK_KEY(info, PMIX_GRPID)) {
@@ -1791,17 +1790,14 @@ static void pass_request(int sd, short args, void *cbdata)
     } else {
         // we need to pass the request on to the scheduler
         // need to add the requestor's ID to the info array
-        PMIX_INFO_CREATE(xfer, req->ninfo + 1);
-        for (n=0; n < req->ninfo; n++) {
-            PMIX_INFO_XFER(&xfer[n], &req->info[n]);
-        }
-        /* the requester's identity is theirs, not ours */
-        prte_pmix_server_mark_relayed(xfer, req->ninfo);
-        PMIX_INFO_LOAD(&xfer[req->ninfo], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
+        PMIX_INFO_CREATE(xfer, req->ninfo + 1 + PRTE_PMIX_ORIGIN_MAX);
+        /* the request is the requester's, not ours - say whom we act for */
+        n = prte_pmix_server_relay_copy(xfer, req->info, req->ninfo);
+        PMIX_INFO_LOAD(&xfer[n], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
         // the current req object points to the caller's info array, so leave it alone
         req->copy = true;
         req->info = xfer;
-        req->ninfo++;
+        req->ninfo = n + 1;
         rc = PMIx_Session_control(req->sessionID, req->info, req->ninfo,
                                   infocbfunc, req);
         if (PMIX_SUCCESS != rc) {

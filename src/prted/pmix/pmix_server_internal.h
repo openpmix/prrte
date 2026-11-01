@@ -675,6 +675,11 @@ typedef struct {
     char *scheduler_uids;
     uint32_t *sched_uids;
     size_t nsched_uids;
+    /* the users, besides root and our own, trusted to relay a request for
+     * a process of another user: the MCA list, and what it resolved to */
+    char *relay_uids;
+    uint32_t *rly_uids;
+    size_t nrly_uids;
     /* who may act on the DVM itself - a pmix_access_t, made from the
      * --rtos users=/groups= the DVM was started with */
     void *dvm_access;
@@ -739,10 +744,30 @@ PRTE_EXPORT extern prte_pmix_server_globals_t prte_pmix_server_globals;
  * pmix_server_access.c and PMIx's docs/security-plan.rst. All of these run
  * on the PRRTE progress thread.
  *
- * prte_pmix_server_requester_uid: the requester's uid, as PMIx names it in
- * an up-call's info (PMIX_USERID, from the identity it connected with).
- * false when the info names none. */
+ * prte_pmix_server_requester_uid: the uid to attribute an up-call to. PMIx
+ * names the process connected to it (PMIX_USERID, from the identity it
+ * connected with) - a relay, if the request was relayed. A relay's claim
+ * about who first asked (PMIX_ORIGIN_USERID) is taken in its place only
+ * when prte_pmix_server_relay_permitted says the relay may make it.
+ * false when the info names no requester at all. */
 PRTE_EXPORT bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t *uid);
+
+/* May a process running as relay speak for one running as origin? Always
+ * when they are the same user - that claims nothing more than the relay
+ * has. Otherwise only root, the user this DVM runs as, and the users
+ * prte_pmix_relay_uids names. */
+PRTE_EXPORT bool prte_pmix_server_relay_permitted(uid_t relay, uid_t origin);
+
+/* Look up the users prte_pmix_relay_uids names, once; a name nobody has is
+ * reported and refused. */
+PRTE_EXPORT int prte_pmix_server_relay_uids_resolve(void);
+
+/* The most entries prte_pmix_server_relay_copy adds */
+#define PRTE_PMIX_ORIGIN_MAX 5
+
+/* True for the keys that say who made a request - the ones PMIx stamps on
+ * an up-call, and a relay's PMIX_ORIGIN_* claims */
+PRTE_EXPORT bool prte_pmix_server_is_identity_key(const char *key);
 
 /* root, or the user this DVM runs as */
 PRTE_EXPORT bool prte_pmix_server_privileged(uid_t uid);
@@ -820,13 +845,20 @@ PRTE_EXPORT pmix_status_t prte_pmix_server_access_record(prte_job_t *jdata,
                                                          const pmix_info_t *info, size_t ninfo);
 PRTE_EXPORT void prte_pmix_server_access_release_job(prte_job_t *jdata);
 
-/* Mark the PMIX_USERID and PMIX_GRPID in info - the identity PMIx gave us
- * for the process that made a request - as relayed, before we pass the
- * request on through a PMIx API (to the scheduler, to another DVM). The
- * server it goes to then keeps them rather than putting ours in their
- * place, and the operation is attributed to whoever asked for it. A no-op
- * against a PMIx without PMIX_INFO_RELAYED */
-PRTE_EXPORT void prte_pmix_server_mark_relayed(pmix_info_t *info, size_t ninfo);
+/* Copy an up-call's info into dst, to pass the request on through a PMIx
+ * API (to the scheduler, to another DVM), saying whom we pass it on for.
+ * The identity PMIx stamped on the up-call, and any PMIX_ORIGIN_* claim,
+ * are not copied: the server it goes to stamps ours, and is told whom we
+ * act for in PMIX_ORIGIN_* instead - the claim we were given, if the relay
+ * that gave it may make it (prte_pmix_server_relay_permitted), and
+ * otherwise the identity PMIx gave us for the process we heard from.
+ * Everything else, a PMIX_REQUESTED_GRPID among it, is copied as is. dst
+ * must have room for nsrc + PRTE_PMIX_ORIGIN_MAX entries; returns how
+ * many were written. Against a PMIx without PMIX_CAP_ORIGIN_ID, which puts
+ * the relay's identity in place of whatever we send, it copies all of
+ * src. */
+PRTE_EXPORT size_t prte_pmix_server_relay_copy(pmix_info_t *dst, const pmix_info_t *src,
+                                               size_t nsrc);
 
 /* A user we now know - a job's owner, a tool's user: make our record of it,
  * its groups looked up, and register it with PMIx. Root and our own user

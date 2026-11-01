@@ -42,7 +42,9 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
+#include "src/util/name_fns.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_show_help.h"
 #    include "src/server/pmix_server_ops.h"
@@ -52,7 +54,8 @@
 
 bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t *uid)
 {
-    uint32_t id;
+    uint32_t id = 0, origin = 0;
+    bool have_id = false, have_origin = false;
     size_t n;
 
     for (n = 0; NULL != info && n < ninfo; n++) {
@@ -60,11 +63,64 @@ bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t
             if (PMIX_SUCCESS != PMIx_Value_get_number(&info[n].value, &id, PMIX_UINT32)) {
                 return false;
             }
-            *uid = (uid_t) id;
+            have_id = true;
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_ORIGIN_USERID)) {
+            /* a claim we cannot read is no claim - the request stays the
+             * relay's own */
+            have_origin = (PMIX_SUCCESS ==
+                           PMIx_Value_get_number(&info[n].value, &origin, PMIX_UINT32));
+#endif
+        }
+    }
+    if (!have_id) {
+        return false;
+    }
+    /* PMIx says who we are talking to. Whom that process says it speaks
+     * for is believed only from a relay trusted to say it - anything else
+     * is the relay's own request */
+    if (have_origin && prte_pmix_server_relay_permitted((uid_t) id, (uid_t) origin)) {
+        *uid = (uid_t) origin;
+    } else {
+        if (have_origin) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s relay uid %u may not speak for uid %u - "
+                                "taking the request as its own",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), id, origin);
+        }
+        *uid = (uid_t) id;
+    }
+    return true;
+}
+
+bool prte_pmix_server_relay_permitted(uid_t relay, uid_t origin)
+{
+    size_t n;
+
+    if (relay == origin || prte_pmix_server_privileged(relay)) {
+        return true;
+    }
+    for (n = 0; n < prte_pmix_server_globals.nrly_uids; n++) {
+        if ((uint32_t) relay == prte_pmix_server_globals.rly_uids[n]) {
             return true;
         }
     }
     return false;
+}
+
+bool prte_pmix_server_is_identity_key(const char *key)
+{
+    if (PMIx_Check_key(key, PMIX_USERID) || PMIx_Check_key(key, PMIX_GRPID)) {
+        return true;
+    }
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+    return (PMIx_Check_key(key, PMIX_REQUESTOR_PID) ||
+            PMIx_Check_key(key, PMIX_ORIGIN_USERID) || PMIx_Check_key(key, PMIX_ORIGIN_GRPID) ||
+            PMIx_Check_key(key, PMIX_ORIGIN_PID) || PMIx_Check_key(key, PMIX_ORIGIN_IS_TOOL) ||
+            PMIx_Check_key(key, PMIX_ORIGIN_IS_CLIENT));
+#else
+    return false;
+#endif
 }
 
 bool prte_pmix_server_privileged(uid_t uid)
@@ -362,21 +418,24 @@ int prte_pmix_server_access_record_dvm(prte_job_t *daemons)
     return PRTE_SUCCESS;
 }
 
-int prte_pmix_server_scheduler_uids_resolve(void)
+/* Resolve a comma-separated list of user names and numbers into *ids. A
+ * name nobody has is refused (PRTE_ERR_NOT_FOUND), and handed back in
+ * *bad for the caller to report - each under its own help topic */
+static int resolve_uid_list(const char *list, uint32_t **idsout, size_t *nout, char **bad)
 {
     char **names;
     uint32_t *ids;
     size_t n, nnames;
-    pmix_status_t prc;
     int rc = PRTE_SUCCESS;
 
-    free(prte_pmix_server_globals.sched_uids);
-    prte_pmix_server_globals.sched_uids = NULL;
-    prte_pmix_server_globals.nsched_uids = 0;
-    if (NULL == prte_pmix_server_globals.scheduler_uids) {
+    free(*idsout);
+    *idsout = NULL;
+    *nout = 0;
+    *bad = NULL;
+    if (NULL == list) {
         return PRTE_SUCCESS;
     }
-    names = PMIx_Argv_split(prte_pmix_server_globals.scheduler_uids, ',');
+    names = PMIx_Argv_split(list, ',');
     nnames = PMIx_Argv_count(names);
     if (0 == nnames) {
         PMIx_Argv_free(names);
@@ -388,12 +447,9 @@ int prte_pmix_server_scheduler_uids_resolve(void)
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     for (n = 0; n < nnames; n++) {
-        prc = pmix_util_uid_from_string(names[n], &ids[n]);
-        if (PMIX_SUCCESS != prc) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
-                           "scheduler-uid-unknown", true, names[n],
-                           prte_pmix_server_globals.scheduler_uids);
-            rc = PRTE_ERR_SILENT;
+        if (PMIX_SUCCESS != pmix_util_uid_from_string(names[n], &ids[n])) {
+            *bad = strdup(names[n]);
+            rc = PRTE_ERR_NOT_FOUND;
             break;
         }
     }
@@ -402,9 +458,45 @@ int prte_pmix_server_scheduler_uids_resolve(void)
         free(ids);
         return rc;
     }
-    prte_pmix_server_globals.sched_uids = ids;
-    prte_pmix_server_globals.nsched_uids = nnames;
+    *idsout = ids;
+    *nout = nnames;
     return PRTE_SUCCESS;
+}
+
+int prte_pmix_server_scheduler_uids_resolve(void)
+{
+    char *bad = NULL;
+    int rc;
+
+    rc = resolve_uid_list(prte_pmix_server_globals.scheduler_uids,
+                          &prte_pmix_server_globals.sched_uids,
+                          &prte_pmix_server_globals.nsched_uids, &bad);
+    if (PRTE_ERR_NOT_FOUND == rc) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                       "scheduler-uid-unknown", true, (NULL == bad) ? "" : bad,
+                       prte_pmix_server_globals.scheduler_uids);
+        rc = PRTE_ERR_SILENT;
+    }
+    free(bad);
+    return rc;
+}
+
+int prte_pmix_server_relay_uids_resolve(void)
+{
+    char *bad = NULL;
+    int rc;
+
+    rc = resolve_uid_list(prte_pmix_server_globals.relay_uids,
+                          &prte_pmix_server_globals.rly_uids,
+                          &prte_pmix_server_globals.nrly_uids, &bad);
+    if (PRTE_ERR_NOT_FOUND == rc) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                       "relay-uid-unknown", true, (NULL == bad) ? "" : bad,
+                       prte_pmix_server_globals.relay_uids);
+        rc = PRTE_ERR_SILENT;
+    }
+    free(bad);
+    return rc;
 }
 
 bool prte_pmix_server_scheduler_permitted(uid_t uid)
@@ -598,17 +690,89 @@ void prte_pmix_server_access_job_done(const pmix_nspace_t nspace)
 /* relaying a request                                                  */
 /* ------------------------------------------------------------------ */
 
-void prte_pmix_server_mark_relayed(pmix_info_t *info, size_t ninfo)
+size_t prte_pmix_server_relay_copy(pmix_info_t *dst, const pmix_info_t *src, size_t nsrc)
 {
-#if PRTE_PMIX_HAVE_INFO_RELAYED
-    size_t n;
+    size_t n, m = 0;
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+    /* the process we heard from, as PMIx established it, and what it
+     * claims about whoever first asked */
+    const pmix_info_t *uid = NULL, *gid = NULL, *pid = NULL, *tool = NULL, *client = NULL;
+    const pmix_info_t *ouid = NULL, *ogid = NULL, *opid = NULL, *otool = NULL, *oclient = NULL;
+    uint32_t relay, origin;
+    bool claimed = false;
 
-    for (n = 0; NULL != info && n < ninfo; n++) {
-        if (PMIX_CHECK_KEY(&info[n], PMIX_USERID) || PMIX_CHECK_KEY(&info[n], PMIX_GRPID)) {
-            PMIx_Info_relayed(&info[n]);
+    for (n = 0; NULL != src && n < nsrc; n++) {
+        if (PMIX_CHECK_KEY(&src[n], PMIX_USERID)) {
+            uid = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_GRPID)) {
+            gid = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_REQUESTOR_PID)) {
+            pid = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_REQUESTOR_IS_TOOL)) {
+            tool = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_REQUESTOR_IS_CLIENT)) {
+            client = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_ORIGIN_USERID)) {
+            ouid = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_ORIGIN_GRPID)) {
+            ogid = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_ORIGIN_PID)) {
+            opid = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_ORIGIN_IS_TOOL)) {
+            otool = &src[n];
+        } else if (PMIX_CHECK_KEY(&src[n], PMIX_ORIGIN_IS_CLIENT)) {
+            oclient = &src[n];
+        } else {
+            PMIX_INFO_XFER(&dst[m], (pmix_info_t *) &src[n]);
+            ++m;
         }
     }
+    /* we pass on the claim we were given only if the one who gave it may
+     * make it - the rule we apply to it ourselves */
+    if (NULL != uid && NULL != ouid &&
+        PMIX_SUCCESS == PMIx_Value_get_number(&uid->value, &relay, PMIX_UINT32) &&
+        PMIX_SUCCESS == PMIx_Value_get_number(&ouid->value, &origin, PMIX_UINT32) &&
+        prte_pmix_server_relay_permitted((uid_t) relay, (uid_t) origin)) {
+        claimed = true;
+    }
+    if (!claimed) {
+        /* otherwise the process we heard from is the one we act for */
+        ouid = uid;
+        ogid = gid;
+        opid = pid;
+        otool = tool;
+        oclient = client;
+    }
+    if (NULL != ouid) {
+        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) ouid);
+        PMIX_LOAD_KEY(dst[m].key, PMIX_ORIGIN_USERID);
+        ++m;
+    }
+    if (NULL != ogid) {
+        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) ogid);
+        PMIX_LOAD_KEY(dst[m].key, PMIX_ORIGIN_GRPID);
+        ++m;
+    }
+    if (NULL != opid) {
+        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) opid);
+        PMIX_LOAD_KEY(dst[m].key, PMIX_ORIGIN_PID);
+        ++m;
+    }
+    if (NULL != otool) {
+        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) otool);
+        PMIX_LOAD_KEY(dst[m].key, PMIX_ORIGIN_IS_TOOL);
+        ++m;
+    }
+    if (NULL != oclient) {
+        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) oclient);
+        PMIX_LOAD_KEY(dst[m].key, PMIX_ORIGIN_IS_CLIENT);
+        ++m;
+    }
 #else
-    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
+    for (n = 0; NULL != src && n < nsrc; n++) {
+        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) &src[n]);
+        ++m;
+    }
 #endif
+    return m;
 }

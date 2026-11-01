@@ -560,6 +560,19 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_pmix_server_globals.scheduler_uids);
 
+    /* the users, besides root and our own, trusted to relay for another */
+    prte_pmix_server_globals.relay_uids = NULL;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "relay_uids",
+                                      "Comma-separated list of the users (names or numeric "
+                                      "uids) trusted to pass on a request for a process of "
+                                      "another user - a privileged DVM relaying its users' "
+                                      "requests, say. A request a relay makes for its own "
+                                      "user, and one relayed by root or by the user the DVM "
+                                      "runs as, needs no entry. Any other relay's claim is "
+                                      "ignored, and the request treated as the relay's own",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_pmix_server_globals.relay_uids);
+
     /* whether or not to generate device distances */
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
                                       "Device types whose distances are to be provided (default=fabric,gpu,network)",
@@ -966,6 +979,8 @@ int pmix_server_init(void)
     prte_pmix_server_globals.primary_server_set = false;
     prte_pmix_server_globals.sched_uids = NULL;
     prte_pmix_server_globals.nsched_uids = 0;
+    prte_pmix_server_globals.rly_uids = NULL;
+    prte_pmix_server_globals.nrly_uids = 0;
     prte_pmix_server_globals.dvm_access = NULL;
 
     /* only the master accepts a scheduler. Its users are looked up now -
@@ -976,6 +991,11 @@ int pmix_server_init(void)
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
+    }
+    /* every daemon judges the relays it hears from */
+    rc = prte_pmix_server_relay_uids_resolve();
+    if (PRTE_SUCCESS != rc) {
+        return rc;
     }
 
     PMIX_INFO_LIST_START(ilist);
@@ -1457,6 +1477,9 @@ void pmix_server_finalize(void)
     free(prte_pmix_server_globals.sched_uids);
     prte_pmix_server_globals.sched_uids = NULL;
     prte_pmix_server_globals.nsched_uids = 0;
+    free(prte_pmix_server_globals.rly_uids);
+    prte_pmix_server_globals.rly_uids = NULL;
+    prte_pmix_server_globals.nrly_uids = 0;
     prte_pmix_server_access_release_dvm();
 
     /* and the users we judged access for */

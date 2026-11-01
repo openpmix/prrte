@@ -401,16 +401,13 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
 
     // we need to pass the request on to the scheduler
     // need to add the requestor's ID to the info array
-    PMIX_INFO_CREATE(xfer, req->ninfo + 1);
+    PMIX_INFO_CREATE(xfer, req->ninfo + 1 + PRTE_PMIX_ORIGIN_MAX);
     if (NULL == xfer) {
         return PMIX_ERR_NOMEM;
     }
-    for (n=0; n < req->ninfo; n++) {
-        PMIX_INFO_XFER(&xfer[n], &req->info[n]);
-    }
-    /* the requester's identity is theirs, not ours */
-    prte_pmix_server_mark_relayed(xfer, req->ninfo);
-    PMIX_INFO_LOAD(&xfer[req->ninfo], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
+    /* the request is the requester's, not ours - say whom we act for */
+    n = prte_pmix_server_relay_copy(xfer, req->info, req->ninfo);
+    PMIX_INFO_LOAD(&xfer[n], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
     /* Repoint the request at our augmented copy. If it merely borrowed the
      * caller's array we leave that alone, but if it already OWNED one we have
      * to release it here or repointing strands it - which is exactly what
@@ -421,7 +418,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     }
     req->copy = true;
     req->info = xfer;
-    req->ninfo++;
+    req->ninfo = n + 1;
 
     /* Build the capture buffer for the answer BEFORE the request goes out.
      * The completion callback runs on the PMIx progress thread, where it may

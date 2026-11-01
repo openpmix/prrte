@@ -334,6 +334,103 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     }
 }
 
+/* May the user who raised a debugger release reach every job it can?
+ * PMIx has checked the jobs registered with our own server; a release
+ * that goes beyond it is ours to judge, because we are the ones who carry
+ * it to every daemon. The jobs it reaches: those a custom range names (a
+ * wildcard namespace meaning every one), the raiser's own for a namespace
+ * range, the raiser alone for a proc-local one, and every job for any
+ * wider range. */
+static bool one_job_permitted(uid_t uid, const char *nspace)
+{
+    prte_job_t *jdata;
+
+    jdata = prte_get_job_data_object(nspace);
+    if (NULL == jdata) {
+        /* no such job here - nothing to release */
+        return true;
+    }
+    return prte_pmix_server_job_permitted(uid, jdata);
+}
+
+static bool every_job_permitted(uid_t uid)
+{
+    prte_job_t *jdata;
+    int i;
+
+    for (i = 0; i < prte_job_data->size; i++) {
+        jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
+        if (NULL == jdata) {
+            continue;
+        }
+        /* the daemons and the tools hold nothing for a debugger */
+        if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace) ||
+            PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+            continue;
+        }
+        if (!prte_pmix_server_job_permitted(uid, jdata)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool release_permitted(prte_pmix_server_op_caddy_t *cd)
+{
+    pmix_proc_t *procs = NULL;
+    size_t n, nprocs = 0;
+    uid_t uid;
+
+    if (!prte_pmix_server_requester_uid(cd->info, cd->ninfo, &uid)) {
+        /* one we raised ourselves */
+        return true;
+    }
+    if (prte_pmix_server_privileged(uid)) {
+        return true;
+    }
+    switch (cd->range) {
+        case PMIX_RANGE_PROC_LOCAL:
+            return true;
+        case PMIX_RANGE_NAMESPACE:
+            return one_job_permitted(uid, cd->proc.nspace);
+        case PMIX_RANGE_CUSTOM:
+            for (n = 0; n < cd->ninfo; n++) {
+                if (!PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_CUSTOM_RANGE)) {
+                    continue;
+                }
+                if (PMIX_PROC == cd->info[n].value.type) {
+                    procs = cd->info[n].value.data.proc;
+                    nprocs = 1;
+                } else if (PMIX_DATA_ARRAY == cd->info[n].value.type &&
+                           NULL != cd->info[n].value.data.darray &&
+                           PMIX_PROC == cd->info[n].value.data.darray->type) {
+                    procs = (pmix_proc_t *) cd->info[n].value.data.darray->array;
+                    nprocs = cd->info[n].value.data.darray->size;
+                } else {
+                    /* a range we cannot read is not one we can check */
+                    return false;
+                }
+                break;
+            }
+            if (NULL == procs) {
+                /* a custom range naming nobody reaches nobody */
+                return true;
+            }
+            for (n = 0; n < nprocs; n++) {
+                if (PMIX_NSPACE_INVALID(procs[n].nspace)) {
+                    /* a wildcard namespace is every job */
+                    return every_job_permitted(uid);
+                }
+                if (!one_job_permitted(uid, procs[n].nspace)) {
+                    return false;
+                }
+            }
+            return true;
+        default:
+            return every_job_permitted(uid);
+    }
+}
+
 static void _notify_event(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -348,6 +445,17 @@ static void _notify_event(int sd, short args, void *cbdata)
      * we treat this as a state change */
     if (PMIX_READY_FOR_DEBUG == cd->status) {
         PRTE_ACTIVATE_PROC_STATE(&cd->proc, PRTE_PROC_STATE_READY_FOR_DEBUG);
+        goto done;
+    }
+
+    /* a release lets processes held for a debugger go on - and it goes to
+     * every daemon, so it is judged here, where it entered */
+    if (PMIX_DEBUGGER_RELEASE == cd->status && !release_permitted(cd)) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s debugger release from %s refused: its user may not "
+                            "access every job it reaches",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&cd->proc));
+        ret = PMIX_ERR_NO_PERMISSIONS;
         goto done;
     }
 

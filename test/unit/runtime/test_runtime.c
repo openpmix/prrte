@@ -69,6 +69,7 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/rml/oob/oob.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
@@ -2300,7 +2301,7 @@ static int test_data_server_requestor(void)
     prte_job_t *toolj, *appj;
     pmix_proc_t owner, behalf;
     pmix_info_t info[3];
-    uint32_t uid, gid, claim;
+    uint32_t uid, gid, claim, other;
 
     reset_globals();
 
@@ -2347,19 +2348,75 @@ static int test_data_server_requestor(void)
     /* The identity a relay claims includes the uid and gid, and has to:
      * ownership is decided by the publishing user, and what PMIx appends to
      * a relayed request is the RELAYING daemon's identity, not the
-     * originating process's. */
+     * originating process's.  A tool running as our own user (or root) may
+     * claim anyone */
     claim = 4242;
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
-    uid = 7; gid = 9;
+    uid = (uint32_t) prte_process_info.euid; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
     PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
     PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
     prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
-    CHECK("requestor: a tool's claimed uid is honored", 4242 == uid);
-    CHECK("requestor: a tool's claimed gid is honored", 4242 == gid);
+    CHECK("requestor: a privileged tool's claimed uid is honored", 4242 == uid);
+    CHECK("requestor: a privileged tool's claimed gid is honored", 4242 == gid);
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_INFO_DESTRUCT(&info[1]);
     PMIX_INFO_DESTRUCT(&info[2]);
+
+    /* ...but being a tool is not enough to speak for another user - any
+     * user can connect one. A tool of some other user claiming a third is
+     * refused, process name and all */
+    other = (uint32_t) prte_process_info.euid + 1;
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = other; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
+    CHECK("requestor: another user's tool may not claim a third user", other == uid && 9 == gid);
+    CHECK("requestor: ...nor the process it names", PMIX_CHECK_NSPACE(owner.nspace, "relay.tool"));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[2]);
+
+    /* it may speak for its own user, which claims nothing it lacks */
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = other; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &other, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
+    CHECK("requestor: a tool may act for a process of its own user",
+          other == uid && 4242 == gid && PMIX_CHECK_PROCID(&owner, &behalf));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[2]);
+
+    /* and a user prte_pmix_relay_uids names may claim anyone */
+    prte_pmix_server_globals.rly_uids = &other;
+    prte_pmix_server_globals.nrly_uids = 1;
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = other; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
+    CHECK("requestor: a listed relay's claim is honored", 4242 == uid);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    prte_pmix_server_globals.rly_uids = NULL;
+    prte_pmix_server_globals.nrly_uids = 0;
+
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+    /* the claim a relay makes through PMIx, which wins over our own keys */
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = (uint32_t) prte_process_info.euid; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &other, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PMIX_ORIGIN_GRPID, &claim, PMIX_UINT32);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
+    CHECK("requestor: PMIX_ORIGIN_* is the claim read first", 4242 == uid && 4242 == gid);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[2]);
+#endif
 
     /* ...and an application process claiming a uid is refused it, which is
      * the half that matters: a uid it could assert is a uid whose published
@@ -2409,9 +2466,11 @@ static int test_data_server_relay_directives(void)
     pmix_info_t in[5], *out = NULL;
     const pmix_info_t *hit;
     size_t nout = 0, count;
-    uint32_t reluid = 7, relgid = 9, claim = 4242;
+    uint32_t reluid, relgid = 9, claim = 4242;
 
     reset_globals();
+    /* a tool of our own user, trusted to relay for anyone */
+    reluid = (uint32_t) prte_process_info.euid;
     toolj = make_job("relay.tool");
     PRTE_FLAG_SET(toolj, PRTE_JOB_FLAG_TOOL);
     CHECK("relay: tool job registered", PRTE_SUCCESS == prte_set_job_data_object(toolj));
@@ -2443,6 +2502,13 @@ static int test_data_server_relay_directives(void)
           1 == count && NULL != hit && relgid == hit->value.data.uint32);
     hit = relay_find(out, nout, "prte.test.relay.key", &count);
     CHECK("relay: the published data goes out", 1 == count);
+    hit = relay_find(out, nout, PMIX_USERID, &count);
+    CHECK("relay: the identity PMIx stamped on the request does not go out", 0 == count);
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+    hit = relay_find(out, nout, PMIX_ORIGIN_USERID, &count);
+    CHECK("relay: one PMIX_ORIGIN_USERID goes out, the tool's claim",
+          1 == count && NULL != hit && claim == hit->value.data.uint32);
+#endif
     PMIX_INFO_FREE(out, nout);
 
     /* an application process claiming to act for somebody is named as
