@@ -159,9 +159,9 @@ static void user_reg_cbfunc(pmix_status_t status, void *cbdata)
     free(msg);
 }
 
-/* Tell PMIx of a user we have made a record of - and the groups we found
- * it in, so PMIx need not look them up again - or, with a NULL user, that
- * we are done with uid */
+/* Tell PMIx of a user we have made a record of, and the groups we found it
+ * in - PMIx never looks them up itself, so these are the groups it judges
+ * the user by - or, with a NULL user, that we are done with uid */
 static void user_tell_pmix(uid_t uid, const pmix_user_t *user)
 {
     user_msg_t *msg;
@@ -175,7 +175,8 @@ static void user_tell_pmix(uid_t uid, const pmix_user_t *user)
         return;
     }
     /* no groups found makes no array to send (PMIx will not copy an empty
-     * one) - PMIx then looks for itself, and finds the same nothing */
+     * one) - PMIx then keeps no record, and judges the user by the one
+     * group each of its requests is made under */
     msg->ninfo = (NULL != user && 0 < user->ngids) ? 2 : 1;
     PMIX_INFO_CREATE(msg->info, msg->ninfo);
     if (NULL == msg->info) {
@@ -197,7 +198,12 @@ static void user_tell_pmix(uid_t uid, const pmix_user_t *user)
             da.type = PMIX_UINT32;
             da.size = user->ngids;
             da.array = gids;
+#ifdef PMIX_USER_GRPIDS
+            PMIX_INFO_LOAD(&msg->info[1], PMIX_USER_GRPIDS, &da, PMIX_DATA_ARRAY);
+#else
+            /* an older PMIx took a user's groups as a PMIX_GRPID array */
             PMIX_INFO_LOAD(&msg->info[1], PMIX_GRPID, &da, PMIX_DATA_ARRAY);
+#endif
             free(gids);
         }
         rc = PMIx_server_register_resources(msg->info, msg->ninfo, user_reg_cbfunc, msg);
@@ -228,6 +234,37 @@ static pmix_user_t *user_get(uid_t uid)
         user_tell_pmix(uid, user);
     }
     return user;
+}
+
+pmix_status_t prte_pmix_server_owner_groups(uid_t uid, pmix_data_array_t **out)
+{
+    pmix_user_t *user;
+    uint16_t n;
+
+    *out = NULL;
+    if (PRTE_INVALID_UID == uid || prte_pmix_server_privileged(uid)) {
+        /* root and our own user need no groups */
+        return PMIX_SUCCESS;
+    }
+    user = user_get(uid);
+    if (NULL == user) {
+        return PMIX_ERR_NOMEM;
+    }
+    /* Looked up afresh for every job the user owns - PMIx never looks a
+     * user's groups up, so a user added to a group is seen from its next
+     * job on. A lookup that fails keeps the groups the record had */
+    (void) pmix_server_user_refresh(user);
+    if (0 == user->ngids) {
+        return PMIX_SUCCESS;
+    }
+    PMIX_DATA_ARRAY_CREATE(*out, user->ngids, PMIX_UINT32);
+    if (NULL == *out) {
+        return PMIX_ERR_NOMEM;
+    }
+    for (n = 0; n < user->ngids; n++) {
+        ((uint32_t *) (*out)->array)[n] = (uint32_t) user->gids[n];
+    }
+    return PMIX_SUCCESS;
 }
 
 void prte_pmix_server_access_user(uid_t uid)
