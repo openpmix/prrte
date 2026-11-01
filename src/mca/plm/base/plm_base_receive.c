@@ -518,15 +518,17 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 PMIX_ERROR_LOG(rc);
                 goto CLEANUP;
             }
-            /* the new nspace is our base nspace with an "@N" extension */
-            pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
-            PMIX_LOAD_NSPACE(name.nspace, tmp);
-            free(tmp);
-            prte_plm_globals.next_jobid++;
+            /* the next "@N" of our base nspace that nothing holds - a
+             * tool that named itself may have taken the next in line */
+            rc = prte_plm_base_next_jobid(name.nspace);
         }
-        // see if we already have this job
-        jdata = prte_get_job_data_object(name.nspace);
-        rc = prte_pmix_server_tool_may_join(jdata, name.rank);
+        // see if we already have this job - a name we could not find
+        // the tool is refused below, as one it may not join is
+        jdata = NULL;
+        if (PRTE_SUCCESS == rc) {
+            jdata = prte_get_job_data_object(name.nspace);
+            rc = prte_pmix_server_tool_may_join(jdata, name.rank);
+        }
         if (PRTE_SUCCESS != rc) {
             PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
                                  "%s refusing tool %s: %s",

@@ -91,61 +91,46 @@ int prte_plm_base_set_hnp_name(void)
  * job named at the door may still be waiting on an allocation, or parked
  * in prte_cache until the DVM is ready, with no map to describe yet.
  */
-static bool reuse = false;
-
-int prte_plm_base_create_jobid(prte_job_t *jdata)
+int prte_plm_base_next_jobid(pmix_nspace_t nspace)
 {
     uint32_t i, jid;
     pmix_nspace_t pjid;
-    bool found;
-    char *tmp;
 
+    /* Find an unused jobid at or after next_jobid, wrapping past the end.
+     * Every name is checked, not only once the counter has wrapped: a
+     * tool may name itself, and one that took "base@N" ahead of us would
+     * otherwise be handed the next job, or the next tool, of that name -
+     * the job's processes joining the tool's namespace.  The scan starts
+     * where we left off rather than at 1 because a name is handed out here
+     * but not recorded in prte_job_data until the job reaches INIT: a scan
+     * that always restarted at 1 would hand the same hole to every job
+     * named while the first one is still waiting for its allocation. */
+    jid = prte_plm_globals.next_jobid;
+    for (i = 0; i < UINT32_MAX; i++) {
+        if (0 == jid || UINT32_MAX == jid) {
+            /* "@0" is the DVM itself */
+            jid = 1;
+        }
+        (void) snprintf(pjid, PMIX_MAX_NSLEN - 1, "%s@%u", prte_plm_globals.base_nspace, jid);
+        if (NULL == prte_get_job_data_object(pjid)) {
+            PMIX_LOAD_NSPACE(nspace, pjid);
+            prte_plm_globals.next_jobid = jid + 1;
+            return PRTE_SUCCESS;
+        }
+        ++jid;
+    }
+    /* we have run out of jobids! */
+    pmix_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are "
+                   "out of jobids!");
+    return PRTE_ERR_OUT_OF_RESOURCE;
+}
+
+int prte_plm_base_create_jobid(prte_job_t *jdata)
+{
     if (!PMIX_NSPACE_INVALID(jdata->nspace)) {
         /* already named - a restarted job keeps the name it had, and a job
          * named at the DVM's door reaches INIT already carrying one */
         return PRTE_SUCCESS;
     }
-
-    if (reuse) {
-        /* Find an unused jobid at or after next_jobid, wrapping past the
-         * end.  The scan has to start where we left off rather than at 1
-         * because a name is handed out here but not recorded in
-         * prte_job_data until the job reaches INIT: a scan that always
-         * restarted at 1 would hand the same hole to every job named while
-         * the first one is still waiting for its allocation. */
-        found = false;
-        jid = prte_plm_globals.next_jobid;
-        for (i = 0; i < UINT32_MAX; i++) {
-            if (0 == jid) {
-                /* "@0" is the DVM itself */
-                jid = 1;
-            }
-            (void) snprintf(pjid, PMIX_MAX_NSLEN - 1, "%s@%u", prte_plm_globals.base_nspace, jid);
-            if (NULL == prte_get_job_data_object(pjid)) {
-                found = true;
-                prte_plm_globals.next_jobid = jid;
-                break;
-            }
-            ++jid;
-        }
-        if (!found) {
-            /* we have run out of jobids! */
-            pmix_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are "
-                           "out of jobids!");
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-    }
-
-    /* the new nspace is our base nspace with an "@N" extension */
-    pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
-    PMIX_LOAD_NSPACE(jdata->nspace, tmp);
-    free(tmp);
-
-    prte_plm_globals.next_jobid++;
-    if (UINT32_MAX == prte_plm_globals.next_jobid) {
-        reuse = true;
-        prte_plm_globals.next_jobid = 1;
-    }
-
-    return PRTE_SUCCESS;
+    return prte_plm_base_next_jobid(jdata->nspace);
 }

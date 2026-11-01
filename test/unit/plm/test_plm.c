@@ -599,6 +599,35 @@ static int test_naming(void)
     PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RESTART);
     PMIX_RELEASE(jdata);
 
+    /* A tool may name itself, and one that took the next name in line
+     * holds it in the registry. The next job, or tool, is not handed that
+     * name - it would join the tool's namespace - but the one after */
+    {
+        prte_job_t *tool, *jdata3;
+        pmix_nspace_t pjid;
+        char expect4[PMIX_MAX_NSLEN + 1];
+
+        tool = PMIX_NEW(prte_job_t);
+        snprintf(expect, sizeof(expect), "%s@3", prte_plm_globals.base_nspace);
+        PMIX_LOAD_NSPACE(tool->nspace, expect);
+        PRTE_FLAG_SET(tool, PRTE_JOB_FLAG_TOOL);
+        CHECK("a tool holds base@3", PRTE_SUCCESS == prte_set_job_data_object(tool));
+        jdata3 = PMIX_NEW(prte_job_t);
+        CHECK("create_jobid past a tool's name succeeds",
+              PRTE_SUCCESS == prte_plm_base_create_jobid(jdata3));
+        snprintf(expect4, sizeof(expect4), "%s@4", prte_plm_globals.base_nspace);
+        CHECK("the job skips the name the tool holds", 0 == strcmp(jdata3->nspace, expect4));
+        CHECK("next_jobid is past it", 5 == prte_plm_globals.next_jobid);
+        /* and a name for a tool the DVM names is found the same way */
+        prte_plm_globals.next_jobid = 3;
+        CHECK("next_jobid for a host-named tool succeeds",
+              PRTE_SUCCESS == prte_plm_base_next_jobid(pjid));
+        CHECK("it skips the name a tool holds too", PMIX_CHECK_NSPACE(pjid, expect4));
+        PMIX_RELEASE(jdata3);
+        pmix_pointer_array_set_item(prte_job_data, tool->index, NULL);
+        PMIX_RELEASE(tool);
+    }
+
     free(prte_plm_globals.base_nspace);
     prte_plm_globals.base_nspace = save_base;
     prte_plm_globals.next_jobid = save_next;
