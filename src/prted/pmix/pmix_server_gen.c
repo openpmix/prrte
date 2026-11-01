@@ -565,7 +565,6 @@ static void _toolconn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *cd = (prte_pmix_server_req_t *) cbdata;
     int rc;
-    char *tmp;
     uint32_t u32;
     size_t n;
     pmix_data_buffer_t *buf;
@@ -751,11 +750,13 @@ static void _toolconn(int sd, short args, void *cbdata)
     /* if we are the HNP, we can handle this ourselves */
     if (PRTE_PROC_IS_MASTER) {
         if (!nspace_given) {
-            /* the new nspace is our base nspace with an "@N" extension */
-            pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
-            PMIX_LOAD_NSPACE(cd->target.nspace, tmp);
-            free(tmp);
-            prte_plm_globals.next_jobid++;
+            /* the next "@N" of our base nspace that nothing holds - a
+             * tool that named itself may have taken the next in line */
+            rc = prte_plm_base_next_jobid(cd->target.nspace);
+            if (PRTE_SUCCESS != rc) {
+                rc = prte_pmix_convert_rc(rc);
+                goto complete;
+            }
         }
         // register this job - will add to our array of jobs. The
         // registration completes asynchronously
