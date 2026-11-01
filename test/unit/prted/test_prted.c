@@ -4160,22 +4160,86 @@ static int test_access(void)
         PMIX_RELEASE(prte_job_data);
         prte_job_data = NULL;
     }
-#if PRTE_PMIX_HAVE_INFO_RELAYED
-    /* relaying a request: the requester's identity is marked as theirs */
+#if PRTE_PMIX_HAVE_ORIGIN_ID
+    /* relaying a request: whom a relay may speak for, whom we attribute
+     * its request to, and whom we say we act for when we pass it on */
     {
-        pmix_info_t rel[3];
-        uint32_t ruid = ACC_LISTED, rgid = ACC_OWNGRP;
+        pmix_info_t rel[4], out[4 + PRTE_PMIX_ORIGIN_MAX];
+        uint32_t ruid = ACC_LISTED, rgid = ACC_OWNGRP, claim = 4242, reqg = 77;
+        uint32_t myuid = (uint32_t) prte_process_info.euid, v = 0;
+        uid_t got = 0;
+        size_t nout, k, nuid, norig, nreq;
 
+        CHECK("relay/same-user-permitted",
+              prte_pmix_server_relay_permitted(ACC_LISTED, ACC_LISTED));
+        CHECK("relay/own-user-permitted",
+              prte_pmix_server_relay_permitted(prte_process_info.euid, 4242));
+        CHECK("relay/other-user-refused", !prte_pmix_server_relay_permitted(ACC_LISTED, 4242));
+        prte_pmix_server_globals.rly_uids = &ruid;
+        prte_pmix_server_globals.nrly_uids = 1;
+        CHECK("relay/listed-user-permitted", prte_pmix_server_relay_permitted(ACC_LISTED, 4242));
+        prte_pmix_server_globals.rly_uids = NULL;
+        prte_pmix_server_globals.nrly_uids = 0;
+
+        /* a claim from a relay that may not make it is not believed */
+        PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);
+        PMIX_INFO_LOAD(&rel[1], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
+        CHECK("relay/untrusted-claim-is-the-relays",
+              prte_pmix_server_requester_uid(rel, 2, &got) && ACC_LISTED == got);
+        PMIX_INFO_DESTRUCT(&rel[0]);
+        PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &myuid, PMIX_UINT32);
+        CHECK("relay/trusted-claim-believed",
+              prte_pmix_server_requester_uid(rel, 2, &got) && 4242 == got);
+        PMIX_INFO_DESTRUCT(&rel[0]);
+        PMIX_INFO_DESTRUCT(&rel[1]);
+
+        /* passing one on: our own stamped identity does not travel, the
+         * process we heard from goes as the origin, the rest as it was */
         PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);
         PMIX_INFO_LOAD(&rel[1], "prte.unit.other", "x", PMIX_STRING);
         PMIX_INFO_LOAD(&rel[2], PMIX_GRPID, &rgid, PMIX_UINT32);
-        prte_pmix_server_mark_relayed(rel, 3);
-        CHECK("relay/uid-marked", PMIx_Info_is_relayed(&rel[0]));
-        CHECK("relay/gid-marked", PMIx_Info_is_relayed(&rel[2]));
-        CHECK("relay/other-unmarked", !PMIx_Info_is_relayed(&rel[1]));
+        PMIX_INFO_LOAD(&rel[3], PMIX_REQUESTED_GRPID, &reqg, PMIX_UINT32);
+        PMIX_INFO_CONSTRUCT(&out[0]);
+        nout = prte_pmix_server_relay_copy(out, rel, 4);
+        nuid = norig = nreq = 0;
+        for (k = 0; k < nout; k++) {
+            if (PMIX_CHECK_KEY(&out[k], PMIX_USERID) || PMIX_CHECK_KEY(&out[k], PMIX_GRPID)) {
+                ++nuid;
+            } else if (PMIX_CHECK_KEY(&out[k], PMIX_ORIGIN_USERID)) {
+                ++norig;
+                v = out[k].value.data.uint32;
+            } else if (PMIX_CHECK_KEY(&out[k], PMIX_REQUESTED_GRPID)) {
+                ++nreq;
+            }
+        }
+        CHECK("relay/stamped-identity-not-copied", 0 == nuid);
+        CHECK("relay/requester-goes-as-origin", 1 == norig && ACC_LISTED == v);
+        CHECK("relay/requested-group-copied", 1 == nreq);
+        CHECK("relay/origin-uid-and-gid-added", 4 == nout);
+        for (k = 0; k < nout; k++) {
+            PMIX_INFO_DESTRUCT(&out[k]);
+        }
         PMIX_INFO_DESTRUCT(&rel[0]);
-        PMIX_INFO_DESTRUCT(&rel[1]);
+
+        /* a trusted relay's claim is what we pass on */
+        PMIX_INFO_LOAD(&rel[0], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
         PMIX_INFO_DESTRUCT(&rel[2]);
+        PMIX_INFO_LOAD(&rel[2], PMIX_USERID, &myuid, PMIX_UINT32);
+        nout = prte_pmix_server_relay_copy(out, rel, 4);
+        norig = 0;
+        for (k = 0; k < nout; k++) {
+            if (PMIX_CHECK_KEY(&out[k], PMIX_ORIGIN_USERID)) {
+                ++norig;
+                v = out[k].value.data.uint32;
+            }
+        }
+        CHECK("relay/trusted-claim-passed-on", 1 == norig && 4242 == v);
+        for (k = 0; k < nout; k++) {
+            PMIX_INFO_DESTRUCT(&out[k]);
+        }
+        for (k = 0; k < 4; k++) {
+            PMIX_INFO_DESTRUCT(&rel[k]);
+        }
     }
 #endif
     PMIX_RELEASE(jdata);
