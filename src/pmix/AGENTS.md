@@ -196,7 +196,7 @@ shape.
 
 ---
 
-## `PMIX_SERVER_URI` is collected, and it is not an RML thing
+## `PMIX_SERVER_URI` is a daemon's own, and it is not an RML thing
 
 Worth stating because the name invites exactly the wrong assumption.
 
@@ -206,56 +206,17 @@ other; that is the RML, using `PMIX_PROC_URI`. No daemon ever opens a PMIx
 connection to another daemon, and nothing in PRRTE consumes this key
 internally.
 
-It exists for one consumer: a **tool** that asks the DVM "where is the PMIx
-server on node X?" so it can connect there directly —
-`PMIx_Query(PMIX_SERVER_URI)` qualified by `PMIX_HOSTNAME` or `PMIX_NODEID`,
-as in [`examples/tool.c`](../../examples/tool.c) (`--uri <nodename>`).
-
-The value travels the **same two hops as `PMIX_PROC_URI`**, one field later
-in each message — collect to the master, then hand the whole set back out:
-
-1. **Collect.** Each daemon fetches its own server URI from its PMIx server
-   and packs it into its `PRTE_RML_TAG_PRTED_CALLBACK` rollup, right after
-   `PMIX_PROC_URI` — [`src/tools/prted/prted.c`](../tools/prted/prted.c).
-   The master unpacks it in `prte_plm_base_daemon_callback()` and does
-   `PMIx_Store_internal(&dname, PMIX_SERVER_URI, ...)` against that daemon's
-   name — [`plm_base_launch_support.c`](../mca/plm/base/plm_base_launch_support.c).
-2. **Distribute.** `vm_ready()` builds the nidmap, appends every daemon's
-   name + `PMIX_PROC_URI` + `PMIX_SERVER_URI` to that same buffer, and
-   xcasts it on `PRTE_RML_TAG_WIREUP` —
-   [`state_dvm.c`](../mca/state/dvm/state_dvm.c). Every daemon stores what
-   it receives in `process_wireup()` —
-   [`grpcomm_xcast.c`](../grpcomm/grpcomm_xcast.c).
-3. **Serve.** The query fetches it with a `PMIx_Get` keyed on exactly that
-   name, which is what `PRTE_MODEX_RECV_VALUE_OPTIONAL` does — so the query
-   code needed no change at all.
-
-Consequences to keep in mind:
-
-- **Every daemon can answer for every node**, and that uniformity is the
-  point: a tool must not get a different answer depending on which daemon it
-  happened to connect to. Collecting only at the master would have made the
-  query's result depend on the tool's attachment point.
-- **Grow is covered by the same path; shrink needs nothing.** `vm_ready()`
-  runs on `VM_READY`, which fires again whenever the daemon set changes, and
-  it re-sends the *whole* set — so a grow redistributes without any code of
-  its own. A shrink NULLs `node->daemon`, and the query resolves
-  hostname → node → daemon, so a departed node simply cannot be answered
-  for; its store entry is orphaned under a vpid the DVM will never reuse.
-- **A daemon that cannot report one packs a NULL, and that is not an
-  error.** This is auxiliary information; it must never fail a launch or a
-  wireup.
-- **In `process_wireup()` the server URI must be unpacked before the
-  `continue`s.** It is a per-record field, so skipping it for a daemon whose
-  `PMIX_PROC_URI` we already have would leave it in the buffer and the next
-  iteration would read that string as a `pmix_proc_t`.
-- **The URI is only useful to a tool on that node.** Every server binds
-  loopback and takes connections from its own node only, so the answer is
-  truthful but cannot be dialled from elsewhere. That is the requester's
-  business, not the DVM's; serve what we have.
-- This closes the half-built feature from commit `6e481fbb95` (2019), whose
-  message promised the collection but whose diff only ever contained the
-  query side and the example.
+**A daemon answers only for its own server.** `PMIx_Query(PMIX_SERVER_URI)`
+gets the URI of the server the tool is connected to; qualified by
+`PMIX_HOSTNAME` or `PMIX_NODEID`, it answers only when that names the
+daemon's own node, and refuses any other node with
+`PMIX_ERR_NOT_SUPPORTED` (`pmix_server_queries.c`). A PMIx server takes
+connections from its own node only, over its local socket, so another
+node's address is of no use to a tool; and the one kind of address that
+crosses nodes, TCP, a server of this PMIx release refuses to a tool of the
+same release. So the URIs are not collected: they used to ride in the
+`PRTED_CALLBACK` rollup and the `WIREUP` xcast, and were removed with the
+query's other-node answers. Do not add them back to either message.
 
 ---
 
@@ -326,15 +287,10 @@ that is not the one you are standing on. The `proctable` client covers:
   must report a state PMIx defines, and none may report `UNDEF`;
 - `PMIX_QUERY_LOCAL_PROC_TABLE`, whose local-vs-global distinction has no
   meaning at all on one host;
-- the master serving **any** node's `PMIX_SERVER_URI`, and a failure
+- a daemon refusing another node's `PMIX_SERVER_URI`, and a failure
   reporting a real status rather than a flattened `PMIX_ERROR` — the direct
-  regression test for the wrong-direction conversion described above.
-
-  Note who the consumer is: **not a daemon**. Daemons reach each other over
-  the RML and never form PMIx connections to one another. This query exists
-  for a *tool* — see `examples/tool.c --uri <nodename>` — which asks the DVM
-  where a particular node's PMIx server is so the tool can connect to it
-  directly. See the section below for how that value gets to the master.
+  regression test for the wrong-direction conversion described above. See
+  the section below for why only a daemon's own URI is answered.
 
 What is deliberately **not** tested anywhere automatically: the lock macros
 and `prte_pmix_shifted_wakeup()`. Their contract is a threading one — it

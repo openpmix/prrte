@@ -3295,54 +3295,37 @@ test_pmix() {
             || bad "$who reported $n of 2 survivors as alive: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
     done
 
-    banner "pmix: every daemon serves every node's PMIX_SERVER_URI"
-    # The consumer of this query is a TOOL, not a daemon -- daemons reach
-    # each other over the RML and never form PMIx connections to one another.
-    # A tool asks the DVM "where is the PMIx server on node X?" so it can
-    # connect there directly (examples/tool.c --uri <nodename>).
-    #
-    # This only works because every daemon ships its own server URI to the
-    # master in its PRTED_CALLBACK rollup, and the master then puts the whole
-    # set into the WIREUP xcast alongside the nidmap -- so EVERY daemon can
-    # answer for EVERY node, not just the master.  That uniformity is the
-    # point: a tool must not get a different answer depending on which daemon
-    # it happened to connect to.  Before the collection existed the query was
-    # asking for a key nobody published and answered NOT_FOUND for every node
-    # but the one being asked.  One host cannot show any of this: there is
-    # only one daemon and it is the master.
-    #
-    # Ask a NON-MASTER daemon (a proc on node3) about the others -- that is
-    # the case that needs the xcast rather than just the rollup.  The URIs
-    # must all differ and each must name its own daemon vpid; an
-    # implementation that echoed the local server back would pass a weaker
-    # test.
-    uris=""
-    for target in node1 node2 node4; do
-        out=$(PRUN "--host node3:1 -n 1 $PT serveruri $target" 2>&1)
-        u=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
-        if [ -n "$u" ]; then
-            ok "a non-master daemon served $target's server URI"
-            uris="$uris$u\n"
+    banner "pmix: a daemon reports its own PMIX_SERVER_URI, and no other node's"
+    # A PMIx server takes connections from its own node only, over its local
+    # socket, so another node's server address is of no use to a tool - and
+    # a TCP address, the only kind that crosses nodes, is refused to a tool
+    # of this release. So the DVM no longer collects every daemon's URI: a
+    # daemon answers for its own server, and refuses a query naming another
+    # node with PMIX_ERR_NOT_SUPPORTED. One host cannot show the refusal:
+    # there every node is the local one.
+    out=$(PRUN "--host node3:1 -n 1 $PT serveruri" 2>&1)
+    u0=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
+    [ -n "$u0" ] \
+        && ok "a non-master daemon reports its own server URI" \
+        || bad "a non-master daemon did not report its own server URI: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(PRUN "--host node3:1 -n 1 $PT serveruri node3" 2>&1)
+    u1=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
+    if [ -n "$u1" ] && [ "$u1" = "$u0" ]; then
+        ok "...and the same URI when its own node is named"
+    else
+        bad "naming its own node gave '$u1', not '$u0'"
+    fi
+    for who in node3:node1 node1:node3; do
+        at=${who%%:*}; target=${who##*:}
+        out=$(PRUN "--host $at:1 -n 1 $PT serveruri $target" 2>&1)
+        if echo "$out" | grep -q '^URI '; then
+            bad "the daemon on $at reported $target's server URI"
+        elif echo "$out" | grep -q '^ERR .*PMIX_ERR_NOT_SUPPORTED'; then
+            ok "the daemon on $at refuses $target's server URI as not supported"
         else
-            bad "non-master daemon could not serve $target's server URI: $(echo "$out" | grep -E '^ERR' | tr '\n' ' ' | tail -c 200)"
+            bad "the daemon on $at answered $target's server URI with: $(echo "$out" | grep -E '^ERR' | tr '\n' ' ' | tail -c 200)"
         fi
     done
-    n=$(printf "$uris" | sort -u | grep -c . | tr -d ' ')
-    [ "$n" = 3 ] \
-        && ok "...and the three URIs are distinct (not the local server echoed back)" \
-        || bad "expected 3 distinct server URIs, got $n: $(printf "$uris" | tr '\n' ' ')"
-    # ...and the master must give the same answers
-    out=$(PRUN "--host node1:1 -n 1 $PT serveruri node3" 2>&1)
-    m3=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
-    out=$(PRUN "--host node3:1 -n 1 $PT serveruri node3" 2>&1)
-    d3=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
-    if [ -n "$m3" ] && [ "$m3" = "$d3" ]; then
-        ok "master and a non-master daemon agree on node3's server URI"
-    elif [ -z "$m3" ] || [ -z "$d3" ]; then
-        bad "node3's server URI was missing from one of the two answers (master='$m3' daemon='$d3')"
-    else
-        bad "master and daemon disagree on node3's server URI: '$m3' vs '$d3'"
-    fi
     # An unknown node must be refused with a status that SAYS something --
     # not the generic PMIX_ERROR (-1) that the wrong-direction conversion
     # used to manufacture out of every failure on this path.
@@ -3362,52 +3345,6 @@ test_pmix() {
     n=$(prted_count 1 2 3 4)
     [ "$n" = 0 ] && ok "no daemons survived the pmix-shim teardown" \
                  || bad "$n daemons still running after pterm"
-    cleanup_swarm
-
-    banner "pmix: server URIs follow the DVM across a grow and a shrink"
-    # The URIs ride along in the WIREUP xcast that vm_ready() builds, and
-    # vm_ready() runs on VM_READY -- which fires again every time the daemon
-    # set changes.  So a GROW should redistribute the whole set (the new
-    # nodes' URIs to everyone, and everyone's to the new nodes) with no code
-    # of its own.  This case checks that rather than assuming it.
-    #
-    # A SHRINK needs nothing: the query resolves hostname -> node ->
-    # node->daemon, and a shrink NULLs that backpointer, so a departed node
-    # cannot be answered for at all.  The store entry keyed on its (never
-    # reused) vpid is orphaned but unreachable.  Asserted here so that stays
-    # true rather than being an accident of the current teardown order.
-    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
-    if ! RUN 'pgrep -x prte >/dev/null'; then
-        bad "could not start an elastic DVM for the grow/shrink URI test"
-    else
-        out=$(RUN 'timeout 90 elastic grow node2:2,node3:2' 2>&1)
-        if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
-            bad "grow did not complete -- cannot test URI redistribution"
-        else
-            ok "grew node2+node3"
-            for target in node2 node3; do
-                out=$(RUN "timeout 40 prun --host node1:1 -n 1 $PT serveruri $target" 2>&1)
-                echo "$out" | grep -q '^URI ' \
-                    && ok "a grown node's server URI ($target) is served after the grow" \
-                    || bad "no server URI for grown $target: $(echo "$out" | grep -E '^ERR' | tr '\n' ' ' | tail -c 200)"
-            done
-            out=$(RUN 'timeout 90 elastic shrink node3' 2>&1); sleep 3
-            if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
-                bad "shrink did not complete -- cannot test the stale URI"
-            else
-                ok "shrank node3"
-                out=$(RUN "timeout 40 prun --host node1:1 -n 1 $PT serveruri node3" 2>&1)
-                echo "$out" | grep -q '^URI ' \
-                    && bad "a shrunk node's server URI is still being served -- stale entry" \
-                    || ok "...and node3's server URI is no longer served"
-                out=$(RUN "timeout 40 prun --host node1:1 -n 1 $PT serveruri node2" 2>&1)
-                echo "$out" | grep -q '^URI ' \
-                    && ok "...while node2's is unaffected" \
-                    || bad "node2's server URI was lost by the shrink"
-            fi
-        fi
-        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
-    fi
     cleanup_swarm
 
     banner "pmix: a rank can locate every peer in its job, on any node"

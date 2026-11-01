@@ -69,7 +69,6 @@ int main(int argc, char **argv)
     pmix_info_t *info = NULL, *iptr;
     char *server_uri = NULL;
     char *nspace = NULL;
-    char *nodename = NULL;
     pmix_data_array_t *darray, *dptr;
     bool geturi = false;
     char hostname[1024];
@@ -89,8 +88,9 @@ int main(int argc, char **argv)
             }
             nspace = argv[n + 1];
         } else if (0 == strcmp("-uri", argv[n]) || 0 == strcmp("--uri", argv[n])) {
-            /* retrieve the PMIx server's uri from the indicated node */
-            nodename = argv[n + 1];
+            /* retrieve the URI of the PMIx server we are connected to - a
+             * server is reached only from its own node, so that is the
+             * only one the DVM reports */
             geturi = true;
         }
     }
@@ -115,10 +115,6 @@ int main(int argc, char **argv)
         nq = 1;
         PMIX_QUERY_CREATE(query, nq);
         PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_SERVER_URI);
-        if (NULL != nodename) {
-            PMIX_QUERY_QUALIFIERS_CREATE(&query[0], 1);
-            PMIX_INFO_LOAD(&query[0].qualifiers[0], PMIX_HOSTNAME, nodename, PMIX_STRING);
-        }
         DEBUG_CONSTRUCT_MYQUERY(&mydata);
         if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void *) &mydata))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace,
@@ -131,7 +127,7 @@ int main(int argc, char **argv)
             /* should be in the first key */
             if (PMIX_CHECK_KEY(&mydata.info[0], PMIX_SERVER_URI)) {
                 fprintf(stderr, "PMIx server URI for node %s: %s\n",
-                        (NULL == nodename) ? hostname : nodename, mydata.info[0].value.data.string);
+                        hostname, mydata.info[0].value.data.string);
             } else {
                 fprintf(stderr, "Query returned wrong info key at first posn: %s\n",
                         mydata.info[0].key);

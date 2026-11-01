@@ -968,8 +968,9 @@ proc half, because `->state` alone cannot be told from a node's.
 Deferral is per **key**, not per query and not per request, because the
 things a daemon must answer for *itself* can arrive in the same
 `PMIx_Query_info` as a key only the master can answer: `PMIX_HWLOC_XML_V1`
-and `_V2` export this node's topology, an unqualified `PMIX_SERVER_URI` is
-this daemon's own URI, and `PMIX_QUERY_LOCAL_PROC_TABLE` means the procs
+and `_V2` export this node's topology, `PMIX_SERVER_URI` is this daemon's
+own URI (the only one it answers - another node's is refused with
+`PMIX_ERR_NOT_SUPPORTED`), and `PMIX_QUERY_LOCAL_PROC_TABLE` means the procs
 this daemon is hosting. Relaying a whole query would answer those about
 the master.
 

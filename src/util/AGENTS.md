@@ -223,7 +223,7 @@ equal to the master's:
 
 - **The pool slot travels on the wire because it is the node's identity.**
   It is the `PMIX_NODEID` a daemon hands its local clients, and the subscript
-  the `PMIX_SERVER_URI` query resolves a nodeid through. It is *not* the
+  a `PMIX_NODEID` qualifier on a query resolves through. It is *not* the
   position in the packed list: the sender skips nodes that have no daemon, so
   after a shrink the packed sequence is compacted while the pool is not, and
   a receiver that used the packed position renamed one node's entry into
