@@ -76,8 +76,8 @@ Consequences, all of them wanted:
 * **The RML and the wire header stay as they are.**  Nothing has to name a
   foreign process, so the OOB header can go on carrying one namespace — see
   the entry in :doc:`../../todo`.
-* **The URI problem disappears.**  What ``PMIx_tool_attach_to_server`` wants
-  under ``PMIX_SERVER_URI`` is exactly what ``prte --report-uri`` writes.
+* **The URI problem disappears.**  ``PMIx_tool_attach_to_server`` takes the
+  file ``prte --report-uri`` writes, as ``PMIX_TOOL_ATTACHMENT_FILE``.
 * **One connection per DVM.**  Only the master attaches; every other daemon
   relays to it over the RML, as it already does for a locally-hosted data
   server.
