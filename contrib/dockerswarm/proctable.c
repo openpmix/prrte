@@ -30,9 +30,9 @@
  *       whole point. See the second block comment below.
  *
  *   proctable serveruri [hostname] [seconds]
- *       PMIx_Query(PMIX_SERVER_URI), optionally qualified by PMIX_HOSTNAME so
- *       the answer must come from ANOTHER node's daemon record. Prints
- *       "URI <uri>" or "ERR <status> <name>".
+ *       PMIx_Query(PMIX_SERVER_URI), optionally qualified by PMIX_HOSTNAME.
+ *       A daemon answers for its own node's server and refuses any other
+ *       node. Prints "URI <uri>" or "ERR <status> <name>".
  *
  * Why this exists, and why it cannot be a unit test:
  *
@@ -51,14 +51,11 @@
  * and ten. The local-vs-global proc table split has no meaning at all on a
  * single host.
  *
- * PMIX_SERVER_URI qualified by hostname is here for the same reason: it is
- * the one query that resolves a *different node's* daemon and then goes out
- * over PRTE_MODEX_RECV_VALUE_OPTIONAL for its URI. That macro yields a PMIx
- * status, and its caller used to run the result through
- * prte_pmix_convert_rc() -- the PRRTE-to-PMIx direction -- so every failure
- * on this path was reported to the tool as a bare PMIX_ERROR. On one host
- * the hostname qualifier resolves to the local daemon and the interesting
- * branch is never taken.
+ * PMIX_SERVER_URI qualified by hostname is here because the refusal of
+ * another node is only reachable with more than one node: on one host the
+ * hostname qualifier names the local daemon. The status has to be one that
+ * says something - this path once reported every failure as a bare
+ * PMIX_ERROR, by converting a PMIx status in the PRRTE-to-PMIx direction.
  *
  * "departed" is the same query asked after some of the job has left. A
  * daemon's copy of a job's proc array is the snapshot the launch message
@@ -72,11 +69,11 @@
  *
  * Note that PMIX_SERVER_URI is the rendezvous address of a node's PMIx
  * SERVER -- how a client or tool connects to it. It is not how daemons reach
- * each other; that is the RML, using PMIX_PROC_URI. The qualified form works
- * only against the master, which is the one that collects every daemon's URI
- * from its rollup; a non-master daemon answers for its own node and
- * NOT_FOUND for any other. This client reports the raw status rather than
- * just succeeding or failing because the status is the interesting part.
+ * each other; that is the RML, using PMIX_PROC_URI. A server takes
+ * connections from its own node only, so a daemon reports its own and
+ * refuses any other node's with PMIX_ERR_NOT_SUPPORTED. This client reports
+ * the raw status rather than just succeeding or failing because the status
+ * is the interesting part.
  */
 
 #include <stdio.h>

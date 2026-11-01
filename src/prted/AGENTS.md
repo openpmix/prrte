@@ -38,9 +38,8 @@ manipulates.
 `prte_plm_base_daemon_callback()`
 ([`plm_base_launch_support.c`](../mca/plm/base/plm_base_launch_support.c)) —
 change one and you must change the other, in field order. Today it carries:
-the daemon's name, its `PMIX_PROC_URI` (RML contact info), its
-`PMIX_SERVER_URI` (the PMIx server rendezvous, for tools — see
-[`../pmix/AGENTS.md`](../pmix/AGENTS.md)), the node name, node aliases, and
+the daemon's name, its `PMIX_PROC_URI` (RML contact info), the node name,
+node aliases, and
 optionally the topology. Note that a tree-spawning parent relays a child's
 buffer by copying the payload wholesale and only *peeking* at the first two
 fields for its own use, so appending a field is safe there — but inserting

@@ -111,8 +111,8 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     }
     /* Every node also carries the index of the slot it occupies in *our* node
      * pool.  That index is the node's identity across the DVM - it is the
-     * PMIX_NODEID every daemon hands its local clients, and the subscript the
-     * PMIX_SERVER_URI query resolves a nodeid through - so the receiver has to
+     * PMIX_NODEID every daemon hands its local clients, and the subscript a
+     * PMIX_NODEID qualifier on a query resolves through - so the receiver has to
      * place the node in the same slot we hold it in.  It cannot derive that
      * from the packing order: a node whose daemon has departed stays in our
      * pool with no daemon and is skipped below, so the packed sequence is
@@ -586,8 +586,8 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     /* A node the sender did not name has no daemon on it any more - it was
      * shrunk out of the DVM, or its grow was rolled back.  The sender cleared
      * its own backpointer when that happened, and we have to do the same:
-     * anything that reaches a daemon through the node pool (the
-     * PMIX_SERVER_URI query does exactly that) would otherwise be handed a
+     * anything that reaches a daemon through the node pool (a query
+     * qualified by node does exactly that) would otherwise be handed a
      * proc for a vpid this DVM has permanently retired. */
     seen = (char *) calloc(prte_node_pool->size, sizeof(char));
     if (NULL == seen) {
