@@ -105,7 +105,8 @@ int prte_pmix_server_init_pubsub(void)
 static int init_server(void)
 {
     char *server;
-    char *input, *filename;
+    char *input, *second, *filename;
+    const char *key;
     size_t len;
     FILE *fp;
     pmix_status_t ret;
@@ -142,7 +143,17 @@ static int init_server(void)
                 return PRTE_ERR_BAD_PARAM;
             }
 
-            /* open the file and extract the uri */
+            /* A server's own report file is handed to PMIx as it is.
+             * PMIx reads it as it reads any report file: it takes the
+             * local URI from the "local:" line where the server wrote one,
+             * and the server's version from line 2. So a file written with
+             * legacy peers on - whose first line is the TCP URI, which a
+             * server of this release refuses to us - still works.
+             *
+             * A file of a single line is one somebody wrote by hand, with
+             * no version line. PMIx would take the server for one of an
+             * early release and refuse it, so that line is passed as the
+             * URI, as it always was */
             fp = fopen(filename, "r");
             if (NULL == fp) { /* can't find or read file! */
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-filename-access", true,
@@ -150,29 +161,39 @@ static int init_server(void)
                 return PRTE_ERR_BAD_PARAM;
             }
             /* the whole first line, however long - a URI naming several
-             * addresses is not short, and a fixed buffer handed back only
-             * as much of it as fit */
+             * addresses is not short */
             input = pmix_getline(fp, NULL);
+            second = (NULL == input) ? NULL : pmix_getline(fp, NULL);
+            fclose(fp);
             if (NULL == input) {
                 /* something malformed about file */
-                fclose(fp);
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-file-bad", true,
                                prte_tool_basename, prte_data_server_uri, prte_tool_basename);
                 return PRTE_ERR_BAD_PARAM;
             }
-            fclose(fp);
-            /* strip the line ending if there is one.  A file written by
-             * PMIx's own report-uri ends in a newline, but this file is
-             * whatever the user pointed us at - and chopping the last
-             * character unconditionally takes a character of the URI off a
-             * file that has none. */
-            len = strlen(input);
-            while (0 < len && '\r' == input[len - 1]) {
-                input[--len] = '\0';
+            if (NULL != second && '\0' != second[0]) {
+                free(second);
+                free(input);
+                server = strdup(filename);
+                key = PMIX_TOOL_ATTACHMENT_FILE;
+            } else {
+                free(second);
+                /* strip the line ending if there is one - chopping the
+                 * last character unconditionally would take a character
+                 * of the URI off a file that has none */
+                len = strlen(input);
+                while (0 < len && '\r' == input[len - 1]) {
+                    input[--len] = '\0';
+                }
+                server = input;
+                key = PMIX_SERVER_URI;
             }
-            server = input;
         } else {
             server = strdup(prte_data_server_uri);
+            key = PMIX_SERVER_URI;
+        }
+        if (NULL == server) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         /* check if we are to wait for the server to start - resolves
          * a race condition that can occur when the server is run
@@ -187,7 +208,7 @@ static int init_server(void)
         /* attach to it.  PMIX_WAIT_FOR_CONNECTION is deliberately not set:
          * the wait above is what the user asked for, and a server that is
          * not there is an error we want reported now rather than a hang. */
-        PMIX_INFO_LOAD(&info[0], PMIX_SERVER_URI, server, PMIX_STRING);
+        PMIX_INFO_LOAD(&info[0], key, server, PMIX_STRING);
         PMIX_INFO_LOAD(&info[1], PMIX_PRIMARY_SERVER, NULL, PMIX_BOOL);
         ret = PMIx_tool_attach_to_server(NULL, &prte_pmix_server_globals.server,
                                          info, 2);
