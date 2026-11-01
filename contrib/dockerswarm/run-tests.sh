@@ -397,6 +397,19 @@ pmix_cap() {
     fi
 }
 
+# Whether the PMIx the swarm is built against defines `$1` - an attribute,
+# where pmix_cap looks for a capability
+pmix_attr() {
+    if [ "$HARNESS_MODE" = cluster ]; then
+        ON 1 "grep -qs $1 '$CLUSTER_PMIX/include/pmix_common.h'" >/dev/null 2>&1
+    else
+        ON 1 "p=\$(sed -n 's|.*--with-pmix=\\([^ ]*\\).*|\\1|p' \
+                      /opt/prte/vpath-linux/.configure-args 2>/dev/null); \
+              [ -n \"\$p\" ] || p=/usr/local; \
+              grep -qs $1 \"\$p/include/pmix_common.h\"" >/dev/null 2>&1
+    fi
+}
+
 # --- bootstrap-DVM helpers --------------------------------------------------
 # A bootstrapped DVM is configured by <sysconfdir>/prte.conf, which lives in the
 # install the swarm shares.  The node containers mount that volume READ-ONLY, so
@@ -3826,24 +3839,37 @@ test_prted() {
                 && ok "300 lines from 6 ranks reached the tool, each exactly once" \
                 || bad "relayed output was lost or duplicated (got $n lines, per-line counts '$u'; expected 300 and '6 ')"
 
-            # The relayed copy must not be EMITTED where it lands.  Every
-            # daemon registers the job's namespace with the same output
-            # directives, so a daemon handed another node's output writes its
-            # own copy of that rank's file unless the delivery says not to --
-            # and node3 hosts none of these ranks, so any file appearing there
-            # is a duplicate of one node1 or node2 already wrote.  Measured,
-            # not assumed: flipping the PMIX_IOF_LOCAL_OUTPUT directive to
-            # true puts a full set here.
+            # Who writes the output files.  Every daemon registers the job's
+            # namespace with the same output directives.  With a PMIx that
+            # has PMIX_IOF_FILE_WRITER the launcher writes them, as the
+            # user, on its own node - it is sent every rank's output anyway -
+            # and no daemon writes one: so node3, where prun runs, has both
+            # ranks' files and the hosting daemons none.  With an older PMIx
+            # each hosting daemon writes its own ranks' files, and the
+            # relayed copy must not be EMITTED where it lands: node3 hosts
+            # none of these ranks, so any file there is a duplicate of one
+            # node1 or node2 already wrote (flipping the PMIX_IOF_LOCAL_OUTPUT
+            # directive to true puts a full set there).
             for i in 1 2 3; do ON $i 'rm -rf /tmp/relayout; mkdir -p /tmp/relayout' >/dev/null 2>&1; done
             ONT 3 'timeout -k 5 45 prun --output file=/tmp/relayout/out --host node1:1,node2:1 -n 2 --map-by node hostname' >/dev/null 2>&1
             n=$(ON 3 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
             m=$(ON 2 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
-            [ "$n" = 0 ] \
-                && ok "the tool's daemon wrote no output files for ranks it does not host" \
-                || bad "relayed output was emitted on the tool's node too ($n files); two daemons are writing one --output file"
-            [ "$m" = 1 ] \
-                && ok "...and the daemon that does host a rank still wrote its file" \
-                || bad "output-to-file broke on the hosting daemon ($m files, expected 1)"
+            l=$(ON 1 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
+            if pmix_attr PMIX_IOF_FILE_WRITER; then
+                [ "$n" = 2 ] \
+                    && ok "the launcher wrote both ranks' output files on its own node" \
+                    || bad "the launcher wrote $n output files on its node, expected 2"
+                [ "$m" = 0 ] && [ "$l" = 0 ] \
+                    && ok "...and no hosting daemon wrote one" \
+                    || bad "hosting daemons wrote output files the launcher writes ($l on node1, $m on node2)"
+            else
+                [ "$n" = 0 ] \
+                    && ok "the tool's daemon wrote no output files for ranks it does not host" \
+                    || bad "relayed output was emitted on the tool's node too ($n files); two daemons are writing one --output file"
+                [ "$m" = 1 ] \
+                    && ok "...and the daemon that does host a rank still wrote its file" \
+                    || bad "output-to-file broke on the hosting daemon ($m files, expected 1)"
+            fi
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
@@ -3857,7 +3883,9 @@ test_prted() {
     # tool's departure retires its rank only in a tool's namespace, so the job
     # could never complete and prun waited for the life of the DVM. The master
     # now refuses the attach with PMIX_ERR_EXISTS - asserted exactly, since a
-    # tool that cannot connect at all would also fail to initialize. The job
+    # tool that cannot connect at all would also fail to initialize. A PMIx
+    # that takes a tool only on a rank its host registered refuses this one
+    # first, PMIX_ERR_NOT_FOUND, never asking PRRTE - as specific a refusal. The job
     # runs on node2 so that the tool attaches through node2's daemon rather
     # than the master's. The second case is the attach that must still work:
     # a tool taking the rank its job script already has, as a prun started
@@ -3871,7 +3899,7 @@ test_prted() {
         bad "could not start a DVM for the tool-rank test"
     else
         out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout 20 $ROLETOOL - impersonate \$PMIX_NAMESPACE 7; true' 2>&1; echo RC=\$?")
-        echo "$out" | grep -q 'ROLE INIT PMIX_ERR_EXISTS' \
+        echo "$out" | grep -qE 'ROLE INIT PMIX_ERR_(EXISTS|NOT_FOUND)' \
             && ok "a tool naming an unused rank of an application job was refused" \
             || bad "a tool naming an unused rank of an application job was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         echo "$out" | grep -q 'RC=0' \
