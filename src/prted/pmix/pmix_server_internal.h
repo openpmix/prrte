@@ -865,6 +865,11 @@ PRTE_EXPORT size_t prte_pmix_server_relay_copy(pmix_info_t *dst, const pmix_info
  * are skipped */
 PRTE_EXPORT void prte_pmix_server_access_user(uid_t uid);
 
+/* The groups uid belongs to, looked up afresh into our record of it, as a
+ * PMIX_UINT32 data array for PMIX_USER_GRPIDS - *out is NULL for root, our
+ * own user, or a user found in none. The caller frees it */
+PRTE_EXPORT pmix_status_t prte_pmix_server_owner_groups(uid_t uid, pmix_data_array_t **out);
+
 /* The job named nspace is ending here. If nothing else of its owner's is
  * left, drop our record of the user and deregister it from PMIx */
 PRTE_EXPORT void prte_pmix_server_access_job_done(const pmix_nspace_t nspace);

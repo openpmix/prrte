@@ -234,6 +234,25 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                 PMIX_INFO_LIST_RELEASE(info);
                 return prte_pmix_convert_status(ret);
             }
+#ifdef PMIX_USER_GRPIDS
+            /* and the groups the owner belongs to. PMIx never looks them
+             * up: these are what it judges the owner by, so they are looked
+             * up afresh for each job */
+            {
+                pmix_data_array_t *ugids = NULL;
+
+                ret = prte_pmix_server_owner_groups((uid_t) ownid, &ugids);
+                if (PMIX_SUCCESS == ret && NULL != ugids) {
+                    PMIX_INFO_LIST_ADD(ret, info, PMIX_USER_GRPIDS, ugids, PMIX_DATA_ARRAY);
+                    PMIX_DATA_ARRAY_FREE(ugids);
+                }
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_INFO_LIST_RELEASE(info);
+                    return prte_pmix_convert_status(ret);
+                }
+            }
+#endif
         }
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, (void **) &ownptr,
                                PMIX_UINT32)) {
