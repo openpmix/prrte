@@ -48,6 +48,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_bootstrap.h"
+#include "src/prted/pmix/pmix_server.h"
 #include "src/util/prte_dvm_key.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
@@ -454,6 +455,28 @@ int prte_ess_base_bootstrap(bool *is_controller)
     if (NULL == dvm_nspace) {
         rc = PRTE_ERR_OUT_OF_RESOURCE;
         goto cleanup;
+    }
+
+    /* Every daemon of a DVM is the session-level server of the DVM's
+     * session, whose ID names its rendezvous file. A launched DVM's
+     * controller computes it from its namespace and pid and hands it down;
+     * here nobody is launched, so each daemon computes it from what they
+     * all read - the cluster, the controller's host and the DVM port - with
+     * the same hash. Two bootstrapped DVMs of one configuration are one DVM */
+    {
+        char *sid = NULL;
+        uint32_t id;
+
+        if (0 > pmix_asprintf(&sid, "%s-%s-%u", bootstrap_cfg.cluster, bootstrap_cfg.ctrlhost,
+                              (unsigned) bootstrap_cfg.port)) {
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
+        id = prte_pmix_server_compute_session_id(sid, (pid_t) bootstrap_cfg.port);
+        free(sid);
+        pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) id);
+        PMIx_Setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
+        PMIx_Setenv("PRTE_MCA_pmix_session_id", valstr, true, &environ);
     }
 
     if (ctrl) {

@@ -668,6 +668,9 @@ typedef struct {
     pmix_list_t notifications;
     bool pubsub_init;
     bool session_server;
+    /* the DVM's session ID - the controller's computation, handed to each
+     * daemon on its command line; UINT_MAX until then */
+    unsigned int session_id;
     bool system_server;
     bool no_foreign_tools;
     /* the users, besides root and our own, a tool may run as to be accepted

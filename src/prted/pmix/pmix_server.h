@@ -36,6 +36,10 @@ PRTE_EXPORT void pmix_server_start(void);
 PRTE_EXPORT void pmix_server_finalize(void);
 PRTE_EXPORT void pmix_server_register_params(void);
 
+/* The session ID the DVM controller computes for the session it is the
+ * server of, from its namespace and pid - see pmix_server.c */
+PRTE_EXPORT uint32_t prte_pmix_server_compute_session_id(const char *nspace, pid_t pid);
+
 PRTE_EXPORT int prte_pmix_server_register_nspace(prte_job_t *jdata,
                                                  pmix_op_cbfunc_t cbfunc, void *cbdata);
 
