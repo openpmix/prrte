@@ -143,6 +143,40 @@ with a comment saying so at each site.
 
 ---
 
+## The session this DVM is the server of
+
+`prte` (and `prterun`) always runs as a session-level PMIx server
+(`prte.c` sets `PRTE_MCA_pmix_session_server`), and so does each of its
+daemons. PMIx names a session server's rendezvous file by its session -
+`pmix.<host>.session.<id>` - and refuses `PMIX_SERVER_SESSION_SUPPORT`
+without `PMIX_SESSION_ID`, so `pmix_server_init()` always passes one:
+
+- **The controller computes it**, `prte_pmix_server_compute_session_id()`:
+  OMPI's job-family hash (`opal_pmix_convert_nspace`) of its namespace
+  less the trailing `-<pid>` - `prte-<host>` - with the pid XORed in, kept
+  to all 32 bits, and never 0 or `UINT32_MAX`. Not the pid alone (not
+  unique across nodes) and not a scheduler's allocation ID (several DVMs
+  can run in one allocation).
+- **Each daemon is handed it** with `pmix_session_server` on its command
+  line (`plm_base_launch_support.c`, which keeps `pmix_session_*` out of
+  the forwarded environment so they are passed once). A daemon told to be
+  a session server without an ID fails (`session-server-no-id`).
+- **A bootstrapped DVM has no launch to hand it down**, so every daemon
+  computes it in `ess_base_bootstrap.c` from what they all read - the
+  same hash over `<cluster>-<controller host>`, XOR the DVM port - and
+  sets `pmix_session_server` and `pmix_session_id` itself. Two
+  bootstrapped DVMs of one configuration are the same DVM.
+- **A collision fails.** Two DVMs of one user whose IDs coincide on a node
+  find the name held, and the second's `PMIx_server_init` fails - the
+  only answer to a hash collision.
+- **It is not the DVM's `prte_default_session`**, which stays `UINT32_MAX`;
+  the ID names the rendezvous file and nothing else, so what jobs see as
+  `PMIX_SESSION_ID` is unchanged.
+
+A tool told no target takes its user's only session server on the node,
+and fails listing them when there are several (PMIx's `too-many-sessions`);
+`--dvm-uri`, `--pid` or `--namespace` pick one.
+
 ## `prte_pmix_server_req_t` — the universal tracker
 
 Almost every asynchronous operation in this directory is tracked by one

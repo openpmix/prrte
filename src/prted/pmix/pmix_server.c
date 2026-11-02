@@ -41,6 +41,7 @@
 #    include <sys/stat.h>
 #endif
 #include <fcntl.h>
+#include <limits.h>
 #ifdef HAVE_NETINET_IN_H
 #    include <netinet/in.h>
 #endif
@@ -535,6 +536,15 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.session_server);
 
+    /* the session it is the server of - the controller computes one, and
+     * passes it to its daemons */
+    prte_pmix_server_globals.session_id = UINT_MAX;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_id",
+                                      "The ID of the session this DVM is the session-level "
+                                      "server of. Set by the DVM controller for its daemons",
+                                      PMIX_MCA_BASE_VAR_TYPE_UNSIGNED_INT,
+                                      &prte_pmix_server_globals.session_id);
+
     /* whether or not to drop a system-level tool rendezvous point */
     prte_pmix_server_globals.system_server = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "system_server",
@@ -941,6 +951,35 @@ static int open_to_foreign_tools(void *ilist)
 }
 #endif
 
+/* OMPI's job-family hash (opal_pmix_convert_nspace): the controller's
+ * namespace less its trailing "-<pid>" - "prte-<host>" - hashed, and the
+ * pid folded in. Unlike a job family it keeps all 32 bits, as nothing else
+ * shares the word, and it never answers 0 or UINT32_MAX: the latter is
+ * PRRTE's default session, and neither is taken as a real one */
+uint32_t prte_pmix_server_compute_session_id(const char *nspace, pid_t pid)
+{
+    const char *end, *c;
+    uint32_t hash = 0;
+
+    end = (NULL == nspace) ? NULL : strrchr(nspace, '-');
+    if (NULL == end) {
+        end = (NULL == nspace) ? NULL : nspace + strlen(nspace);
+    }
+    for (c = nspace; NULL != c && c < end; c++) {
+        hash += (uint32_t) (unsigned char) *c;
+        hash += (hash << 10);
+        hash ^= (hash >> 6);
+    }
+    hash += (hash << 3);
+    hash ^= (hash >> 11);
+    hash += (hash << 15);
+    hash ^= (uint32_t) pid;
+    if (0 == hash || UINT32_MAX == hash) {
+        hash = 1;
+    }
+    return hash;
+}
+
 int pmix_server_init(void)
 {
     int rc;
@@ -953,6 +992,7 @@ int pmix_server_init(void)
     pmix_status_t prc;
     prte_pmix_lock_t lock;
     bool flag;
+    uint32_t ui32;
 
     if (prte_pmix_server_globals.initialized) {
         return PRTE_SUCCESS;
@@ -1075,6 +1115,31 @@ int pmix_server_init(void)
         PMIX_INFO_LIST_RELEASE(ilist);
         rc = prte_pmix_convert_status(prc);
         return rc;
+    }
+    /* A session-level server is the server of a session, and the session's
+     * ID names its rendezvous file: DVMs of different sessions share a node,
+     * and a tool asks for the one it wants. The controller computes the ID
+     * and hands it to its daemons. A server told to be the session's
+     * without an ID cannot be, and says so rather than run as something
+     * else */
+    if (prte_pmix_server_globals.session_server) {
+        if (PRTE_PROC_IS_MASTER && UINT_MAX == prte_pmix_server_globals.session_id) {
+            prte_pmix_server_globals.session_id =
+                prte_pmix_server_compute_session_id(PRTE_PROC_MY_NAME->nspace, getpid());
+        }
+        if (UINT_MAX == prte_pmix_server_globals.session_id) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "session-server-no-id",
+                           true, prte_process_info.nodename);
+            PMIX_INFO_LIST_RELEASE(ilist);
+            return PRTE_ERR_SILENT;
+        }
+        ui32 = (uint32_t) prte_pmix_server_globals.session_id;
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
     }
 
     if (PRTE_PROC_IS_MASTER) {
