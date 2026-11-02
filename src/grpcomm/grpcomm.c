@@ -47,7 +47,8 @@ prte_grpcomm_globals_t prte_grpcomm_globals = {
     .context_id = UINT32_MAX,
     .fence_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_ops),
     .group_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.group_ops),
-    .fence_generations = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_generations)
+    .fence_generations = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_generations),
+    .live_groups = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.live_groups)
 };
 
 prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast =
@@ -275,6 +276,7 @@ int prte_grpcomm_init(void)
     PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_generations, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.live_groups, pmix_list_t);
 
     /* xcast receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
@@ -308,6 +310,7 @@ void prte_grpcomm_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.group_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_generations);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.live_groups);
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);
@@ -359,6 +362,93 @@ bool prte_grpcomm_proc_departed(const pmix_proc_t *proc)
     }
     return pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns,
                                   p->node->daemon->name.rank);
+}
+
+/* whether any of a group's members' jobs still runs */
+static bool group_lives(const prte_grpcomm_live_group_t *grp)
+{
+    prte_job_t *jdata;
+    size_t m;
+
+    for (m = 0; m < grp->nmembers; m++) {
+        jdata = prte_get_job_data_object(grp->members[m].nspace);
+        if (NULL != jdata && PRTE_JOB_STATE_UNTERMINATED > jdata->state) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool prte_grpcomm_group_id_taken(const char *grpid)
+{
+    prte_grpcomm_live_group_t *grp;
+    pmix_nspace_t nspace;
+
+    if (NULL == grpid) {
+        return false;
+    }
+    /* a namespace is at most PMIX_MAX_NSLEN characters, and the lookup
+     * compares only that many: a longer ID is no job's */
+    if (PMIX_MAX_NSLEN >= strlen(grpid)) {
+        PMIX_LOAD_NSPACE(nspace, grpid);
+        if (NULL != prte_get_job_data_object(nspace)) {
+            return true;
+        }
+    }
+    PMIX_LIST_FOREACH(grp, &prte_grpcomm_globals.live_groups, prte_grpcomm_live_group_t) {
+        if (0 == strcmp(grp->groupID, grpid) && group_lives(grp)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void prte_grpcomm_group_formed(const char *grpid, const pmix_proc_t *members, size_t nmembers)
+{
+    prte_grpcomm_live_group_t *grp, *gnext;
+
+    if (NULL == grpid) {
+        return;
+    }
+    PMIX_LIST_FOREACH_SAFE(grp, gnext, &prte_grpcomm_globals.live_groups,
+                           prte_grpcomm_live_group_t) {
+        if (0 == strcmp(grp->groupID, grpid) || !group_lives(grp)) {
+            pmix_list_remove_item(&prte_grpcomm_globals.live_groups, &grp->super);
+            PMIX_RELEASE(grp);
+        }
+    }
+    grp = PMIX_NEW(prte_grpcomm_live_group_t);
+    grp->groupID = strdup(grpid);
+    if (NULL == grp->groupID) {
+        PMIX_RELEASE(grp);
+        return;
+    }
+    if (0 < nmembers && NULL != members) {
+        PMIX_PROC_CREATE(grp->members, nmembers);
+        if (NULL == grp->members) {
+            PMIX_RELEASE(grp);
+            return;
+        }
+        memcpy(grp->members, members, nmembers * sizeof(pmix_proc_t));
+        grp->nmembers = nmembers;
+    }
+    pmix_list_append(&prte_grpcomm_globals.live_groups, &grp->super);
+}
+
+void prte_grpcomm_group_ended(const char *grpid)
+{
+    prte_grpcomm_live_group_t *grp, *gnext;
+
+    if (NULL == grpid) {
+        return;
+    }
+    PMIX_LIST_FOREACH_SAFE(grp, gnext, &prte_grpcomm_globals.live_groups,
+                           prte_grpcomm_live_group_t) {
+        if (0 == strcmp(grp->groupID, grpid)) {
+            pmix_list_remove_item(&prte_grpcomm_globals.live_groups, &grp->super);
+            PMIX_RELEASE(grp);
+        }
+    }
 }
 
 bool prte_grpcomm_procs_lost(const pmix_proc_t *procs, size_t nprocs)

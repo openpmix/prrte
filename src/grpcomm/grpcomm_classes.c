@@ -257,6 +257,25 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_group_memo_t,
                     pmix_list_item_t,
                     memocon, memodes);
 
+static void livecon(prte_grpcomm_live_group_t *p)
+{
+    p->groupID = NULL;
+    p->members = NULL;
+    p->nmembers = 0;
+}
+static void livedes(prte_grpcomm_live_group_t *p)
+{
+    if (NULL != p->groupID) {
+        free(p->groupID);
+    }
+    if (NULL != p->members) {
+        PMIX_PROC_FREE(p->members, p->nmembers);
+    }
+}
+PMIX_CLASS_INSTANCE(prte_grpcomm_live_group_t,
+                    pmix_list_item_t,
+                    livecon, livedes);
+
 static void mdcon(prte_pmix_fence_caddy_t *p)
 {
     p->procs = NULL;

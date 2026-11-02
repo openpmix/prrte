@@ -1158,6 +1158,26 @@ label instead falls back to `abort_group_op()`, whose message is only a
 signature plus a status and so is by far the smallest thing still worth
 trying to build.
 
+**The controller refuses a group ID that is taken.** When a construct
+completes, the master asks `prte_grpcomm_group_id_taken()` and, if so,
+answers every participant `PMIX_ERR_EXISTS` instead of forming the group.
+An ID is taken when it is a job's namespace - a group ID must never be one,
+or it would stand in for that job's procs - or when it names a group the
+master formed and has not seen destructed while any member's job still
+runs. A group whose jobs have all ended frees its ID, so a program that
+never destructs its group can run again on a persistent DVM. The master
+keeps its own record for this, `prte_grpcomm_globals.live_groups`, updated
+in `check_complete()` as each release leaves (`prte_grpcomm_group_formed()`,
+`prte_grpcomm_group_ended()`): `prte_pmix_server_globals.groups` will not
+do, since a release reaches only the daemons taking part - the master
+learns only of groups it hosts a member of - and the master processes its
+own copy of a destruct's release after forwarding it, so the daemons below
+can start the next construct of that ID first. Each daemon's
+`grp_release_complete()` replaces any group of the ID in its list rather
+than appending a second, so the destruct after a reuse finds the group
+that is. The PMIx servers screen their own clients' requests against what
+they hold; this is the DVM-wide half (N07).
+
 **`ft_collective` means "some *surviving* participant asked for it."** It
 is accumulated by sticky-OR as contributions merge, so a participant that
 requested it and then died before rolling up is not visible. This is a
