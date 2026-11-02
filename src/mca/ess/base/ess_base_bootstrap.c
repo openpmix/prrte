@@ -458,7 +458,7 @@ int prte_ess_base_bootstrap(bool *is_controller)
     }
 
     /* Every daemon of a DVM is the session-level server of the DVM's
-     * session, whose ID names its rendezvous file. A launched DVM's
+     * session, whose rendezvous file is named by an ID. A launched DVM's
      * controller computes it from its namespace and pid and hands it down;
      * here nobody is launched, so each daemon computes it from what they
      * all read - the cluster, the controller's host and the DVM port - with
@@ -472,11 +472,11 @@ int prte_ess_base_bootstrap(bool *is_controller)
             rc = PRTE_ERR_OUT_OF_RESOURCE;
             goto cleanup;
         }
-        id = prte_pmix_server_compute_session_id(sid, (pid_t) bootstrap_cfg.port);
+        id = prte_pmix_server_compute_rndz_id(sid, (pid_t) bootstrap_cfg.port);
         free(sid);
         pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) id);
         PMIx_Setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
-        PMIx_Setenv("PRTE_MCA_pmix_session_id", valstr, true, &environ);
+        PMIx_Setenv("PRTE_MCA_pmix_session_rndz_id", valstr, true, &environ);
     }
 
     if (ctrl) {
