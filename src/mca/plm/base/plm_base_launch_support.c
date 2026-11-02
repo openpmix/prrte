@@ -2335,6 +2335,8 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     char *skips[] = {
         "rmaps",
         "ras",
+        /* passed explicitly below, with the ID that goes with it */
+        "pmix_session_",
         NULL
     };
 
@@ -2407,6 +2409,21 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     if (NULL != param) {
         pmix_argv_append(argc, argv, "--prtemca");
         pmix_argv_append(argc, argv, "rml_base_dead_dmns");
+        pmix_argv_append(argc, argv, param);
+        free(param);
+        param = NULL;
+    }
+
+    /* A daemon of a session-level server's DVM is one too, of the same
+     * session - whose ID only the controller computes. Passed both, so a
+     * daemon never claims the role without the ID it is named by */
+    if (prte_pmix_server_globals.session_server) {
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "pmix_session_server");
+        pmix_argv_append(argc, argv, "1");
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "pmix_session_id");
+        pmix_asprintf(&param, "%u", prte_pmix_server_globals.session_id);
         pmix_argv_append(argc, argv, param);
         free(param);
         param = NULL;

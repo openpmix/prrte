@@ -2012,6 +2012,52 @@ static const struct {
     {"9223372036854775808",    -1},   /* past LONG_MAX: strtol's own overflow */
 };
 
+/*
+ * The session ID a DVM controller computes, which names its session-level
+ * rendezvous file: OMPI's job-family hash of "prte-<host>", with the pid
+ * folded in, kept to 32 bits.  What matters is that it is that hash - so
+ * two DVMs differ by host or pid - and that it is never a value taken to
+ * mean "no session".
+ */
+static uint32_t ompi_hash(const char *s)
+{
+    uint32_t h = 0;
+
+    while (*s) {
+        h += (uint32_t) (unsigned char) *s++;
+        h += (h << 10);
+        h ^= (h >> 6);
+    }
+    h += (h << 3);
+    h ^= (h >> 11);
+    return h + (h << 15);
+}
+
+static int test_session_id(void)
+{
+    int failures = 0;
+    uint32_t a, b, c;
+
+    a = prte_pmix_server_compute_session_id("prte-node1-1234", 1234);
+    CHECK("sessionid/is OMPI's hash of prte-<host>, xor the pid",
+          a == (ompi_hash("prte-node1") ^ 1234u));
+    CHECK("sessionid/the same DVM, the same ID",
+          a == prte_pmix_server_compute_session_id("prte-node1-1234", 1234));
+    b = prte_pmix_server_compute_session_id("prte-node1-1235", 1235);
+    CHECK("sessionid/another pid on the host, another ID", a != b);
+    c = prte_pmix_server_compute_session_id("prte-node2-1234", 1234);
+    CHECK("sessionid/the same pid on another host, another ID", a != c);
+    CHECK("sessionid/a namespace with no pid is hashed whole",
+          prte_pmix_server_compute_session_id("prte", 7) == (ompi_hash("prte") ^ 7u));
+    CHECK("sessionid/never the default session",
+          UINT32_MAX != a && UINT32_MAX != b && UINT32_MAX != c);
+    /* a pid that cancels the hash exactly would give 0 */
+    CHECK("sessionid/never zero",
+          0 != prte_pmix_server_compute_session_id("prte-node1-1234",
+                                                   (pid_t) ompi_hash("prte-node1")));
+    return failures;
+}
+
 static int test_session_time(void)
 {
     size_t n;
@@ -4326,6 +4372,7 @@ int main(void)
     failures += test_xfer_app();
     failures += test_job_info_cache();
     failures += test_session_time();
+    failures += test_session_id();
     failures += test_directive_distribution();
     failures += test_membind_distribution();
     failures += test_xfer_membind();
