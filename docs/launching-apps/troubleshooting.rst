@@ -79,6 +79,29 @@ In cases like this, check your shell script startup files and verify
 that the appropriate compiler environment is setup properly for
 non-interactive logins.
 
+Every process of a job runs as a singleton
+------------------------------------------
+
+With PMIx v7.0 or later, the PMIx server in each PRRTE daemon takes
+clients and tools of earlier PMIx releases - an Open MPI 5 application,
+say, which carries PMIx v5.0, or a ``prun`` built against an earlier
+PMIx - only when *legacy peers* are turned on. Without them such a
+client cannot reach its server: each process logs one ``PMIX ERROR:
+BAD-PARAM`` line and comes up as a singleton, so an N-process job runs
+as N separate one-process jobs, each of rank 0 in a job of size 1.
+
+To run such applications, use a PMIx built with
+``--enable-legacy-peers`` and turn legacy peers on with its
+``ptl_base_legacy_peers`` MCA parameter - for example:
+
+.. code-block:: sh
+
+   prterun --pmixmca ptl_base_legacy_peers 1 -n 4 ./mpi_app
+
+or set ``PMIX_MCA_ptl_base_legacy_peers=1`` in the environment of
+``prte`` or ``prterun``. Either reaches every daemon of the DVM. The
+alternative is to rebuild the application against PMIx v7.0 or later.
+
 Problems when running across multiple hosts
 -------------------------------------------
 
