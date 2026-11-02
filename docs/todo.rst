@@ -412,18 +412,6 @@ the fix is argued rather than demonstrated.  The case is cheap —
 ``UINT32_MAX`` spelling, two sessions instantiated by the same requestor,
 and the request issued from a node that is not the master.
 
-**``prte_pmix_server_register_tool()`` past its early returns.**  The unit
-test (``test_tool_registration``) pins the three decisions the function
-makes before it needs a live PMIx server: the rank screen, the refusal of a
-namespace PRRTE will not file, and the already-registered short circuit.
-Everything after that — including the missing-command-line case, where PMIx
-sent no ``PMIX_CMD_LINE`` because it could not read its own argv — ends in
-``PMIx_server_register_nspace`` and so cannot be reached from
-``test/unit/prted``, which initializes no server.  Nor does the harness
-produce it: PMIx on Linux always finds ``/proc/self/cmdline``, so the tool
-always sends one.  What would cover it is a client that attaches with
-``PMIx_tool_init`` and composes its own connection info array.
-
 **The XML arm, and the copy constructors.**  In
 ``src/runtime/data_type_support/``, the print functions' XML output has no
 test, and ``prte_job_copy`` / ``prte_proc_copy`` have no callers to be tested
