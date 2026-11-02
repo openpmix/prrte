@@ -37,7 +37,7 @@ upcall; each file below implements a related group of them.
 |------|----------------|
 | `pmix_server.c` | Init/finalize, MCA params, the module table, the request trackers, direct-modex RML plumbing (`dmdx_recv`/`dmdx_resp`), logging relay, the scheduler relay (`pmix_server_sched`). The biggest file. |
 | `pmix_server_internal.h` | `prte_pmix_server_req_t` (the universal request tracker), `prte_pmix_server_op_caddy_t`, the globals struct, and the thread-shift macros. **Read this first.** |
-| `pmix_server_register_fns.c` | Turning a `prte_job_t` into the info arrays PMIx needs (`PMIx_server_register_nspace`, `register_client`, tool registration). |
+| `pmix_server_register_fns.c` | Turning a `prte_job_t` into the info arrays PMIx needs (`PMIx_server_register_nspace`, `register_client`), and a tool's job object. |
 | `pmix_server_dyn.c` | `spawn` — plus `prte_pmix_xfer_job_info()`/`prte_pmix_xfer_app()`, the translators from PMIx directives to PRRTE job/app attributes. Also `connect`/`disconnect`. |
 | `pmix_server_queries.c` | `query` — namespaces, proc tables, psets, groups, allocations. |
 | `pmix_server_gen.c` | `abort`, `client_finalized`, `client_connected2`, `tool_connected`, `iof_pull`, `push_stdin`, `log`. `client_finalized` is how a **tool**'s departure is learned as well — see below. |
@@ -1661,7 +1661,15 @@ entries. The same applies to everything else `_toolconn()` recorded off the
 wire — an empty `PMIX_NSPACE` is one `prte_set_job_data_object()` refuses,
 and a `PMIX_CMD_LINE` that never arrived leaves a NULL that
 `PMIx_Argv_split()` turns into a NULL `argv`. `test_tool_registration` pins
-the checks that can be reached without a live PMIx server.
+all of it.
+
+**A tool's namespace is not registered with PMIx.** PRRTE knows nothing of
+a tool's job beyond what the tool sends, and the tool library sets the
+well-known values (job size, local rank, hostname) for itself. PMIx treats
+a namespace the host registers while it decides on a tool that named
+itself as a job of the host's, and refuses the tool with
+`PMIX_ERR_EXISTS`: registering the tool's own namespace there would get
+the tool refused.
 
 **A tool may not add a rank to an application job.** A tool started by one
 of a job's processes inherits the job's identity, and PMIx lets it claim a

@@ -2614,8 +2614,8 @@ static int test_query_qualifiers(void)
 
 /* prte_pmix_server_register_tool() builds the daemon's job object for a
  * connecting tool out of what that tool sent, which is untrusted input from
- * the wire.  Everything past the checks below needs a live PMIx server, so
- * this pins the three decisions it makes before reaching one. */
+ * the wire.  It registers nothing with PMIx, so all of it can be reached
+ * here, given the daemon's own job and node. */
 static int test_tool_registration(void)
 {
     int failures = 0;
@@ -2638,7 +2638,7 @@ static int test_tool_registration(void)
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_PROCID(&req->target, "unit-test-tool@1", PMIX_RANK_UNDEF);
     req->cmdline = strdup("a-tool --with args");
-    rc = prte_pmix_server_register_tool(req, NULL, NULL);
+    rc = prte_pmix_server_register_tool(req);
     CHECK("a sentinel rank is refused", PRTE_ERR_BAD_PARAM == rc);
     CHECK("...and no job object was left behind",
           NULL == prte_get_job_data_object(req->target.nspace));
@@ -2651,13 +2651,11 @@ static int test_tool_registration(void)
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_NSPACE(req->target.nspace, NULL);
     req->target.rank = 0;
-    rc = prte_pmix_server_register_tool(req, NULL, NULL);
+    rc = prte_pmix_server_register_tool(req);
     CHECK("an empty namespace is refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(req);
 
-    /* A tool namespace we already hold is answered at once - and the caller
-     * has to tolerate the callback firing before the call returns, which is
-     * why this one is passed none. */
+    /* A tool namespace we already hold is answered at once */
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-tool@2");
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
@@ -2672,7 +2670,7 @@ static int test_tool_registration(void)
     }
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
-    rc = prte_pmix_server_register_tool(req, NULL, NULL);
+    rc = prte_pmix_server_register_tool(req);
     CHECK("a namespace already known is accepted without rebuilding it",
           PRTE_SUCCESS == rc);
     CHECK("...and the job object we had is the one still there",
@@ -2687,21 +2685,65 @@ static int test_tool_registration(void)
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
     CHECK("a tool may not add a rank to an application job",
-          PRTE_EXISTS == prte_pmix_server_register_tool(req, NULL, NULL));
+          PRTE_EXISTS == prte_pmix_server_register_tool(req));
     proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, "unit-test-tool@2", 0);
     pmix_pointer_array_set_item(jdata->procs, 0, proc);
     CHECK("...but may take one it already has",
-          PRTE_SUCCESS == prte_pmix_server_register_tool(req, NULL, NULL));
+          PRTE_SUCCESS == prte_pmix_server_register_tool(req));
     req->target.rank = PMIX_RANK_UNDEF;
     CHECK("...and a sentinel rank is refused for a known namespace too",
-          PRTE_ERR_BAD_PARAM == prte_pmix_server_register_tool(req, NULL, NULL));
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_register_tool(req));
     CHECK("the may-join check refuses the same sentinel on the relay's behalf",
           PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, PMIX_RANK_WILDCARD));
     PMIX_RELEASE(req);
 
     pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
     PMIX_RELEASE(jdata);
+
+    /* A new tool, sent with no command line - PMIx sends PMIX_CMD_LINE only
+     * when it could read its own argv.  Its job is built at the rank it
+     * chose, on the node our own daemon proc is on, with no argv */
+    {
+        pmix_proc_t saved = *PRTE_PROC_MY_NAME;
+        prte_job_t *dmns = PMIX_NEW(prte_job_t);
+        prte_proc_t *dproc = PMIX_NEW(prte_proc_t);
+        prte_node_t *node = PMIX_NEW(prte_node_t);
+        prte_app_context_t *app;
+
+        PMIX_LOAD_PROCID(PRTE_PROC_MY_NAME, "unit-test-tool-dvm", 0);
+        PMIX_LOAD_NSPACE(dmns->nspace, PRTE_PROC_MY_NAME->nspace);
+        PMIX_LOAD_PROCID(&dproc->name, PRTE_PROC_MY_NAME->nspace, 0);
+        dproc->node = node;
+        pmix_pointer_array_set_item(dmns->procs, 0, dproc);
+        if (PRTE_SUCCESS != prte_set_job_data_object(dmns)) {
+            fprintf(stderr, "FAIL [test_tool_registration]: could not file the daemons\n");
+            failures++;
+        } else {
+            req = PMIX_NEW(prte_pmix_server_req_t);
+            PMIX_LOAD_PROCID(&req->target, "unit-test-tool@3", 2);
+            CHECK("a new tool with no command line is recorded",
+                  PRTE_SUCCESS == prte_pmix_server_register_tool(req));
+            jdata = prte_get_job_data_object(req->target.nspace);
+            CHECK("...as a tool job", NULL != jdata && PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL));
+            if (NULL != jdata) {
+                proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, 2);
+                app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+                CHECK("...with its proc at the rank it chose, on our node",
+                      NULL != proc && 2 == proc->name.rank && node == proc->node);
+                CHECK("...and an app with no argv",
+                      NULL != app && NULL == app->argv && NULL == app->app);
+                pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+                PMIX_RELEASE(jdata);
+            }
+            PMIX_RELEASE(req);
+            pmix_pointer_array_set_item(prte_job_data, dmns->index, NULL);
+        }
+        PMIX_RELEASE(dmns);
+        PMIX_RELEASE(node);
+        *PRTE_PROC_MY_NAME = saved;
+    }
+
     if (made_array) {
         PMIX_RELEASE(prte_job_data);
         prte_job_data = NULL;
