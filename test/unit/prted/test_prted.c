@@ -2013,9 +2013,9 @@ static const struct {
 };
 
 /*
- * The session ID a DVM controller computes, which names its session-level
- * rendezvous file: OMPI's job-family hash of "prte-<host>", with the pid
- * folded in, kept to 32 bits.  What matters is that it is that hash - so
+ * The rendezvous ID a DVM controller computes, which names its
+ * session-level rendezvous file: OMPI's job-family hash of "prte-<host>",
+ * with the pid folded in, kept to 32 bits.  What matters is that it is that hash - so
  * two DVMs differ by host or pid - and that it is never a value taken to
  * mean "no session".
  */
@@ -2033,27 +2033,27 @@ static uint32_t ompi_hash(const char *s)
     return h + (h << 15);
 }
 
-static int test_session_id(void)
+static int test_rndz_id(void)
 {
     int failures = 0;
     uint32_t a, b, c;
 
-    a = prte_pmix_server_compute_session_id("prte-node1-1234", 1234);
-    CHECK("sessionid/is OMPI's hash of prte-<host>, xor the pid",
+    a = prte_pmix_server_compute_rndz_id("prte-node1-1234", 1234);
+    CHECK("rndzid/is OMPI's hash of prte-<host>, xor the pid",
           a == (ompi_hash("prte-node1") ^ 1234u));
-    CHECK("sessionid/the same DVM, the same ID",
-          a == prte_pmix_server_compute_session_id("prte-node1-1234", 1234));
-    b = prte_pmix_server_compute_session_id("prte-node1-1235", 1235);
-    CHECK("sessionid/another pid on the host, another ID", a != b);
-    c = prte_pmix_server_compute_session_id("prte-node2-1234", 1234);
-    CHECK("sessionid/the same pid on another host, another ID", a != c);
-    CHECK("sessionid/a namespace with no pid is hashed whole",
-          prte_pmix_server_compute_session_id("prte", 7) == (ompi_hash("prte") ^ 7u));
-    CHECK("sessionid/never the default session",
+    CHECK("rndzid/the same DVM, the same ID",
+          a == prte_pmix_server_compute_rndz_id("prte-node1-1234", 1234));
+    b = prte_pmix_server_compute_rndz_id("prte-node1-1235", 1235);
+    CHECK("rndzid/another pid on the host, another ID", a != b);
+    c = prte_pmix_server_compute_rndz_id("prte-node2-1234", 1234);
+    CHECK("rndzid/the same pid on another host, another ID", a != c);
+    CHECK("rndzid/a namespace with no pid is hashed whole",
+          prte_pmix_server_compute_rndz_id("prte", 7) == (ompi_hash("prte") ^ 7u));
+    CHECK("rndzid/never the default session",
           UINT32_MAX != a && UINT32_MAX != b && UINT32_MAX != c);
     /* a pid that cancels the hash exactly would give 0 */
-    CHECK("sessionid/never zero",
-          0 != prte_pmix_server_compute_session_id("prte-node1-1234",
+    CHECK("rndzid/never zero",
+          0 != prte_pmix_server_compute_rndz_id("prte-node1-1234",
                                                    (pid_t) ompi_hash("prte-node1")));
     return failures;
 }
@@ -4372,7 +4372,7 @@ int main(void)
     failures += test_xfer_app();
     failures += test_job_info_cache();
     failures += test_session_time();
-    failures += test_session_id();
+    failures += test_rndz_id();
     failures += test_directive_distribution();
     failures += test_membind_distribution();
     failures += test_xfer_membind();

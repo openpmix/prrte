@@ -2414,16 +2414,16 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         param = NULL;
     }
 
-    /* A daemon of a session-level server's DVM is one too, of the same
-     * session - whose ID only the controller computes. Passed both, so a
-     * daemon never claims the role without the ID it is named by */
+    /* A daemon of a session-level server's DVM is one too, named by the
+     * same rendezvous ID - which only the controller computes. Passed both,
+     * so a daemon never claims the role without the ID it is named by */
     if (prte_pmix_server_globals.session_server) {
         pmix_argv_append(argc, argv, "--prtemca");
         pmix_argv_append(argc, argv, "pmix_session_server");
         pmix_argv_append(argc, argv, "1");
         pmix_argv_append(argc, argv, "--prtemca");
-        pmix_argv_append(argc, argv, "pmix_session_id");
-        pmix_asprintf(&param, "%u", prte_pmix_server_globals.session_id);
+        pmix_argv_append(argc, argv, "pmix_session_rndz_id");
+        pmix_asprintf(&param, "%u", prte_pmix_server_globals.session_rndz_id);
         pmix_argv_append(argc, argv, param);
         free(param);
         param = NULL;

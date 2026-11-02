@@ -320,10 +320,10 @@ correct the list and try again.
 #
 [session-server-no-id]
 This PRRTE daemon on %s was told to be the session-level PMIx server
-of its DVM, but was not told the session's ID.
+of its DVM, but was not given the ID its rendezvous file is named by.
 
-A session-level server's rendezvous file is named by its session ID, so
-that DVMs of different sessions can share a node and a tool can choose
-among them. The DVM controller computes the ID and passes it to each
-daemon it starts (the pmix_session_id parameter). A daemon started
+A session-level server's rendezvous file is named by an ID, so that DVMs
+of different sessions can share a node and a tool can choose among
+them. The DVM controller computes the ID and passes it to each
+daemon it starts (the pmix_session_rndz_id parameter). A daemon started
 another way must be given it too, or not be told to be a session server.
