@@ -536,14 +536,14 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.session_server);
 
-    /* the session it is the server of - the controller computes one, and
-     * passes it to its daemons */
-    prte_pmix_server_globals.session_id = UINT_MAX;
-    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_id",
-                                      "The ID of the session this DVM is the session-level "
-                                      "server of. Set by the DVM controller for its daemons",
+    /* the ID naming its session-level rendezvous file - the controller
+     * computes one, and passes it to its daemons */
+    prte_pmix_server_globals.session_rndz_id = UINT_MAX;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_rndz_id",
+                                      "The ID naming this DVM's session-level PMIx rendezvous "
+                                      "file. Set by the DVM controller for its daemons",
                                       PMIX_MCA_BASE_VAR_TYPE_UNSIGNED_INT,
-                                      &prte_pmix_server_globals.session_id);
+                                      &prte_pmix_server_globals.session_rndz_id);
 
     /* whether or not to drop a system-level tool rendezvous point */
     prte_pmix_server_globals.system_server = false;
@@ -956,7 +956,7 @@ static int open_to_foreign_tools(void *ilist)
  * pid folded in. Unlike a job family it keeps all 32 bits, as nothing else
  * shares the word, and it never answers 0 or UINT32_MAX: the latter is
  * PRRTE's default session, and neither is taken as a real one */
-uint32_t prte_pmix_server_compute_session_id(const char *nspace, pid_t pid)
+uint32_t prte_pmix_server_compute_rndz_id(const char *nspace, pid_t pid)
 {
     const char *end, *c;
     uint32_t hash = 0;
@@ -992,7 +992,6 @@ int pmix_server_init(void)
     pmix_status_t prc;
     prte_pmix_lock_t lock;
     bool flag;
-    uint32_t ui32;
 
     if (prte_pmix_server_globals.initialized) {
         return PRTE_SUCCESS;
@@ -1116,30 +1115,35 @@ int pmix_server_init(void)
         rc = prte_pmix_convert_status(prc);
         return rc;
     }
-    /* A session-level server is the server of a session, and the session's
-     * ID names its rendezvous file: DVMs of different sessions share a node,
-     * and a tool asks for the one it wants. The controller computes the ID
-     * and hands it to its daemons. A server told to be the session's
+    /* A session-level server's rendezvous file is named by an ID of its
+     * host's choosing, PMIX_SESSION_RNDZ_ID: DVMs of different sessions
+     * share a node, and a tool asks for the one it wants. The controller
+     * computes the ID and hands it to its daemons. It is not passed as
+     * PMIX_SESSION_ID, which is the scheduler's ID of the session and what
+     * clients and tools read as such. A server told to be a session server
      * without an ID cannot be, and says so rather than run as something
      * else */
     if (prte_pmix_server_globals.session_server) {
-        if (PRTE_PROC_IS_MASTER && UINT_MAX == prte_pmix_server_globals.session_id) {
-            prte_pmix_server_globals.session_id =
-                prte_pmix_server_compute_session_id(PRTE_PROC_MY_NAME->nspace, getpid());
+        if (PRTE_PROC_IS_MASTER && UINT_MAX == prte_pmix_server_globals.session_rndz_id) {
+            prte_pmix_server_globals.session_rndz_id =
+                prte_pmix_server_compute_rndz_id(PRTE_PROC_MY_NAME->nspace, getpid());
         }
-        if (UINT_MAX == prte_pmix_server_globals.session_id) {
+        if (UINT_MAX == prte_pmix_server_globals.session_rndz_id) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prted.txt", "session-server-no-id",
                            true, prte_process_info.nodename);
             PMIX_INFO_LIST_RELEASE(ilist);
             return PRTE_ERR_SILENT;
         }
-        ui32 = (uint32_t) prte_pmix_server_globals.session_id;
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
+#ifdef PMIX_SESSION_RNDZ_ID
+        /* a PMIx without it names no session server's file by an ID */
+        uint32_t ui32 = (uint32_t) prte_pmix_server_globals.session_rndz_id;
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SESSION_RNDZ_ID, &ui32, PMIX_UINT32);
         if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
+#endif
     }
 
     if (PRTE_PROC_IS_MASTER) {

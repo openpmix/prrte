@@ -143,15 +143,18 @@ with a comment saying so at each site.
 
 ---
 
-## The session this DVM is the server of
+## The rendezvous ID of a DVM's session server
 
 `prte` (and `prterun`) always runs as a session-level PMIx server
 (`prte.c` sets `PRTE_MCA_pmix_session_server`), and so does each of its
-daemons. PMIx names a session server's rendezvous file by its session -
-`pmix.<host>.session.<id>` - and refuses `PMIX_SERVER_SESSION_SUPPORT`
-without `PMIX_SESSION_ID`, so `pmix_server_init()` always passes one:
+daemons. PMIx names a session server's rendezvous file by an ID -
+`pmix.<host>.session.<id>` - given as `PMIX_SESSION_RNDZ_ID`, else
+`PMIX_SESSION_ID`, and refuses `PMIX_SERVER_SESSION_SUPPORT` without
+either. `pmix_server_init()` always passes `PMIX_SESSION_RNDZ_ID` (when
+the PMIx defines it), never its own value as `PMIX_SESSION_ID`: that is
+the scheduler's ID of the session, which clients and tools read.
 
-- **The controller computes it**, `prte_pmix_server_compute_session_id()`:
+- **The controller computes it**, `prte_pmix_server_compute_rndz_id()`:
   OMPI's job-family hash (`opal_pmix_convert_nspace`) of its namespace
   less the trailing `-<pid>` - `prte-<host>` - with the pid XORed in, kept
   to all 32 bits, and never 0 or `UINT32_MAX`. Not the pid alone (not
@@ -159,12 +162,13 @@ without `PMIX_SESSION_ID`, so `pmix_server_init()` always passes one:
   can run in one allocation).
 - **Each daemon is handed it** with `pmix_session_server` on its command
   line (`plm_base_launch_support.c`, which keeps `pmix_session_*` out of
-  the forwarded environment so they are passed once). A daemon told to be
-  a session server without an ID fails (`session-server-no-id`).
+  the forwarded environment so they are passed once), as
+  `pmix_session_rndz_id`. A daemon told to be a session server without an
+  ID fails (`session-server-no-id`).
 - **A bootstrapped DVM has no launch to hand it down**, so every daemon
   computes it in `ess_base_bootstrap.c` from what they all read - the
   same hash over `<cluster>-<controller host>`, XOR the DVM port - and
-  sets `pmix_session_server` and `pmix_session_id` itself. Two
+  sets `pmix_session_server` and `pmix_session_rndz_id` itself. Two
   bootstrapped DVMs of one configuration are the same DVM.
 - **A collision fails.** Two DVMs of one user whose IDs coincide on a node
   find the name held, and the second's `PMIx_server_init` fails - the
