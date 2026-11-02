@@ -1335,6 +1335,19 @@ static void check_complete(prte_grpcomm_group_t *coll)
 
         /* the allgather is complete - send the xcast */
         if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
+            /* An ID that names a job, or a group still in use, is refused
+             * to every participant. Formed again, a group would take over
+             * the old one's record wherever both have members - the PMIx
+             * servers', and ours - and a group named as a namespace would
+             * stand in for that job's procs */
+            if (prte_grpcomm_group_id_taken(coll->sig->groupID)) {
+                pmix_output_verbose(1, prte_grpcomm_globals.output,
+                                    "%s grpcomm:group \"%s\" refused - the ID is a job's "
+                                    "namespace or a group still in use",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
+                coll->status = PMIX_ERR_EXISTS;
+                goto answer;
+            }
             /* Decide what a construct that lost a member should do. This
              * is the one place with the whole picture, it runs exactly
              * once, and unlike the fault handler it also covers an
@@ -1483,7 +1496,6 @@ answer:
                     PMIX_DATA_BUFFER_RELEASE(reply);
                     goto failed;
                 }
-                PMIX_PROC_FREE(finalmembership, nfinal);
             }
 
             /* pack the members lost to a failed daemon, so each daemon can
@@ -1549,6 +1561,18 @@ answer:
          * buffer is still ours to free */
         (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
+        /* what the controller holds of the DVM's groups - here, as the
+         * release leaves, not when the master processes its own copy: see
+         * prte_grpcomm_globals.live_groups. A destruct ends the group
+         * whatever it reports, as it does on each daemon */
+        if (PMIX_GROUP_CONSTRUCT == coll->sig->op && PMIX_SUCCESS == coll->status) {
+            prte_grpcomm_group_formed(coll->sig->groupID, finalmembership, nfinal);
+        } else if (PMIX_GROUP_DESTRUCT == coll->sig->op) {
+            prte_grpcomm_group_ended(coll->sig->groupID);
+        }
+        if (NULL != finalmembership) {
+            PMIX_PROC_FREE(finalmembership, nfinal);
+        }
         return;
 
 failed:
@@ -2428,12 +2452,22 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
     prte_grpcomm_group_t *coll;
     prte_grpcomm_grp_pending_t *pnd, *pnext;
     prte_pmix_grp_caddy_t *ccd;
-    prte_pmix_server_pset_t *pset;
+    prte_pmix_server_pset_t *pset, *pold;
     pmix_data_array_t darray;
     pmix_status_t rc;
 
     if (PMIX_SUCCESS == cd->st) {
-       /* add it to our list of known groups */
+        /* add it to our list of known groups - in place of a group of
+         * that ID whose jobs all ended without destructing it, which the
+         * controller let the ID go from: a destruct must find the group
+         * that is, not the one that was */
+        PMIX_LIST_FOREACH_SAFE(pset, pold, &prte_pmix_server_globals.groups,
+                               prte_pmix_server_pset_t) {
+            if (NULL != pset->name && 0 == strcmp(pset->name, cd->sig->groupID)) {
+                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
+                PMIX_RELEASE(pset);
+            }
+        }
         pset = PMIX_NEW(prte_pmix_server_pset_t);
         pset->name = strdup(cd->sig->groupID);
         if (NULL != cd->finalmembership) {
