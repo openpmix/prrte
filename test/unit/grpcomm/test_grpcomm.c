@@ -45,6 +45,12 @@
  *      fence fault handler's choice -- re-converge a fence that merely
  *      lost a message path, end one that lost a participant -- are pinned
  *      down away from a live DVM, with the release broadcast stubbed.
+ *
+ *   6. Which group IDs a construct may not take.  The controller refuses
+ *      one that names a job, or a group it formed and has not seen
+ *      destructed while any of its jobs runs; a group whose jobs have all
+ *      ended frees its ID.  That reads only the job table and the
+ *      controller's own record of its groups, both stood up here.
  */
 
 #include "prte_config.h"
@@ -260,6 +266,88 @@ static int test_classes(void)
  * daemon may complete on the survivors, so it is worth pinning down away from
  * a live DVM.  It reads only the failed-daemon set and the job data, both of
  * which can be stood up by hand here. */
+/* add a job of this namespace and state to the table */
+static prte_job_t *add_job(const char *nspace, prte_job_state_t state)
+{
+    prte_job_t *jdata = PMIX_NEW(prte_job_t);
+
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
+    jdata->state = state;
+    prte_set_job_data_object(jdata);
+    return jdata;
+}
+
+static int test_group_id_taken(void)
+{
+    int failures = 0;
+    prte_job_t *running, *ended;
+    pmix_proc_t members[2];
+    char longid[PMIX_MAX_NSLEN + 8];
+
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+
+    running = add_job("gid-running", PRTE_JOB_STATE_RUNNING);
+    ended = add_job("gid-ended", PRTE_JOB_STATE_TERMINATED);
+
+    CHECK("group ID: a new ID is free", !prte_grpcomm_group_id_taken("gid-fresh"));
+    CHECK("group ID: no ID at all is free", !prte_grpcomm_group_id_taken(NULL));
+    CHECK("group ID: a running job's namespace is taken",
+          prte_grpcomm_group_id_taken("gid-running"));
+    CHECK("group ID: ...and an ended job's still in the table",
+          prte_grpcomm_group_id_taken("gid-ended"));
+
+    /* the lookup compares PMIX_MAX_NSLEN characters: an ID that long plus
+     * more is no job's, whatever its first characters */
+    memset(longid, 'x', sizeof(longid) - 1);
+    longid[sizeof(longid) - 1] = '\0';
+    memcpy(longid, "gid-running", strlen("gid-running"));
+    CHECK("group ID: one longer than any namespace is no job's",
+          !prte_grpcomm_group_id_taken(longid));
+
+    /* a group with a member whose job runs holds its ID until destructed */
+    PMIX_LOAD_PROCID(&members[0], "gid-ended", 0);
+    PMIX_LOAD_PROCID(&members[1], "gid-running", PMIX_RANK_WILDCARD);
+    prte_grpcomm_group_formed("gid-live", members, 2);
+    CHECK("group ID: a formed group with a running member is taken",
+          prte_grpcomm_group_id_taken("gid-live"));
+    prte_grpcomm_group_ended("gid-live");
+    CHECK("group ID: ...and free once destructed",
+          !prte_grpcomm_group_id_taken("gid-live"));
+
+    /* one whose jobs have all ended - or gone from the table - does not */
+    PMIX_LOAD_PROCID(&members[0], "gid-ended", 0);
+    PMIX_LOAD_PROCID(&members[1], "gid-gone", 1);
+    prte_grpcomm_group_formed("gid-stale", members, 2);
+    CHECK("group ID: a group whose jobs have all ended is free",
+          !prte_grpcomm_group_id_taken("gid-stale"));
+    prte_grpcomm_group_formed("gid-empty", NULL, 0);
+    CHECK("group ID: a group of no members is free",
+          !prte_grpcomm_group_id_taken("gid-empty"));
+
+    /* forming another lets go of those, and of an earlier one of its ID */
+    PMIX_LOAD_PROCID(&members[0], "gid-running", 0);
+    prte_grpcomm_group_formed("gid-again", members, 1);
+    prte_grpcomm_group_formed("gid-again", members, 1);
+    CHECK("group ID: a group formed again is held once, ended groups let go",
+          1 == pmix_list_get_size(&prte_grpcomm_globals.live_groups));
+
+    /* a job that ends frees its group's ID */
+    running->state = PRTE_JOB_STATE_TERMINATED;
+    CHECK("group ID: ...and its ID is free once its job ends",
+          !prte_grpcomm_group_id_taken("gid-again"));
+
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.live_groups);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.live_groups, pmix_list_t);
+    pmix_pointer_array_set_item(prte_job_data, running->index, NULL);
+    pmix_pointer_array_set_item(prte_job_data, ended->index, NULL);
+    PMIX_RELEASE(running);
+    PMIX_RELEASE(ended);
+    return failures;
+}
+
 static int test_member_departed(void)
 {
     int failures = 0;
@@ -1961,6 +2049,7 @@ int main(void)
 #if PRTE_TEST_GRPCOMM_INTERNALS
     failures += test_member_departed();
 #endif
+    failures += test_group_id_taken();
     failures += test_group_directives();
     failures += test_fence_operation();
     failures += test_fence_generation();

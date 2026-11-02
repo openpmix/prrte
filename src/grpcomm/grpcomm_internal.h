@@ -125,6 +125,16 @@ typedef struct {
     // whose arrival could forget the entry - see the commentary in
     // grpcomm_fence.c.
     pmix_list_t fence_generations;
+    // The groups the controller has formed and not yet seen destructed -
+    // list of prte_grpcomm_live_group_t, kept on the master alone, which
+    // completes every construct and destruct. What the daemons hold
+    // (prte_pmix_server_globals.groups) cannot serve: a release reaches
+    // only the daemons taking part, so the master learns only of groups it
+    // hosts a member of, and it learns of a destruct only when its own copy
+    // of the release is processed - after the daemons it forwarded it to
+    // may already have started the next construct of that ID. See
+    // prte_grpcomm_group_id_taken().
+    pmix_list_t live_groups;
     // The collective recovery epoch for this daemon. A daemon failure
     // invalidates every in-flight rollup, because how many contributions each
     // daemon expects is derived from the routing tree. Recovery is a
@@ -275,11 +285,38 @@ typedef struct {
 } prte_grpcomm_group_memo_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_group_memo_t);
 
+/* A group the controller formed - see prte_grpcomm_globals.live_groups */
+typedef struct {
+    pmix_list_item_t super;
+    char *groupID;
+    pmix_proc_t *members;
+    size_t nmembers;
+} prte_grpcomm_live_group_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_live_group_t);
+
 /* Was this process hosted by a daemon that has since failed? A wildcard rank
  * names a whole namespace rather than one process and so is never answered
  * here - use prte_grpcomm_procs_lost() for a set that may contain one.
  * Exported so the unit test can drive it against a synthetic failed set. */
 PRTE_EXPORT bool prte_grpcomm_proc_departed(const pmix_proc_t *proc);
+
+/* Is this group ID one a construct may not take? It is when it names a job
+ * this DVM knows - a group ID must never be a namespace - or a group the
+ * controller formed and has not seen destructed, while any of its members'
+ * jobs still runs. A group whose jobs have all ended is not held against
+ * its ID: a program that never destructs its group can be run again. The
+ * controller asks this when a construct completes, the one place that sees
+ * every participant. Master only, as live_groups is. */
+PRTE_EXPORT bool prte_grpcomm_group_id_taken(const char *grpid);
+
+/* The controller formed a group of these members (master only). Groups
+ * whose jobs have all ended are let go first, and any earlier one of this
+ * ID with them */
+PRTE_EXPORT void prte_grpcomm_group_formed(const char *grpid, const pmix_proc_t *members,
+                                           size_t nmembers);
+
+/* The controller completed a destruct of this ID (master only) */
+PRTE_EXPORT void prte_grpcomm_group_ended(const char *grpid);
 
 /* Did this set of participants lose anyone to a failed daemon? Unlike the
  * single-process test, a wildcard entry is expanded through the job map, so

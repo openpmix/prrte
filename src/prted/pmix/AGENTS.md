@@ -843,7 +843,10 @@ knowing before someone makes them symmetrical. A group is appended to
 `prte_pmix_server_globals.groups` by `grp_release_complete()` on each daemon
 that took part in constructing it, so a daemon hosting no member never
 learns of it — **including the master**. There is no authority to defer to,
-and the local list is the whole of the answer available.
+and the local list is the whole of the answer available. (The master does
+keep a record of every group it forms, `prte_grpcomm_globals.live_groups`,
+but only to refuse a construct of a taken ID - see `src/grpcomm/AGENTS.md`;
+it is not the registry queries read.)
 
 ### A proc table is sized by a span, not by a count
 
