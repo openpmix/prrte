@@ -1841,6 +1841,42 @@ prte_grpcomm_fence_t *prte_grpcomm_fence_get_tracker(prte_grpcomm_fence_signatur
     return get_tracker(sig, generation, step, create);
 }
 
+/* Add the daemon hosting each process of a job, once each, to the list -
+ * for a daemon that no longer holds the job's map. Returns false when there
+ * is no process placed to walk. */
+static bool add_job_daemons(prte_job_t *jdata, pmix_list_t *ds)
+{
+    prte_proc_t *proc;
+    prte_namelist_t *nm;
+    bool found, any = false;
+    int i;
+
+    if (NULL == jdata->procs) {
+        return false;
+    }
+    for (i = 0; i < jdata->procs->size; i++) {
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i);
+        if (NULL == proc || NULL == proc->node || NULL == proc->node->daemon) {
+            continue;
+        }
+        any = true;
+        found = false;
+        PMIX_LIST_FOREACH(nm, ds, prte_namelist_t) {
+            if (nm->name.rank == proc->node->daemon->name.rank) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            nm = PMIX_NEW(prte_namelist_t);
+            PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace,
+                             proc->node->daemon->name.rank);
+            pmix_list_append(ds, &nm->super);
+        }
+    }
+    return any;
+}
+
 static int create_dmns(prte_grpcomm_fence_signature_t *sig,
                        pmix_rank_t **dmns, size_t *ndmns)
 {
@@ -1930,9 +1966,26 @@ static int create_dmns(prte_grpcomm_fence_signature_t *sig,
                 }
                 continue;
             }
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
-            break;
+            /* A daemon gives up its map of a job when its own share of the
+             * job ends (state/prted's job_teardown) - but the job goes on
+             * elsewhere, and this daemon still relays the job's collectives
+             * for its subtree for as long as it does. Refusing here dropped
+             * the contribution of every daemon below one whose processes had
+             * all finished, and the fence hung. The job object, and the
+             * placement of every process in it, stays until the DVM says the
+             * job is over, and that is all a participant needs: a named rank
+             * is resolved through it below anyway, and a wildcard is resolved
+             * through it here. A daemon that has not been told of the job's
+             * processes yet has nothing to walk, and is refused as before. */
+            if (PMIX_RANK_WILDCARD == sig->signature[n].rank) {
+                if (!add_job_daemons(jdata, &ds)) {
+                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                    rc = PRTE_ERR_NOT_FOUND;
+                    break;
+                }
+                continue;
+            }
+            /* a named rank needs no map - fall through to the lookup below */
         }
         if (PMIX_RANK_WILDCARD == sig->signature[n].rank) {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
