@@ -4,7 +4,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -135,6 +135,17 @@ typedef struct {
     // may already have started the next construct of that ID. See
     // prte_grpcomm_group_id_taken().
     pmix_list_t live_groups;
+    // The processes of survivable jobs (PRTE_JOB_RECOVERABLE or
+    // PRTE_JOB_CONTINUOUS) known to have terminated - one
+    // prte_grpcomm_departed_t per job. A daemon learns of its own
+    // children's terminations and of everything its subtree reports up the
+    // routing tree (PRTE_RML_TAG_FENCE_DEPARTED), so the master learns of
+    // all of them. A fence's rollup consults it so that a subtree whose
+    // participants have all departed is not waited for: a daemon whose
+    // processes of a job are gone has no PMIx server left to contribute for
+    // them. Empty in a DVM where nothing has died, and then costs nothing.
+    // See grpcomm_departed.c.
+    pmix_list_t departed;
     // The collective recovery epoch for this daemon. A daemon failure
     // invalidates every in-flight rollup, because how many contributions each
     // daemon expects is derived from the routing tree. Recovery is a
@@ -284,6 +295,43 @@ typedef struct {
     uint32_t next_generation;
 } prte_grpcomm_group_memo_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_group_memo_t);
+
+/* The terminated processes of one survivable job - see
+ * prte_grpcomm_globals.departed */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_nspace_t nspace;
+    pmix_bitmap_t ranks;
+} prte_grpcomm_departed_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_departed_t);
+
+/* Record that these processes of nspace have terminated, without telling
+ * anyone. Returns how many were not already recorded, and copies their
+ * ranks into fresh (which must hold nranks) when it is non-NULL. Exported
+ * so the unit test can stand a departed set up by hand. */
+PRTE_EXPORT size_t prte_grpcomm_departed_add(const pmix_nspace_t nspace,
+                                             const pmix_rank_t *ranks, size_t nranks,
+                                             pmix_rank_t *fresh);
+
+/* Has this process been recorded as departed? */
+PRTE_EXPORT bool prte_grpcomm_departed_has(const pmix_nspace_t nspace, pmix_rank_t rank);
+
+/* Has any process of this namespace been recorded as departed? */
+PRTE_EXPORT bool prte_grpcomm_departed_any(const pmix_nspace_t nspace);
+
+/* Departure notices from our children */
+PRTE_EXPORT void prte_grpcomm_departed_recv(int status, pmix_proc_t *sender,
+                                            pmix_data_buffer_t *buffer,
+                                            prte_rml_tag_t tag, void *cbdata);
+
+/* Tell our (possibly new) parent everything we know has departed - called on
+ * a recovery restart, when the routing tree may have given us a different
+ * parent that has heard none of it */
+void prte_grpcomm_departed_resend(void);
+
+/* Re-test every fence in flight against the departed set, which has just
+ * grown. Exported so the unit test can drive it. */
+PRTE_EXPORT void prte_grpcomm_fence_departed_recheck(void);
 
 /* A group the controller formed - see prte_grpcomm_globals.live_groups */
 typedef struct {

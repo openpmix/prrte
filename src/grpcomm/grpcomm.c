@@ -48,7 +48,8 @@ prte_grpcomm_globals_t prte_grpcomm_globals = {
     .fence_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_ops),
     .group_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.group_ops),
     .fence_generations = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_generations),
-    .live_groups = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.live_groups)
+    .live_groups = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.live_groups),
+    .departed = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.departed)
 };
 
 prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast =
@@ -277,6 +278,7 @@ int prte_grpcomm_init(void)
     PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_generations, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.live_groups, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.departed, pmix_list_t);
 
     /* xcast receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
@@ -290,6 +292,9 @@ int prte_grpcomm_init(void)
     /* setup recv for barrier release */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_fence_release, NULL);
+    /* what has departed below us - see grpcomm_departed.c */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_DEPARTED,
+                  PRTE_RML_PERSISTENT, prte_grpcomm_departed_recv, NULL);
 
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
@@ -311,11 +316,13 @@ void prte_grpcomm_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_generations);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.live_groups);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.departed);
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_DEPARTED);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE);
     return;
@@ -516,6 +523,11 @@ void prte_grpcomm_advance_epoch(uint32_t to)
                         "%s grpcomm restarting collectives at epoch %u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) to);
 
+    /* the repaired tree may have given us a parent that has heard nothing of
+     * what departed below us - tell it before the restarted rollups need it.
+     * Order against the restart does not matter: a tracker records which
+     * subtrees reported, so nothing can be counted twice. */
+    prte_grpcomm_departed_resend();
     prte_grpcomm_fence_restart();
     prte_grpcomm_group_restart();
 }

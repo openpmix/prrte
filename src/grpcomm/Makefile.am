@@ -32,4 +32,5 @@ libprrte_la_SOURCES += \
     grpcomm/grpcomm_classes.c \
     grpcomm/grpcomm_xcast.c \
     grpcomm/grpcomm_fence.c \
+    grpcomm/grpcomm_departed.c \
     grpcomm/grpcomm_group.c
