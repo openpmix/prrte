@@ -313,6 +313,13 @@ PRTE_EXPORT size_t prte_grpcomm_departed_add(const pmix_nspace_t nspace,
                                              const pmix_rank_t *ranks, size_t nranks,
                                              pmix_rank_t *fresh);
 
+/* Take these processes of nspace off the departed set, without telling
+ * anyone. Returns how many were on it, copying their ranks into cleared
+ * (which must hold nranks) when it is non-NULL. Exported for the unit test. */
+PRTE_EXPORT size_t prte_grpcomm_departed_remove(const pmix_nspace_t nspace,
+                                                const pmix_rank_t *ranks, size_t nranks,
+                                                pmix_rank_t *cleared);
+
 /* Has this process been recorded as departed? */
 PRTE_EXPORT bool prte_grpcomm_departed_has(const pmix_nspace_t nspace, pmix_rank_t rank);
 
@@ -324,10 +331,11 @@ PRTE_EXPORT void prte_grpcomm_departed_recv(int status, pmix_proc_t *sender,
                                             pmix_data_buffer_t *buffer,
                                             prte_rml_tag_t tag, void *cbdata);
 
-/* Tell our (possibly new) parent everything we know has departed - called on
- * a recovery restart, when the routing tree may have given us a different
- * parent that has heard none of it */
-void prte_grpcomm_departed_resend(void);
+/* Rebuild the departed set after a recovery: keep only the departures of
+ * processes we host, and report those to our (possibly new) parent - see
+ * grpcomm_departed.c for why topping it up is not enough. Exported for the
+ * unit test. */
+PRTE_EXPORT void prte_grpcomm_departed_resend(void);
 
 /* Re-test every fence in flight against the departed set, which has just
  * grown. Exported so the unit test can drive it. */
