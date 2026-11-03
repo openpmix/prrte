@@ -1238,6 +1238,22 @@ application) hung every survivor in `MPI_Finalize`.
   matter: the tracker's per-subtree record makes double counting impossible.
 - **A job's entry goes when the job does**, swept the next time anything is
   recorded rather than through a teardown hook.
+- **A daemon with nothing left of the job still relays for it.**
+  `state/prted`'s `job_teardown` gives up the job's map when this daemon's
+  own share ends, and keeps the job object. `create_dmns()` used to refuse
+  a fence over a job with no map on any daemon but the controller, so the
+  contribution of every daemon *below* one whose processes had all
+  finished was dropped - a hang this mechanism could not reach, since the
+  tracker was never built. A wildcard is now resolved through
+  `jdata->procs` (`add_job_daemons()`) when the map is gone; a named rank
+  always was. `test_fence_tracker_unmapped_daemon` covers it.
+- **Which daemons it matters on.** The HNP also drops a node from the job's
+  map once its processes of the job are all gone
+  (`prte_state_base_recover_resources()`, from `errmgr/dvm`), which is why a
+  DVM of no more than `rml_base_radix + 1` daemons - the HNP the parent of
+  every daemon - never showed the hang. Any daemon deeper in the tree keeps
+  counting the empty node, and depends on the departed set instead. Reproduce
+  with `--prtemca rml_base_radix 2` on four nodes, one rank each.
 
 Not covered: the group collective. A construct over a whole namespace has
 the same shape, but whether it may complete without a member is the
