@@ -426,6 +426,22 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_iof_flow_control],
                        [Whether PMIx supports PMIx_server_IOF_flow_control])
 
+    dnl A daemon retires each of its clients with the PMIx server as the
+    dnl client terminates. Against a PMIx that does not take a deregistered
+    dnl client out of its job's collectives, doing that before the server has
+    dnl read the client's closed socket would leave the rank an expected
+    dnl participant for good - so without the capability the daemon leaves
+    dnl it to the socket close, as it always did.
+    AC_MSG_CHECKING([whether PMIx deregistration takes a client out of collectives])
+    PRTE_CHECK_PMIX_CAP([DEREG_DEPARTS],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_dereg_departs=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_dereg_departs=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_DEREG_DEPARTS],
+                       [$prte_pmix_dereg_departs],
+                       [Whether PMIx_server_deregister_client takes the rank out of its job's collectives])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1
