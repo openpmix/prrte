@@ -46,6 +46,11 @@
  *      lost a message path, end one that lost a participant -- are pinned
  *      down away from a live DVM, with the release broadcast stubbed.
  *
+ *   7. A survivable job's fence stops waiting for a subtree whose processes
+ *      have all departed, and only then: that decision reads the departed
+ *      set, the job map and which subtrees have reported, all stood up here
+ *      over a routing tree computed by hand.
+ *
  *   6. Which group IDs a construct may not take.  The controller refuses
  *      one that names a job, or a group it formed and has not seen
  *      destructed while any of its jobs runs; a group whose jobs have all
@@ -2022,6 +2027,241 @@ static int test_xcast_grow_new_parent(void)
     return failures;
 }
 
+/*
+ * A survivable job's fence must not wait for a daemon whose processes have
+ * all departed.
+ *
+ * A fence over a whole namespace counts every daemon hosting one of its
+ * processes, and each of those contributes once its PMIx server has heard
+ * from every local participant. A daemon whose processes are all gone has
+ * nobody left to call the fence, so its PMIx server never contributes, and
+ * the rollup used to wait for it forever - every survivor of a ULFM
+ * application hung in MPI_Finalize. A departure now travels up the routing
+ * tree, and a subtree whose participants have all departed stops being
+ * waited for.
+ *
+ * We are the controller of a radix-2 tree of four daemons, each hosting one
+ * process of the job. Our own contribution and every subtree but the one
+ * holding daemon 3 have reported; then the processes of that subtree depart
+ * one by one. The fence must hold until the last of them has gone, then
+ * complete - once - with its status untouched.
+ */
+#if PRTE_TEST_GRPCOMM_INTERNALS
+/* give a job built by build_job() the map create_dmns() resolves a wildcard
+ * through */
+static void map_job(const char *nspace)
+{
+    pmix_nspace_t ns;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    int i;
+
+    PMIX_LOAD_NSPACE(ns, nspace);
+    jdata = prte_get_job_data_object(ns);
+    jdata->map = PMIX_NEW(prte_job_map_t);
+    for (i = 0; i < jdata->procs->size; i++) {
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i);
+        if (NULL != proc && NULL != proc->node) {
+            pmix_pointer_array_add(jdata->map->nodes, proc->node);
+            jdata->map->num_nodes++;
+        }
+    }
+}
+
+static prte_grpcomm_fence_t *whole_job_fence(const char *nspace)
+{
+    prte_grpcomm_fence_signature_t sig;
+    prte_grpcomm_fence_t *coll;
+
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
+    sig.sz = 1;
+    PMIX_PROC_CREATE(sig.signature, 1);
+    PMIX_LOAD_PROCID(&sig.signature[0], nspace, PMIX_RANK_WILDCARD);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
+    PMIX_DESTRUCT(&sig);
+    return coll;
+}
+
+/* mark every child subtree reported except the one holding daemon `except` */
+static void report_all_but(prte_grpcomm_fence_t *coll, pmix_rank_t except)
+{
+    int skip = prte_rml_get_subtree_index(except);
+    pmix_rank_t d;
+    int slot;
+
+    for (d = 1; d < 4; d++) {
+        slot = prte_rml_get_subtree_index(d);
+        if (0 <= slot && slot != skip &&
+            !pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
+            pmix_bitmap_set_bit(&coll->reported_slots, slot);
+            coll->nreported++;
+        }
+    }
+}
+
+static void drop_fences(void)
+{
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+}
+#endif
+
+static int test_fence_departed(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    pmix_rank_t save_rank = PRTE_PROC_MY_NAME->rank;
+    pmix_rank_t save_ndaemons = prte_process_info.num_daemons;
+    prte_proc_type_t save_type = prte_process_info.proc_type;
+    int save_radix = prte_rml_base.radix;
+    pmix_nspace_t save_nspace, ns, other;
+    prte_grpcomm_fence_t *coll;
+    prte_job_t *jdata;
+    pmix_proc_t proc;
+    pmix_rank_t d, slot3_dmns[4];
+    size_t nslot3 = 0, i;
+    pmix_data_buffer_t *msg;
+    pmix_rank_t ranks[2];
+    size_t nr;
+
+    PMIX_LOAD_NSPACE(save_nspace, PRTE_PROC_MY_NAME->nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-unit-dvm");
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.departed, pmix_list_t);
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+    /* the controller of four daemons - grow_view sets us up as a plain
+     * daemon, and a controller is what answers a converged fence by
+     * broadcasting its release, which the stub then reads back */
+    grow_view(0, 4, NULL, 0);
+    prte_process_info.proc_type = PRTE_PROC_MASTER;
+    prte_grpcomm_release_bcast = stub_xcast;
+
+    build_job("departed-job", 4);
+    map_job("departed-job");
+    PMIX_LOAD_NSPACE(ns, "departed-job");
+    jdata = prte_get_job_data_object(ns);
+    build_job("departed-other", 4);
+    map_job("departed-other");
+    PMIX_LOAD_NSPACE(other, "departed-other");
+
+    /* which daemons share daemon 3's subtree - every one of them has to go
+     * before that subtree stops being owed */
+    for (d = 1; d < 4; d++) {
+        if (prte_rml_get_subtree_index(d) == prte_rml_get_subtree_index(3)) {
+            slot3_dmns[nslot3++] = d;
+        }
+    }
+    CHECK("departed: daemon 3 is below us", 0 < nslot3);
+
+    /* a job that ends with its first loss records nothing */
+    PMIX_LOAD_PROCID(&proc, ns, 3);
+    prte_grpcomm_proc_terminated(&proc);
+    CHECK("departed: a job that is not survivable records nothing",
+          !prte_grpcomm_departed_has(ns, 3));
+
+    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, PRTE_ATTR_GLOBAL, true);
+
+    coll = whole_job_fence("departed-job");
+    CHECK("departed: the fence resolves", NULL != coll);
+    if (NULL == coll) {
+        goto cleanup;
+    }
+    CHECK("departed: it waits for us and each child subtree",
+          (size_t) prte_rml_base.n_children + 1 == coll->nexpected);
+    coll->self_reported = true;
+    coll->nreported++;
+    report_all_but(coll, 3);
+    fence_xcast_calls = 0;
+
+    /* a loss in some other job says nothing about this fence */
+    ranks[0] = 3;
+    (void) prte_grpcomm_departed_add(other, ranks, 1, NULL);
+    prte_grpcomm_fence_departed_recheck();
+    CHECK("departed: another job's loss does not complete it", !coll->converged);
+
+    /* depart the subtree's processes one at a time */
+    for (i = 0; i < nslot3; i++) {
+        CHECK("departed: still waiting while any of the subtree is left",
+              !coll->converged && 0 == fence_xcast_calls);
+        PMIX_LOAD_PROCID(&proc, ns, slot3_dmns[i]);
+        prte_grpcomm_proc_terminated(&proc);
+        CHECK("departed: the departure is recorded",
+              prte_grpcomm_departed_has(ns, slot3_dmns[i]));
+    }
+    CHECK("departed: the fence completes once the subtree is gone", coll->converged);
+    CHECK("departed: exactly one release", 1 == fence_xcast_calls);
+    CHECK("departed: released on the fence-release tag",
+          PRTE_RML_TAG_FENCE_RELEASE == fence_xcast_tag);
+    CHECK("departed: for this job's fence", 0 == strcmp("departed-job", fence_xcast_nspace));
+    CHECK("departed: with its status untouched", PMIX_SUCCESS == fence_xcast_status);
+
+    /* hearing of it again changes nothing */
+    PMIX_LOAD_PROCID(&proc, ns, 3);
+    prte_grpcomm_proc_terminated(&proc);
+    CHECK("departed: a repeat does not answer the fence again", 1 == fence_xcast_calls);
+    drop_fences();
+
+    /* our own contribution is owed only while one of our processes is left -
+     * every child subtree reported, and our process departs */
+    coll = whole_job_fence("departed-job");
+    if (NULL != coll) {
+        report_all_but(coll, 0);  /* daemon 0 is no child, so this is all of them */
+        fence_xcast_calls = 0;
+        prte_grpcomm_fence_departed_recheck();
+        CHECK("departed: our own contribution is still owed", !coll->converged);
+        PMIX_LOAD_PROCID(&proc, ns, 0);
+        prte_grpcomm_proc_terminated(&proc);
+        CHECK("departed: until our own process departs", coll->converged);
+        CHECK("departed: and then it completes once", 1 == fence_xcast_calls);
+    }
+    drop_fences();
+
+    /* a notice from a child is recorded like our own; one whose count the
+     * message cannot hold is refused */
+    PMIX_LOAD_PROCID(&proc, PRTE_PROC_MY_NAME->nspace, 1);
+    PMIX_DATA_BUFFER_CREATE(msg);
+    nr = 2;
+    ranks[0] = 1;
+    ranks[1] = 2;
+    PMIx_Data_pack(NULL, msg, &other, 1, PMIX_PROC_NSPACE);
+    PMIx_Data_pack(NULL, msg, &nr, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, msg, ranks, 2, PMIX_PROC_RANK);
+    prte_grpcomm_departed_recv(PRTE_SUCCESS, &proc, msg, PRTE_RML_TAG_FENCE_DEPARTED, NULL);
+    PMIX_DATA_BUFFER_RELEASE(msg);
+    CHECK("departed: a child's notice is recorded",
+          prte_grpcomm_departed_has(other, 1) && prte_grpcomm_departed_has(other, 2));
+    PMIX_DATA_BUFFER_CREATE(msg);
+    nr = SIZE_MAX / 2;
+    PMIx_Data_pack(NULL, msg, &other, 1, PMIX_PROC_NSPACE);
+    PMIx_Data_pack(NULL, msg, &nr, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, msg, ranks, 1, PMIX_PROC_RANK);
+    prte_grpcomm_departed_recv(PRTE_SUCCESS, &proc, msg, PRTE_RML_TAG_FENCE_DEPARTED, NULL);
+    PMIX_DATA_BUFFER_RELEASE(msg);
+    CHECK("departed: a count the message cannot hold is refused",
+          !prte_grpcomm_departed_has(other, 0));
+
+cleanup:
+    prte_grpcomm_release_bcast = prte_grpcomm_xcast;
+    drop_fences();
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.departed);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.departed, pmix_list_t);
+    grow_view_release();
+    prte_rml_base.radix = save_radix;
+    prte_process_info.num_daemons = save_ndaemons;
+    prte_process_info.proc_type = save_type;
+    PRTE_PROC_MY_NAME->rank = save_rank;
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, save_nspace);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_departed\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2062,6 +2302,7 @@ int main(void)
     failures += test_fence_release_failure();
     failures += test_xcast_tree_identity();
     failures += test_xcast_grow_new_parent();
+    failures += test_fence_departed();
 
     PMIx_server_finalize();
     prte_finalize();
