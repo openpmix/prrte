@@ -39,6 +39,14 @@
  * Only survivable jobs: the notices cost a message per terminated process per
  * level of the tree, and a job that ends at its first loss would pay that at
  * every normal exit for nothing.
+ *
+ * A process can come back under its rank - the runtime restarts it - and
+ * then it is a participant again. Its daemon reports the return up the same
+ * links (prte_grpcomm_proc_restarted), so it reaches every daemon that heard
+ * of the departure, and reaches each of them ahead of anything the new
+ * incarnation contributes. A departure left standing for a live process is
+ * the dangerous error here: a fence would stop waiting for it and complete
+ * without it.
  */
 
 #include "prte_config.h"
@@ -154,8 +162,14 @@ bool prte_grpcomm_departed_any(const pmix_nspace_t nspace)
     return (NULL != dp && !pmix_bitmap_is_clear(&dp->ranks));
 }
 
+/* What a notice says about the ranks it carries. The first byte of every
+ * PRTE_RML_TAG_FENCE_DEPARTED message. */
+#define DEPARTED_OP_GONE     0
+#define DEPARTED_OP_RETURNED 1
+
 /* Tell our parent. The master has none - it is where everything ends up. */
-static void send_up(const pmix_nspace_t nspace, const pmix_rank_t *ranks, size_t nranks)
+static void send_up(uint8_t op, const pmix_nspace_t nspace, const pmix_rank_t *ranks,
+                    size_t nranks)
 {
     pmix_data_buffer_t *buf;
     pmix_nspace_t ns;
@@ -166,7 +180,14 @@ static void send_up(const pmix_nspace_t nspace, const pmix_rank_t *ranks, size_t
     }
     PMIX_LOAD_NSPACE(ns, nspace);
     PMIX_DATA_BUFFER_CREATE(buf);
-    rc = PMIx_Data_pack(NULL, buf, &ns, 1, PMIX_PROC_NSPACE);
+    /* which recovery epoch this belongs to - see the receive */
+    rc = PMIx_Data_pack(NULL, buf, &prte_grpcomm_globals.recovery_epoch, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, &op, 1, PMIX_UINT8);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, &ns, 1, PMIX_PROC_NSPACE);
+    }
     if (PMIX_SUCCESS == rc) {
         rc = PMIx_Data_pack(NULL, buf, &nranks, 1, PMIX_SIZE);
     }
@@ -183,6 +204,34 @@ static void send_up(const pmix_nspace_t nspace, const pmix_rank_t *ranks, size_t
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
     }
+}
+
+size_t prte_grpcomm_departed_remove(const pmix_nspace_t nspace,
+                                    const pmix_rank_t *ranks, size_t nranks,
+                                    pmix_rank_t *cleared)
+{
+    prte_grpcomm_departed_t *dp;
+    size_t n, ncleared = 0;
+
+    if (NULL == ranks || 0 == nranks || PMIX_NSPACE_INVALID(nspace)) {
+        return 0;
+    }
+    dp = find_departed(nspace, false);
+    if (NULL == dp) {
+        return 0;
+    }
+    for (n = 0; n < nranks; n++) {
+        if (PMIX_RANK_VALID < ranks[n] || INT_MAX <= (long long) ranks[n] ||
+            !pmix_bitmap_is_set_bit(&dp->ranks, (int) ranks[n])) {
+            continue;
+        }
+        pmix_bitmap_clear_bit(&dp->ranks, (int) ranks[n]);
+        if (NULL != cleared) {
+            cleared[ncleared] = ranks[n];
+        }
+        ++ncleared;
+    }
+    return ncleared;
 }
 
 void prte_grpcomm_proc_terminated(const pmix_proc_t *proc)
@@ -206,8 +255,32 @@ void prte_grpcomm_proc_terminated(const pmix_proc_t *proc)
     PMIX_OUTPUT_VERBOSE((2, prte_grpcomm_globals.output,
                          "%s grpcomm: %s has departed",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
-    send_up(proc->nspace, &rank, 1);
+    send_up(DEPARTED_OP_GONE, proc->nspace, &rank, 1);
     prte_grpcomm_fence_departed_recheck();
+}
+
+void prte_grpcomm_proc_restarted(const pmix_proc_t *proc)
+{
+    pmix_rank_t rank;
+
+    if (NULL == proc) {
+        return;
+    }
+    rank = proc->rank;
+    /* nothing to undo for a rank that was never counted out - a job that is
+     * not survivable records nothing, so it has nothing to clear either */
+    if (0 == prte_grpcomm_departed_remove(proc->nspace, &rank, 1, NULL)) {
+        return;
+    }
+    PMIX_OUTPUT_VERBOSE((2, prte_grpcomm_globals.output,
+                         "%s grpcomm: %s has returned",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+    /* Up the same links the departure took, so every daemon that heard the
+     * process went also hears it came back - and hears it before anything
+     * the new incarnation contributes, which travels behind this. Nothing
+     * in flight needs re-testing: a fence can only be waiting for more now,
+     * never complete sooner. */
+    send_up(DEPARTED_OP_RETURNED, proc->nspace, &rank, 1);
 }
 
 void prte_grpcomm_departed_recv(int status, pmix_proc_t *sender,
@@ -218,9 +291,40 @@ void prte_grpcomm_departed_recv(int status, pmix_proc_t *sender,
     pmix_rank_t *ranks = NULL, *fresh = NULL;
     size_t nranks = 0, nfresh;
     int32_t cnt;
+    uint8_t op = DEPARTED_OP_GONE;
+    uint32_t stamp;
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
+    /* A recovery rebuilds the set (prte_grpcomm_departed_resend), so a notice
+     * has to land on the side of the rebuild it was sent from. One sent
+     * before it describes a tree that no longer exists - its sender reports
+     * again at the new epoch - and is dropped. One sent after it can reach
+     * us before our own notice of the recovery does, because a broadcast
+     * reaches our children before us: adopt the epoch first, which runs our
+     * rebuild, or the rebuild would wipe the very report it is waiting for. */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &stamp, &cnt, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (stamp < prte_grpcomm_globals.recovery_epoch) {
+        return;
+    }
+    if (stamp > prte_grpcomm_globals.recovery_epoch) {
+        prte_grpcomm_advance_epoch(stamp);
+    }
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &op, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (DEPARTED_OP_GONE != op && DEPARTED_OP_RETURNED != op) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return;
+    }
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_PROC_NSPACE);
     if (PMIX_SUCCESS != rc) {
@@ -253,15 +357,21 @@ void prte_grpcomm_departed_recv(int status, pmix_proc_t *sender,
     }
 
     PMIX_OUTPUT_VERBOSE((2, prte_grpcomm_globals.output,
-                         "%s grpcomm: %s reports %u departed from %s",
+                         "%s grpcomm: %s reports %u %s from %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
-                         (unsigned) nranks, nspace));
+                         (unsigned) nranks,
+                         (DEPARTED_OP_GONE == op) ? "departed" : "returned", nspace));
 
     /* pass on only what is news here - a resend after a recovery repeats
      * everything, and our parent has had most of it already */
+    if (DEPARTED_OP_RETURNED == op) {
+        nfresh = prte_grpcomm_departed_remove(nspace, ranks, nranks, fresh);
+        send_up(DEPARTED_OP_RETURNED, nspace, fresh, nfresh);
+        goto done;
+    }
     nfresh = prte_grpcomm_departed_add(nspace, ranks, nranks, fresh);
     if (0 < nfresh) {
-        send_up(nspace, fresh, nfresh);
+        send_up(DEPARTED_OP_GONE, nspace, fresh, nfresh);
         prte_grpcomm_fence_departed_recheck();
     }
 
@@ -270,6 +380,40 @@ done:
     free(fresh);
 }
 
+/* Is this process one of ours? Its departure is ours to report, and nobody
+ * else can report it again. */
+static bool hosted_here(const pmix_nspace_t nspace, int rank)
+{
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+
+    jdata = prte_get_job_data_object(nspace);
+    if (NULL == jdata || NULL == jdata->procs) {
+        return false;
+    }
+    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, rank);
+    return (NULL != proc && NULL != proc->node && NULL != proc->node->daemon &&
+            proc->node->daemon->name.rank == PRTE_PROC_MY_NAME->rank);
+}
+
+/* After a recovery the routing tree may have changed shape, and the set has
+ * to be rebuilt to match it rather than topped up.
+ *
+ * Topping up is not enough because a notice can be lost with a daemon. A
+ * process that came back had its return sent up the tree it had then; if a
+ * daemon on that path failed, an ancestor on the far side still holds the
+ * departure - and once the tree is repaired it may be our new parent, where
+ * a stale departure is the dangerous error: a fence would stop waiting for a
+ * live participant and complete without it.
+ *
+ * So every daemon drops what it learned from others, keeps the departures of
+ * the processes it hosts, and reports those to its parent - which passes on
+ * what is news to it, exactly as for a fresh departure. The recovery is
+ * DVM-wide and simultaneous, so the set converges on what the repaired tree
+ * actually holds. While it does, a rollup only waits for more than it needs
+ * to - never less - and every arrival re-tests it. A process lost with a
+ * failed daemon is not reported by anyone, and needs not be: the fence skips
+ * a failed daemon's participants by itself. */
 void prte_grpcomm_departed_resend(void)
 {
     prte_grpcomm_departed_t *dp;
@@ -277,11 +421,16 @@ void prte_grpcomm_departed_resend(void)
     size_t n, nranks;
     int bit, nbits;
 
-    if (PRTE_PROC_IS_MASTER) {
-        return;
-    }
     PMIX_LIST_FOREACH(dp, &prte_grpcomm_globals.departed, prte_grpcomm_departed_t) {
         nbits = (int) dp->ranks.array_size * 64;
+        for (bit = 0; bit < nbits; bit++) {
+            if (pmix_bitmap_is_set_bit(&dp->ranks, bit) && !hosted_here(dp->nspace, bit)) {
+                pmix_bitmap_clear_bit(&dp->ranks, bit);
+            }
+        }
+        if (PRTE_PROC_IS_MASTER) {
+            continue;
+        }
         nranks = (size_t) pmix_bitmap_num_set_bits(&dp->ranks, nbits);
         if (0 == nranks) {
             continue;
@@ -297,7 +446,7 @@ void prte_grpcomm_departed_resend(void)
                 ranks[n++] = (pmix_rank_t) bit;
             }
         }
-        send_up(dp->nspace, ranks, n);
+        send_up(DEPARTED_OP_GONE, dp->nspace, ranks, n);
         free(ranks);
     }
 }

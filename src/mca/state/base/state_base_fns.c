@@ -806,6 +806,18 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
          * line from a random rank whenever a job had a failure in it.
          *
          * state/prted has always used the flag here; this is the same test. */
+        /* A survivable job goes on without it, so its collectives have to
+         * stop waiting for it - see grpcomm_departed.c. Ahead of the
+         * accounting guard below because it is a no-op the second time for
+         * one incarnation, and a process the runtime restarts is a second
+         * incarnation whose termination has to be reported whether or not
+         * the restart reset RECORDED. Only a process we host: news of a
+         * remote one reaches us here by a path no fence contribution takes,
+         * so it could overtake one the process made before it died - its own
+         * daemon reports it up the routing tree instead. */
+        if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_LOCAL)) {
+            prte_grpcomm_proc_terminated(proc);
+        }
         if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
             pmix_output_verbose(5, prte_state_base_framework.framework_output,
                                 "%s state:base:track_procs proc %s already recorded as %s. Skip transition.",
@@ -831,13 +843,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         }
         if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_LOCAL)) {
             PMIx_server_deregister_client(proc, NULL, NULL);
-            /* a survivable job goes on without it, so its collectives have
-             * to stop waiting for it. Only a process we host: the news of
-             * a remote one reaches us here by a path no fence contribution
-             * takes, so it could overtake one the process made before it
-             * died - its own daemon reports it up the routing tree instead.
-             * See grpcomm_departed.c */
-            prte_grpcomm_proc_terminated(proc);
         }
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs

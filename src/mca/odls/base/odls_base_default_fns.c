@@ -3234,6 +3234,38 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
             goto CLEANUP;
         }
     }
+    /* The new incarnation is a participant in its job's collectives again,
+     * under the same rank. Two things counted the old one out when it
+     * terminated, and both have to be undone before it is launched:
+     *
+     *  - the departed set the fences consult (grpcomm_departed.c). Done
+     *    first, so the news travels up the routing tree ahead of anything
+     *    the new process contributes; left standing, a fence would stop
+     *    waiting for a live process and complete without it;
+     *  - its PMIx registration, which the termination accounting gives up
+     *    (state/prted, and state/base for a process the HNP hosts). The
+     *    server refuses the connection of a rank it does not have, and
+     *    registering it again is also what counts it back into its job's
+     *    collectives there. A rank still registered is updated, which is
+     *    not a failure. */
+    prte_grpcomm_proc_restarted(&child->name);
+    rc = PMIx_server_register_client(&child->name, geteuid(), getegid(),
+                                     (void *) child, NULL, NULL);
+    if (PMIX_ERR_DUPLICATE_KEY == rc ||
+#ifdef PMIX_UPDATED
+        PMIX_UPDATED == rc ||
+#endif
+        PMIX_OPERATION_SUCCEEDED == rc) {
+        rc = PMIX_SUCCESS;
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        child->exit_code = prte_pmix_convert_status(rc);
+        PMIX_RELEASE(cd);
+        PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
+        rc = prte_pmix_convert_status(rc);
+        goto CLEANUP;
+    }
     /* see comment in launch_local_procs() regarding STOP_ON_EXEC + ptrace
      * tracer-thread affinity */
     if (cd->stop_on_exec) {

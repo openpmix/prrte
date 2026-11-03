@@ -180,6 +180,15 @@ PRTE_EXPORT int prte_grpcomm_assign_context_id(size_t *ctxid);
  * process made earlier. */
 PRTE_EXPORT void prte_grpcomm_proc_terminated(const pmix_proc_t *proc);
 
+/* A process this daemon hosts has been started again under its old name.
+ *
+ * Undoes prte_grpcomm_proc_terminated: the process is a participant again,
+ * so every daemon that heard it had departed has to hear that it is back -
+ * otherwise a fence would stop waiting for a live process and complete
+ * without it. Call it before the new incarnation is launched, so the news
+ * travels up the routing tree ahead of anything it contributes. */
+PRTE_EXPORT void prte_grpcomm_proc_restarted(const pmix_proc_t *proc);
+
 /* The collective recovery epoch this daemon is currently at.
  *
  * Exposed because the epoch has to travel to a daemon that joins an already

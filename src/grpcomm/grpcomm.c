@@ -523,10 +523,11 @@ void prte_grpcomm_advance_epoch(uint32_t to)
                         "%s grpcomm restarting collectives at epoch %u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) to);
 
-    /* the repaired tree may have given us a parent that has heard nothing of
-     * what departed below us - tell it before the restarted rollups need it.
-     * Order against the restart does not matter: a tracker records which
-     * subtrees reported, so nothing can be counted twice. */
+    /* the repaired tree may have given us a parent that holds a stale view of
+     * what departed below us, or none at all - rebuild it before the
+     * restarted rollups need it. Order against the restart does not matter: a
+     * tracker records which subtrees reported, so nothing can be counted
+     * twice, and a rollup only waits longer while the set is rebuilt. */
     prte_grpcomm_departed_resend();
     prte_grpcomm_fence_restart();
     prte_grpcomm_group_restart();

@@ -512,22 +512,25 @@ static void track_procs(int fd, short argc, void *cbdata)
          * update the accounting here */
         if (!PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
             jdata->num_terminated++;
-#if PRTE_PMIX_DEREG_DEPARTS
-            /* Tell the PMIx server the client is gone for good. Without
-             * this it learns only of a client whose socket closed without a
-             * finalize; one that finalized and then exited stays an expected
-             * participant in its job's collectives until the whole job is
-             * deregistered, and a whole-job fence its peers make meanwhile
-             * waits for it. Without blocking: the server's deregistration
-             * runs on its own progress thread, and may complete a
-             * collective whose up-call lands back on this one. The proc is
-             * copied, so the caddy may go. */
-            PMIx_server_deregister_client(proc, dereg_client_done, NULL);
-#endif
-            /* a survivable job goes on without it, so its collectives have
-             * to stop waiting for it - see grpcomm_departed.c */
-            prte_grpcomm_proc_terminated(proc);
         }
+        /* The two below are outside the accounting guard on purpose. Each is
+         * a no-op the second time for the same incarnation, and a process the
+         * runtime restarts is a second incarnation: its next termination has
+         * to be reported whether or not the restart reset RECORDED. */
+#if PRTE_PMIX_DEREG_DEPARTS
+        /* Tell the PMIx server the client is gone for good. Without this it
+         * learns only of a client whose socket closed without a finalize; one
+         * that finalized and then exited stays an expected participant in its
+         * job's collectives until the whole job is deregistered, and a
+         * whole-job fence its peers make meanwhile waits for it. Without
+         * blocking: the server's deregistration runs on its own progress
+         * thread, and may complete a collective whose up-call lands back on
+         * this one. The proc is copied, so the caddy may go. */
+        PMIx_server_deregister_client(proc, dereg_client_done, NULL);
+#endif
+        /* a survivable job goes on without it, so its collectives have to
+         * stop waiting for it - see grpcomm_departed.c */
+        prte_grpcomm_proc_terminated(proc);
         /* update the proc state */
         PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_RECORDED);
         PRTE_FLAG_UNSET(pdata, PRTE_PROC_FLAG_ALIVE);

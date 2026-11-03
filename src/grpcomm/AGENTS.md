@@ -1233,9 +1233,31 @@ application) hung every survivor in `MPI_Finalize`.
   when the count falls short, and returns at once on an empty set or when no
   job in the signature has lost anyone. A departure costs one message per
   level of the tree, and only for a survivable job.
-- **Recovery.** `prte_grpcomm_advance_epoch()` resends the whole set to the
-  (possibly new) parent before restarting the collectives. Order does not
-  matter: the tracker's per-subtree record makes double counting impossible.
+- **A process can come back.** A process the runtime restarts under its old
+  rank is a participant again, and a departure left standing for it is the
+  dangerous error - a fence would stop waiting for a live process and
+  complete without it. `prte_grpcomm_proc_restarted()` (from `odls`'s
+  `restart_proc`, before the new incarnation exists) clears it and sends a
+  return up the same links, ahead of anything the new process contributes.
+  Every notice carries an operation byte - departed or returned.
+- **Recovery rebuilds the set; it does not top it up.** A return can be lost
+  with a failed daemon, leaving an ancestor on the far side holding the
+  departure - and after the repair that ancestor may be our new parent. So
+  `prte_grpcomm_advance_epoch()` has every daemon drop what others reported,
+  keep the departures of the processes it hosts, and report those
+  (`prte_grpcomm_departed_resend()`). While the set re-converges a rollup can
+  only wait longer, never complete short. Notices carry the recovery epoch:
+  one from before the recovery is dropped, and one from after it that
+  arrives before our own notice of the recovery (a broadcast reaches our
+  children first) moves us to that epoch - running our rebuild - before it
+  is applied, or the rebuild would wipe it.
+- **The termination hooks sit outside the `RECORDED` guard.**
+  `prte_grpcomm_proc_terminated()` is a no-op the second time for one
+  incarnation, and a restarted process's next termination has to be reported
+  whether or not the restart reset the flag; on a `prted` the PMIx
+  deregistration sits beside it for the same reason. The HNP's own
+  deregistration stays behind the guard with the rest of its accounting,
+  which a restart has to reset for any of it to see a second death.
 - **A job's entry goes when the job does**, swept the next time anything is
   recorded rather than through a teardown hook.
 - **A daemon with nothing left of the job still relays for it.**

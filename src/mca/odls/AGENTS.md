@@ -643,6 +643,20 @@ computed proc state.
 - **`prte_odls_base_default_restart_proc()`** — resets a single known
   child's state/flags and re-dispatches it through `prte_odls_base_spawn_proc`
   (same caddy/thread/IOF machinery as a first launch).
+  Before it dispatches, it also undoes what the old incarnation's
+  termination did to its job's collectives, and **whoever rewires this path
+  has to keep both**: it reports the return up the routing tree
+  (`prte_grpcomm_proc_restarted()` - left out, a survivable job's fences go
+  on treating the live process as departed and complete without it), and it
+  registers the rank with the PMIx server again (the termination accounting
+  deregisters it, and the server refuses a rank it does not have; this is
+  also what counts it back into the server's collectives). The order is
+  load-bearing: both happen before the new process exists, so the return
+  travels up the tree ahead of anything it contributes. What it does *not*
+  do is reset `PRTE_PROC_FLAG_RECORDED` or `num_terminated` - that
+  per-incarnation accounting is the rewire's to settle - which is why the
+  collective hooks in `state/prted` and `state/base` sit outside the
+  `RECORDED` guard.
 
 ---
 
