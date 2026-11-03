@@ -2262,6 +2262,76 @@ cleanup:
     return failures;
 }
 
+/*
+ * A daemon whose own share of a job has ended still relays the job's
+ * collectives for its subtree. state/prted's job_teardown gives up the job's
+ * map at that point while keeping the job object, and create_dmns() used to
+ * refuse any fence over a job with no map on a daemon other than the
+ * controller - so the contribution of every daemon below one whose
+ * processes had all finished was dropped, and the fence hung. The daemons
+ * are found through the job's processes instead.
+ */
+static int test_fence_tracker_unmapped_daemon(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    pmix_rank_t save_rank = PRTE_PROC_MY_NAME->rank;
+    pmix_rank_t save_ndaemons = prte_process_info.num_daemons;
+    prte_proc_type_t save_type = prte_process_info.proc_type;
+    int save_radix = prte_rml_base.radix;
+    pmix_nspace_t save_nspace;
+    prte_grpcomm_fence_t *coll;
+    prte_grpcomm_fence_signature_t sig;
+
+    PMIX_LOAD_NSPACE(save_nspace, PRTE_PROC_MY_NAME->nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-unit-dvm");
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+    /* daemon 1 of four, which grow_view leaves a plain daemon */
+    grow_view(1, 4, NULL, 0);
+
+    /* every process placed, and no map - what job_teardown leaves */
+    build_job("unmapped-job", 4);
+
+    coll = whole_job_fence("unmapped-job");
+    CHECK("unmapped: a whole-job fence still resolves on a relay daemon", NULL != coll);
+    if (NULL != coll) {
+        CHECK("unmapped: every daemon hosting the job takes part", 4 == coll->ndmns);
+    }
+
+    /* a named rank needed no map to begin with */
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
+    sig.sz = 1;
+    PMIX_PROC_CREATE(sig.signature, 1);
+    PMIX_LOAD_PROCID(&sig.signature[0], "unmapped-job", 3);
+    coll = prte_grpcomm_fence_get_tracker(&sig, 0, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
+    PMIX_DESTRUCT(&sig);
+    CHECK("unmapped: a named rank resolves to its daemon",
+          NULL != coll && 1 == coll->ndmns && 3 == coll->dmns[0]);
+
+    /* a job we know nothing placed for is still refused */
+    build_job("unmapped-empty", 0);
+    coll = whole_job_fence("unmapped-empty");
+    CHECK("unmapped: a job with nothing placed is refused", NULL == coll);
+
+    drop_fences();
+    grow_view_release();
+    prte_rml_base.radix = save_radix;
+    prte_process_info.num_daemons = save_ndaemons;
+    prte_process_info.proc_type = save_type;
+    PRTE_PROC_MY_NAME->rank = save_rank;
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, save_nspace);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_tracker_unmapped_daemon\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2303,6 +2373,7 @@ int main(void)
     failures += test_xcast_tree_identity();
     failures += test_xcast_grow_new_parent();
     failures += test_fence_departed();
+    failures += test_fence_tracker_unmapped_daemon();
 
     PMIx_server_finalize();
     prte_finalize();
