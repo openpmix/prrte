@@ -2123,6 +2123,8 @@ static int test_fence_departed(void)
     pmix_data_buffer_t *msg;
     pmix_rank_t ranks[2];
     size_t nr;
+    uint32_t epoch;
+    uint8_t op;
 
     PMIX_LOAD_NSPACE(save_nspace, PRTE_PROC_MY_NAME->nspace);
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-unit-dvm");
@@ -2226,6 +2228,10 @@ static int test_fence_departed(void)
     nr = 2;
     ranks[0] = 1;
     ranks[1] = 2;
+    epoch = prte_grpcomm_globals.recovery_epoch;
+    op = 0;
+    PMIx_Data_pack(NULL, msg, &epoch, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, msg, &op, 1, PMIX_UINT8);
     PMIx_Data_pack(NULL, msg, &other, 1, PMIX_PROC_NSPACE);
     PMIx_Data_pack(NULL, msg, &nr, 1, PMIX_SIZE);
     PMIx_Data_pack(NULL, msg, ranks, 2, PMIX_PROC_RANK);
@@ -2235,6 +2241,8 @@ static int test_fence_departed(void)
           prte_grpcomm_departed_has(other, 1) && prte_grpcomm_departed_has(other, 2));
     PMIX_DATA_BUFFER_CREATE(msg);
     nr = SIZE_MAX / 2;
+    PMIx_Data_pack(NULL, msg, &epoch, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, msg, &op, 1, PMIX_UINT8);
     PMIx_Data_pack(NULL, msg, &other, 1, PMIX_PROC_NSPACE);
     PMIx_Data_pack(NULL, msg, &nr, 1, PMIX_SIZE);
     PMIx_Data_pack(NULL, msg, ranks, 1, PMIX_PROC_RANK);
@@ -2242,6 +2250,70 @@ static int test_fence_departed(void)
     PMIX_DATA_BUFFER_RELEASE(msg);
     CHECK("departed: a count the message cannot hold is refused",
           !prte_grpcomm_departed_has(other, 0));
+
+    /* a notice stamped before a recovery we have been through describes a
+     * tree that no longer exists, and is dropped */
+    prte_grpcomm_globals.recovery_epoch = 5;
+    PMIX_DATA_BUFFER_CREATE(msg);
+    nr = 1;
+    ranks[0] = 0;
+    epoch = 4;
+    PMIx_Data_pack(NULL, msg, &epoch, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, msg, &op, 1, PMIX_UINT8);
+    PMIx_Data_pack(NULL, msg, &other, 1, PMIX_PROC_NSPACE);
+    PMIx_Data_pack(NULL, msg, &nr, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, msg, ranks, 1, PMIX_PROC_RANK);
+    prte_grpcomm_departed_recv(PRTE_SUCCESS, &proc, msg, PRTE_RML_TAG_FENCE_DEPARTED, NULL);
+    PMIX_DATA_BUFFER_RELEASE(msg);
+    CHECK("departed: a notice from before a recovery is dropped",
+          !prte_grpcomm_departed_has(other, 0));
+    prte_grpcomm_globals.recovery_epoch = 0;
+
+    /* a child reporting that a process came back */
+    PMIX_DATA_BUFFER_CREATE(msg);
+    nr = 1;
+    ranks[0] = 2;
+    epoch = prte_grpcomm_globals.recovery_epoch;
+    op = 1;
+    PMIx_Data_pack(NULL, msg, &epoch, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, msg, &op, 1, PMIX_UINT8);
+    PMIx_Data_pack(NULL, msg, &other, 1, PMIX_PROC_NSPACE);
+    PMIx_Data_pack(NULL, msg, &nr, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, msg, ranks, 1, PMIX_PROC_RANK);
+    prte_grpcomm_departed_recv(PRTE_SUCCESS, &proc, msg, PRTE_RML_TAG_FENCE_DEPARTED, NULL);
+    PMIX_DATA_BUFFER_RELEASE(msg);
+    CHECK("departed: a child's report of a return clears the departure",
+          !prte_grpcomm_departed_has(other, 2) && prte_grpcomm_departed_has(other, 1));
+
+    /* a process we host restarted: the fence waits for it again */
+    PMIX_LOAD_PROCID(&proc, ns, 0);
+    prte_grpcomm_proc_restarted(&proc);
+    CHECK("departed: a restarted process is no longer departed",
+          !prte_grpcomm_departed_has(ns, 0));
+    coll = whole_job_fence("departed-job");
+    if (NULL != coll) {
+        report_all_but(coll, 0);
+        fence_xcast_calls = 0;
+        prte_grpcomm_fence_departed_recheck();
+        CHECK("departed: a fence waits for the restarted process", !coll->converged);
+        coll->self_reported = true;
+        coll->nreported++;
+        prte_grpcomm_fence_departed_recheck();
+        CHECK("departed: until it contributes",
+              coll->converged && 1 == fence_xcast_calls);
+    }
+    drop_fences();
+
+    /* a recovery rebuilds the set: what others reported goes, and only the
+     * departures of processes we host - rank 0 lives on us - are kept */
+    ranks[0] = 0;
+    ranks[1] = 1;
+    (void) prte_grpcomm_departed_add(ns, ranks, 2, NULL);
+    prte_grpcomm_departed_resend();
+    CHECK("departed: a rebuild keeps the departures of our own processes",
+          prte_grpcomm_departed_has(ns, 0));
+    CHECK("departed: and drops what others reported",
+          !prte_grpcomm_departed_has(ns, 1) && !prte_grpcomm_departed_has(other, 1));
 
 cleanup:
     prte_grpcomm_release_bcast = prte_grpcomm_xcast;
