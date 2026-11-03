@@ -166,6 +166,20 @@ PRTE_EXPORT int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
  * request to the master instead. */
 PRTE_EXPORT int prte_grpcomm_assign_context_id(size_t *ctxid);
 
+/* A process this daemon hosts has terminated.
+ *
+ * For a survivable job (PRTE_JOB_RECOVERABLE or PRTE_JOB_CONTINUOUS) this
+ * records the departure, tells our parent in the routing tree, and re-tests
+ * every fence in flight: a fence over a whole namespace counts each daemon
+ * hosting one of its processes, and once a daemon's processes of the job are
+ * all gone its PMIx server will never contribute for them, so the rollup has
+ * to stop waiting on that subtree. Any other job ends with its first loss,
+ * and nothing is done for it. Call it once per process, from the state
+ * machine's termination accounting, and only for a local process - the
+ * routing tree is what orders a departure behind a contribution the same
+ * process made earlier. */
+PRTE_EXPORT void prte_grpcomm_proc_terminated(const pmix_proc_t *proc);
+
 /* The collective recovery epoch this daemon is currently at.
  *
  * Exposed because the epoch has to travel to a daemon that joins an already

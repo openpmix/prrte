@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -1208,6 +1208,122 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
  * last. Only the timeout and the local collective status are ever read out of
  * it, and both are accumulated on the tracker, so this says the same thing
  * without depending on a message being present. */
+/* Is this participant one the rollup still has to hear from?
+ *
+ * Not if it has departed, nor if the daemon hosting it has failed - the fault
+ * handler decides those - nor if it is not below us at all. Otherwise it is
+ * awaited until the subtree it lives in has reported, or until we have
+ * contributed ourselves if it is one of ours. */
+static bool participant_awaited(prte_grpcomm_fence_t *coll, prte_proc_t *proc)
+{
+    pmix_rank_t dmn;
+    int slot;
+
+    if (prte_grpcomm_departed_has(proc->name.nspace, proc->name.rank)) {
+        return false;
+    }
+    if (NULL == proc->node || NULL == proc->node->daemon) {
+        /* not placed, so create_dmns() did not count a daemon for it */
+        return false;
+    }
+    dmn = proc->node->daemon->name.rank;
+    if (pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, dmn)) {
+        return false;
+    }
+    if (dmn == PRTE_PROC_MY_NAME->rank) {
+        return !coll->self_reported;
+    }
+    slot = prte_rml_get_subtree_index(dmn);
+    if (0 > slot) {
+        return false;
+    }
+    return !pmix_bitmap_is_set_bit(&coll->reported_slots, slot);
+}
+
+/* Is the rollup short only of participants that have departed?
+ *
+ * nexpected counts a contribution from every child subtree holding a
+ * participant, and from us if we hold one - and a daemon whose participants
+ * have all terminated has no PMIx server left to contribute for them, so in a
+ * survivable job its subtree can be owed a contribution that is never coming.
+ * See grpcomm_departed.c for how a departure reaches us, and why it can never
+ * be mistaken for a subtree that reported and then lost its processes: a
+ * tracker records which subtrees reported, and a subtree that reported is
+ * done with however its processes fared afterwards.
+ *
+ * The answer is per participant, through the job map, so it costs a walk of
+ * the signature - which is why it is asked only once the count has fallen
+ * short, and only when one of the signature's jobs has lost somebody. A DVM
+ * where nothing has departed never gets past the first test.
+ *
+ * The fence's status is left alone. A departed process is not a participant
+ * any more, exactly as the PMIx server treats a whole-job fence started after
+ * one of its clients died - and failing the fence would make every survivor's
+ * PMIx server discard the data the survivors did contribute. A process lost
+ * while it was still being waited for on a daemon that has others is reported
+ * by that daemon's PMIx server, through PMIX_LOCAL_COLLECTIVE_STATUS, as
+ * before. */
+static bool departed_only(prte_grpcomm_fence_t *coll)
+{
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    size_t n;
+    int i;
+    bool any = false;
+
+    /* a fence over the daemon job (NULL dmns) has no application processes
+     * to have departed */
+    if (pmix_list_is_empty(&prte_grpcomm_globals.departed) ||
+        NULL == coll->sig || NULL == coll->dmns) {
+        return false;
+    }
+    for (n = 0; n < coll->sig->sz; n++) {
+        if (prte_grpcomm_departed_any(coll->sig->signature[n].nspace)) {
+            any = true;
+            break;
+        }
+    }
+    if (!any) {
+        return false;
+    }
+
+    for (n = 0; n < coll->sig->sz; n++) {
+        jdata = prte_get_job_data_object(coll->sig->signature[n].nspace);
+        if (NULL == jdata || NULL == jdata->procs) {
+            /* cannot tell who is left - keep waiting, as the count says */
+            return false;
+        }
+        if (PMIX_RANK_WILDCARD == coll->sig->signature[n].rank) {
+            for (i = 0; i < jdata->procs->size; i++) {
+                proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i);
+                if (NULL != proc && participant_awaited(coll, proc)) {
+                    return false;
+                }
+            }
+            continue;
+        }
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
+                                                           coll->sig->signature[n].rank);
+        if (NULL != proc && participant_awaited(coll, proc)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void prte_grpcomm_fence_departed_recheck(void)
+{
+    prte_grpcomm_fence_t *coll, *nxt;
+
+    /* check_complete() can answer a tracker, but the answer goes out as a
+     * message - nothing here unlinks it - so walking safely is belt and
+     * braces rather than load-bearing */
+    PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_grpcomm_globals.fence_ops,
+                           prte_grpcomm_fence_t) {
+        check_complete(coll);
+    }
+}
+
 static void check_complete(prte_grpcomm_fence_t *coll)
 {
     int rc;
@@ -1216,7 +1332,7 @@ static void check_complete(prte_grpcomm_fence_t *coll)
         return;
     }
 
-    if (!tree_gather_converged(coll)) {
+    if (!tree_gather_converged(coll) && !departed_only(coll)) {
         return;
     }
 

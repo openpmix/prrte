@@ -1187,6 +1187,65 @@ rest — do not "fix" it to match.
 
 ---
 
+## A survivable job's departed processes
+
+A fence over a whole namespace (`PMIX_RANK_WILDCARD`, which is what
+`PMIx_Fence(NULL, 0)` sends and so what `MPI_Finalize` uses) counts every
+daemon hosting one of its processes. A daemon contributes once its PMIx
+server has heard from every local participant, and the PMIx server takes a
+terminated client out of that count - so a daemon that loses *some* of its
+processes still contributes. A daemon that loses **all** of them has nobody
+left to call the fence, so it never contributes, and the rollup used to wait
+for it forever. A job that ends at its first loss never noticed; a
+survivable one (`PRTE_JOB_RECOVERABLE` or `PRTE_JOB_CONTINUOUS` - a ULFM
+application) hung every survivor in `MPI_Finalize`.
+
+`grpcomm_departed.c` closes that:
+
+- **Each daemon reports its own terminations up the routing tree**
+  (`prte_grpcomm_proc_terminated()`, called from the state machine's
+  termination accounting, `PRTE_RML_TAG_FENCE_DEPARTED`), and passes up
+  whatever its children report. The master hears of everything.
+  `prte_grpcomm_globals.departed` holds one rank bitmap per job.
+- **A rollup short of its count asks who it is still waiting for**
+  (`departed_only()` in `grpcomm_fence.c`): a participant is awaited unless it
+  has departed, its daemon has failed, or the subtree it lives in has
+  reported. A tracker records *which* subtrees reported
+  (`reported_slots`/`self_reported`), so a subtree that reported and then
+  lost its processes is done, never counted twice.
+- **Up the tree, not by broadcast, because of ordering.** A process that
+  called the fence and then died has its daemon's contribution on the same
+  link to the same parent, ahead of the news of its death. A broadcast from
+  the master would race it. That is also why the HNP records only the
+  processes it hosts itself: news of a remote one reaches it through the PLM,
+  a path no contribution takes.
+- **The fence's status is left alone.** A departed process is no longer a
+  participant, which is how the PMIx server treats a whole-job fence started
+  after one of its clients died. Failing the fence would make every
+  survivor's PMIx server discard the data the survivors did contribute - and
+  would happen only when some daemon lost *every* process, making the answer
+  depend on placement. A loss on a daemon that still has survivors is
+  reported by that daemon's PMIx server through
+  `PMIX_LOCAL_COLLECTIVE_STATUS`, as it always was. This is a deliberate
+  difference from the daemon-failure policy below: a survivable job has said
+  it runs degraded.
+- **Cost.** Nothing when nothing has departed - the predicate is reached only
+  when the count falls short, and returns at once on an empty set or when no
+  job in the signature has lost anyone. A departure costs one message per
+  level of the tree, and only for a survivable job.
+- **Recovery.** `prte_grpcomm_advance_epoch()` resends the whole set to the
+  (possibly new) parent before restarting the collectives. Order does not
+  matter: the tracker's per-subtree record makes double counting impossible.
+- **A job's entry goes when the job does**, swept the next time anything is
+  recorded rather than through a teardown hook.
+
+Not covered: the group collective. A construct over a whole namespace has
+the same shape, but whether it may complete without a member is the
+caller's choice (`PMIX_GROUP_FT_COLLECTIVE`), so it needs its own policy
+rather than this one. Covered by `test_fence_departed` in
+`test/unit/grpcomm/test_grpcomm.c`; the multi-daemon case needs the
+dockerswarm harness.
+
 ## Surviving a daemon failure
 
 This applies to **both** fence and group; they differ only in what they do

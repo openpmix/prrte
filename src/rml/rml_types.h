@@ -239,6 +239,14 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_QUERY                85
 #define PRTE_RML_TAG_QUERY_RESP           86
 
+/* Processes of a survivable job that have terminated, on their way up the
+ * routing tree.  A fence over a whole namespace counts every daemon hosting
+ * one of its processes, and a daemon whose processes have all gone has no
+ * PMIx server left to contribute for it - so each daemon tells its parent
+ * which processes below it have departed, and a subtree whose participants
+ * have all departed stops being waited for.  See grpcomm_departed.c. */
+#define PRTE_RML_TAG_FENCE_DEPARTED       87
+
 #define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)

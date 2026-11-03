@@ -257,6 +257,19 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_group_memo_t,
                     pmix_list_item_t,
                     memocon, memodes);
 
+static void depcon(prte_grpcomm_departed_t *p)
+{
+    PMIX_LOAD_NSPACE(p->nspace, NULL);
+    PMIX_CONSTRUCT(&p->ranks, pmix_bitmap_t);
+}
+static void depdes(prte_grpcomm_departed_t *p)
+{
+    PMIX_DESTRUCT(&p->ranks);
+}
+PMIX_CLASS_INSTANCE(prte_grpcomm_departed_t,
+                    pmix_list_item_t,
+                    depcon, depdes);
+
 static void livecon(prte_grpcomm_live_group_t *p)
 {
     p->groupID = NULL;

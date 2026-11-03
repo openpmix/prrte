@@ -27,6 +27,7 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/rml/rml.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/data_server/prte_data_server.h"
@@ -503,6 +504,9 @@ static void track_procs(int fd, short argc, void *cbdata)
          * update the accounting here */
         if (!PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
             jdata->num_terminated++;
+            /* a survivable job goes on without it, so its collectives have
+             * to stop waiting for it - see grpcomm_departed.c */
+            prte_grpcomm_proc_terminated(proc);
         }
         /* update the proc state */
         PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_RECORDED);
