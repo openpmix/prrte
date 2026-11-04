@@ -1181,6 +1181,9 @@ next:
         if (node_idx < INT_MAX) {
             /* set the node location to NULL */
             pmix_pointer_array_set_item(map->nodes, node_idx, NULL);
+            if (0 < map->num_nodes) {
+                --map->num_nodes;
+            }
         }
         /* flag that the node is no longer in a map.  This must happen BEFORE
          * the release below: the map holds a reference, and dropping it can
