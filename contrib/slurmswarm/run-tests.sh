@@ -1400,6 +1400,15 @@ elastic_grant_group() {
     [ "$(job_nodes "$ajid")" = "${nodes##*,}" ] \
         && ok "the job kept exactly the node PRRTE named as survivor" \
         || bad "job $ajid holds $(job_nodes "$ajid"), expected ${nodes##*,}"
+    # PMIX_QUERY_ALLOCATION has to agree with SLURM: the survivor is still
+    # in the allocation, the released node is not.
+    out=$(SA 'timeout 30 prun -n 1 slotinfo alloc' 2>&1 | awk '$1 == "ALLOC" {print $3}')
+    echo "$out" | grep -qx "${nodes##*,}" \
+        && ok "the allocation query still lists the survivor (${nodes##*,})" \
+        || bad "the allocation query lost the survivor: $(echo "$out" | tr '\n' ' ')"
+    echo "$out" | grep -qx "${nodes%%,*}" \
+        && bad "the allocation query still lists the released node (${nodes%%,*})" \
+        || ok "the released node is gone from the allocation query"
     # SLURM writes slurm_job_<id>_resize.{sh,csh} into the caller's cwd on a
     # successful shrink for the user to source; PRRTE deletes them.  Their
     # absence only means anything because the resize above really happened.
