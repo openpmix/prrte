@@ -961,6 +961,62 @@ static int test_recover_resources(void)
 }
 
 /*
+ * prte_state_base_recover_resources() drops an emptied node from the map by
+ * nulling its entry in map->nodes, but leaves map->num_nodes untouched.  The
+ * job packer writes num_nodes immediately ahead of the (non-NULL) node
+ * names when it broadcasts the job, and plm_base_launch_support.c already
+ * decrements it for the daemon map when a node drops out - this is the same
+ * bookkeeping missing on the job map.  A recoverable job that outlives the
+ * node whose last proc just left therefore ships a map whose count no
+ * longer matches its names, and the next daemon to unpack it refuses the
+ * buffer (prte_dt_unpacking_fns.c's unpack_layout(): "nnodes != argv_count").
+ */
+static int test_recover_resources_num_nodes(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    prte_node_t *node;
+
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "recover-test3");
+    jdata->map = PMIX_NEW(prte_job_map_t);
+
+    node = PMIX_NEW(prte_node_t);
+    node->name = strdup("nodeB");
+    /* the map holds a reference of its own, which recover_resources drops
+     * when the node empties */
+    PMIX_RETAIN(node);
+    pmix_pointer_array_set_item(jdata->map->nodes, 0, node);
+    jdata->map->num_nodes = 1;
+
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, 0);
+    /* the node holds a reference of its own, which recover_resources drops */
+    PMIX_RETAIN(proc);
+    pmix_pointer_array_set_item(node->procs, 0, proc);
+    node->num_procs = 1;
+    node->slots_inuse = 1;
+    proc->node = node;
+
+    /* this is the only proc of the job on the node, so recovering it empties
+     * the node and must remove it from the map */
+    prte_state_base_recover_resources(jdata, proc);
+    CHECK("recover:node-left-the-map",
+          NULL == pmix_pointer_array_get_item(jdata->map->nodes, 0));
+    CHECK("recover:num-nodes-matches-the-map", 0 == jdata->map->num_nodes);
+
+    PMIX_RELEASE(proc);
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(jdata);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_recover_resources_num_nodes\n");
+    }
+    return failures;
+}
+
+/*
  * prte_state_base_cpu_release_policy() - how a proc's cpus are handed back
  * when it goes away.  A proc was bound in its own app's terms - a hwthread
  * each for an app that counts hwthreads as its cpus, a core each otherwise -
@@ -1075,6 +1131,7 @@ int main(void)
     failures += test_component_selection();
     failures += test_state_log();
     failures += test_recover_resources();
+    failures += test_recover_resources_num_nodes();
     failures += test_cpu_release_policy();
 
     /* the framework close frees log_file, so take a copy to clean up with */
