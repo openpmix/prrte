@@ -332,11 +332,12 @@ build_linux() {
             make -j"$jobs"
             make install
 
-            # The elastic client, borrowed from the sibling harness rather
-            # than copied: it is the same program, and the alternative is two
-            # of them drifting apart.  It is the only probe this suite needs
-            # that PRRTE does not install -- everything else here is driven
-            # through prun/prte and the SLURM commands themselves.
+            # The elastic and slotinfo clients, borrowed from the sibling
+            # harness rather than copied: they are the same programs, and the
+            # alternative is two of them drifting apart.  They are the only
+            # probes this suite needs that PRRTE does not install --
+            # everything else here is driven through prun/prte and the SLURM
+            # commands themselves.
             #
             # NOTE the -Wl,-rpath.  An application launched onto a NON-head
             # node gets an EMPTY LD_LIBRARY_PATH -- the head node inherits
@@ -350,6 +351,10 @@ build_linux() {
             echo ">>>> elastic test client (from ../dockerswarm)"
             gcc -O0 -g -o /opt/prte/prte/bin/elastic \
                 /prrte-src/contrib/dockerswarm/elastic.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+            echo ">>>> slotinfo test client (from ../dockerswarm)"
+            gcc -O0 -g -o /opt/prte/prte/bin/slotinfo \
+                /prrte-src/contrib/dockerswarm/slotinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # The recording wrapper around salloc/scontrol/scancel/srun.  It goes
