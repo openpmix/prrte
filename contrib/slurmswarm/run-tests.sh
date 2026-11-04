@@ -983,7 +983,7 @@ drop_extra_jobs() {   # $1 = the job id to keep
 # answer to it.  It runs on its own allocation and its own DVM so that either
 # outcome is harmless to everything else.
 elastic_external_cancel_group() {
-    local out aj anodes jid n
+    local out aj anodes jid n live
 
     banner "ras/slurm: an absorbed allocation cancelled behind the DVM's back"
     cleanup_cluster
@@ -1011,6 +1011,11 @@ elastic_external_cancel_group() {
         && ok "the DVM absorbed job $aj and has daemons on $anodes" \
         || bad "the absorbed allocation never got its daemons ($n on $anodes)"
 
+    # A tool stays connected through it: a DVM that carries on reports to
+    # its tools, not on its own stderr.
+    SA_BG /tmp/cancel-tool.out 'prun --host node1:1 -n 1 sleep 40'
+    sleep 3
+
     # The scheduler takes it back.  Not through PRRTE - this is a user, or an
     # admin, or a job's time limit, doing what any of them may legitimately do.
     SQ "scancel $aj" >/dev/null 2>&1
@@ -1027,12 +1032,27 @@ elastic_external_cancel_group() {
     # first -- and the oob layer's own "unable to complete a TCP connection"
     # usually wins the race.  Both say the loss was noticed and announced,
     # which is the property under test; which one is displayed is not.
-    SA 'grep -qE "lost communication with a remote daemon|help-errmgr-base.txt / node-died" /tmp/prte.out' \
+    SA 'tr -d "\\000" < /tmp/cancel-tool.out | cat - /tmp/prte.out |
+        grep -qE "lost communication with a remote daemon|help-errmgr-base.txt / node-died"' \
         && ok "the HNP reported the loss rather than waiting on it" \
         || bad "the HNP never reported losing the cancelled allocation's daemons"
 
+    # The DVM may carry on without the lost daemons, or end.  If it carries
+    # on, the loss has to be on record: one proc per node lands on the DVM's
+    # own nodes only.
+    live=""
+    if SA 'pgrep -x prte' >/dev/null 2>&1; then
+        live=$(job_nodes "$jid")
+        out=$(SA 'timeout 60 prun --map-by ppr:1:node hostname' 2>&1 | grep -E '^node[0-9]+$' | sort -V | paste -sd, -)
+        [ "$out" = "$live" ] \
+            && ok "the DVM carried on, mapping onto its own nodes only ($out)" \
+            || bad "the DVM carried on, but a proc per node ran on: $out"
+    fi
+
+    # a daemon of a DVM that carried on is not an orphan
     n=0
     for i in 1 2 3 4 5 6 7 8 9 10; do
+        echo ",$live," | grep -q ",node$i," && continue
         [ "$(prted_count $i)" = 1 ] && n=$((n+1))
     done
     [ "$n" = 0 ] \
