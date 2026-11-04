@@ -1178,6 +1178,58 @@ elastic_regrant_order_group() {
     cleanup_cluster
 }
 
+# A grow launches its daemons with srun --jobid=<expander> from inside the
+# parent allocation.  Under step management that allocation's environment
+# carries SLURM_STEPMGR, which sends srun to the parent job's step manager -
+# and that has never heard of the expander, so srun fails with "Invalid job
+# id specified" and the DVM is torn down.  Asked for per allocation, with
+# --stepmgr, so every other case keeps running without it.
+#
+# Own DVM: the allocation has to be made with --stepmgr.  It holds two
+# nodes, so the DVM's own srun also runs without SLURM_STEPMGR.
+elastic_stepmgr_group() {
+    local out jid ajid nodes idx
+
+    banner "plm/slurm: a grow launches its daemons under step management"
+    cleanup_cluster
+    ALLOC new --tag dvm --nodelist node1,node2 --tasks-per-node 2 --salloc-arg=--stepmgr >/dev/null 2>&1
+    jid=$(ALLOC jobid --tag dvm | tr -d ' \r')
+    if [ -z "$jid" ]; then
+        skp "salloc --stepmgr gave no allocation"
+        cleanup_cluster
+        return
+    fi
+    if ! ALLOC env --tag dvm | grep -q 'SLURM_STEPMGR='; then
+        skp "SLURM put no SLURM_STEPMGR in job $jid's environment -- step management is not in effect"
+        cleanup_cluster
+        return
+    fi
+    if ! dvm_start --prtemca prte_elastic_mode 1; then
+        bad "no DVM came up in a step-managed allocation: $(SA 'tail -5 /tmp/prte.out' | tr '\n' ' ')"
+        cleanup_cluster
+        return
+    fi
+    out=$(SA 'timeout 180 elastic extend 2' 2>&1)
+    ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$ajid" ]; then
+        skp "the extend was refused, so the grow's srun never ran: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        dvm_stop; cleanup_cluster
+        return
+    fi
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the grow completed under step management" \
+        || bad "the grow did not complete: $(echo "$out" | grep -m1 'srun returned')"
+    nodes=$(job_nodes "$ajid"); idx=$(idx_of "$nodes")
+    sleep 8
+    # shellcheck disable=SC2086
+    [ "$(prted_count $idx)" = 2 ] \
+        && ok "daemons launched on the granted nodes ($nodes)" \
+        || bad "no daemons on the granted nodes ($nodes)"
+    SA "timeout 180 elastic release-id $ajid" >/dev/null 2>&1
+    dvm_stop
+    cleanup_cluster
+}
+
 # THE PHASE IS A SEQUENCE OF INDEPENDENT GROUPS, AND THAT IS DELIBERATE.
 #
 # Each group below is its own function so that a group which cannot proceed
@@ -1221,6 +1273,7 @@ test_elastic() {
     dvm_stop
     elastic_external_cancel_group
     elastic_regrant_order_group
+    elastic_stepmgr_group
     cleanup_cluster
 
     # The last two groups need the recording shim in front of the real SLURM
