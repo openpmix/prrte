@@ -136,7 +136,9 @@ static void launch_daemons(int fd, short args, void *cbdata);
  * whose node count and node list differ from that parent allocation.  Leaving
  * these values set makes srun validate the explicit --nodes/--nodelist request
  * against the old allocation.  Slurm regenerates the corresponding values for
- * the remote tasks in the newly-created step. */
+ * the remote tasks in the newly-created step.  SLURM_STEPMGR goes too: under
+ * step management it sends srun to the parent job's step manager, which does
+ * not know the new allocation. */
 static void clear_parent_slurm_allocation_env(void)
 {
     static const char *const vars[] = {
@@ -145,6 +147,7 @@ static void clear_parent_slurm_allocation_env(void)
         "SLURM_JOB_NODELIST",
         "SLURM_NODELIST",
         "SLURM_TASKS_PER_NODE",
+        "SLURM_STEPMGR",
         NULL
     };
 
