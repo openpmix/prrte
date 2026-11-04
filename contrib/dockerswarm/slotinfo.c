@@ -15,6 +15,8 @@
  *   SLOTS <host> <n>          PMIX_NUM_SLOTS, no qualifier
  *   AVAIL <host> <n>          PMIX_QUERY_AVAILABLE_SLOTS
  *   ERROR <host> <key> <why>  the query failed
+ * or, run as "slotinfo alloc", one line per node PMIX_QUERY_ALLOCATION lists:
+ *   ALLOC <host> <node>
  *
  * Why this exists: the answers are properties of the DVM, so every rank must
  * get the same ones no matter which daemon it happens to be talking to.  A
@@ -42,6 +44,36 @@
 
 static pmix_proc_t myproc;
 
+/* PMIX_QUERY_ALLOCATION answers with one PMIX_NODE_INFO array per node */
+static int print_alloc(const char *host, pmix_info_t *res)
+{
+    pmix_data_array_t *ninfo;
+    pmix_info_t *iptr, *nptr;
+    size_t m, k;
+
+    if (PMIX_DATA_ARRAY != res->value.type || NULL == res->value.data.darray ||
+        PMIX_INFO != res->value.data.darray->type) {
+        printf("ERROR %s %s bad-type\n", host, PMIX_QUERY_ALLOCATION);
+        return 1;
+    }
+    iptr = (pmix_info_t *) res->value.data.darray->array;
+    for (m = 0; m < res->value.data.darray->size; m++) {
+        if (!PMIX_CHECK_KEY(&iptr[m], PMIX_NODE_INFO) ||
+            PMIX_DATA_ARRAY != iptr[m].value.type) {
+            continue;
+        }
+        ninfo = iptr[m].value.data.darray;
+        nptr = (pmix_info_t *) ninfo->array;
+        for (k = 0; k < ninfo->size; k++) {
+            if (PMIX_CHECK_KEY(&nptr[k], PMIX_HOSTNAME) &&
+                PMIX_STRING == nptr[k].value.type) {
+                printf("ALLOC %s %s\n", host, nptr[k].value.data.string);
+            }
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
@@ -51,9 +83,7 @@ int main(int argc, char **argv)
     char host[256];
     uint32_t val;
     int ret = 0;
-
-    (void) argc;
-    (void) argv;
+    int alloc = (1 < argc && 0 == strcmp(argv[1], "alloc"));
 
     if (0 != gethostname(host, sizeof(host))) {
         strncpy(host, "unknown", sizeof(host) - 1);
@@ -71,8 +101,12 @@ int main(int argc, char **argv)
      * keep whole.  Anything the daemon can answer itself must still come
      * back alongside what only the master can answer. */
     PMIX_QUERY_CREATE(query, 1);
-    PMIx_Argv_append_nosize(&query[0].keys, PMIX_NUM_SLOTS);
-    PMIx_Argv_append_nosize(&query[0].keys, PMIX_QUERY_AVAILABLE_SLOTS);
+    if (alloc) {
+        PMIx_Argv_append_nosize(&query[0].keys, PMIX_QUERY_ALLOCATION);
+    } else {
+        PMIx_Argv_append_nosize(&query[0].keys, PMIX_NUM_SLOTS);
+        PMIx_Argv_append_nosize(&query[0].keys, PMIX_QUERY_AVAILABLE_SLOTS);
+    }
 
     rc = PMIx_Query_info(query, 1, &results, &nresults);
     if (PMIX_SUCCESS != rc && PMIX_QUERY_PARTIAL_SUCCESS != rc) {
@@ -99,6 +133,8 @@ int main(int argc, char **argv)
                 continue;
             }
             printf("AVAIL %s %u\n", host, val);
+        } else if (PMIX_CHECK_KEY(&results[n], PMIX_QUERY_ALLOCATION)) {
+            ret |= print_alloc(host, &results[n]);
         }
     }
     fflush(stdout);
