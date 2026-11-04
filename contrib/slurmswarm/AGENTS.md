@@ -332,7 +332,7 @@ run, and the only visible symptom was a suite total about fifty checks lower
 than the run before. A group that gives up now says what it gave up on, and
 the caller runs the next one regardless.
 
-Two more groups run on a DVM of their own:
+Three more groups run on a DVM of their own:
 
 - **A node granted again, out of SLURM's order.** vpids follow the node
   pool, where a regranted node keeps its old place, so a grant can list
@@ -348,6 +348,12 @@ Two more groups run on a DVM of their own:
   `slurmctld`. The case asserts the grow completes and its daemons come up.
   `--stepmgr` needs `PrologFlags=Contain`, which is why `slurm.conf` sets
   it; without it SLURM accepts the option, ignores it, and the case skips.
+- **Every daemon of an `srun` step lost.** `--no-kill` makes a lost daemon
+  cost one daemon, but losing all of a step's daemons ends its `srun`. The
+  case kills node2's daemon, the only remote one of the DVM's own step, and
+  then the daemon an extend started, and checks from the HNP's log
+  (`plm_base_verbose 1`) that each `srun` end was taken as expected and that
+  the DVM still runs a job.
 
 [#2617]: https://github.com/openpmix/prrte/issues/2617
 [#2491]: https://github.com/openpmix/prrte/issues/2491
