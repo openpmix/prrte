@@ -7087,6 +7087,20 @@ test_errmgr() {
             out=$(PRUN '--host node2:1,node3:1 -n 2 --map-by node hostname' 2>&1); rc=$?
             [ "$rc" = 0 ] && ok "...and still runs a job on the survivors" \
                           || bad "the reduced DVM could not run a job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            # The cases above name the survivors.  These do not: the lost
+            # node has to be out of the allocation a client sizes its work
+            # by, and out of what the mapper will place on.
+            out=$(PRUN "--host node1:1 -n 1 $SI alloc" 2>&1)
+            n=$(echo "$out" | grep -cE '^ALLOC node1 node[123]$')
+            if [ "$n" = 3 ] && ! echo "$out" | grep -q '^ALLOC node1 node4$'; then
+                ok "...and the allocation query no longer lists node4"
+            else
+                bad "the allocation query after losing node4: $(echo "$out" | grep -E '^(ALLOC|ERROR)' | tr '\n' ' ')"
+            fi
+            out=$(PRUN '--map-by ppr:1:node hostname' 2>&1)
+            [ "$(echo "$out" | grep -E '^node[0-9]+$' | sort | paste -sd, -)" = "node1,node2,node3" ] \
+                && ok "...and a job with no --host is mapped on the survivors only" \
+                || bad "one proc per node after losing node4 ran on: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
