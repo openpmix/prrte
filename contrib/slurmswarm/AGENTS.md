@@ -332,7 +332,7 @@ run, and the only visible symptom was a suite total about fifty checks lower
 than the run before. A group that gives up now says what it gave up on, and
 the caller runs the next one regardless.
 
-One more group runs on a DVM of its own:
+Two more groups run on a DVM of their own:
 
 - **A node granted again, out of SLURM's order.** vpids follow the node
   pool, where a regranted node keeps its old place, so a grant can list
@@ -342,6 +342,12 @@ One more group runs on a DVM of its own:
   checks from the HNP's log that each daemon reported from its assigned
   node, then grants the pair again and checks for a daemon and a job on
   each. A grant that lands elsewhere is a skip: the order was not forced.
+- **A grow under step management.** The parent allocation is made with
+  `--stepmgr`, so its environment carries `SLURM_STEPMGR`, which sends the
+  grow's `srun --jobid=<expander>` to the parent's step manager instead of
+  `slurmctld`. The case asserts the grow completes and its daemons come up.
+  `--stepmgr` needs `PrologFlags=Contain`, which is why `slurm.conf` sets
+  it; without it SLURM accepts the option, ignores it, and the case skips.
 
 [#2617]: https://github.com/openpmix/prrte/issues/2617
 [#2491]: https://github.com/openpmix/prrte/issues/2491
