@@ -473,6 +473,10 @@ static void proc_errors(int fd, short args, void *cbdata)
             if (prte_plm_base_grow_target_failed(proc->rank)) {
                 goto cleanup;
             }
+            /* mark its node down, until a daemon reports from it again */
+            if (NULL != pptr->node) {
+                pptr->node->state = PRTE_NODE_STATE_DOWN;
+            }
             /* NOTE: a daemon departing as part of a DVM *shrink* is not handled
              * here.  The collective shrink-completion handler tears each target
              * out of the DVM proactively when the shrink broadcast completes, so

@@ -1175,6 +1175,10 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == node) {
                         continue;
                     }
+                    // ignore nodes that are down
+                    if (PRTE_NODE_STATE_DOWN == node->state) {
+                        continue;
+                    }
                     PMIX_INFO_LIST_START(nodeinfolist);
                     /* start with the node name */
                     PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);
