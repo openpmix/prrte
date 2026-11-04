@@ -1179,6 +1179,10 @@ static void _query(int sd, short args, void *cbdata)
                     if (PRTE_NODE_STATE_DOWN == node->state) {
                         continue;
                     }
+                    // ignore nodes the scheduler has taken back
+                    if (PRTE_NODE_STATE_NOT_INCLUDED == node->state) {
+                        continue;
+                    }
                     PMIX_INFO_LIST_START(nodeinfolist);
                     /* start with the node name */
                     PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);
