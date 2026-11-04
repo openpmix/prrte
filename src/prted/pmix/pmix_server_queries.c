@@ -848,8 +848,11 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
                 /* get the server uri value - we can block here as we are in
-                 * an PRTE progress thread */
-                PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_SERVER_URI, &proct->name,
+                 * an PRTE progress thread. PMIX_MYSERVER_URI is the URI a
+                 * tool of this PMIx release connects to: the local socket's.
+                 * PMIX_SERVER_URI is the TCP one when the server also takes
+                 * peers of earlier releases */
+                PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_MYSERVER_URI, &proct->name,
                                                (char **) &uri, PMIX_STRING);
                 if (PMIX_SUCCESS != rc) {
                     /* the macro yields a PMIx status - it is already in the
