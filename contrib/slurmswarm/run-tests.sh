@@ -1289,7 +1289,7 @@ test_elastic() {
 # The first extend, and everything that can only be asserted about a grant
 # that actually happened.
 elastic_grant_group() {
-    local jid=$1 out ajid nodes idx n p_end a_end
+    local jid=$1 out ajid nodes idx n p_end a_end avail
 
     banner "ras/slurm: PMIX_ALLOC_EXTEND submits a real job and absorbs it"
     out=$(SA 'timeout 180 elastic extend 2' 2>&1)
@@ -1384,6 +1384,7 @@ elastic_grant_group() {
     # the one node that could never be released -- so this direction is what
     # allocating with "salloc --no-shell" actually buys, and only a real
     # scheduler can say whether the resize is accepted.
+    avail=$(SA 'timeout 30 prun -n 1 slotinfo' 2>&1 | awk '$1 == "AVAIL" {print $3}')
     out=$(SA "timeout 180 elastic shrink ${nodes%%,*}" 2>&1)
     sleep 6
     echo "$out" | grep -q PMIX_DVM_IS_READY \
@@ -1409,6 +1410,10 @@ elastic_grant_group() {
     echo "$out" | grep -qx "${nodes%%,*}" \
         && bad "the allocation query still lists the released node (${nodes%%,*})" \
         || ok "the released node is gone from the allocation query"
+    n=$(SA 'timeout 30 prun -n 1 slotinfo' 2>&1 | awk '$1 == "AVAIL" {print $3}')
+    [ -n "$avail" ] && [ -n "$n" ] && [ "$n" -lt "$avail" ] \
+        && ok "the available slots dropped with the released node ($avail -> $n)" \
+        || bad "the available-slots query still counts the released node ($avail -> ${n:-none})"
     # SLURM writes slurm_job_<id>_resize.{sh,csh} into the caller's cwd on a
     # successful shrink for the user to source; PRRTE deletes them.  Their
     # absence only means anything because the resize above really happened.
