@@ -1421,6 +1421,10 @@ static void _query(int sd, short args, void *cbdata)
                     if (PRTE_NODE_STATE_DOWN == node->state) {
                         continue;
                     }
+                    // ignore nodes the scheduler has taken back
+                    if (PRTE_NODE_STATE_NOT_INCLUDED == node->state) {
+                        continue;
+                    }
                     // ignore nodes that are at/above max
                     if (0 != node->slots_max && node->slots_inuse >= node->slots_max) {
                         continue;
