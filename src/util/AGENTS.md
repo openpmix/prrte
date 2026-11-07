@@ -303,7 +303,9 @@ same kind, or its daemons are no longer the only processes that can join.
 `prte_poly1305.[ch]` - Poly1305 (RFC 8439), checked against that RFC's
 vectors in `test/unit/util` - is the authenticator for the OOB's per-message
 tags (`prte_oob_authenticate_messages`); a Poly1305 key must never tag two
-messages, so its caller derives one per message. Not wired into the OOB yet.
+messages, so its caller derives one per message - `prte_oob_tcp_msg_tag()` in
+`src/rml/oob/oob_tcp_connection.c`, from the connection's direction key and
+the message's sequence number.
 
 `prte_hmac.[ch]` - SHA-256 and HMAC-SHA256, checked against the FIPS 180-4 and
 RFC 4231 vectors in `test/unit/util` - is generic code (so is

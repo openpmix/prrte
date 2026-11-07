@@ -2380,6 +2380,38 @@ static int test_listeners_bound_to_selection(void)
     return failures;
 }
 
+/* Message tagging opens the transport only alongside authentication, whose
+ * handshake its keys come from - refused without it, before anything is
+ * opened, and taken with it like any other setting. */
+static int test_open_msg_auth(void)
+{
+    int failures = 0, rc;
+    bool save_auth = prte_oob_authenticate;
+
+    prte_oob_authenticate_messages = true;
+    prte_oob_authenticate = false;
+    fprintf(stdout, "-- the next case is refused; the message it prints is expected --\n");
+    rc = prte_oob_open();
+    CHECK("tagging without authentication is refused", PRTE_ERR_SILENT == rc);
+    CHECK("with nothing opened", NULL == prte_oob_base.ipv4conns);
+    /* refused before anything was built, so there is nothing to close */
+
+    prte_oob_authenticate = true;
+    rc = prte_oob_open();
+    CHECK("tagging with authentication opens", PRTE_SUCCESS == rc);
+    if (PRTE_SUCCESS == rc) {
+        failures += check_listeners("tagging");
+    }
+    prte_oob_close();
+
+    prte_oob_authenticate = save_auth;
+    prte_oob_authenticate_messages = false;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_open_msg_auth\n");
+    }
+    return failures;
+}
+
 /* is there a non-loopback IPv4 interface, and the names of every
  * non-loopback interface as an exclude list */
 static bool have_other_ipv4_interface(void)
@@ -2510,6 +2542,7 @@ int main(void)
     failures += test_bad_subnets_dropped();
     failures += test_subnet_resolves_and_dedupes();
     failures += test_listeners_bound_to_selection();
+    failures += test_open_msg_auth();
     failures += test_loopback_include_honored();
     /* reports refusals with pmix_net_get_hostname(), so it too has to run
      * before PMIx is finalized below */
