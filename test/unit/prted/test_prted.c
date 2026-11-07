@@ -408,6 +408,34 @@ static int test_xfer_job_info(void)
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_RELEASE(jdata);
 
+    /* cpus per proc is the divisor in the mapper's "how many procs fit on
+     * this object", so zero must be refused here even though it is a valid
+     * uint16. A real count still goes through. */
+    {
+        uint16_t pes = 0, *pesptr = &pes;
+
+        jdata = fresh_job();
+        PMIX_INFO_LOAD(&info[0], PMIX_CPUS_PER_PROC, &pes, PMIX_UINT16);
+        CHECK("xfer/cpus-per-proc-zero-refused",
+              PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+        CHECK("xfer/cpus-per-proc-zero-not-recorded",
+              !prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+
+        jdata = fresh_job();
+        pes = 2;
+        PMIX_INFO_LOAD(&info[0], PMIX_CPUS_PER_PROC, &pes, PMIX_UINT16);
+        CHECK("xfer/cpus-per-proc-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+        pes = 0;
+        CHECK("xfer/cpus-per-proc-set",
+              prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &pesptr,
+                                 PMIX_UINT16));
+        CHECK("xfer/cpus-per-proc-value", 2 == pes);
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_RELEASE(jdata);
+    }
+
     /* map-by is accepted and records the policy on the map */
     jdata = fresh_job();
     PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "node", PMIX_STRING);
