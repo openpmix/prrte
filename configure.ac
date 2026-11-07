@@ -419,7 +419,7 @@ AC_CHECK_HEADERS([arpa/inet.h dirent.h \
                   dlfcn.h endian.h execinfo.h fcntl.h \
                   libutil.h netdb.h netinet/in.h netinet/tcp.h \
                   poll.h  pty.h pwd.h sched.h \
-                  strings.h linux/ethtool.h linux/sockios.h \
+                  strings.h \
                   sys/fcntl.h \
                   sys/ioctl.h sys/param.h sys/queue.h \
                   sys/resource.h sys/select.h sys/socket.h \
@@ -460,7 +460,7 @@ AC_CACHE_SAVE
 prte_show_title "Type tests"
 
 AC_CHECK_TYPES([socklen_t, struct sockaddr_in, struct sockaddr_in6,
-                struct sockaddr_storage, struct ifreq, struct ethtool_cmd],
+                struct sockaddr_storage, struct ifreq],
                [], [], [AC_INCLUDES_DEFAULT
 #if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -468,56 +468,8 @@ AC_CHECK_TYPES([socklen_t, struct sockaddr_in, struct sockaddr_in6,
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
-#endif
 #ifdef HAVE_NET_IF_H
 #include <net/if.h>
-#endif])
-
-AC_CHECK_DECLS([ethtool_cmd_speed, SIOCETHTOOL],
-               [], [], [AC_INCLUDES_DEFAULT
-#ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
-#endif
-#ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
-#endif])
-
-AC_CHECK_MEMBERS([struct ethtool_cmd.speed_hi],
-               [], [], [AC_INCLUDES_DEFAULT
-#ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
-#endif
-#ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
-#endif])
-
-AC_CHECK_MEMBERS([struct ethtool_cmd.speed_hi],
-               [], [], [AC_INCLUDES_DEFAULT
-#ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
-#endif
-#ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
-#endif])
-
-AC_CHECK_MEMBERS([struct ethtool_cmd.speed_hi],
-               [], [], [AC_INCLUDES_DEFAULT
-#ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
-#endif
-#ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
-#endif])
-
-AC_CHECK_MEMBERS([struct ethtool_cmd.speed_hi],
-               [], [], [AC_INCLUDES_DEFAULT
-#ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
-#endif
-#ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
 #endif])
 
 AC_CHECK_DECLS([AF_UNSPEC, PF_UNSPEC, AF_INET6, PF_INET6],
