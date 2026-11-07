@@ -51,6 +51,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1717,6 +1718,237 @@ static int test_adopted_connection_retags(void)
     return failures;
 }
 
+/* A data message from rank 6 to us as it would arrive: the header, the
+ * payload, and - when `key` is given - the tag for message number `seq`. */
+static size_t tagged_message(uint8_t *out, const uint8_t *key, uint64_t seq,
+                             const uint8_t *payload, size_t plen)
+{
+    prte_oob_tcp_hdr_t hdr;
+    size_t n = PRTE_OOB_TCP_HDR_FIXED;
+
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.origin = 6;
+    hdr.dst = PRTE_PROC_MY_NAME->rank;
+    hdr.type = MCA_OOB_TCP_USER;
+    hdr.tag = 7;
+    hdr.seq_num = (uint32_t) seq;
+    hdr.epoch = 1;
+    hdr.nbytes = (uint32_t) plen;
+    MCA_OOB_TCP_HDR_HTON(&hdr);
+    memcpy(out, &hdr, n);
+    if (0 < plen) {
+        memcpy(out + n, payload, plen);
+    }
+    n += plen;
+    if (NULL != key) {
+        prte_oob_tcp_msg_tag(key, seq, out, PRTE_OOB_TCP_HDR_FIXED, payload, plen, out + n);
+        n += PRTE_POLY1305_TAG_LEN;
+    }
+    return n;
+}
+
+/* has the peer taken a whole message off the wire and kept the connection? */
+static bool took_message(prte_oob_tcp_peer_t *peer, int sd)
+{
+    return NULL == peer->recv_msg && MCA_OOB_TCP_CONNECTED == peer->state && sd == peer->sd
+           && fd_is_open(sd);
+}
+
+/* has the peer closed the connection, without acting on what came? */
+static bool closed_it(prte_oob_tcp_peer_t *peer, int sd)
+{
+    return MCA_OOB_TCP_CLOSED == peer->state && 0 > peer->sd && !fd_is_open(sd)
+           && NULL == peer->recv_msg;
+}
+
+/* Feed one message to a fresh tagging peer after `ahead` good ones, and say
+ * whether it closed the connection over it with its count left alone. */
+static bool refused(const uint8_t *bad, size_t badlen, int ahead)
+{
+    uint8_t payload[64], good[PRTE_OOB_TCP_HDR_FIXED + 64 + PRTE_POLY1305_TAG_LEN];
+    prte_oob_tcp_peer_t *peer;
+    int sv[2], i;
+    size_t len;
+    bool ok;
+
+    memset(payload, 0x3c, sizeof(payload));
+    if (!make_pair(sv)) {
+        return false;
+    }
+    peer = connected_peer(sv[0], true);
+    peer->established = true;
+    for (i = 0; i < ahead; i++) {
+        len = tagged_message(good, peer->msgauth.recv_key, (uint64_t) i, payload,
+                             sizeof(payload));
+        if ((ssize_t) len != write(sv[1], good, len)) {
+            return false;
+        }
+        prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    }
+    ok = (ahead == (int) peer->msgauth.recv_seq);
+    if ((ssize_t) badlen != write(sv[1], bad, badlen)) {
+        return false;
+    }
+    prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    ok = ok && closed_it(peer, sv[0]) && ahead == (int) peer->msgauth.recv_seq;
+    PMIX_RELEASE(peer);
+    close(sv[1]);
+    return ok;
+}
+
+/* A connection that tags its messages acts on one only once its tag checks
+ * out as the next message from the far end - however the bytes arrive - and
+ * closes the connection over any that does not: a changed payload or header,
+ * a message repeated, one left out, or one tagged in our own direction.  One
+ * that does not tag reads exactly what it always has.
+ *
+ * Every message here is stamped with an incarnation older than the one this
+ * process knows for rank 6, so a good one is dropped by the bootstrap epoch
+ * guard once its tag has checked out, and nothing is delivered.  That also
+ * shows the order: were the tag checked after the epoch, a bad message would
+ * be dropped quietly and the connection left open. */
+static int test_recv_checks_tags(void)
+{
+    int failures = 0, sv[2], i;
+    uint8_t payload[100], wire[PRTE_OOB_TCP_HDR_FIXED + 100 + PRTE_POLY1305_TAG_LEN];
+    uint8_t wire2[sizeof(wire)];
+    prte_event_base_t *save_base = prte_event_base;
+    pmix_proc_t save_name = *PRTE_PROC_MY_NAME;
+    prte_oob_tcp_peer_t *peer;
+    size_t len, len2;
+
+    /* Delivering a message, and reporting a closed connection, both post to
+     * prte_event_base.  Give them one of their own that nothing runs. */
+    prte_event_base = prte_event_base_create();
+    CHECK("event base", NULL != prte_event_base);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+    for (i = 0; i < (int) sizeof(payload); i++) {
+        payload[i] = (uint8_t) (3 * i);
+    }
+    prte_bootstrap_setup = true;
+    prte_rml_record_epoch(6, 100);
+
+    CHECK("socketpair", make_pair(sv));
+    peer = connected_peer(sv[0], true);
+    peer->established = true;
+
+    /* two messages, each arriving whole */
+    for (i = 0; i < 2; i++) {
+        len = tagged_message(wire, peer->msgauth.recv_key, (uint64_t) i, payload,
+                             sizeof(payload));
+        CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+        prte_oob_tcp_recv_handler(sv[0], 0, peer);
+        CHECK("a correctly tagged message is taken", took_message(peer, sv[0]));
+    }
+    CHECK("and each counted", 2 == peer->msgauth.recv_seq);
+
+    /* a tag that arrives in two pieces */
+    len = tagged_message(wire, peer->msgauth.recv_key, 2, payload, sizeof(payload));
+    CHECK("wrote all but part of the tag", (ssize_t) (len - 11) == write(sv[1], wire, len - 11));
+    prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    CHECK("the message waits for the rest of its tag",
+          NULL != peer->recv_msg && 2 == peer->msgauth.recv_seq && fd_is_open(sv[0]));
+    CHECK("wrote the rest", 11 == write(sv[1], wire + len - 11, 11));
+    prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    CHECK("and is taken once it is in", took_message(peer, sv[0]) && 3 == peer->msgauth.recv_seq);
+
+    /* an empty message: a header and a tag */
+    len = tagged_message(wire, peer->msgauth.recv_key, 3, NULL, 0);
+    CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+    prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    CHECK("an empty message is taken", took_message(peer, sv[0]) && 4 == peer->msgauth.recv_seq);
+
+    /* a large message, a few hundred bytes at a time */
+    {
+        size_t big = 64 * 1024, off = 0, step;
+        uint8_t *bp = malloc(big), *bw = malloc(big + 64);
+        bool waited = true;
+
+        for (len = 0; len < big; len++) {
+            bp[len] = (uint8_t) (len * 13);
+        }
+        len = tagged_message(bw, peer->msgauth.recv_key, 4, bp, big);
+        while (off < len) {
+            step = (len - off < 700) ? len - off : 700;
+            if ((ssize_t) step != write(sv[1], bw + off, step)) {
+                break;
+            }
+            off += step;
+            prte_oob_tcp_recv_handler(sv[0], 0, peer);
+            if (off < len && (NULL == peer->recv_msg || 4 != peer->msgauth.recv_seq)) {
+                waited = false;
+            }
+        }
+        CHECK("a message read in pieces waits for all of them", waited);
+        CHECK("and is taken whole", took_message(peer, sv[0]) && 5 == peer->msgauth.recv_seq);
+        free(bp);
+        free(bw);
+    }
+    PMIX_RELEASE(peer);
+    close(sv[1]);
+
+    /* what is refused, each on a connection that has taken two good ones */
+    {
+        uint8_t key[PRTE_OOB_TCP_MSGKEY_LEN];
+
+        memset(key, 0xb2, sizeof(key)); // connected_peer's receive key
+        len = tagged_message(wire, key, 2, payload, sizeof(payload));
+        wire[PRTE_OOB_TCP_HDR_FIXED + 50] ^= 0x01;
+        CHECK("a changed payload byte closes the connection", refused(wire, len, 2));
+        wire[PRTE_OOB_TCP_HDR_FIXED + 50] ^= 0x01;
+        wire[offsetof(prte_oob_tcp_hdr_t, tag) + 3] ^= 0x01;
+        CHECK("and so does a changed header byte", refused(wire, len, 2));
+        wire[offsetof(prte_oob_tcp_hdr_t, tag) + 3] ^= 0x01;
+        wire[len - 1] ^= 0x80;
+        CHECK("and a changed tag byte", refused(wire, len, 2));
+
+        len = tagged_message(wire, key, 1, payload, sizeof(payload));
+        CHECK("a message repeated closes it", refused(wire, len, 2));
+        len = tagged_message(wire, key, 3, payload, sizeof(payload));
+        CHECK("and one with another left out before it", refused(wire, len, 2));
+        memset(key, 0xa1, sizeof(key)); // the send key: our own direction
+        len = tagged_message(wire, key, 2, payload, sizeof(payload));
+        CHECK("and one tagged in our own direction", refused(wire, len, 2));
+        /* two whole untagged messages, back to back: room for both */
+        {
+            uint8_t two[2 * sizeof(wire)];
+
+            len = tagged_message(two, NULL, 0, payload, sizeof(payload));
+            len2 = tagged_message(two + len, NULL, 1, payload, sizeof(payload));
+            CHECK("and two messages with no tags", refused(two, len + len2, 0));
+        }
+    }
+
+    /* a connection that does not tag reads a message and then the next */
+    CHECK("socketpair", make_pair(sv));
+    peer = connected_peer(sv[0], false);
+    peer->established = true;
+    len = tagged_message(wire, NULL, 0, payload, sizeof(payload));
+    len2 = tagged_message(wire2, NULL, 1, payload, sizeof(payload));
+    CHECK("wrote two", (ssize_t) len == write(sv[1], wire, len)
+                           && (ssize_t) len2 == write(sv[1], wire2, len2));
+    prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    CHECK("without tagging, a message is taken as before", took_message(peer, sv[0]));
+    prte_oob_tcp_recv_handler(sv[0], 0, peer);
+    CHECK("and the next one after it", took_message(peer, sv[0]) && 0 == peer->msgauth.recv_seq);
+    PMIX_RELEASE(peer);
+    close(sv[1]);
+
+    prte_bootstrap_setup = false;
+    if (6 < prte_rml_base.peer_epochs_size) {
+        prte_rml_base.peer_epochs[6] = 0;
+    }
+    prte_event_base_free(prte_event_base);
+    prte_event_base = save_base;
+    *PRTE_PROC_MY_NAME = save_name;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_recv_checks_tags\n");
+    }
+    return failures;
+}
+
 /* An inbound connection cannot hold a descriptor for long, nor can many.
  *
  * Every connection that has not finished its handshake holds a descriptor,
@@ -2278,6 +2510,11 @@ int main(void)
     /* reports refusals with pmix_net_get_hostname(), so it too has to run
      * before PMIx is finalized below */
     failures += test_pending_handshakes_bounded();
+    /* delivers messages (PMIx_Data_load) and shows help, so it too has to
+     * run while PMIx is up */
+    fprintf(stdout, "-- the next test closes connections over messages whose tags do not "
+                    "check out; the messages it prints are expected --\n");
+    failures += test_recv_checks_tags();
     /* PMIx_server_finalize, at the end of this one, takes PMIx's utility
      * layer down with it - the interface list included - so anything that
      * needs a local interface has to run before it */
