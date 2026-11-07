@@ -140,11 +140,26 @@ The exchange, ahead of the IDENT exchange it leaves untouched
 
 Rules that are easy to break:
 
-- **A proof covers both nonces, both ranks, the namespace and a role byte**
-  (`prte_oob_tcp_auth_mac()`). Drop the role byte and a listener's proof can be
-  sent back to it as a dialer's; drop the ranks and a daemon's own proof,
-  carried between two of its connections, could pass for another's.
-  If what goes into a proof changes, change `PRTE_OOB_TCP_AUTH_LABEL` too.
+- **A proof covers both nonces, both ranks, the namespace, a role byte and
+  a mode byte** (`prte_oob_tcp_auth_mac()`). Drop the role byte and a
+  listener's proof can be sent back to it as a dialer's; drop the ranks and a
+  daemon's own proof, carried between two of its connections, could pass for
+  another's. The mode byte is `prte_oob_authenticate_messages` (`'T'` or
+  `'U'`): the two settings put different bytes on the wire after the
+  handshake, so two daemons that disagree must fail the handshake rather than
+  misread each other's stream. If what goes into a proof changes, change
+  `PRTE_OOB_TCP_AUTH_LABEL` too.
+- **A successful handshake leaves the keys its messages are tagged under**
+  when `prte_oob_authenticate_messages` is on (`peer->msgauth`). The
+  connection key is an HMAC under the DVM key of the same endpoints a proof
+  covers, under its own label (`PRTE_OOB_TCP_MSG_LABEL`); each direction's
+  key is an HMAC of it with `"D"` or `"L"`, so a message cannot be reflected
+  back to the end that tagged it (`prte_oob_tcp_msg_keys()`). They are
+  installed at the end of `prte_oob_tcp_peer_recv_connect_ack`, after
+  `retry()` has settled which socket survives and before anything publishes
+  `CONNECTED` - so no worker ever sees a connection without them - and
+  cleared when a new socket is made for the peer. Both sequence numbers start
+  at 0 on every connection.
 - **The dialer gives its proof only after checking the listener's.** Whatever
   answers at a dead daemon's address learns nothing.
 - **The proven rank is the identity.** The IDENT must name the rank the HELLO

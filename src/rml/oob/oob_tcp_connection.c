@@ -78,6 +78,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/prte_dvm_key.h"
 #include "src/util/prte_hmac.h"
+#include "src/util/prte_poly1305.h"
 
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_common.h"
@@ -179,6 +180,8 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
      * and the clock on it */
     prte_oob_tcp_handshake_clear(&peer->hshake);
     prte_oob_tcp_peer_disarm_deadline(peer);
+    /* and keys of its own for its messages, made when its handshake is done */
+    prte_secure_zero(&peer->msgauth, sizeof(peer->msgauth));
 
     /* setup event callbacks */
     tcp_peer_event_init(peer);
@@ -896,7 +899,12 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 /* The label every proof starts with.  Changing what goes into a proof means
  * changing this too, so that two builds which disagree about it fail the
  * handshake visibly rather than by coincidence. */
-#define PRTE_OOB_TCP_AUTH_LABEL "prte-oob-auth-1"
+#define PRTE_OOB_TCP_AUTH_LABEL "prte-oob-auth-2"
+
+/* The label the connection key's input starts with - the same endpoints as
+ * a proof, under a label of its own, so a connection key is never a proof
+ * and a proof never a key. */
+#define PRTE_OOB_TCP_MSG_LABEL "prte-oob-msg-1"
 
 /* how many refused connections are reported before the rest go quiet */
 #define PRTE_OOB_TCP_AUTH_REFUSALS_REPORTED 8
@@ -904,6 +912,9 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 /* the longest IDENT payload accepted: the ack flag, and a version string far
  * longer than any release has had along with its terminator */
 #define PRTE_OOB_TCP_IDENT_MAX (sizeof(uint16_t) + 256)
+
+/* room for the endpoints both a proof and a connection key cover */
+#define PRTE_OOB_TCP_ENDPOINTS_MAX (1 + PMIX_MAX_NSLEN + 8 + 2 * PRTE_OOB_TCP_AUTH_LEN)
 
 static void store_be32(uint8_t *p, uint32_t v)
 {
@@ -913,20 +924,20 @@ static void store_be32(uint8_t *p, uint32_t v)
     p[3] = (uint8_t) v;
 }
 
-void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer, pmix_rank_t listener,
-                           const uint8_t *dialer_nonce, const uint8_t *listener_nonce, uint8_t *mac)
+static void store_be64(uint8_t *p, uint64_t v)
 {
-    uint8_t buf[1 + sizeof(PRTE_OOB_TCP_AUTH_LABEL) + 1 + PMIX_MAX_NSLEN + 8
-                + 2 * PRTE_OOB_TCP_AUTH_LEN];
+    store_be32(p, (uint32_t) (v >> 32));
+    store_be32(p + 4, (uint32_t) v);
+}
+
+/* Write what identifies one connection - the namespace, both ranks and both
+ * nonces - at `buf`, and return how many bytes that took. */
+static size_t put_endpoints(uint8_t *buf, const char *nspace, pmix_rank_t dialer,
+                            pmix_rank_t listener, const uint8_t *dialer_nonce,
+                            const uint8_t *listener_nonce)
+{
     size_t n = 0, len;
 
-    /* Which end made the proof comes first.  The two ends' proofs are
-     * otherwise over identical inputs, and without it the listener's proof
-     * could simply be sent back to it as the dialer's. */
-    buf[n++] = (uint8_t) role;
-    len = sizeof(PRTE_OOB_TCP_AUTH_LABEL) - 1;
-    memcpy(buf + n, PRTE_OOB_TCP_AUTH_LABEL, len);
-    n += len;
     /* length-prefixed, so that no namespace and rank can be made to look
      * like another */
     len = strnlen(nspace, PMIX_MAX_NSLEN);
@@ -946,8 +957,110 @@ void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer, pm
     n += PRTE_OOB_TCP_AUTH_LEN;
     memcpy(buf + n, listener_nonce, PRTE_OOB_TCP_AUTH_LEN);
     n += PRTE_OOB_TCP_AUTH_LEN;
+    return n;
+}
+
+void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer, pmix_rank_t listener,
+                           const uint8_t *dialer_nonce, const uint8_t *listener_nonce, uint8_t *mac)
+{
+    uint8_t buf[2 + sizeof(PRTE_OOB_TCP_AUTH_LABEL) + PRTE_OOB_TCP_ENDPOINTS_MAX];
+    size_t n = 0, len;
+
+    /* Which end made the proof comes first.  The two ends' proofs are
+     * otherwise over identical inputs, and without it the listener's proof
+     * could simply be sent back to it as the dialer's. */
+    buf[n++] = (uint8_t) role;
+    /* Whether this end tags its messages.  The two settings put different
+     * bytes on the wire after the handshake - a tag behind every payload, or
+     * none - so two daemons that disagree must not get as far as reading
+     * each other's stream: binding the setting into the proof makes them
+     * fail the handshake instead. */
+    buf[n++] = prte_oob_authenticate_messages ? 'T' : 'U';
+    len = sizeof(PRTE_OOB_TCP_AUTH_LABEL) - 1;
+    memcpy(buf + n, PRTE_OOB_TCP_AUTH_LABEL, len);
+    n += len;
+    n += put_endpoints(buf + n, nspace, dialer, listener, dialer_nonce, listener_nonce);
 
     prte_hmac_sha256(prte_dvm_key, sizeof(prte_dvm_key), buf, n, mac);
+    prte_secure_zero(buf, sizeof(buf));
+}
+
+void prte_oob_tcp_msg_keys(const char *nspace, pmix_rank_t dialer, pmix_rank_t listener,
+                           const uint8_t *dialer_nonce, const uint8_t *listener_nonce,
+                           uint8_t *dialer_key, uint8_t *listener_key)
+{
+    uint8_t buf[sizeof(PRTE_OOB_TCP_MSG_LABEL) + PRTE_OOB_TCP_ENDPOINTS_MAX];
+    uint8_t conn[PRTE_SHA256_DIGEST_LEN];
+    size_t n, len;
+
+    /* The connection key: what the proofs cover, under its own label.  The
+     * nonces are fresh on both sides, so no two connections share it, even
+     * between the same two daemons. */
+    len = sizeof(PRTE_OOB_TCP_MSG_LABEL) - 1;
+    memcpy(buf, PRTE_OOB_TCP_MSG_LABEL, len);
+    n = len;
+    n += put_endpoints(buf + n, nspace, dialer, listener, dialer_nonce, listener_nonce);
+    prte_hmac_sha256(prte_dvm_key, sizeof(prte_dvm_key), buf, n, conn);
+
+    /* One key for each direction, so that a message cannot be sent back to
+     * the end that tagged it and pass its check there. */
+    prte_hmac_sha256(conn, sizeof(conn), "D", 1, dialer_key);
+    prte_hmac_sha256(conn, sizeof(conn), "L", 1, listener_key);
+
+    prte_secure_zero(conn, sizeof(conn));
+    prte_secure_zero(buf, sizeof(buf));
+}
+
+void prte_oob_tcp_msg_tag(const uint8_t *key, uint64_t seq, const void *hdr, size_t hdrlen,
+                          const void *payload, size_t len, uint8_t *tag)
+{
+    uint8_t seqbuf[8], mkey[PRTE_SHA256_DIGEST_LEN];
+    prte_poly1305_ctx_t ctx;
+
+    /* A Poly1305 key must tag one message only, so each message gets its
+     * own: the direction's key and the message's place in that direction's
+     * sequence.  Both ends count from 0 on every connection, so a message
+     * the receiver does not expect next - repeated, out of order, or from
+     * another connection - is checked under a key that did not tag it. */
+    store_be64(seqbuf, seq);
+    prte_hmac_sha256(key, PRTE_OOB_TCP_MSGKEY_LEN, seqbuf, sizeof(seqbuf), mkey);
+
+    /* The header as it goes on the wire, then the payload.  The header
+     * carries the payload's length, so where one ends and the other begins
+     * is not open to question. */
+    prte_poly1305_init(&ctx, mkey);
+    prte_poly1305_update(&ctx, hdr, hdrlen);
+    if (0 < len) {
+        prte_poly1305_update(&ctx, payload, len);
+    }
+    prte_poly1305_final(&ctx, tag);
+    prte_secure_zero(mkey, sizeof(mkey));
+}
+
+/* Make the keys a connection's messages are tagged under, once its
+ * handshake has succeeded.  `listener` says which end of it we are. */
+static void tcp_peer_install_msg_keys(prte_oob_tcp_peer_t *peer, prte_oob_tcp_auth_t *au,
+                                      bool listener)
+{
+    prte_oob_tcp_msgauth_t *ma = &peer->msgauth;
+    uint8_t dkey[PRTE_OOB_TCP_MSGKEY_LEN], lkey[PRTE_OOB_TCP_MSGKEY_LEN];
+
+    if (listener) {
+        prte_oob_tcp_msg_keys(PRTE_PROC_MY_NAME->nspace, au->rank, PRTE_PROC_MY_NAME->rank,
+                              au->dialer_nonce, au->listener_nonce, dkey, lkey);
+        memcpy(ma->send_key, lkey, sizeof(lkey));
+        memcpy(ma->recv_key, dkey, sizeof(dkey));
+    } else {
+        prte_oob_tcp_msg_keys(PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank, au->rank,
+                              au->dialer_nonce, au->listener_nonce, dkey, lkey);
+        memcpy(ma->send_key, dkey, sizeof(dkey));
+        memcpy(ma->recv_key, lkey, sizeof(lkey));
+    }
+    ma->send_seq = 0;
+    ma->recv_seq = 0;
+    ma->on = true;
+    prte_secure_zero(dkey, sizeof(dkey));
+    prte_secure_zero(lkey, sizeof(lkey));
 }
 
 /* send one authentication message: a header and one or two 32-byte fields */
@@ -1134,7 +1247,9 @@ static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_ha
             memcpy(theirs, msg, sizeof(theirs));
             free(msg);
             if (!prte_secure_equal(mine, theirs, sizeof(mine))) {
-                return auth_refuse(NULL, sd, "it does not hold this DVM's key");
+                return auth_refuse(NULL, sd,
+                                   "it does not hold this DVM's key, or does not share this "
+                                   "daemon's prte_oob_authenticate_messages setting");
             }
             au->phase = PRTE_OOB_TCP_AUTH_DONE;
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
@@ -1161,7 +1276,9 @@ static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_ha
         /* Whatever answered at this daemon's address is not one of ours.
          * Nothing of the key has been given away: our proof is sent only
          * after theirs checks out. */
-        return auth_refuse(peer, sd, "whatever answered does not hold this DVM's key");
+        return auth_refuse(peer, sd,
+                           "whatever answered does not hold this DVM's key, or does not share "
+                           "this daemon's prte_oob_authenticate_messages setting");
     }
     prte_oob_tcp_auth_mac('D', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank,
                           peer->name.rank, au->dialer_nonce, au->listener_nonce, mine);
@@ -1713,6 +1830,21 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s connect-ack version from %s matches ours",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
+
+    /* The handshake has succeeded, and retry() has settled which socket the
+     * peer keeps, so make the keys its messages are tagged under - here,
+     * before the inbound caller's prte_oob_tcp_peer_accept or our own
+     * tcp_peer_connected below publishes CONNECTED, after which a worker
+     * may be sending.  We are the listener when the connection came in.
+     *
+     * The keys come from the nonces, so there are none to make without
+     * authentication (prte_oob_open refuses tagging without it).  A peer
+     * that is already CONNECTED keeps its keys: its socket is in use, and
+     * the inbound caller turns this connection away. */
+    if (prte_oob_authenticate && prte_oob_authenticate_messages
+        && MCA_OOB_TCP_CONNECTED != peer->state) {
+        tcp_peer_install_msg_keys(peer, &hs->auth, is_new);
+    }
 
     /* if the requestor wanted the header returned, then they
      * will complete their processing
