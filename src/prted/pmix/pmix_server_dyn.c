@@ -30,6 +30,7 @@
 
 #include "prte_config.h"
 
+#include <errno.h>
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif
@@ -1182,8 +1183,23 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     for (n=2; NULL != ck[n]; n++) {
                         p = strchr(ck[n], '=');
                         if (NULL != p && 0 == strncmp(ck[n], "pe", 2)) {
+                            char *end;
+                            long lval;
+                            /* the same checks as PE= on a mapping policy:
+                             * the attribute is a uint16, so a bare strtol
+                             * stored "-1" as 65535, dropped 65536 as 0 and
+                             * took text for no value at all */
                             ++p;
-                            pes = strtol(p, NULL, 10);
+                            errno = 0;
+                            lval = strtol(p, &end, 10);
+                            if (end == p || '\0' != *end || 0 != errno ||
+                                0 >= lval || UINT16_MAX < lval) {
+                                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
+                                               "invalid-value", true, "mapping policy", "pe", ck[n]);
+                                PMIx_Argv_free(ck);
+                                return PRTE_ERR_BAD_PARAM;
+                            }
+                            pes = (uint16_t) lval;
                             break;
                         }
                     }
