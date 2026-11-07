@@ -182,6 +182,8 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
     peer->send_ev_active = false;
     peer->recv_ev_active = false;
     memset(&peer->hshake, 0, sizeof(peer->hshake));
+    memset(&peer->hs_deadline, 0, sizeof(peer->hs_deadline));
+    peer->hs_deadline_active = false;
 }
 static void peer_des(prte_oob_tcp_peer_t *peer)
 {
@@ -193,6 +195,9 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
     }
     if (peer->recv_ev_active) {
         prte_event_del(&peer->recv_event);
+    }
+    if (peer->hs_deadline_active) {
+        prte_event_del(&peer->hs_deadline);
     }
     if (0 <= peer->sd) {
         pmix_output_verbose(2, prte_oob_base.output,

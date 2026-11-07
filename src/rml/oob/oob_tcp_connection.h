@@ -144,5 +144,8 @@ PRTE_EXPORT void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_
                                        pmix_rank_t listener, const uint8_t *dialer_nonce,
                                        const uint8_t *listener_nonce, uint8_t *mac);
 PRTE_EXPORT void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer);
+/* start and stop the clock on a connection we opened finishing its handshake */
+PRTE_EXPORT void prte_oob_tcp_peer_arm_deadline(prte_oob_tcp_peer_t *peer);
+PRTE_EXPORT void prte_oob_tcp_peer_disarm_deadline(prte_oob_tcp_peer_t *peer);
 
 #endif /* _MCA_OOB_TCP_CONNECTION_H_ */

@@ -98,6 +98,12 @@ typedef struct {
                                           made for the peer.  An inbound handshake is read into its
                                           own conn op instead, since it arrives before we know
                                           which peer it is. */
+    prte_event_t hs_deadline;  /**< how long a connection WE opened has to finish its
+                                    handshake (prte_oob_base.handshake_timeout), the outbound
+                                    twin of the conn op's deadline.  Armed when the HELLO goes
+                                    out, disarmed at CONNECTED or when the socket goes.  Main
+                                    progress thread only. */
+    bool hs_deadline_active;
 } prte_oob_tcp_peer_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_peer_t);
 
