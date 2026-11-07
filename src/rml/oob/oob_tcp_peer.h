@@ -45,6 +45,26 @@ typedef struct {
 } prte_oob_tcp_addr_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_addr_t);
 
+/* The length of each direction's message key: an HMAC-SHA256 output */
+#define PRTE_OOB_TCP_MSGKEY_LEN 32
+
+/* What a connection's messages are tagged under (prte_oob_authenticate_messages).
+ *
+ * Installed by prte_oob_tcp_peer_recv_connect_ack once the handshake has
+ * succeeded and before tcp_peer_connected publishes CONNECTED, so a worker
+ * never sees a connection without its keys.  From CONNECTED on, the send keys
+ * belong to the thread servicing the socket's send event and the receive keys
+ * to the one servicing its read event - both on peer->evbase.  Cleared when a
+ * new socket is made for the peer: a new connection gets new keys, and both
+ * sequence numbers start again at 0. */
+typedef struct {
+    bool on;                                     /* tag this connection's messages */
+    uint8_t send_key[PRTE_OOB_TCP_MSGKEY_LEN];   /* our direction */
+    uint8_t recv_key[PRTE_OOB_TCP_MSGKEY_LEN];   /* the far end's direction */
+    uint64_t send_seq;                           /* the next message we send */
+    uint64_t recv_seq;                           /* the next message we expect */
+} prte_oob_tcp_msgauth_t;
+
 /* object for tracking peers in the module */
 typedef struct {
     pmix_list_item_t super;
@@ -104,6 +124,8 @@ typedef struct {
                                     out, disarmed at CONNECTED or when the socket goes.  Main
                                     progress thread only. */
     bool hs_deadline_active;
+    prte_oob_tcp_msgauth_t msgauth; /**< the keys and sequence numbers this connection's
+                                         messages are tagged with - see the type */
 } prte_oob_tcp_peer_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_peer_t);
 
