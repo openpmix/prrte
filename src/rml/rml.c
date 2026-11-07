@@ -79,12 +79,23 @@ static char *dead_dmns_spec = NULL;
  * running on the main thread alone. */
 static pmix_mutex_t epoch_lock = PMIX_MUTEX_STATIC_INIT;
 
+/* The most ranks the epoch table will grow to hold.  The rank it is grown
+ * for comes straight out of a message header, and the table used to be grown
+ * to whatever that said - rank + 8 slots of 8 bytes, so a rank near the top
+ * of the range asked for some 32 GiB.  Daemon ranks are dense and start at
+ * 0, so this is far past any DVM; a rank beyond it is simply not tracked,
+ * as when the realloc fails. */
+#define PRTE_RML_EPOCH_MAX_RANKS (1u << 20)
+
 /* Grow the per-rank epoch table so index rank is valid, zero-filling new slots
  * (0 = unknown). Ranks are dense and small, so a flat array indexed by rank is
  * ample. Caller must hold epoch_lock. */
 static void ensure_epoch_slot(pmix_rank_t rank)
 {
     if ((size_t) rank < prte_rml_base.peer_epochs_size) {
+        return;
+    }
+    if (PRTE_RML_EPOCH_MAX_RANKS <= rank) {
         return;
     }
     size_t newsize = (size_t) rank + 8;
@@ -109,10 +120,16 @@ bool prte_rml_epoch_ok(pmix_rank_t rank, uint64_t epoch)
     if (0 == epoch) {
         return true;
     }
+    /* ...but a stamped one claims to come from a daemon, and no daemon has a
+     * sentinel rank: those match other ranks in a non-strict comparison */
+    if (PMIX_RANK_VALID <= rank) {
+        return false;
+    }
     pmix_mutex_lock(&epoch_lock);
     ensure_epoch_slot(rank);
     if ((size_t) rank >= prte_rml_base.peer_epochs_size) {
-        /* allocation failed - fail open rather than drop live traffic */
+        /* allocation failed, or the rank is past what the table holds -
+         * fail open rather than drop live traffic */
         goto done;
     }
     known = prte_rml_base.peer_epochs[rank];
