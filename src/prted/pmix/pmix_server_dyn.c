@@ -699,7 +699,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             /***   CPUS/RANK   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
             rc = PMIx_Value_get_number(&info->value, &u16, PMIX_UINT16);
-            if (PMIX_SUCCESS != rc) {
+            /* Zero fits a uint16 and means nothing: the mapper divides by
+             * this ("ncpus / cpus_per_rank" in prte_rmaps_base_check_avail),
+             * so it must be at least one. The command-line
+             * spelling of the same request ("--map-by :PE=0") has always been
+             * refused for that reason; this is the same request arriving
+             * as a spawn attribute. */
+            if (PMIX_SUCCESS != rc || 0 == u16) {
                 return PRTE_ERR_BAD_PARAM;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC,
