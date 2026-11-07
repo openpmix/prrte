@@ -10,8 +10,8 @@
 /*
  * Unit tests for the DVM key and the primitives behind it.
  *
- * The digest and the HMAC are checked against the published vectors (FIPS
- * 180-4's examples and RFC 4231): a hash that is merely self-consistent
+ * The digest, the HMAC and Poly1305 are checked against the published vectors
+ * (FIPS 180-4's examples, RFC 4231 and RFC 8439): a hash that is merely self-consistent
  * would still let two daemons agree with each other, so agreement between
  * daemons proves nothing about it.  The key's delivery channels are checked
  * for what they refuse as much as what they accept - a key file other users
@@ -34,6 +34,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/prte_dvm_key.h"
 #include "src/util/prte_hmac.h"
+#include "src/util/prte_poly1305.h"
 
 int test_dvm_key(void);
 
@@ -78,6 +79,97 @@ static bool hmac_is(const uint8_t *key, size_t keylen, const char *msg, const ch
     prte_hmac_sha256(key, keylen, msg, strlen(msg), d);
     to_hex(d, sizeof(d), hex);
     return (0 == strcmp(hex, want));
+}
+
+static void from_hex(const char *hex, uint8_t *out)
+{
+    size_t i;
+
+    for (i = 0; '\0' != hex[2 * i]; i++) {
+        unsigned int v;
+        sscanf(hex + 2 * i, "%2x", &v);
+        out[i] = (uint8_t) v;
+    }
+}
+
+/* the Poly1305 tag of `msghex` (or of `msg`, when it is given) under
+ * `keyhex`, computed in one call and again fed in `step`-byte pieces */
+static bool poly1305_is(const char *keyhex, const char *msghex, const char *msg, size_t step,
+                        const char *want)
+{
+    uint8_t key[PRTE_POLY1305_KEY_LEN], buf[128], tag[PRTE_POLY1305_TAG_LEN];
+    char hex[2 * PRTE_POLY1305_TAG_LEN + 1];
+    prte_poly1305_ctx_t ctx;
+    size_t len, off;
+    const uint8_t *m;
+
+    from_hex(keyhex, key);
+    if (NULL != msg) {
+        m = (const uint8_t *) msg;
+        len = strlen(msg);
+    } else {
+        len = strlen(msghex) / 2;
+        from_hex(msghex, buf);
+        m = buf;
+    }
+    prte_poly1305(key, m, len, tag);
+    to_hex(tag, sizeof(tag), hex);
+    if (0 != strcmp(hex, want)) {
+        return false;
+    }
+    prte_poly1305_init(&ctx, key);
+    for (off = 0; off < len; off += step) {
+        prte_poly1305_update(&ctx, m + off, (len - off < step) ? len - off : step);
+    }
+    prte_poly1305_final(&ctx, tag);
+    to_hex(tag, sizeof(tag), hex);
+    return (0 == strcmp(hex, want));
+}
+
+/* RFC 8439: the worked example of section 2.5.2, and the vectors of
+ * appendix A.3 that exercise the reduction's edge cases - an accumulator
+ * that lands at or just past p, and carries that run the length of the
+ * limbs.  Each is also fed in pieces that split its blocks. */
+static int test_poly1305(void)
+{
+    int failures = 0;
+    char key[65], msg[97];
+
+    CHECK("poly1305 rfc8439 2.5.2",
+          poly1305_is("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b", NULL,
+                      "Cryptographic Forum Research Group", 5, "a8061dc1305136c6c22b8baf0c0127a9"));
+    memset(key, '0', 64);
+    key[64] = '\0';
+    memset(msg, '0', 96);
+    msg[96] = '\0';
+    msg[64] = '\0';
+    CHECK("poly1305 rfc8439 a.3 #1 (all zero)",
+          poly1305_is(key, msg, NULL, 7, "00000000000000000000000000000000"));
+    CHECK("poly1305 rfc8439 a.3 #5",
+          poly1305_is("0200000000000000000000000000000000000000000000000000000000000000",
+                      "ffffffffffffffffffffffffffffffff", NULL, 3,
+                      "03000000000000000000000000000000"));
+    CHECK("poly1305 rfc8439 a.3 #6",
+          poly1305_is("02000000000000000000000000000000ffffffffffffffffffffffffffffffff",
+                      "02000000000000000000000000000000", NULL, 16,
+                      "03000000000000000000000000000000"));
+    CHECK("poly1305 rfc8439 a.3 #7",
+          poly1305_is("0100000000000000000000000000000000000000000000000000000000000000",
+                      "ffffffffffffffffffffffffffffffff"
+                      "f0ffffffffffffffffffffffffffffff"
+                      "11000000000000000000000000000000", NULL, 9,
+                      "05000000000000000000000000000000"));
+    CHECK("poly1305 rfc8439 a.3 #8",
+          poly1305_is("0100000000000000000000000000000000000000000000000000000000000000",
+                      "ffffffffffffffffffffffffffffffff"
+                      "fbfefefefefefefefefefefefefefefe"
+                      "01010101010101010101010101010101", NULL, 17,
+                      "00000000000000000000000000000000"));
+    CHECK("poly1305 rfc8439 a.3 #9",
+          poly1305_is("0200000000000000000000000000000000000000000000000000000000000000",
+                      "fdffffffffffffffffffffffffffffff", NULL, 1,
+                      "faffffffffffffffffffffffffffffff"));
+    return failures;
 }
 
 static int test_digests(void)
@@ -336,6 +428,7 @@ int test_dvm_key(void)
     int failures = 0;
 
     failures += test_digests();
+    failures += test_poly1305();
     failures += test_hex();
     failures += test_from_fd();
     failures += test_from_file();
