@@ -90,6 +90,26 @@ static void wildcard_reg_complete(pmix_status_t status, void *cbdata)
 }
 
 static void derived_relfn(void *cbdata);
+static void dmodex_req(int sd, short args, void *cbdata);
+
+/* A direct-modex request for a namespace this daemon has not heard of waits
+ * for the job on the request's cycle timer, and this is where it wakes: off
+ * the array, and back through dmodex_req() from the top, which answers it if
+ * the job has arrived (or has come and gone) and puts it back to wait if not.
+ * dmodex_req() gives up once it has waited prte_pmix_dmodex_job_wait times. */
+static void dmodex_job_recheck(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+
+    req->cycle_active = false;
+    req->awaiting_job = false;
+    --prte_pmix_server_globals.dmdx_awaiting_job;
+    if (0 <= req->local_index) {
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+        req->local_index = -1;
+    }
+    dmodex_req(sd, args, req);
+}
 
 static void dmodex_req(int sd, short args, void *cbdata)
 {
@@ -181,6 +201,13 @@ static void dmodex_req(int sd, short args, void *cbdata)
         if (PMIX_NSPACE_INVALID(r->tproc.nspace)) {
             continue;
         }
+        /* ...and not against one waiting for its job to appear.  That one
+         * has asked nobody, so no answer is on its way, and when it does
+         * resolve it may do so locally, answering only itself.  A request
+         * parked behind it was never answered at all. */
+        if (r->awaiting_job) {
+            continue;
+        }
         if (PMIX_CHECK_PROCID(&r->tproc, &req->tproc)) {
             /* save the request in the array until the
              * data is returned */
@@ -196,7 +223,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
          *
          * A job we have not heard of YET is a race - the requestor got the
          * namespace from somewhere and our own record of it is still on its
-         * way - so park the request and answer it when the job turns up.
+         * way - so wait for it, within the limits set out below.
          *
          * A job that has already FINISHED is never coming back.  Its object
          * was released when it terminated, so parking a request on it parks
@@ -220,7 +247,45 @@ static void dmodex_req(int sd, short args, void *cbdata)
             prc = PMIX_ERR_NOT_FOUND;
             goto callback;
         }
-        req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+        /* ...and what we cannot prove is over gets a bounded wait, not an
+         * unbounded one.  Nothing else answers a request parked here: the
+         * job's arrival does not look for it, and PMIx has already handed
+         * us the target and will not ask again.  So it rechecks for itself
+         * once a second, for prte_pmix_dmodex_job_wait seconds, and is
+         * answered NOT_FOUND after that.  Each waiting request holds memory
+         * here and in PMIx, and a namespace that never existed costs the
+         * asker nothing to name, so no more than prte_pmix_dmodex_job_wait_max
+         * wait at once; a new one past that is answered NOT_FOUND now. */
+        if (0 == req->job_waits &&
+            prte_pmix_server_globals.dmdx_job_wait_max <= prte_pmix_server_globals.dmdx_awaiting_job) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s DMODX REQ FOR %s:%u - %u ALREADY WAITING FOR THEIR JOBS",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                req->tproc.nspace, req->tproc.rank,
+                                prte_pmix_server_globals.dmdx_awaiting_job);
+            prc = PMIX_ERR_NOT_FOUND;
+            goto callback;
+        }
+        if ((int) prte_pmix_server_globals.dmdx_job_wait <= req->job_waits) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s DMODX REQ FOR %s:%u - JOB NOT SEEN IN %d SECONDS",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                req->tproc.nspace, req->tproc.rank, req->job_waits);
+            prc = PMIX_ERR_NOT_FOUND;
+            goto callback;
+        }
+        {
+            struct timeval tv = {1, 0};
+
+            ++req->job_waits;
+            req->awaiting_job = true;
+            ++prte_pmix_server_globals.dmdx_awaiting_job;
+            /* on the array only so that finalize finds the armed timer */
+            req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+            prte_event_evtimer_set(prte_event_base, &req->cycle, dmodex_job_recheck, req);
+            prte_event_evtimer_add(&req->cycle, &tv);
+            req->cycle_active = true;
+        }
         return;
     }
     /* if this is a request for rank=WILDCARD, then they want the job-level data

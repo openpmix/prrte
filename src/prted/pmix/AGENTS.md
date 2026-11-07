@@ -277,6 +277,23 @@ ordinary — a parent asking about a short-lived child it just spawned
 harness, in both spellings of `report-child-jobs-separately` and on master
 before this change.
 
+**A job not yet known gets a bounded wait, and nothing else answers it.**
+`dmodex_req()` cannot tell a namespace whose launch message is still on its
+way from one that will never exist, so it waits, but nothing wakes it when
+the job arrives. PMIx has already handed us the target and will not ask
+again (`pmix_pending_nspace_requests()` skips a target it has already sent
+up). Such a request used to sit in `local_reqs` for the life of the daemon,
+and `dmodex_req()`'s de-duplication scan parked every later request for the
+same proc behind it. So now it waits on its own `cycle` timer. Each second it
+leaves the array and runs `dmodex_req()` again from the top. It is answered
+`PMIX_ERR_NOT_FOUND` after `prte_pmix_dmodex_job_wait` seconds (default 60).
+No more than `prte_pmix_dmodex_job_wait_max` (default 1024) wait at once;
+past that, a new one is answered `NOT_FOUND` immediately. While it waits it
+is marked `awaiting_job`, and both the de-duplication scan and
+`pmix_server_dmdx_resp()` skip it: it asked nobody, so nothing it could be
+paired with is coming. `test_dmodex_job_wait` pins the cap, the timeout,
+and two requests for one proc both being answered once the job appears.
+
 **Two request arrays, two meanings.** `local_reqs` holds requests *we*
 originated and are waiting on; `remote_reqs` holds requests *a peer*
 asked us to service. `prte_pmix_server_clear()` sweeps only

@@ -65,6 +65,10 @@ typedef struct {
     bool event_active;
     prte_event_t cycle;
     bool cycle_active;
+    /* a direct-modex request waiting, on the cycle timer, for a job this
+     * daemon has not heard of yet - and how many times it has waited */
+    bool awaiting_job;
+    int job_waits;
     bool inprogress;
     bool timed_out;
     char *operation;
@@ -676,6 +680,12 @@ typedef struct {
     /* a tool's rank is a subscript into its job's procs array, so a rank
      * of its own choosing must be below this */
     unsigned int tool_rank_limit;
+    /* how long, in seconds, a direct-modex request for a namespace this
+     * daemon does not know waits for the job to appear; how many may wait
+     * at once; and how many are waiting now */
+    unsigned int dmdx_job_wait;
+    unsigned int dmdx_job_wait_max;
+    unsigned int dmdx_awaiting_job;
     /* the users, besides root and our own, a tool may run as to be accepted
      * as the scheduler: the MCA list, and what it resolved to */
     char *scheduler_uids;
