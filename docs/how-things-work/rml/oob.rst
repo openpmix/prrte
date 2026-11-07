@@ -116,7 +116,8 @@ progress thread, where ``prte_oob_base_send_nb`` (``oob_base_stubs.c``) runs:
    (``MCA_OOB_TCP_QUEUE_PENDING``) and the connection state machine is started.
 
 Once the socket is up and the IDENT handshake has completed, the send handler in
-``oob_tcp_sendrecv.c`` writes the header and then the payload.
+``oob_tcp_sendrecv.c`` writes the header, then the payload, and - on a
+connection that tags its messages (see `Message tagging`_ below) - the tag.
 
 The connection state machine
 ----------------------------
@@ -130,10 +131,11 @@ one DVM shares and nothing else has.  The dialer sends ``AUTH_HELLO`` carrying
 a fresh nonce; the acceptor answers ``AUTH_CHALLENGE`` with its own nonce and
 its proof; the dialer checks that proof and answers ``AUTH_RESPONSE`` with its
 own.  Each proof is an HMAC-SHA256, under the key, of both nonces, both ranks,
-the namespace and which end made it, so no proof can be replayed, reflected
-back, or presented on another connection, and the key itself never crosses the
-wire.  Nothing outside the handshake is touched until a peer has proved
-itself: no peer object is created and no existing connection is disturbed.
+the namespace, which end made it, and whether that end tags its messages, so
+no proof can be replayed, reflected back, or presented on another connection,
+and the key itself never crosses the wire.  Nothing outside the handshake is
+touched until a peer has proved itself: no peer object is created and no
+existing connection is disturbed.
 
 The key travels to each daemon by a channel private to the DVM's user - never
 on a command line, where the namespace and the HNP's contact address already
@@ -148,8 +150,9 @@ the check off for a launch agent that cannot forward stdin; daemons then
 cannot tell their own peers from any other process that connects to their
 ports.
 
-Authentication establishes who is at the other end of a connection; it does
-not encrypt or sign the traffic that follows.
+Authentication establishes who is at the other end of a connection.  On its
+own it says nothing about the messages that follow; that is what message
+tagging adds, when it is turned on (see `Message tagging`_).
 
 Then the ``IDENT`` exchange that has always opened a connection: the daemon
 that initiated it names itself (and must name the rank it proved); the
@@ -203,7 +206,8 @@ original behavior:
 Receiving and relaying
 ----------------------
 
-When a peer's socket has delivered a complete message, the recv handler in
+When a peer's socket has delivered a complete message - and, on a connection
+that tags its messages, its tag has checked out - the recv handler in
 ``oob_tcp_sendrecv.c`` inspects ``hdr.dst``:
 
 * **For us.**  It calls ``PRTE_RML_POST_MESSAGE`` to hand the message up to the
@@ -218,6 +222,59 @@ Connection loss.  When a socket drops, ``oob_tcp_component.c`` fires its
 ``lost_connection`` / ``failed_to_connect`` handlers, which turn a transport
 event into a routing event: the RML is told to treat the peer as lost so the
 tree can be repaired (see :ref:`rml-label`).
+
+Message tagging
+---------------
+
+``prte_oob_authenticate_messages`` (default ``false``) tags every message on
+a daemon connection, so that the receiving daemon acts on a message only once
+it has checked that it is the next message the far end sent on that
+connection, unchanged.  It needs ``prte_oob_authenticate``, whose handshake
+the keys come from: ``prte`` refuses to start with tagging on and
+authentication off.  It is off by default for what it costs: every hop
+computes a tag on each message it sends and checks one on each message it
+receives.
+
+* **Keys.**  When a connection's handshake succeeds, both ends derive a
+  connection key - an HMAC-SHA256, under the DVM key, of the same namespace,
+  ranks and nonces the proofs cover, under a label of its own - and from it
+  one key for each direction.  The nonces are fresh on both sides, so no two
+  connections share a key, even between the same two daemons; and with a key
+  per direction a message cannot be sent back to the end that tagged it.
+
+* **Tags.**  Each direction numbers its messages from 0.  A message's tag is
+  a 16-byte Poly1305 tag, under a key made from the direction's key and the
+  message's number, over the header as it goes on the wire and then the
+  payload; it follows the payload on the wire.  Because each message has a
+  key of its own, a message that is repeated, sent out of order, or left out
+  is checked under a key that did not tag it.
+
+* **Checking.**  The receiver checks the tag before it does anything else
+  with the message - before the incarnation check, before delivering it, and
+  before relaying it.  A message whose tag does not match closes the
+  connection, with a message naming both daemons and the message's number:
+  once one message cannot be accounted for, nothing later on the same stream
+  can be relied on either.
+
+* **Relays.**  A daemon that relays a message sends it again as a new message
+  on its own connection to the next hop, so every hop tags and checks under
+  the keys of the connection the message is on.
+
+* **Every daemon needs the same setting.**  The two settings put different
+  bytes on the wire after the handshake, so the setting is bound into each
+  end's proof: two daemons that disagree fail their handshake rather than
+  misread each other's messages.  ``prte`` passes its own setting to every
+  daemon it launches.  A bootstrapped DVM has no launcher to do that, so put
+  the setting in an MCA parameter file every node reads (see
+  :doc:`/configuration`).
+
+Confidentiality
+^^^^^^^^^^^^^^^
+
+PRRTE authenticates its daemons' connections and, with tagging, their
+messages; it does not encrypt them.  Where the traffic between nodes has to
+be kept private, provide that at the network layer: an isolated fabric, or
+IPsec or WireGuard between the nodes.
 
 Which thread moves the bytes
 ----------------------------
@@ -273,6 +330,11 @@ information:
   daemon to the next ancestor and returns a ``COMM_FAILED`` recovery, instead of
   raising a fatal ``FAILED_TO_CONNECT``.  The HNP is the exception — it is
   retried forever and never allowed to time out.
+
+* **No launcher passes on the tagging setting.**  Every daemon must share
+  ``prte_oob_authenticate_messages`` (see `Message tagging`_), and with no
+  ``prte`` to hand it down, each node has to read it from an MCA parameter
+  file of its own.
 
 Where to look
 -------------

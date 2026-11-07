@@ -87,6 +87,19 @@ not meet these requirements. One way to create a key::
 Distribute it to the nodes so that it stays private to that user - not on a
 world-readable shared file system.
 
+The key is also what each connection's message tags are made from, when
+the ``prte_oob_authenticate_messages`` MCA parameter turns tagging on (see
+:ref:`rml-oob-label`).  That parameter has no entry in this file, and every
+daemon of the DVM must have the same setting - two that differ refuse each
+other's connections - so set it in an MCA parameter file that every node
+reads, such as ``<install-location>/etc/prte-mca-params.conf``::
+
+   prte_oob_authenticate_messages = 1
+
+Neither the key nor tagging encrypts the traffic between daemons; where that
+traffic has to be kept private, provide it at the network layer (see
+:ref:`rml-oob-label`).
+
 ``DVMNetworks=<comma-delimited list> (default: all)`` restricts the networks
 the runtime uses for inter-node (daemon-to-daemon) communication. Entries may be
 interface names or CIDR subnets (e.g., "eth0,10.0.0.0/8"). When omitted, the

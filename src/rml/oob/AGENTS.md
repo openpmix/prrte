@@ -205,8 +205,13 @@ Rules that are easy to break:
   stdin; the HNP passes it to its daemons explicitly
   (`prte_plm_base_prted_append_basic_args`).
 
-This authenticates endpoints; it does not encrypt or sign the stream after
-it, and every daemon of the DVM holds the key.
+This authenticates endpoints and, with `prte_oob_authenticate_messages` on,
+every message after the handshake (the bullets above on `msgauth`, tagging
+and checking). Nothing is encrypted, and every daemon of the DVM holds the
+key. Every daemon must also share the tagging setting - the mode byte makes
+two that differ fail the handshake - which `prte_plm_base_prted_append_basic_args`
+passes on to daemons the HNP launches and a bootstrapped DVM has to put in
+an MCA parameter file every node reads (`docs/configuration.rst`).
 
 ## A connection may hold a descriptor only so long, and only so many inbound ones may
 
