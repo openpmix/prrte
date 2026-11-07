@@ -429,26 +429,34 @@ void prte_oob_close(void)
     }
 #endif
 
+    /* each cleared as it is freed: get_addr() reads them, and a second
+     * close would free them again */
     if (NULL != prte_oob_base.ipv4conns) {
         PMIx_Argv_free(prte_oob_base.ipv4conns);
+        prte_oob_base.ipv4conns = NULL;
     }
     if (NULL != prte_oob_base.ipv4ports) {
         PMIx_Argv_free(prte_oob_base.ipv4ports);
+        prte_oob_base.ipv4ports = NULL;
     }
 
 #if PRTE_ENABLE_IPV6
     if (NULL != prte_oob_base.ipv6conns) {
         PMIx_Argv_free(prte_oob_base.ipv6conns);
+        prte_oob_base.ipv6conns = NULL;
     }
     if (NULL != prte_oob_base.ipv6ports) {
         PMIx_Argv_free(prte_oob_base.ipv6ports);
+        prte_oob_base.ipv6ports = NULL;
     }
 #endif
     if (NULL != prte_oob_base.ipv4masks) {
         PMIx_Argv_free(prte_oob_base.ipv4masks);
+        prte_oob_base.ipv4masks = NULL;
     }
     if (NULL != prte_oob_base.ipv6masks) {
         PMIx_Argv_free(prte_oob_base.ipv6masks);
+        prte_oob_base.ipv6masks = NULL;
     }
 
     if (0 <= prte_oob_base.output) {

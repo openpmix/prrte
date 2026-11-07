@@ -2369,6 +2369,10 @@ static int test_listeners_bound_to_selection(void)
         failures += check_listeners("default");
     }
     prte_oob_close();
+    /* the address lists are freed, and nothing is left pointing at them */
+    CHECK("closing clears the address lists",
+          NULL == prte_oob_base.ipv4conns && NULL == prte_oob_base.ipv4ports
+              && NULL == prte_oob_base.ipv4masks && NULL == prte_oob_base.ipv6masks);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_listeners_bound_to_selection\n");
