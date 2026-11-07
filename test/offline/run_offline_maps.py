@@ -615,9 +615,11 @@ class Case:
 def _expect_for(map_by, rank_by, bind_to):
     # rank-by fill/span require an object-level map (must-map-by-obj).  This
     # only arises for slot/node maps, where every bind is accepted, so it is
-    # an unambiguous reject reason.
+    # an unambiguous reject reason.  Match the message's own text: the topic
+    # name appears in the output only in PMIx's "couldn't find that topic"
+    # placeholder, which is what printed until the topic was restored.
     if rank_by in ("fill", "span") and map_by not in OBJECT_MAPS:
-        return ("reject", "must-map-by-obj")
+        return ("reject", "you must map by an object")
     # binding above an object-level map is rejected.
     if not bind_compatible(map_by, bind_to):
         return ("reject", "lies above the mapping object")
