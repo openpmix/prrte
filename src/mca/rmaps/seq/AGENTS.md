@@ -42,7 +42,9 @@ mapper builds the ordered list from the first of these that is present:
 5. **Default hostfile** — `prte_default_hostfile`, parsed once up front
    into `default_seq_list`.
 
-`process_file()` reads a hostfile where each line is `hostname [cpuset
+`process_file()` reads, through the shared `prte_textfile_*` reader (so
+only a regular file is accepted, and fields split on any whitespace), a
+hostfile where each line is `hostname [cpuset
 [numa mempolicy]]`; it keeps hostname and cpuset and drops the trailing
 NUMA/mempolicy fields (the LSB affinity-file format is accepted so the
 same parser serves both). A line that names a cpuset says where the rank
