@@ -159,7 +159,10 @@ static int ssh_component_register(void)
                                                 &prte_mca_plm_ssh_component.no_tree_spawn);
 
     /* local ssh/ssh launch agent */
-    prte_mca_plm_ssh_component.agent = "ssh : rsh";
+    /* rsh is not on the list: the DVM key travels on the agent's channel,
+     * and rsh's is unencrypted (setup_launch refuses it while daemons
+     * authenticate) */
+    prte_mca_plm_ssh_component.agent = "ssh";
     agent_var_id = pmix_mca_base_component_var_register(c, "agent",
                                                        "The command used to launch executables on remote nodes (typically \"ssh\")",
                                                        PMIX_MCA_BASE_VAR_TYPE_STRING,
@@ -297,7 +300,7 @@ lookup:
         /* if the user specified an agent and we couldn't find it,
          * then we want to error out and not continue */
         if (NULL != prte_mca_plm_ssh_component.agent &&
-            0 != strcmp(prte_mca_plm_ssh_component.agent, "ssh : rsh")) {
+            0 != strcmp(prte_mca_plm_ssh_component.agent, "ssh")) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "agent-not-found", true,
                            prte_mca_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);

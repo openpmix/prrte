@@ -11,8 +11,8 @@ referenced throughout.
 
 `ssh` is the **default, always-available fallback launcher**, priority
 **10** (MCA `plm_ssh_priority`, the lowest of all `plm` components). It
-starts `prted` daemons by forking a remote-shell agent — `ssh` or `rsh`
-by default, or `qrsh`/`llspawn`/`pbs_tmrsh` when it detects the
+starts `prted` daemons by forking a remote-shell agent — `ssh` by
+default, or `qrsh`/`llspawn`/`pbs_tmrsh` when it detects the
 corresponding batch environment. It is the reference implementation: the
 only component that does a **tree-based fan-out** (`remote_spawn`), and
 the one to read to understand the whole framework. It targets any
@@ -50,7 +50,7 @@ The query decides *which agent* to use and offers the module at priority
      agent `pbs_tmrsh` (absolute path `PRTE_PBSTRMSH_PATH`), sets
      `using_tmrsh`.
 3. Fall back to looking up the `plm_ssh_agent` list (default
-   `"ssh : rsh"` — a colon-delimited preference list) in PATH via
+   `"ssh"`; it may be a colon-delimited preference list) in PATH via
    `ssh_launch_agent_lookup` → `prte_plm_ssh_search`. Each agent is
    located as a shell would locate it: a bare name (`ssh`) on the PATH,
    an absolute path as given, and a relative path (`./myssh`,
@@ -151,7 +151,13 @@ prted reads before it daemonizes (`setup_launch` adds
 the remote daemon that stays private to the DVM's user - the remote
 command is the ssh process's argv here and the shell's there, both
 visible to `ps` - so do not move the key onto the command line, and an
-agent that cannot forward stdin cannot launch an authenticated DVM. See
+agent that cannot forward stdin cannot launch an authenticated DVM.
+Nor can one whose channel is unencrypted: the key would cross the network
+as plain text. `launch_agent_setup` marks `rsh` and `remsh`
+(`agent_unencrypted`), and `setup_launch` refuses them with
+`agent-unencrypted` while `prte_oob_authenticate` is on - there, and not
+when the agent is chosen, so a DVM that never launches a remote daemon is
+unaffected. That is also why `rsh` is no longer in the default agent list. See
 `src/util/prte_dvm_key.h`. Both
 sides `setpgid` the child into its own process group so a `Ctrl-C` to
 the HNP doesn't `SIGINT` the ssh processes (which would litter the
@@ -226,7 +232,7 @@ their MCA vars (`plm_ssh_*`):
 | `num_concurrent` (128) | Max simultaneous ssh forks. |
 | `priority` (10) | Selection priority. |
 | `no_tree_spawn` (false) | Disable the fan-out; flat launch from HNP. |
-| `agent` (`"ssh : rsh"`) | Preference-ordered agent list. |
+| `agent` (`"ssh"`) | Preference-ordered agent list. |
 | `agent_argv` / `agent_path` | Resolved agent + its args. |
 | `ssh_args` | Extra args appended to the agent. |
 | `assume_same_shell` (true) | Skip the remote `echo $SHELL` probe. |
