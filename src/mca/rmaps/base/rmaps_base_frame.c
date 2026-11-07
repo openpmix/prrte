@@ -66,6 +66,8 @@ prte_rmaps_base_t prte_rmaps_base = {
     .hwthread_cpus = false,
     .file = NULL,
     .default_pes = 0,
+    .max_procs_per_slot = 64,
+    .max_procs_per_node_floor = 1024,
     .available = NULL,
     .baseset = NULL,
     .default_mapping_policy = NULL,
@@ -131,6 +133,22 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
                                       "directives from their parent by default",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_rmaps_base.inherit);
+
+    /* with oversubscription allowed and slots_max unlimited, nothing else
+     * bounds how many procs a mapping places on a node */
+    prte_rmaps_base.max_procs_per_slot = 64;
+    (void) pmix_mca_base_var_register("prte", "rmaps", "base", "max_procs_per_slot",
+                                      "The most processes a node may hold, as a multiple of "
+                                      "its slots - including when the mapping oversubscribes "
+                                      "it. 0 means no limit (default 64)",
+                                      PMIX_MCA_BASE_VAR_TYPE_UNSIGNED_INT,
+                                      &prte_rmaps_base.max_procs_per_slot);
+    prte_rmaps_base.max_procs_per_node_floor = 1024;
+    (void) pmix_mca_base_var_register("prte", "rmaps", "base", "max_procs_per_node_floor",
+                                      "However few slots a node has, it may hold at least "
+                                      "this many processes (default 1024)",
+                                      PMIX_MCA_BASE_VAR_TYPE_UNSIGNED_INT,
+                                      &prte_rmaps_base.max_procs_per_node_floor);
 
     return PRTE_SUCCESS;
 }

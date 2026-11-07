@@ -201,7 +201,12 @@ while ``--mapby device=gpu,ndev=2`` names a device called
 * ``OVERSUBSCRIBE`` allow more processes on a node than processing
   elements. Note that this describes the whole job. It may be written in
   a per-app ``--mapby`` string, where it is taken to describe the job
-  (see "Per-app-context mapping" below).
+  (see "Per-app-context mapping" below). An oversubscribed node still
+  holds at most 64 processes per slot, and at least 1024 however few
+  slots it has; a job asking for more than its nodes can hold that way
+  fails to map. The ``prte_rmaps_base_max_procs_per_slot`` and
+  ``prte_rmaps_base_max_procs_per_node_floor`` MCA parameters set those
+  two numbers, and a per-slot value of 0 removes the limit.
 
 * ``NOOVERSUBSCRIBE`` means ``!OVERSUBSCRIBE``. Note that this describes
   the whole job (see above).

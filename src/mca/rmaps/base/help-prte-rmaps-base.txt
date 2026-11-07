@@ -408,6 +408,26 @@ A %s was given that requires a value, but the provided value is invalid:
 
 Please provide a valid value for this policy, or remove it.
 #
+[node-proc-limit]
+A job asked for more processes than a node may hold:
+
+  Node:   %s
+  Slots:  %d
+  Limit:  %d
+
+A node may hold %u processes for each of its slots, and at least %u
+however few slots it has. Ask for fewer processes, add nodes, or raise
+the prte_rmaps_base_max_procs_per_slot or
+prte_rmaps_base_max_procs_per_node_floor MCA parameter.
+#
+[job-procs-overflow]
+A job asked for more processes in total than one job can hold:
+
+  Requested:  %s
+  Limit:      %d
+
+Ask for fewer processes.
+#
 [rmaps:ppr-too-many-procs]
 A "ppr" mapping asks for more processes than a job can hold:
 
