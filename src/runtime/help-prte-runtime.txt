@@ -294,8 +294,8 @@ launcher writes it to the daemon's standard input, and the resource-manager
 launchers (Slurm, LSF, PALS) pass it in the daemon's environment.
 
 If the remote-launch agent in use does not forward standard input to the
-command it runs, it cannot deliver the key. Use an agent that does (ssh,
-rsh and "qrsh -inherit" all do), or launch through the resource manager.
+command it runs, it cannot deliver the key. Use an agent that does, over
+an encrypted channel (ssh does), or launch through the resource manager.
 As a last resort the check can be turned off with
 "--prtemca prte_oob_authenticate 0" - but understand what that means:
 daemons can then no longer tell their own peers from any other process

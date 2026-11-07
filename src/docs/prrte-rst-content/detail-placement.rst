@@ -91,7 +91,7 @@ will run all processes on the localhost.
 If running under a supported resource manager, the ``prte(1)`` process
 will start the daemon processes (``prted(1)``) on the remote nodes
 using the corresponding resource manager process starter. If no such
-starter is available then ``ssh`` (or ``rsh``) is used.
+starter is available then ``ssh`` is used.
 
 Minus user direction, PRRTE will automatically map processes in a
 round-robin fashion by CPU, binding each process to its own CPU. The
