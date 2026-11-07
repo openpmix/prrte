@@ -36,7 +36,7 @@ linked into `libprrte`. There are no MCA components here.
 | **Session directories** | `session_dir.[ch]` | Construction and teardown of the `$TMPDIR/<prefix>.<pid>/<jobid>/<rank>` tree. |
 | **Tool option values** | `prte_cmd_line.[ch]` | Value interpreters more than one tool needs (`--pid`, `--app`, the daemon umask), and the vocabularies of the directive-valued options - see "Directive vocabularies" below. See [`src/tools/AGENTS.md`](../tools/AGENTS.md). |
 | **Bootstrap** | `prte_bootstrap.[ch]` | Reading `prte.conf` for a launcher-less DVM. |
-| **DVM key** | `prte_dvm_key.[ch]`, `prte_hmac.[ch]` | The per-DVM key daemons prove they hold before the OOB treats them as daemons, how each launcher delivers it, and the SHA-256/HMAC that proof is made with. See "The DVM key" below. |
+| **DVM key** | `prte_dvm_key.[ch]`, `prte_hmac.[ch]`, `prte_poly1305.[ch]` | The per-DVM key daemons prove they hold before the OOB treats them as daemons, how each launcher delivers it, and the SHA-256/HMAC that proof is made with. See "The DVM key" below. |
 | **Process plumbing** | `daemon_init.c`, `sys_limits.[ch]`, `stacktrace.[ch]` | Daemonizing, `setrlimit`, and the crash handler. |
 | **Help delivery** | `prte_show_help.[ch]` | `prte_show_help()` — a drop-in for `pmix_show_help()` that works on a **daemon**. See below. |
 | **Generated** | `prte_show_help_content.c`, `prte-convert-help.py` | Every `help-*.txt` in the tree, compiled in. **Never edit the generated file.** |
@@ -300,12 +300,18 @@ stdin), `plm/slurm`/`lsf`/`pals` the launcher's environment
 `DVMKeyFile` named in `prte.conf`. A new launcher must pick a channel of the
 same kind, or its daemons are no longer the only processes that can join.
 
-`prte_hmac.[ch]` - SHA-256 and HMAC-SHA256, checked against the FIPS 180-4
-and RFC 4231 vectors in `test/unit/util` - is generic code, and the rule below
-says generic code belongs in PMIx. It is here for now because PRRTE must not
-wait on a PMIx release to authenticate its own daemons; if PMIx grows the same
-primitives, use them and delete these. Compare a received proof with
-`prte_secure_equal`, never `memcmp`.
+`prte_poly1305.[ch]` - Poly1305 (RFC 8439), checked against that RFC's
+vectors in `test/unit/util` - is the authenticator for the OOB's per-message
+tags (`prte_oob_authenticate_messages`); a Poly1305 key must never tag two
+messages, so its caller derives one per message. Not wired into the OOB yet.
+
+`prte_hmac.[ch]` - SHA-256 and HMAC-SHA256, checked against the FIPS 180-4 and
+RFC 4231 vectors in `test/unit/util` - is generic code (so is
+`prte_poly1305.[ch]`), and the rule below says generic code belongs in PMIx.
+It is here for now because PRRTE must not wait on a PMIx release to
+authenticate its own daemons; if PMIx grows the same primitives, use them and
+delete these. Compare a received proof with `prte_secure_equal`, never
+`memcmp`.
 
 ## `prte_process_info`
 
