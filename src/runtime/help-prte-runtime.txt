@@ -409,3 +409,13 @@ is not a NAME=value assignment:
    Entry:  %s
 
 The job was not started. Give each environment entry as NAME=value.
+#
+[spawn-maxprocs]
+A request to start a job asked for a negative number of processes for
+an application:
+
+   Application:  %s
+   Processes:    %d
+
+The job was not started. Give the number of processes to start, or zero
+to have the mapper decide how many.
