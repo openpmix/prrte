@@ -294,8 +294,8 @@ legitimately be NULL**. Neither is corruption:
   loss marks `TERM_WO_SYNC`, a later abort delivers a second terminal
   state), the second arrival can land after that.
 
-Reading either unconditionally took the HNP down — and on the HNP that is
-the whole DVM, not one job. Both are now a no-op return at the top, and
+Reading either unconditionally dereferenced a NULL and faulted the HNP.
+Both are now a no-op return at the top, and
 [`test/unit/state/test_state.c`](../../../test/unit/state/test_state.c)
 pins both. The same care applies to the two **copies** of this logic named
 under "Gotchas" in [`dvm/AGENTS.md`](dvm/AGENTS.md): `check_complete` and

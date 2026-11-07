@@ -304,7 +304,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
      * A second path used to run here for an unmanaged allocation, assembling
      * the list from the app specs and looking each name up in the pool. It
      * reached the same set by a longer route - nothing outside the pool could
-     * ever survive it either - but it bypassed the checks this one applies,
+     * ever survive it either - but it skipped the checks this one applies,
      * notably that an unallocated head node is not usable just because
      * someone named it.
      */

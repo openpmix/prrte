@@ -81,7 +81,7 @@ int prte_plm_base_set_hnp_name(void)
  * test an unnamed job passes through silently succeeds.  That has bitten
  * this code base repeatedly: it disabled a reservation's ownership gate,
  * it let one application's early failure be taken for the daemon job and
- * bring the whole DVM down, and it let a completing job clear another
+ * terminate the DVM, and it let a completing job clear another
  * job's slot in session->jobs.  Each was repaired where it was found; a
  * job that has a name from the outset cannot raise the next one.
  *

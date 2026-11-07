@@ -1655,11 +1655,10 @@ pmix_status_t prte_ras_base_parse_node_list(pmix_info_t *info, char **ndstring)
  * client's data straight through - so every value in it arrived from a
  * client or a tool and may be of any type.  Taking value.data.string from an
  * entry that is not a string yields whatever the union happened to hold, and
- * the first strdup/strcmp/PMIX_LOAD_NSPACE of it faults the HNP: any
- * connected process could take the DVM down with a one-line allocation
- * request.  Refuse instead, as PMIX_ALLOC_NODE_LIST and the activate
- * directives already do - a caller that mistyped a key has to be told, not
- * quietly handed a reservation it cannot name.
+ * the first strdup/strcmp/PMIX_LOAD_NSPACE of it faults the HNP.  Refuse
+ * instead, as PMIX_ALLOC_NODE_LIST and the activate directives already do -
+ * a caller that mistyped a key has to be told, not quietly handed a
+ * reservation it cannot name.
  */
 static bool ras_base_get_string(const pmix_info_t *info, char **value)
 {

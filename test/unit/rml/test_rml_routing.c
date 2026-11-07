@@ -820,7 +820,7 @@ static int test_reconcile_ancestry(void)
     }
 
     /*
-     * (d) The regression that used to take the DVM down.  The HNP loses rank 1
+     * (d) The regression that used to force an exit.  The HNP loses rank 1
      * and adopts rank 5 directly, so the adoption notice it sends carries the
      * shortest list there is: [0].  Rank 5 has not noticed anything yet, so its
      * own list is [0,1] -- one entry longer.
@@ -925,7 +925,7 @@ static int test_reconcile_ancestry(void)
      * fatal by construction rather than recoverable.  A well-formed report can
      * never ask for it, since every ancestor list begins with 0 and index 0
      * therefore never differs; an empty one reaching a daemon that is NOT the
-     * root would fall into the tail loop and take the whole DVM with it.
+     * root would fall into the tail loop and never leave it.
      */
     report = mk_ranks(NULL, 0);
     bitmaps_reset();
@@ -1031,7 +1031,7 @@ static int test_dead_dmns_round_trip(void)
     CHECK("a live rank is not marked departed",
           !pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, 3));
 
-    /* garbage must not take the daemon down, and must not be believed */
+    /* garbage must be parsed without a fault, and must not be believed */
     bitmaps_reset();
     prte_rml_load_dead_dmns(NULL);
     prte_rml_load_dead_dmns("");

@@ -177,7 +177,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     /* Everything below is assembled by walking the job's map, and a job
      * object outlives its map: the map is released when the job completes
      * and the object itself not until cleanup_job, a later event.  A caller
-     * that reaches us in between would take the daemon down here.  The
+     * that reaches us in between would dereference a NULL map here.  The
      * caller that can hit that window - the wildcard direct-modex arm of
      * dmodex_req() - screens for it itself, because it owes its client an
      * answer rather than merely a survival; this is the backstop for the

@@ -570,7 +570,7 @@ survives the trip to a remote daemon — the envar directives are applied
 by `setup_fork` on the prted that forks the process, `--output file=…`
 is written per-daemon, and a job's personality is resolved again on
 every daemon by `odls`. Those cases, plus "an unknown personality must
-be refused without taking a persistent DVM down", live there.
+be refused and the DVM keep running", live there.
 
 ---
 

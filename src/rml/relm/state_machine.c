@@ -180,9 +180,9 @@ PMIX_CLASS_INSTANCE(start_msg_caddy_t, pmix_object_t, con_msg_cd, des_msg_cd);
  * PRTE_RELM_UID_MAX, and a plain "next_uid++" walked straight through them on
  * its way back to zero. That is not a wrap, it is a poisoned signature:
  * prte_relm_get_msg() refuses any UID above the max and answers NULL, so
- * three of every 2^32 reliable messages took the daemon down rather than
- * being sent. Step over the sentinels so the wrap the design documents is the
- * wrap the code performs.
+ * three of every 2^32 reliable messages faulted the daemon on that NULL
+ * rather than being sent. Step over the sentinels so the wrap the design
+ * documents is the wrap the code performs.
  */
 prte_relm_uid_t prte_relm_next_uid(void){
     prte_relm_uid_t uid = prte_relm_sm->next_uid;

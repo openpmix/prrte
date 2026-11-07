@@ -468,8 +468,7 @@ bootstrap_start() {
 #
 #   - a mapping request that cannot be satisfied must fail the job and leave
 #     the DVM standing.  A mapper that walks off the end of its node list
-#     takes the HNP down with it, and on a persistent DVM that is every other
-#     user's job too, not just the one that asked.
+#     faults the HNP, so the case checks the DVM still answers afterwards.
 #   - the user-ranked mappers (rankfile, seq) name hosts.  With one node, any
 #     placement is the right placement; the rank -> host assignment only
 #     means something when there is more than one host to get wrong.
@@ -1897,11 +1896,11 @@ test_state() {
     # processes must decline, leave the targets alone, and still run the job.
     cleanup_swarm
     for n in 1 2; do
-        ON $n 'rm -rf /tmp/statelog /tmp/statelog-victim; mkdir -p /tmp/statelog
-               echo original > /tmp/statelog-victim' >/dev/null 2>&1
+        ON $n 'rm -rf /tmp/statelog /tmp/statelog-target; mkdir -p /tmp/statelog
+               echo original > /tmp/statelog-target' >/dev/null 2>&1
     done
-    RUN 'ln -s /tmp/statelog-victim /tmp/statelog/prtectrlr-$(hostname)-log' >/dev/null 2>&1
-    ON 2 'ln -s /tmp/statelog-victim /tmp/statelog/prted-$(hostname)-log' >/dev/null 2>&1
+    RUN 'ln -s /tmp/statelog-target /tmp/statelog/prtectrlr-$(hostname)-log' >/dev/null 2>&1
+    ON 2 'ln -s /tmp/statelog-target /tmp/statelog/prted-$(hostname)-log' >/dev/null 2>&1
     out=$(RUN 'timeout 90 prterun --prtemca state_base_log_jobstate 1 \
                    --prtemca state_base_log_procstate 1 \
                    --prtemca state_base_log_path /tmp/statelog \
@@ -1910,7 +1909,7 @@ test_state() {
     [ "$n" = 2 ] && ok "the job ran with the state log declined" \
                  || bad "the job did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     for h in 1 2; do
-        c=$(ON $h 'cat /tmp/statelog-victim' 2>/dev/null)
+        c=$(ON $h 'cat /tmp/statelog-target' 2>/dev/null)
         [ "$c" = original ] \
             && ok "node$h: the symlink's target was left alone" \
             || bad "node$h: the state log was written thru the symlink ($(echo "$c" | wc -l | tr -d ' ') lines)"
@@ -1921,7 +1920,7 @@ test_state() {
             && bad "node$h: a log was written under another name -- the planted link missed" \
             || ok "node$h: no log was written under any other name"
     done
-    for n in 1 2; do ON $n 'rm -rf /tmp/statelog /tmp/statelog-victim' >/dev/null 2>&1; done
+    for n in 1 2; do ON $n 'rm -rf /tmp/statelog /tmp/statelog-target' >/dev/null 2>&1; done
     cleanup_swarm
 }
 
@@ -3898,14 +3897,14 @@ test_prted() {
     elif ! prted_dvm_start 'node1:2,node2:2'; then
         bad "could not start a DVM for the tool-rank test"
     else
-        out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout 20 $ROLETOOL - impersonate \$PMIX_NAMESPACE 7; true' 2>&1; echo RC=\$?")
+        out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'timeout 20 $ROLETOOL - claim \$PMIX_NAMESPACE 7; true' 2>&1; echo RC=\$?")
         echo "$out" | grep -qE 'ROLE INIT PMIX_ERR_(EXISTS|NOT_FOUND)' \
             && ok "a tool naming an unused rank of an application job was refused" \
             || bad "a tool naming an unused rank of an application job was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         echo "$out" | grep -q 'RC=0' \
             && ok "...and the job completed" \
             || bad "...but the job never completed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
-        out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'echo JOB \$PMIX_NAMESPACE \$PMIX_RANK; timeout 20 $ROLETOOL - impersonate \$PMIX_NAMESPACE \$PMIX_RANK; true' 2>&1; echo RC=\$?")
+        out=$(RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --host node2:1 -n 1 sh -c 'echo JOB \$PMIX_NAMESPACE \$PMIX_RANK; timeout 20 $ROLETOOL - claim \$PMIX_NAMESPACE \$PMIX_RANK; true' 2>&1; echo RC=\$?")
         job=$(echo "$out" | tr -d '\r' | sed -n 's/^JOB //p')
         name=$(echo "$out" | tr -d '\r' | sed -n 's/^ROLE NAME //p')
         echo "$out" | grep -q 'ROLE INIT PMIX_SUCCESS' \
@@ -5074,7 +5073,7 @@ test_hwloc() {
     # diagnostic was followed by a segfault in the HNP inside hwloc.
     echo "$out" | grep -qE 'Segmentation fault|Bus error|signal' \
         && bad "the HNP crashed after refusing the cpu-set: $(echo "$out" | tr '\n' ' ' | tail -c 300)" \
-        || ok "the refusal did not take the HNP down"
+        || ok "the HNP did not fault after the refusal"
     # an id past the end of the topology is the same class of mistake
     out=$(RUN 'timeout 60 prterun --prtemca hwloc_default_cpu_list 0,99 \
                    --host node2:1 -n 1 hostname' 2>&1)
@@ -5083,7 +5082,7 @@ test_hwloc() {
                    || bad "a cpu-set of 0,99 was accepted on an 8-core node"
     echo "$out" | grep -qE 'Segmentation fault|Bus error|signal' \
         && bad "the HNP crashed on an out-of-range cpu-set: $(echo "$out" | tr '\n' ' ' | tail -c 300)" \
-        || ok "an out-of-range cpu-set did not take the HNP down"
+        || ok "the HNP did not fault on an out-of-range cpu-set"
     cleanup_swarm
 
     banner "hwloc: every node's topology can be printed"
@@ -10376,7 +10375,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     # (state_dvm's release path removes the job from session->jobs and hands
     # the session to prte_pmix_server_session_job_terminated). With the
     # job-side pointer borrowed rather than counted, that read is of freed
-    # memory and it takes the HNP with it.
+    # memory and the HNP faults.
     #
     # Gated on PMIX_CAP_TOOL_FINALIZED for the same reason the departing-tool
     # case above is: without it the host is never told the tool went, the
@@ -11447,13 +11446,13 @@ test_macos() {
     fi
     rm -f "$BOUT"; macpk
 
-    banner "macOS: a rejected spawn request must not take the DVM down"
+    banner "macOS: the DVM keeps running after a rejected spawn request"
     # The HNP unpacks a job object from a spawn request before validating
     # anything about it, so a request it then rejects exercises the error path
     # that answers the requester and disposes of that half-built job. The DVM
-    # has to survive it: a persistent DVM that dies on one bad prun takes
-    # every other job on the machine with it. Single host is enough - the
-    # request is rejected at the HNP, before any daemon is involved.
+    # has to keep running and launching jobs afterwards. Single host is
+    # enough - the request is rejected at the HNP, before any daemon is
+    # involved.
     macpk; sleep 1
     bounded 60 "$B/prte" --daemonize; sleep 3
     if mypgrep prte; then

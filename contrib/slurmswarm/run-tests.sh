@@ -1919,14 +1919,14 @@ elastic_tainted_hostname_group() {
     # command separator: it must be refused outright, and nothing may run.
     # The stake is higher against a real scheduler -- the command that would
     # be built here is one a live slurmctld would act on.
-    SA 'rm -f /tmp/pwned' >/dev/null 2>&1
-    out=$(SA "timeout 90 elastic shrink 'node9;touch /tmp/pwned'" 2>&1)
+    SA 'rm -f /tmp/hostname-cmd-ran' >/dev/null 2>&1
+    out=$(SA "timeout 90 elastic shrink 'node9;touch /tmp/hostname-cmd-ran'" 2>&1)
     echo "$out" | grep -q 'REJECTED' \
         && ok "a release naming a tainted hostname was refused" \
         || bad "tainted hostname not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
-    SA 'test -e /tmp/pwned' \
-        && bad "the injected command RAN -- hostname validation is not holding" \
-        || ok "the injected command never ran"
+    SA 'test -e /tmp/hostname-cmd-ran' \
+        && bad "the command in the hostname RAN -- hostname validation is not holding" \
+        || ok "the command in the hostname never ran"
     SA 'pgrep -x prte >/dev/null' && ok "HNP survived the tainted request" \
                                   || bad "HNP died on a tainted hostname"
 }
