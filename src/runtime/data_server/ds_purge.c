@@ -274,6 +274,14 @@ void prte_data_server_purge_local(const pmix_proc_t *target,
                                   pmix_persistence_t horizon,
                                   uint32_t qualifier)
 {
+    pmix_proc_t t;
+
+    /* Work from a copy.  The purge releases parked requests and stored
+     * items as it goes, and a target taken from one of them - a request's
+     * requestor, say - would be read again, for the next comparison, after
+     * the object holding it had been freed. */
+    PMIX_XFER_PROCID(&t, target);
+
     /* A store nothing was ever published into is an array of one empty
      * slot, so this costs nothing in the case that matters: the PROC
      * horizon fires once per terminating process, and almost no job
@@ -282,8 +290,8 @@ void prte_data_server_purge_local(const pmix_proc_t *target,
                         "%s data server: purge at %s horizon, data from %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIx_Persistence_string(horizon),
-                        PMIX_NAME_PRINT(target));
-    purge_store(target, horizon, qualifier);
+                        PMIX_NAME_PRINT(&t));
+    purge_store(&t, horizon, qualifier);
 }
 
 void prte_ds_purge(pmix_proc_t *sender,
