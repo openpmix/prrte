@@ -107,8 +107,8 @@ prte_rml_ancestry_t prte_rml_reconcile_ancestry(pmix_data_array_t* report,
     // the middle of a real list and nonsense for a slot invented past its end -
     // padding a report of [0] (all the HNP sends when it adopts a grandchild
     // directly) produced [0,2] at radix 2, rank 2 being the root's OTHER child
-    // and no ancestor of ours at all. That reconciled against nothing and took
-    // the DVM down with a FORCED_EXIT, in exactly the race the notice exists to
+    // and no ancestor of ours at all. That reconciled against nothing and
+    // forced the DVM to exit, in exactly the race the notice exists to
     // settle. A legitimately shorter report is what the tail loop below is for.
     prte_rml_update_ancestors(report);
 

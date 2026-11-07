@@ -715,7 +715,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     /* the map has to exist before the first "goto cleanup" can run: the
      * cleanup label walks jdata->map->nodes to reset the flags this map
      * set, and a job that arrives here without a map - every job that has
-     * not been mapped before - would take the HNP down inside its own
+     * not been mapped before - would dereference a NULL map inside its own
      * error handler */
     if (NULL == jdata->map) {
         jdata->map = PMIX_NEW(prte_job_map_t);

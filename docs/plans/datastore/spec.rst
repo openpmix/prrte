@@ -529,9 +529,9 @@ publishers who never asked for the change.
     The Standard says the data is retained "until specifically deleted",
     and only the publisher may specifically delete it.  In a DVM that
     outlives the publisher, that is a permanent allocation made by a
-    process that no longer exists, and repeating it is a
-    denial-of-service that needs no malice — a crash loop that
-    republishes under a fresh namespace gets there on its own.  PRRTE
+    process that no longer exists, and repeating it grows the store
+    without bound — an ordinary crash loop that republishes under a
+    fresh namespace does exactly that.  PRRTE
     retains such an item for as long as it is being used and reclaims it
     when it is not.
 

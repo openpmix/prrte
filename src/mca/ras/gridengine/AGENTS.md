@@ -46,7 +46,7 @@ framework `ras_base_verbose`.
   `hostname` and `slots` are used (queue/arch are logged, not stored).
   **`strtok_r` returns NULL for a blank or short line** — a missing
   hostname or slot count must be skipped, not dereferenced. This runs on
-  the HNP, so a NULL deref here takes the whole DVM down.
+  the HNP, so a NULL deref here faults the HNP.
 - `query` is strict about **all four** env vars — SGE sets them
   together; loosening the gate risks selecting on a non-SGE machine.
 - `get_slot_count` is `#if 0`-guarded dead code; ignore it.

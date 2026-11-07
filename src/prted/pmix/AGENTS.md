@@ -267,7 +267,7 @@ the departure `prte_pmix_server_job_has_departed()` tests. A dmodex request
 landing in between finds a job that is present, is not yet "departed", and
 has a NULL `map`. The `PMIX_RANK_WILDCARD` arm handed that job straight to
 `prte_pmix_server_register_nspace()`, which assembles the job-level data by
-walking `map->nodes` — a NULL dereference that took the daemon down after
+walking `map->nodes` — a NULL dereference that faulted the daemon after
 the job had run correctly, so it read as a clean run with a segfault at the
 end. The proc-level arm immediately below already refused the equivalent
 case (a proc the mapper has not placed) with `PMIX_ERR_NOT_FOUND`; the
@@ -325,12 +325,12 @@ requester's index so the reply can find its way home:
 | monitor | `..._MONITOR_REQUEST` | `..._MONITOR_RESP` |
 | log | `PRTE_RML_TAG_LOGGING` | `..._LOGGING_RESP` |
 
-When adding to a relay, remember that the index arriving on the wire is
-untrusted input. `pmix_pointer_array_get_item()` bounds-checks and
+When adding to a relay, remember that the index arriving on the wire has
+not been checked. `pmix_pointer_array_get_item()` bounds-checks and
 returns NULL, so check for NULL — but do not then `return` without
 completing the request, because the requester is still waiting.
 
-**And a *count* arriving on the wire is untrusted in a second way.** The
+**And a *count* arriving on the wire needs a second check.** The
 `PMIX_*_CREATE` macros multiply the count by the element size with no
 overflow guard and then run a constructor over every element they claimed,
 so a count large enough to wrap that product yields a short allocation and
@@ -374,26 +374,26 @@ answers the tool.
 **The info array on a tool connection is the tool's own, straight off the
 wire.** `ptl_base_connection_hdlr.c` unpacks whatever the connecting
 process sent and hands it to the `tool_connected` upcall with only the
-uid/gid/version appended, so `_toolconn()` is parsing untrusted input in
+uid/gid/version appended, so `_toolconn()` is parsing unchecked input in
 exactly the way `prte_pmix_xfer_job_info()` is - see the NULL-value rule
 under "Directive translation" below, which is the same rule. It bit here
 too: `PMIX_HOSTNAME` and `PMIX_CMD_LINE` were `strdup`ed unchecked, and a
 `PMIX_STRING` carrying no string survives the wire as a NULL (the packer
-writes a zero length, the unpacker hands back NULL), so any tool could
-segfault the daemon it attached to by connecting.
+writes a zero length, the unpacker hands back NULL), so the daemon passed
+that NULL to `strdup` and faulted.
 
-**A directive's value is untrusted until its type has been checked, and
+**A directive's value cannot be read until its type has been checked, and
 `job_control` is the second place that bit.** The directives reach
 `process_job_ctrl()` exactly as the client sent them - PMIx's job-control
 path forwards the array to the host without inspecting what any entry holds
 - so reading a fixed member of the value union is reading whatever eight
 bytes the caller chose to put there. `PMIX_JOB_CTRL_DEFINE_PSET` took the
 pset name straight from `value.data.string` and handed it to the packer,
-which calls `strlen` on it: any process attached to a daemon could fault it
-with one `PMIx_Job_control` carrying that key with, say, a `PMIX_SIZE`
-value. Check the type, and check the string is there - and while you are
-about it check the parts of the request the *receiving* daemon will need,
-because a directive that is merely useless rather than fatal still gets
+which calls `strlen` on it: a `PMIX_SIZE` value under that key had its
+number passed to `strlen` as a pointer, and the daemon faulted. Check the
+type, and check the string is there - and while you are about it check
+the parts of the request the *receiving* daemon will need, because a
+directive that is merely useless rather than fatal still gets
 broadcast to the whole DVM and answered with success. A pset with no members
 is the case: `PMIx_Proc_create(0)` returns NULL and PMIx refuses a set with
 no name or no members, so every daemon logged an error and the requestor was
@@ -858,10 +858,10 @@ the job store, and that is the half it is easy to miss. `PMIX_MEM_ALLOC_KIND`
 is not a key `prte_pmix_xfer_job_info()` recognizes, so its default arm
 caches the spawn directive **verbatim** and PMIx registers it with whatever
 type the spawning client chose. `PMIx_Get` hands it straight back, so
-reading `data.string` off it is reading the client's eight bytes again — any
-process able to spawn could fault the daemon answering the query. What this
-file fetches out of the job store is requestor data wearing a server's
-clothes; check its type on the way out as carefully as on the way in.
+reading `data.string` off it is reading the client's eight bytes again, and
+the daemon answering the query faulted on them. What this file fetches out
+of the job store is requestor data wearing a server's clothes; check its
+type on the way out as carefully as on the way in.
 
 ### An unknown namespace is not always a client error
 
@@ -1091,9 +1091,9 @@ onto PRRTE job and app attributes. Notes for extending them:
   `PMIX_WDIR` (`pmix_path_is_absolute` dereferences its argument
   immediately), and both timeout keys — `PMIX_CONVERT_TIME` indexes
   `tmp[sz-1]` without checking that the split produced anything, so a NULL
-  string faults *inside PMIx*. Any of these let a client segfault the
-  daemon it was attached to with one `PMIx_Spawn`, which is why
-  `test_xfer_job_info` now pins each of them.
+  string faults *inside PMIx*. Each of these faulted the daemon the spawn
+  request arrived at, which is why `test_xfer_job_info` now pins each of
+  them.
 - **Read a number with `PMIx_Value_get_number()`, never off a fixed union
   member.** `u16 = info->value.data.uint32` reads four bytes of a union the
   caller may have filled with two, which the truncation back to `uint16_t`
@@ -1405,13 +1405,12 @@ The parts that matter when editing this file:
   cannot (`PROVISION_*`, anything asking it to *choose* machines).
 - **Every value in the request is the caller's own, and this upcall is
   reachable by any application process or tool attached to any daemon.** It is
-  the same untrusted-input rule as `_toolconn()` and `process_job_ctrl()` under
+  the same unchecked-input rule as `_toolconn()` and `process_job_ctrl()` under
   "The relay pattern", in another place, and the strings are the fault version
   of it: `PMIX_SESSION_CTRL_ID`, `PMIX_ALLOC_ID`, `PMIX_ALLOC_REQ_ID`,
   `PMIX_ALLOC_TIME`, `PMIX_PERSONALITY` and `PMIX_NSPACE` all go on to a
-  `strdup`, a `strlen` or a parser, so a mistyped one faulted the daemon on a
-  path that needs no authorization at all (the time is read during the parse,
-  before anyone has asked who is calling). `get_string_directive()` is the one
+  `strdup`, a `strlen` or a parser, so a mistyped one faulted the daemon
+  while the request was being parsed. `get_string_directive()` is the one
   place they are read; keep it that way. `PMIX_ALLOC_INHERITANCE` is the quiet
   half of the same rule — it decides whether the session's nodes are handed
   *away* to the scheduler, so it is read with `PMIx_Value_get_number()`,
@@ -1730,18 +1729,17 @@ it is enforced here:
 **An event's info array is the generating client's own, and it reaches every
 daemon in the DVM.** PMIx hands what a process passed to `PMIx_Notify_event`
 straight to the host without inspecting what any entry holds — the same
-untrusted-input rule as `_toolconn()` and `process_job_ctrl()` under "The
-relay pattern", in a third place, and the worst-placed of the three because
-the host's answer to the event is to broadcast it. So anything in here that
-*reads* an entry must check `value.type` first:
+unchecked-input rule as `_toolconn()` and `process_job_ctrl()` under "The
+relay pattern", in a third place, and here the host's answer to the event
+is to broadcast it, so the same entries are read on every daemon. So
+anything in here that *reads* an entry must check `value.type` first:
 `prte_pmix_server_group_member_left()` took the `PMIX_GROUP_ID` off
-`value.data.string` and the departing proc off `value.data.proc`, so one
-`PMIx_Notify_event(PMIX_GROUP_LEFT, ...)` carrying either key with, say, a
-`PMIX_SIZE` value faulted every daemon at once, on the `strcmp` or on the
-`PMIX_CHECK_PROCID`. Any process attached to any daemon could send it, and
-the registry is non-empty on every daemon from the first successful
-`PMIx_Group_construct` onwards, because `grpcomm_group.c` appends the group
-everywhere.
+`value.data.string` and the departing proc off `value.data.proc` without
+checking the type, so a `PMIX_GROUP_LEFT` event carrying either key with a
+non-pointer value had that value dereferenced on each daemon, on the
+`strcmp` or on the `PMIX_CHECK_PROCID`. The registry is non-empty on every
+daemon from the first successful `PMIx_Group_construct` onwards, because
+`grpcomm_group.c` appends the group everywhere, so the lookup always ran.
 
 The identity has to be concrete as well as well-typed. `PMIX_CHECK_PROCID`
 counts an empty nspace and a wildcard rank as matching anything, so a

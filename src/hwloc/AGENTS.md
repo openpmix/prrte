@@ -422,7 +422,7 @@ wraps it and is what produces `prte_node_t.available`.
   tokenizes to the single id `1`. The grammar cannot express a negative id.
 - **`prte_hwloc_base_filter_cpus()` never returns NULL.** Its result goes
   straight into `prte_node_t.available`, which the mapper copies and
-  intersects without checking; a NULL there took the HNP down inside hwloc.
+  intersects without checking; hwloc dereferenced a NULL there and faulted.
   An unresolvable cpu-set yields an **empty** set, so the node offers
   nothing and the mapper reports it through its normal path — the user has
   already been told which entry failed.

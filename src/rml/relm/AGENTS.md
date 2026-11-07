@@ -164,9 +164,9 @@ new neighbors so in-flight messages resume over the repaired tree.
   by `prte_relm_next_uid()` and not by a bare `next_uid++`. The bare increment
   walked through all three on its way back to zero, and a UID above the max is
   not a wrap but a poisoned signature: `prte_relm_get_msg()` refuses it and
-  answers NULL, so three of every 2^32 reliable messages took the daemon down
-  instead of being sent. Every lookup helper enforces `PRTE_RELM_UID_MAX`;
-  anything that generates a UID must respect it.
+  answers NULL, so three of every 2^32 reliable messages faulted the daemon on
+  that NULL instead of being sent. Every lookup helper enforces
+  `PRTE_RELM_UID_MAX`; anything that generates a UID must respect it.
 - **A signature collision is fatal, by decision.** Two live messages under one
   `<src,uid,dst>` cannot both be delivered, and the one that is dropped is
   silently lost by the layer that exists to not lose it — with no way to tell

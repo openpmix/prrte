@@ -18,7 +18,7 @@
  *   roletool <uri> parent <nspace> <rank>
  *   roletool <uri> instantiate <session-id> <hosts>
  *   roletool <uri> pset <name> <nspace> <rank>
- *   roletool <uri> impersonate <nspace> <rank>
+ *   roletool <uri> claim <nspace> <rank>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
  * DVM's rendezvous files are readable by its own user only. A <uri> of "-"
@@ -30,12 +30,12 @@
  *   parent       start /bin/true, naming <nspace>:<rank> as its parent
  *   instantiate  create session <session-id> holding <hosts>
  *   pset         define process set <name> holding <nspace>:<rank>
- *   impersonate  connect naming itself <nspace>:<rank>, then leave
+ *   claim        connect naming itself <nspace>:<rank>, then leave
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
  *   ROLE INIT <status>
- *   ROLE NAME <nspace> <rank>    (impersonate: the name it connected under)
+ *   ROLE NAME <nspace> <rank>    (claim: the name it connected under)
  *   ROLE SPAWN <status>
  *   ROLE SESSION <status>
  *   ROLE PSET <status>
@@ -104,7 +104,7 @@ static void usage(const char *name)
     fprintf(stderr,
             "usage: %s <uri> scheduler | spawn | parent <nspace> <rank> |"
             " instantiate <session-id> <hosts> | pset <name> <nspace> <rank> |"
-            " impersonate <nspace> <rank>\n",
+            " claim <nspace> <rank>\n",
             name);
 }
 
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
     if ((0 == strcmp(op, "parent") && 5 != argc) ||
         (0 == strcmp(op, "instantiate") && 5 != argc) ||
         (0 == strcmp(op, "pset") && 6 != argc) ||
-        (0 == strcmp(op, "impersonate") && 5 != argc)) {
+        (0 == strcmp(op, "claim") && 5 != argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     if (0 != strcmp(argv[1], "-")) {
         PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_SERVER_URI, argv[1], PMIX_STRING);
     }
-    if (0 == strcmp(op, "impersonate")) {
+    if (0 == strcmp(op, "claim")) {
         /* a tool chooses its own name, including one that is taken */
         char *end;
         unsigned long ul;
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
         errno = 0;
         ul = strtoul(argv[4], &end, 10);
         if (0 != errno || end == argv[4] || '\0' != *end || PMIX_RANK_VALID <= ul) {
-            fprintf(stderr, "%s: impersonate: '%s' is not a rank\n", argv[0], argv[4]);
+            fprintf(stderr, "%s: claim: '%s' is not a rank\n", argv[0], argv[4]);
             return 1;
         }
         rank = (pmix_rank_t) ul;
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
     if (0 == strcmp(op, "scheduler")) {
         rc = PMIX_SUCCESS;
 
-    } else if (0 == strcmp(op, "impersonate")) {
+    } else if (0 == strcmp(op, "claim")) {
         /* PMIx may have connected it under a fresh name instead */
         printf("ROLE NAME %s %u\n", myproc.nspace, myproc.rank);
         rc = PMIX_SUCCESS;

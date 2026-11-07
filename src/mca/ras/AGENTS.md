@@ -544,13 +544,11 @@ client's `pmix_info_t[]` straight through, and nothing between there and here
 inspects it. So **never read `value.data.<member>` without first establishing
 the type**. A `PMIX_ALLOC_ID` sent as an integer, taken as `.string`, is a
 wild pointer, and the first `strdup`/`strcmp`/`PMIX_LOAD_NSPACE` of it faults
-the **HNP** — i.e. any process or tool that can connect to the DVM could take
-it down with a one-line allocation request. `ras_base_get_string()` is the
-string reader every directive in `ras_base_allocate.c` goes through, and it
-answers `PMIX_ERR_BAD_PARAM` rather than ignoring a mistyped key, because a
-caller that mistyped one needs to be told and not quietly handed a
-reservation it cannot name. `prte_ras_base_parse_node_list()` does the same
-for `PMIX_ALLOC_NODE_LIST`.
+the **HNP**. `ras_base_get_string()` is the string reader every directive in
+`ras_base_allocate.c` goes through, and it answers `PMIX_ERR_BAD_PARAM`
+rather than ignoring a mistyped key, because a caller that mistyped one
+needs to be told and not quietly handed a reservation it cannot name.
+`prte_ras_base_parse_node_list()` does the same for `PMIX_ALLOC_NODE_LIST`.
 
 `PMIX_ALLOC_INHERITANCE` has **two** legitimate spellings and both must be
 accepted: `PMIX_ALLOC_INHERIT`, the attribute's own type and the one the PMIx
@@ -742,11 +740,11 @@ documented in each component's guide.
   reachable from user input: `--display topo=';'` used to fault the HNP in
   `prte_ras_base_allocate`'s topology dump.
 - **A parser reading an RM's file or env must tolerate malformed input.**
-  These run on the HNP, so a NULL deref on a blank line takes the whole
-  DVM down. `strtok_r` returns NULL for a short line; `fgets` does not
-  guarantee a trailing newline; and every `ctype.h` call needs its
-  argument cast to `unsigned char` (a plain `char` is UB for any byte
-  with the high bit set).
+  These run on the HNP, so a NULL deref on a blank line faults the HNP.
+  `strtok_r` returns NULL for a short line; `fgets` does not guarantee a
+  trailing newline; and every `ctype.h` call needs its argument cast to
+  `unsigned char` (a plain `char` is UB for any byte with the high bit
+  set).
 - Standard PRRTE rules apply: `prte_config.h` first, braces on every
   block, `NULL ==`/constant-on-left, no new warnings,
   `PRTE_ERROR_LOG`/`PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED)`

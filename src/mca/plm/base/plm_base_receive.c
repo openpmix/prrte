@@ -627,8 +627,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
              * enough to name the wrong node - or, past the end of the pool,
              * none at all.
              *
-             * Not knowing where a tool sits is also not a reason to bring the
-             * DVM down, which is what the old NOT_FOUND did: it fell through
+             * Not knowing where a tool sits is also not a reason to make the
+             * DVM exit, which is what the old NOT_FOUND did: it fell through
              * to the master's CLEANUP, which activates FORCED_EXIT. Record
              * what we know and carry on. */
             daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -704,7 +704,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
          * anything), so until it is named, every identity test this job
          * passes through succeeds against every other namespace in the DVM.
          * It is not a hypothetical: an unnamed job has been mistaken for the
-         * daemon job by errmgr/dvm and taken the whole DVM down with it, has
+         * daemon job by errmgr/dvm, which then terminated the DVM, has
          * opened a reservation to every namespace by being recorded as its
          * owner, and has cleared another job's slot in session->jobs.
          *
