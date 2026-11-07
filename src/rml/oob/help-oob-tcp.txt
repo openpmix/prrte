@@ -180,13 +180,3 @@ match was changed between the two daemons, or was not sent by the
 daemon this connection was opened with. Both daemons must also come
 from the same build. If the network path between these nodes is
 known to be reliable, please report this to the PRRTE developers.
-#
-[msg-auth-unfinished]
-PRRTE was asked to tag the messages between its daemons
-("prte_oob_authenticate_messages"), which this build cannot yet do:
-
-  node:  %s
-
-The parameter is reserved for that feature, and is refused rather than
-ignored so that no DVM runs believing its messages are tagged when they
-are not. Turn it off to start the DVM.
