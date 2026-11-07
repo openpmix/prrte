@@ -1297,8 +1297,8 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
     }
 
     /* the vtable slot is optional, so a module that left it unset would
-     * otherwise take the daemon down with a NULL call - which is what used
-     * to happen on every daemon but the master, killing the very daemon the
+     * otherwise be called through a NULL pointer - which is what used to
+     * happen on every daemon but the master, faulting the daemon the
      * requesting tool was attached to */
     if (NULL == prte_iof.push_stdin) {
         cd->cbfunc(PMIX_ERR_NOT_SUPPORTED, cd->cbdata);

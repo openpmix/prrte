@@ -164,8 +164,8 @@ The other half of that function is worth knowing before you write anything
 that names "our" job: **an empty namespace is not a safe way to say "no
 job".** Handed to the job-control path it is packed into the daemon command
 verbatim, and `prted_comm.c` reads an empty namespace as *every* job — so
-the signal is delivered to every process in the DVM, other users' jobs
-included. Check for it explicitly.
+the signal is delivered to every process in the DVM. Check for it
+explicitly.
 
 There are two ways to arrive there with one, and both are live. In `prte.c`
 a persistent DVM has no job of its own, so `spawnednspace` is only ever set

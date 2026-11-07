@@ -258,10 +258,11 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * the departure the guard above tests.  So a request landing in
          * between finds a jdata that is present, is not yet "departed", and
          * has nothing left to say about placement;
-         * prte_pmix_server_register_nspace() walks map->nodes and takes the
-         * daemon down.  That window is easy to hit exactly where the comment
-         * above says it is - a parent asking about the child it just spawned
-         * (examples/dynamic.c) when the child was short-lived.
+         * prte_pmix_server_register_nspace() walks map->nodes and
+         * dereferences the NULL map.  That window is easy to hit exactly
+         * where the comment above says it is - a parent asking about the
+         * child it just spawned (examples/dynamic.c) when the child was
+         * short-lived.
          *
          * Refuse it the way the proc-level branch below refuses a proc the
          * mapper has not placed: PMIX_ERR_NOT_FOUND is the truth, and it is

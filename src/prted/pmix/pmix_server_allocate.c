@@ -61,7 +61,7 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
 
     req = pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, req_index);
     if (NULL == req) {
-        /* The index arrived on the wire, so it is untrusted - but it is also
+        /* The index arrived on the wire, so it is unchecked - but it is also
          * OUR index, echoed back, so a miss means the request was retired
          * early and whoever is waiting on it will wait forever. There is
          * nothing to complete, so say so rather than returning in silence. */

@@ -199,7 +199,7 @@ through answers true against every namespace in the DVM. Three separate
 bugs came out of that window: the reservation-ownership grant recorded an
 empty namespace as an owner and thereby opened the reservation to
 everyone, `errmgr/dvm` took an early-failing job for the *daemon* job and
-brought the whole DVM down, and a completing job cleared another job's
+terminated the DVM, and a completing job cleared another job's
 slot in `session->jobs`. `prte_plm_base_create_jobid()` is therefore
 called immediately after the unpack, before the sender, the personality,
 the session or anything else is looked at.
@@ -230,7 +230,7 @@ vpids and pool indices run in step, and they need not: the pool holds
 every node the allocation named, including ones no daemon was ever
 launched on (excluded by a `-host`/hostfile spec, marked `DO_NOT_USE`,
 shrunk away), while vpids go only to nodes that get a daemon. And not
-knowing where a tool sits is no reason to bring the DVM down, which is
+knowing where a tool sits is no reason to make the DVM exit, which is
 what the old `NOT_FOUND` did by falling into the master's `CLEANUP`
 (→ `FORCED_EXIT`).
 

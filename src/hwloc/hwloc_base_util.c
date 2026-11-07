@@ -375,7 +375,7 @@ void prte_hwloc_base_setup_summary(hwloc_topology_t topo)
  *
  * NEVER returns NULL. Every caller assigns the result straight to
  * prte_node_t.available, which the mapper copies and intersects without
- * checking - a NULL there took the HNP down with a segfault inside hwloc
+ * checking - hwloc dereferenced a NULL there and the HNP segfaulted
  * (prte_rmaps_base_get_target_nodes -> hwloc_bitmap_copy). When the DVM's
  * cpu-set cannot be resolved against this node's topology, the honest answer
  * is that the node contributes no cpus: generate_cpuset() has already told

@@ -1373,8 +1373,8 @@ static void interim(int sd, short args, void *cbdata)
     if (NULL == jdata->schizo) {
         /* the requestor named a personality no component claims. Every later
          * use of jdata->schizo (starting with set_default_rto just below) is
-         * an unchecked dereference, so reject the request here - a bad
-         * personality string in a spawn request must not take down the DVM */
+         * an unchecked dereference, so reject the request here rather than
+         * dereference a NULL module later */
         char *prsn = (NULL == jdata->personality)
                      ? NULL : PMIx_Argv_join(jdata->personality, ',');
         prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true, prte_tool_basename,

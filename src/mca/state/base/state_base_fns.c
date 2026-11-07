@@ -1077,9 +1077,8 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
      * for PRTE_PROC_STATE_KILLED_BY_RELEASE.  state/dvm's check_complete
      * releases the map and sets jdata->map to NULL, and this routine exists
      * to be re-entered for the same proc, so a later terminal state can
-     * arrive after that.  Reading either one unconditionally took the HNP -
-     * and therefore the whole DVM - down with the proc it was trying to
-     * account for. */
+     * arrive after that.  Reading either one unconditionally dereferenced a
+     * NULL and faulted the HNP while accounting for the proc. */
     if (NULL == node || NULL == map) {
         return;
     }

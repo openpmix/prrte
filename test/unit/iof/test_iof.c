@@ -33,7 +33,7 @@
  *      is the only process that can do that routing.  A daemon that left
  *      the slot NULL segfaulted the moment a tool attached to it pushed
  *      stdin -- which every prun does, if only to mark end-of-input --
- *      taking the DVM node down and hanging the tool (issue #2568).
+ *      and the tool then hung (issue #2568).
  *
  *   3. The component identities: "hnp" and "prted" (selection needs them).
  *

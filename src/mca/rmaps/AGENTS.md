@@ -693,8 +693,8 @@ binding. It is not part of `make check` (it needs a freshly built
 show:
 
 - **An impossible mapping must fail the job and leave the DVM standing.** A
-  mapper that walks off the end of its node list takes the HNP down, and on
-  a persistent DVM that is every other user's job as well. Two cases: a
+  mapper that walks off the end of its node list faults the HNP, so the
+  test checks the DVM still answers afterwards. Two cases: a
   request past `max_slots`, and a map by an object the node does not have.
 - **The user-ranked mappers name hosts.** With one node any placement is the
   right placement; rankfile and seq only mean something when there is more

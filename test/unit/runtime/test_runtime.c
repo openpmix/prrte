@@ -23,8 +23,8 @@
  *  - prte_get_session_object_from_refid() compared against
  *    session->user_refid without checking it for NULL, so a single
  *    reservation created without a user reference id (they are optional -
- *    the sibling lookup on alloc_refid does check) crashed every subsequent
- *    lookup by refid;
+ *    the sibling lookup on alloc_refid does check) made every subsequent
+ *    lookup by refid dereference a NULL;
  *  - prte_node_match() dereferenced prte_node_pool unconditionally when
  *    asked to search the global pool, which is a NULL pointer until
  *    prte_init has laid the global arrays out;

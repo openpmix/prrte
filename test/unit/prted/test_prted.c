@@ -513,9 +513,9 @@ static int test_xfer_job_info(void)
      * PMIX_INFO_LOAD produces from a NULL - an ordinary thing for an
      * application to hand PMIx_Spawn, and something PMIx itself treats as
      * legal.  The branches that parse such a value rather than pass it on
-     * to a NULL-tolerant callee used to dereference it, so a client could
-     * segfault the daemon it was attached to with one spawn request.  Each
-     * of these must come back as a refusal, and must come back at all. */
+     * to a NULL-tolerant callee used to dereference it, and the daemon
+     * faulted.  Each of these must come back as a refusal, and must come
+     * back at all. */
     jdata = fresh_job();
     PMIX_INFO_LOAD(&info[0], PMIX_STDIN_TGT, NULL, PMIX_STRING);
     CHECK("xfer/null-stdin-tgt", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
@@ -2641,7 +2641,7 @@ static int test_query_qualifiers(void)
 }
 
 /* prte_pmix_server_register_tool() builds the daemon's job object for a
- * connecting tool out of what that tool sent, which is untrusted input from
+ * connecting tool out of what that tool sent, which arrives unchecked off
  * the wire.  It registers nothing with PMIx, so all of it can be reached
  * here, given the daemon's own job and node. */
 static int test_tool_registration(void)
@@ -4300,7 +4300,7 @@ static int test_access(void)
         /* a claim from a relay that may not make it is not believed */
         PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);
         PMIX_INFO_LOAD(&rel[1], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
-        CHECK("relay/untrusted-claim-is-the-relays",
+        CHECK("relay/unpermitted-claim-is-the-relays",
               prte_pmix_server_requester_uid(rel, 2, &got) && ACC_LISTED == got);
         PMIX_INFO_DESTRUCT(&rel[0]);
         PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &myuid, PMIX_UINT32);

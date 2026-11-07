@@ -120,7 +120,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
 
         /* a blank line yields no hostname, and a line missing the slot
          * count yields no num - either way there is nothing to add, and
-         * dereferencing them would take down the HNP */
+         * dereferencing them would fault on the NULL */
         if (NULL == ptr || NULL == num) {
             free(line);
             continue;

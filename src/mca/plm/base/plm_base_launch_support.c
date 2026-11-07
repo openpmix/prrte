@@ -221,8 +221,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     /* every path that admits a job to the launch machinery gives it a session
      * (the default one if nothing more specific), but this handler runs for
      * the daemon job too and is reached from several states - so treat a
-     * missing session as "the default pool" rather than dereferencing NULL
-     * and taking the whole DVM down with it */
+     * missing session as "the default pool" rather than dereferencing NULL */
     session = (NULL != caddy->jdata->session) ? caddy->jdata->session : prte_default_session;
     if (NULL == session || NULL == session->nodes) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -1859,7 +1858,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
          * the name, the aliases, the topology, the launched flag. setup_vm
          * links the two when it creates the daemon, so a missing node means
          * this is not a daemon we launched; say so rather than dereferencing
-         * NULL and taking the HNP down with it */
+         * NULL */
         if (NULL == daemon->node) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             prted_failed_launch = true;
