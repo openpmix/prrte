@@ -1143,6 +1143,23 @@ type is wrong - and, for an array, its element type.
 
 ## Connected assemblages (`pmix_server_connect.c`)
 
+**The endpoint entries are checked both where they enter and where they
+are used.** A connect's fence carries every `PMIX_PROC_INFO_ARRAY` and
+`PMIX_JOB_INFO_ARRAY` entry of its info (`pmix_server_connect_fn()` in
+`pmix_server_dyn.c`), and when the connect asks for data to be collected
+(`PMIX_COLLECT_DATA`, which is the caller's own directive) every
+participating daemon hands each entry to `PMIx_server_register_nspace()` as
+an update to the namespace its first element names (`connect_release()`).
+Those entries are not all PMIx's: a client's connect directives reach the
+host in the same array, under whatever key the client chose. Both ends
+therefore go through `connect_endpt_check()`: a data array of info, at
+least one element, the first a `PMIX_PROCID` naming a real process (or a
+`PMIX_NSPACE`) that is a participant of this connect. The contributing
+daemon refuses the connect on an entry that fails; the releasing daemon
+drops it, since by then the connect has completed. Without the check, the
+first element was dereferenced as whatever type was expected, and an entry
+naming a non-participant was registered against that namespace.
+
 `PMIx_Connect` is not a communication operation — the fence it runs is a
 means, not the point. What it asks for is that the host **treat the
 participants as one application for fault purposes**, and the concrete

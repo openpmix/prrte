@@ -1536,6 +1536,109 @@ pmix_status_t pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t jo
     return PMIX_SUCCESS;
 }
 
+/*
+ * Is this a connect endpoint entry we can act on, and whom does it name?
+ *
+ * A PMIx_Connect carries two kinds of entry in its fence blob, and both
+ * end up as an argument to PMIx_server_register_nspace() on every daemon
+ * that hosts a participant:
+ *
+ *   PMIX_PROC_INFO_ARRAY - a data array of info, the first naming the
+ *                          process (PMIX_PROCID) whose posted data follows
+ *   PMIX_JOB_INFO_ARRAY  - the same, the first naming a namespace
+ *                          (PMIX_NSPACE) whose job-level data follows
+ *
+ * Neither shape was checked. The array was cast and its first element
+ * dereferenced as whatever type was expected, which is only valid for a
+ * data array of info, with at least one element, whose first element has
+ * that type. And an entry naming a namespace outside the connect was
+ * registered against that namespace all the same.
+ *
+ * Entries under those keys are not all built by the PMIx server: what a
+ * client passes as connect directives reaches us too, under whatever key
+ * the client chose. So an entry is accepted only when it is the right
+ * shape and names a participant of this connect - a process that is one
+ * of them (or of a namespace given whole, by wildcard rank), or a
+ * namespace one of them belongs to. The participant list is the one the
+ * fence was run over, so every daemon applies the same test to the same
+ * blob and comes to the same answer.
+ *
+ * Returns true and fills exactly one of "proc"/"nspace" when the entry is
+ * usable. "proc" and "nspace" point into the entry, which keeps ownership.
+ */
+static bool connect_endpt_check(const pmix_info_t *entry,
+                                const pmix_proc_t *procs, size_t nprocs,
+                                const pmix_proc_t **proc, const char **nspace)
+{
+    const pmix_data_array_t *darray;
+    const pmix_info_t *first;
+    const pmix_proc_t *p = NULL;
+    const char *ns = NULL;
+    bool isproc;
+    size_t n;
+
+    *proc = NULL;
+    *nspace = NULL;
+
+    if (PMIX_CHECK_KEY(entry, PMIX_PROC_INFO_ARRAY)) {
+        isproc = true;
+    } else if (PMIX_CHECK_KEY(entry, PMIX_JOB_INFO_ARRAY)) {
+        isproc = false;
+    } else {
+        return false;
+    }
+
+    if (PMIX_DATA_ARRAY != entry->value.type) {
+        return false;
+    }
+    darray = entry->value.data.darray;
+    if (NULL == darray || PMIX_INFO != darray->type ||
+        0 == darray->size || NULL == darray->array) {
+        return false;
+    }
+    first = (const pmix_info_t *) darray->array;
+
+    if (isproc) {
+        if (!PMIX_CHECK_KEY(first, PMIX_PROCID) ||
+            PMIX_PROC != first->value.type ||
+            NULL == first->value.data.proc) {
+            return false;
+        }
+        p = first->value.data.proc;
+        /* a real process: an unset namespace or a wildcard rank would
+         * otherwise match whatever it is compared with */
+        if (PMIX_NSPACE_INVALID(p->nspace) || !PMIX_RANK_IS_VALID(p->rank)) {
+            return false;
+        }
+        ns = p->nspace;
+    } else {
+        if (!PMIX_CHECK_KEY(first, PMIX_NSPACE) ||
+            PMIX_PROC_NSPACE != first->value.type ||
+            NULL == first->value.data.nspace) {
+            return false;
+        }
+        ns = *first->value.data.nspace;
+        if (PMIX_NSPACE_INVALID(ns)) {
+            return false;
+        }
+    }
+
+    for (n = 0; n < nprocs; n++) {
+        if (!PMIX_CHECK_NSPACE_STRICT(procs[n].nspace, ns)) {
+            continue;
+        }
+        if (!isproc) {
+            *nspace = ns;
+            return true;
+        }
+        if (PMIX_RANK_WILDCARD == procs[n].rank || procs[n].rank == p->rank) {
+            *proc = p;
+            return true;
+        }
+    }
+    return false;
+}
+
 // modex callback func for connect
 static void connect_release(pmix_status_t status,
                             const char *data, size_t sz,
@@ -1545,9 +1648,9 @@ static void connect_release(pmix_status_t status,
     prte_pmix_server_req_t *md = (prte_pmix_server_req_t*)cbdata;
     pmix_byte_object_t bo;
     pmix_data_buffer_t pbkt;
-    pmix_info_t *info = NULL, infostat;
-    pmix_proc_t *procID;
-    pmix_nspace_t *nspace;
+    pmix_info_t infostat;
+    const pmix_proc_t *procID;
+    const char *nspace;
     pmix_status_t rc;
     int32_t cnt;
 
@@ -1579,25 +1682,26 @@ static void connect_release(pmix_status_t status,
         rc = PMIx_Data_unpack(NULL, &pbkt, &infostat, &cnt, PMIX_INFO);
         while (PMIX_SUCCESS == rc) {
             // only interested in the endpt data
-            if (PMIX_CHECK_KEY(&infostat, PMIX_PROC_INFO_ARRAY)) {
-                // contains an array of info
-                info = (pmix_info_t*)infostat.value.data.darray->array;
-                // procID is in first place
-                procID = info[0].value.data.proc;
-                // register this data
-                rc = PMIx_server_register_nspace(procID->nspace, -1, &infostat, 1, NULL, NULL);
-                if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-                    PMIX_ERROR_LOG(rc);
-                }
-            } else if (PMIX_CHECK_KEY(&infostat, PMIX_JOB_INFO_ARRAY)) {
-                // contains an array of job-level info
-                info = (pmix_info_t*)infostat.value.data.darray->array;
-                // nspace is in first place
-                nspace = info[0].value.data.nspace;
-                // register this data
-                rc = PMIx_server_register_nspace(*nspace, -1, &infostat, 1, NULL, NULL);
-                if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-                    PMIX_ERROR_LOG(rc);
+            if (PMIX_CHECK_KEY(&infostat, PMIX_PROC_INFO_ARRAY) ||
+                PMIX_CHECK_KEY(&infostat, PMIX_JOB_INFO_ARRAY)) {
+                /* The daemon that contributed this entry screened it (see
+                 * pmix_server_connect_fn), but this blob is every daemon's
+                 * contribution, so check it again before dereferencing it.
+                 * An entry that fails is dropped - the rest of the exchange is
+                 * still good, and the connect itself has completed. */
+                if (!connect_endpt_check(&infostat, md->procs, md->nprocs,
+                                         &procID, &nspace)) {
+                    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                        "%s connect: dropping a malformed or "
+                                        "non-participant endpoint entry",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                } else {
+                    // register this data
+                    rc = PMIx_server_register_nspace((NULL != procID) ? procID->nspace : nspace,
+                                                     -1, &infostat, 1, NULL, NULL);
+                    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+                        PMIX_ERROR_LOG(rc);
+                    }
                 }
             }
             PMIX_INFO_DESTRUCT(&infostat);
@@ -1657,6 +1761,23 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_INFO_ARRAY) ||
             PMIX_CHECK_KEY(&info[n], PMIX_JOB_INFO_ARRAY)) {
+            /* Not every entry under these keys was built by the PMIx
+             * server: a client's own connect directives arrive in this same
+             * array. Whatever goes into the blob is registered on every
+             * daemon in the fence, so refuse the connect rather than
+             * forward an entry that is malformed or names a process or
+             * namespace outside it. A conforming client never sends one. */
+            const pmix_proc_t *eproc;
+            const char *ens;
+
+            if (!connect_endpt_check(&info[n], procs, nprocs, &eproc, &ens)) {
+                pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                    "%s connect: refusing a malformed or "
+                                    "non-participant endpoint entry",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                PMIX_RELEASE(cd);
+                return PMIX_ERR_BAD_PARAM;
+            }
             rc = PMIx_Data_pack(NULL, &cd->msg, (pmix_info_t*)&info[n], 1, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_RELEASE(cd);
