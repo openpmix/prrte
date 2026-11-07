@@ -409,6 +409,31 @@ static int test_cpu_list_parse(void)
     rc = prte_hwloc_base_cpu_list_parse("", topo, false, mask);
     CHECK("empty list is refused", PRTE_SUCCESS != rc);
 
+    /* Lists that are not empty but hold no token. PMIx_Argv_split() returns
+     * NULL for those rather than an empty array, and each split in the
+     * parser was indexed without being checked. One case per split: the ';' split, the package
+     * split behind a bare "P"/"S", and the bare-core ',' split. */
+    rc = prte_hwloc_base_cpu_list_parse(";", topo, false, mask);
+    CHECK("a list of only ';' is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse(";;;", topo, false, mask);
+    CHECK("a list of only ';;;' is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse("P", topo, false, mask);
+    CHECK("a bare 'P' is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse("S", topo, false, mask);
+    CHECK("a bare 'S' is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse("p,", topo, false, mask);
+    CHECK("a 'p' naming no package is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse(",", topo, false, mask);
+    CHECK("a list of only ',' is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse("0;,", topo, false, mask);
+    CHECK("an empty item after a good one is refused", PRTE_SUCCESS != rc);
+    rc = prte_hwloc_base_cpu_list_parse("P0:", topo, false, mask);
+    CHECK("a package with no core list is refused", PRTE_SUCCESS != rc);
+    /* and the separators alone do not make a good list bad */
+    rc = prte_hwloc_base_cpu_list_parse("0;", topo, false, mask);
+    CHECK("a trailing ';' is tolerated", PRTE_SUCCESS == rc);
+    CHECK("a trailing ';' still covers the core", 2 == hwloc_bitmap_weight(mask));
+
     /* bare core ids */
     rc = prte_hwloc_base_cpu_list_parse("0-1", topo, false, mask);
     CHECK("core range parses", PRTE_SUCCESS == rc);
