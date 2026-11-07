@@ -73,6 +73,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "constants.h"
@@ -2379,6 +2380,133 @@ static int test_monitor_accounting(void)
     return failures;
 }
 
+/* A direct-modex request for a namespace this daemon has not heard of.
+ *
+ * Nothing answers such a request when its job arrives - PMIx has handed us
+ * the target and will not ask again - so it used to wait for the life of
+ * the daemon, and any later request for the same proc was parked behind it
+ * and waited too.  It now rechecks once a second, is answered NOT_FOUND
+ * after prte_pmix_dmodex_job_wait seconds, and no more than
+ * prte_pmix_dmodex_job_wait_max wait at once. */
+#define DMDX_NREQ 4
+static int dmdx_calls[DMDX_NREQ];
+static pmix_status_t dmdx_status[DMDX_NREQ];
+
+static void dmdx_cbfunc(pmix_status_t status, const char *data, size_t ndata, void *cbdata,
+                        pmix_release_cbfunc_t relfn, void *relcbdata)
+{
+    int i = (int) (intptr_t) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(data, ndata);
+
+    dmdx_status[i] = status;
+    ++dmdx_calls[i];
+    if (NULL != relfn) {
+        relfn(relcbdata);
+    }
+}
+
+/* turn the event base until request i has been answered or limit seconds
+ * have passed; the retry timer is all there is to wake it */
+static bool dmdx_wait(int i, int limit)
+{
+    time_t start = time(NULL);
+
+    while (0 == dmdx_calls[i] && time(NULL) - start <= limit) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+    }
+    return 0 != dmdx_calls[i];
+}
+
+static void dmdx_spin(void)
+{
+    int n;
+
+    for (n = 0; n < 50; n++) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE | PRTE_EVLOOP_NONBLOCK);
+    }
+}
+
+static int test_dmodex_job_wait(void)
+{
+    int failures = 0;
+    unsigned int saved_wait = prte_pmix_server_globals.dmdx_job_wait;
+    unsigned int saved_max = prte_pmix_server_globals.dmdx_job_wait_max;
+    bool made_array = false;
+    pmix_proc_t ghost, other;
+    prte_job_t *jdata;
+    time_t start;
+
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
+        made_array = true;
+    }
+    /* a waiting request is held in local_reqs, which nothing has set up
+     * here: zero storage has a block size of 0, and growing it divides by
+     * that */
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 8, INT32_MAX, 8);
+    memset(dmdx_calls, 0, sizeof(dmdx_calls));
+    PMIX_LOAD_PROCID(&ghost, "unit-test-dmdx-ghost@1", 0);
+    PMIX_LOAD_PROCID(&other, "unit-test-dmdx-ghost@2", 0);
+
+    /* one may wait, for one second */
+    prte_pmix_server_globals.dmdx_job_wait = 1;
+    prte_pmix_server_globals.dmdx_job_wait_max = 1;
+    CHECK("dmdx/upcall",
+          PMIX_SUCCESS == pmix_server_dmodex_req_fn(&ghost, NULL, 0, dmdx_cbfunc, (void *) 0));
+    dmdx_spin();
+    CHECK("a request for an unknown job waits", 0 == dmdx_calls[0]);
+    CHECK("...and is counted", 1 == prte_pmix_server_globals.dmdx_awaiting_job);
+    (void) pmix_server_dmodex_req_fn(&other, NULL, 0, dmdx_cbfunc, (void *) 1);
+    dmdx_spin();
+    CHECK("one past the cap is answered at once", 1 == dmdx_calls[1]);
+    CHECK("...as not found", PMIX_ERR_NOT_FOUND == dmdx_status[1]);
+    CHECK("the waiting one is answered when its wait runs out", dmdx_wait(0, 5));
+    CHECK("...as not found", PMIX_ERR_NOT_FOUND == dmdx_status[0]);
+    CHECK("...exactly once", 1 == dmdx_calls[0]);
+    CHECK("...and is no longer counted", 0 == prte_pmix_server_globals.dmdx_awaiting_job);
+
+    /* two requests for the same proc of a job that turns up: neither may be
+     * parked behind the other, and both are answered once it is known */
+    memset(dmdx_calls, 0, sizeof(dmdx_calls));
+    prte_pmix_server_globals.dmdx_job_wait = 30;
+    prte_pmix_server_globals.dmdx_job_wait_max = 8;
+    (void) pmix_server_dmodex_req_fn(&ghost, NULL, 0, dmdx_cbfunc, (void *) 2);
+    (void) pmix_server_dmodex_req_fn(&ghost, NULL, 0, dmdx_cbfunc, (void *) 3);
+    dmdx_spin();
+    CHECK("both requests for the same unknown proc wait",
+          0 == dmdx_calls[2] && 0 == dmdx_calls[3] &&
+          2 == prte_pmix_server_globals.dmdx_awaiting_job);
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, ghost.nspace);
+    if (PRTE_SUCCESS != prte_set_job_data_object(jdata)) {
+        fprintf(stderr, "FAIL [test_dmodex_job_wait]: could not register a job\n");
+        ++failures;
+    } else {
+        start = time(NULL);
+        CHECK("the first is answered once the job arrives", dmdx_wait(2, 5));
+        CHECK("...and so is the second", dmdx_wait(3, 5));
+        CHECK("...well before the wait would have run out", time(NULL) - start < 10);
+        CHECK("...and neither is counted any more",
+              0 == prte_pmix_server_globals.dmdx_awaiting_job);
+        pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+    }
+    PMIX_RELEASE(jdata);
+
+    prte_pmix_server_globals.dmdx_job_wait = saved_wait;
+    prte_pmix_server_globals.dmdx_job_wait_max = saved_max;
+    PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
+    if (made_array) {
+        PMIX_RELEASE(prte_job_data);
+        prte_job_data = NULL;
+    }
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_dmodex_job_wait\n");
+    }
+    return failures;
+}
+
 static int test_departed_jobs(void)
 {
     int failures = 0;
@@ -4513,6 +4641,7 @@ int main(void)
 
     failures += test_request_tracker();
     failures += test_departed_jobs();
+    failures += test_dmodex_job_wait();
     failures += test_monitor_accounting();
     failures += test_connections();
     failures += test_connection_fate_sharing();
