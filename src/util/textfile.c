@@ -9,11 +9,13 @@
 
 #include "prte_config.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "src/util/pmix_string_copy.h"
@@ -111,20 +113,39 @@ static void split_fields(prte_textfile_t *tf)
 int prte_textfile_open(prte_textfile_t *tf, const char *path)
 {
     struct stat sbuf;
+    int fd, flags;
 
     memset(tf, 0, sizeof(*tf));
 
-    /* Refuse anything that is not a regular file before opening it.
-     * fopen() opens a directory quite happily and every read from the
-     * result then fails with EISDIR, which the lexer this replaces did not
-     * tell apart from "no input yet" -- so it spun, and naming a directory
-     * hung the tool instead of reporting a typo. */
-    if (0 == stat(path, &sbuf) && !S_ISREG(sbuf.st_mode)) {
+    /* Refuse anything that is not a regular file. fopen() opens a directory
+     * quite happily and every read from the result then fails with EISDIR,
+     * which the lexer this replaces did not tell apart from "no input yet"
+     * -- so it spun, and naming a directory hung the tool instead of
+     * reporting a typo.
+     *
+     * The test is made on the file actually opened, not on the path
+     * beforehand, so it describes the file that is read. These files (a
+     * hostfile, a rankfile, a sequence file named in "--map-by") are read
+     * on the DVM master's progress thread, where a blocking open() of a
+     * FIFO would stall it; opening non-blocking avoids that, and fstat() on
+     * the descriptor answers for the file we hold. Blocking is turned back on before any read: a regular
+     * file never blocks anyway, and stdio is not written to expect EAGAIN. */
+    fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (0 > fd) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    if (0 != fstat(fd, &sbuf) || !S_ISREG(sbuf.st_mode)) {
+        close(fd);
         return PRTE_ERR_BAD_PARAM;
     }
-
-    tf->fp = fopen(path, "r");
+    flags = fcntl(fd, F_GETFL);
+    if (0 > flags || 0 > fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)) {
+        close(fd);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    tf->fp = fdopen(fd, "r");
     if (NULL == tf->fp) {
+        close(fd);
         return PRTE_ERR_NOT_FOUND;
     }
     return PRTE_SUCCESS;

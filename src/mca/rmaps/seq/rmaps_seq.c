@@ -49,6 +49,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
+#include "src/util/textfile.h"
 
 #include "rmaps_seq.h"
 #include "src/mca/rmaps/base/base.h"
@@ -560,63 +561,41 @@ error:
 
 static int process_file(char *path, pmix_list_t *list)
 {
-    char *hstname = NULL;
-    FILE *fp;
+    prte_textfile_t tf;
     seq_node_t *sq;
-    char *sep, *eptr, *membind_opt;
-    bool failed = false;
+    char **fields;
+    bool failed;
 
-    /* open the file */
-    fp = fopen(path, "r");
-    if (NULL == fp) {
+    /* Read through the same reader as the hostfile and the rankfile, so
+     * all three accept the same thing: a regular file, checked on the
+     * descriptor that was opened. The bare fopen() this replaces would open
+     * whatever the path named, and a non-regular file then blocked the
+     * progress thread in open() or in the first read.
+     *
+     * The line format is unchanged - "hostname [cpuset [numa mempolicy]]",
+     * the last two being the LSB_AFFINITY_HOSTFILE fields, which are
+     * dropped:
+     *
+     *     Host1 0,1,2,3 0 2
+     *     Host1 4,5,6,7 1 2
+     *
+     * The reader splits on any run of whitespace rather than at the first
+     * space, so a tab between the host and its cpuset now separates them
+     * instead of becoming part of the hostname. */
+    if (PRTE_SUCCESS != prte_textfile_open(&tf, path)) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
-    while (NULL != (hstname = pmix_getline(fp, &failed))) {
-        if (0 == strlen(hstname)) {
-            free(hstname);
-            /* blank line - ignore */
-            continue;
-        }
-        if ('#' == hstname[0]) {
-            free(hstname);
-            /* Comment line - ignore */
-            continue;
-        }
+    while (NULL != (fields = prte_textfile_next(&tf))) {
         sq = PMIX_NEW(seq_node_t);
-        if (NULL != (sep = strchr(hstname, ' '))) {
-            *sep = '\0';
-            sep++;
-            /* remove any trailing space */
-            eptr = sep + strlen(sep) - 1;
-            while (eptr > sep && isspace(*eptr)) {
-                eptr--;
-            }
-            *(eptr + 1) = 0;
-            /*
-             * If the submitted LSF job has memory binding related resource requirement, after
-             * the cpu id list there are memory binding options.
-             *
-             * The following is the format of LSB_AFFINITY_HOSTFILE file:
-             *
-             * Host1 0,1,2,3 0 2
-             * Host1 4,5,6,7 1 2
-             *
-             * Each line includes: host_name, cpu_id_list, NUMA_node_id_list, and memory_policy.
-             * In this fix we will drop the last two sections (NUMA_node_id_list and memory_policy)
-             * of each line and keep them in 'membind_opt' for future use.
-             */
-            if (NULL != (membind_opt = strchr(sep, ' '))) {
-                *membind_opt = '\0';
-                membind_opt++;
-            }
-            sq->cpuset = strdup(sep);
+        sq->hostname = strdup(fields[0]);
+        if (NULL != fields[1]) {
+            sq->cpuset = strdup(fields[1]);
         }
-
-        sq->hostname = hstname;
         pmix_list_append(list, &sq->super);
     }
-    fclose(fp);
+    failed = tf.failed;
+    prte_textfile_close(&tf);
     if (failed) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, path);
         return PRTE_ERR_SILENT;

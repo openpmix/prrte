@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "constants.h"
@@ -260,6 +262,25 @@ int test_textfile(void)
     CHECK("a directory is refused as a bad path",
           PRTE_ERR_BAD_PARAM == prte_textfile_open(&tf, "."));
     prte_textfile_close(&tf);
+    /* A FIFO is refused, and refused without waiting for a writer: the open
+     * is non-blocking and the type test is made on the descriptor, so a
+     * FIFO with nobody at the other end comes straight back as a bad path.
+     * If this hangs, the open blocks. */
+    {
+        char fifo[256];
+
+        snprintf(fifo, sizeof(fifo), "prte_tf_fifo_%lu", (unsigned long) getpid());
+        unlink(fifo);
+        if (0 == mkfifo(fifo, 0600)) {
+            CHECK("a FIFO is refused as a bad path, without blocking",
+                  PRTE_ERR_BAD_PARAM == prte_textfile_open(&tf, fifo));
+            CHECK("a refused FIFO leaves no stream behind", NULL == tf.fp);
+            prte_textfile_close(&tf);
+            unlink(fifo);
+        } else {
+            fprintf(stdout, "  SKIP textfile FIFO case (mkfifo failed)\n");
+        }
+    }
     /* ...and closing a file that was never opened, twice, is harmless */
     prte_textfile_close(&tf);
 
