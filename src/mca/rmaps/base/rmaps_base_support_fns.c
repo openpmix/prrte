@@ -670,6 +670,30 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     return PRTE_SUCCESS;
 }
 
+/* The most procs this node may hold.  An oversubscribed mapping has nothing
+ * else to stop it: with slots_max unlimited, which is the default, a mapper
+ * places one proc per requested process however many were asked for, and
+ * every daemon builds the same proc objects again when it unpacks the job.
+ * So a node holds at most max_procs_per_slot times its slots, never fewer
+ * than max_procs_per_node_floor, and never more than a node rank can name. */
+int prte_rmaps_base_node_proc_limit(const prte_node_t *node)
+{
+    uint64_t lim;
+
+    if (0 == prte_rmaps_base.max_procs_per_slot) {
+        return PRTE_NODE_RANK_MAX;
+    }
+    lim = (uint64_t) prte_rmaps_base.max_procs_per_slot *
+          (uint64_t) ((0 < node->slots) ? node->slots : 0);
+    if (lim < prte_rmaps_base.max_procs_per_node_floor) {
+        lim = prte_rmaps_base.max_procs_per_node_floor;
+    }
+    if ((uint64_t) PRTE_NODE_RANK_MAX < lim) {
+        lim = PRTE_NODE_RANK_MAX;
+    }
+    return (int) lim;
+}
+
 prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
                                         prte_app_idx_t idx,
                                         prte_node_t *node,
@@ -689,6 +713,24 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
     app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, idx);
     if (NULL == app) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PMIX_RELEASE(proc);
+        return NULL;
+    }
+    /* a full node is refused like any other: every mapper takes a NULL
+     * here as "this node can take no more" and moves on or fails the map */
+    if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+        prte_rmaps_base_node_proc_limit(node) <= (int) node->num_procs) {
+        static pmix_nspace_t reported = {0};
+
+        /* once per job - the mapper will try every node */
+        if (0 != strncmp(reported, jdata->nspace, PMIX_MAX_NSLEN)) {
+            PMIX_LOAD_NSPACE(reported, jdata->nspace);
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
+                           "node-proc-limit", true, node->name, (int) node->slots,
+                           prte_rmaps_base_node_proc_limit(node),
+                           prte_rmaps_base.max_procs_per_slot,
+                           prte_rmaps_base.max_procs_per_node_floor);
+        }
         PMIX_RELEASE(proc);
         return NULL;
     }

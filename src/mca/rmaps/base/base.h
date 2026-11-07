@@ -77,6 +77,11 @@ typedef struct {
     char *file;
     // default number of pe's per proc
     uint16_t default_pes;
+    /* the most procs a node may hold: max_procs_per_slot times its slots,
+     * but never fewer than max_procs_per_node_floor. Zero per slot means
+     * no limit beyond what a node rank can name */
+    unsigned int max_procs_per_slot;
+    unsigned int max_procs_per_node_floor;
     // some general storage values
     hwloc_cpuset_t available, baseset;  // scratch for binding calculation
     char *default_mapping_policy;

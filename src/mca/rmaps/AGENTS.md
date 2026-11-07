@@ -299,7 +299,7 @@ A mapper is mostly glue around them:
 | `prte_rmaps_base_get_ncpus()` | How many usable cpus/cores an object (or whole node) offers under the current cpu-type. |
 | `prte_rmaps_base_check_avail()` | Can this node/object take more procs? Also adds the node to `jdata->map->nodes` exactly once and sets `options->target`. **It can also remove and release the node** — see below. |
 | `prte_rmaps_base_check_oversubscribed()` | After placing a proc, flag/deny oversubscription per the node's SLOTS_GIVEN and the job's OVERSUBSCRIBE directive. |
-| `prte_rmaps_base_setup_proc()` | Create the `prte_proc_t`, attach it to the node, assign node rank, bump `slots_inuse`, draw down `slots_available`, and **bind it** (`prte_rmaps_base_bind_proc`). |
+| `prte_rmaps_base_setup_proc()` | Create the `prte_proc_t`, attach it to the node, assign node rank, bump `slots_inuse`, draw down `slots_available`, and **bind it** (`prte_rmaps_base_bind_proc`). Refuses (NULL) a proc past `prte_rmaps_base_node_proc_limit()`: `max_procs_per_slot` (default 64) times the node's slots, at least `max_procs_per_node_floor` (default 1024), at most `PRTE_NODE_RANK_MAX`. With oversubscription allowed and `slots_max` unlimited, nothing else bounds how many procs a mapper places on a node, and every daemon builds them all again when it unpacks the job. Every mapper reads the NULL as "this node is full". |
 | `prte_rmaps_base_compute_vpids()` | Assign global ranks by slot/node/fill/span, then derive local & app ranks. |
 | `prte_rmaps_base_bind_proc()` | Bind a proc: dispatch to `bind_generic` / `bind_multiple` (pe>1) / `bind_to_cpuset` (pe-list), or no-op for by-user/bind-none. |
 

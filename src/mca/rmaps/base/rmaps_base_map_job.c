@@ -671,6 +671,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
     int n;
+    uint64_t total_procs;
     bool did_map, pernode = false;
     bool bind_inherited = false;
     prte_rmaps_base_selected_module_t *mod;
@@ -1291,14 +1292,17 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         PMIx_Argv_free(ck);
     }
 
-    /* add up all the expected procs */
+    /* add up all the expected procs - in 64 bits, because each app's count
+     * is an int32 and options.nprocs is an int, so the sum across apps can
+     * overflow it */
+    total_procs = 0;
     for (n = 0; n < jdata->apps->size; n++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
         if (NULL == app) {
             continue;
         }
         if (0 < app->num_procs) {
-            options.nprocs += app->num_procs;
+            total_procs += (uint64_t) app->num_procs;
             continue;
         }
         PRTE_FLAG_SET(app, PRTE_APP_FLAG_COMPUTED);
@@ -1353,8 +1357,20 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             }
             PMIX_LIST_DESTRUCT(&nodes);
         }
-        options.nprocs += app->num_procs;
+        total_procs += (uint64_t) app->num_procs;
     }
+    if ((uint64_t) INT32_MAX < total_procs) {
+        char *req = NULL;
+
+        pmix_asprintf(&req, "%llu", (unsigned long long) total_procs);
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
+                       "job-procs-overflow", true, req, INT32_MAX);
+        free(req);
+        jdata->exit_code = PRTE_ERR_BAD_PARAM;
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+        goto cleanup;
+    }
+    options.nprocs += (int) total_procs;
 
     /* check for oversubscribe directives */
     if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {

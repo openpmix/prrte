@@ -39,6 +39,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 
 int test_node_rank(void);
+int test_node_proc_limit(void);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -195,6 +196,83 @@ int test_node_rank(void)
 
     if (0 == failures) {
         fprintf(stderr, "test_node_rank: PASS\n");
+    }
+    return failures;
+}
+
+/*
+ * The most procs a node may hold.  With oversubscription allowed and
+ * slots_max unlimited - the default - nothing else stopped a mapper placing
+ * one proc per requested process, however many that was, and every daemon
+ * builds the same objects again when it unpacks the job.  The limit is
+ * max_procs_per_slot times the node's slots, at least the floor, and never
+ * more than a node rank can name; setup_proc refuses a proc past it, which
+ * every mapper reads as "this node is full".
+ */
+int test_node_proc_limit(void)
+{
+    int failures = 0;
+    unsigned int saved_slot = prte_rmaps_base.max_procs_per_slot;
+    unsigned int saved_floor = prte_rmaps_base.max_procs_per_node_floor;
+    prte_job_t *job, *jtool;
+    prte_node_t *node;
+    prte_proc_t *p[5], *t;
+    prte_rmaps_options_t opts;
+    int i;
+
+    node = PMIX_NEW(prte_node_t);
+    node->name = strdup("node0");
+
+    prte_rmaps_base.max_procs_per_slot = 64;
+    prte_rmaps_base.max_procs_per_node_floor = 1024;
+    node->slots = 4;
+    CHECK("a small node gets the floor", 1024 == prte_rmaps_base_node_proc_limit(node));
+    node->slots = 100;
+    CHECK("a larger one gets its multiple", 6400 == prte_rmaps_base_node_proc_limit(node));
+    node->slots = 4000;
+    CHECK("never more than a node rank can name",
+          PRTE_NODE_RANK_MAX == prte_rmaps_base_node_proc_limit(node));
+    prte_rmaps_base.max_procs_per_slot = 0;
+    node->slots = 4;
+    CHECK("zero per slot means only the node-rank bound",
+          PRTE_NODE_RANK_MAX == prte_rmaps_base_node_proc_limit(node));
+
+    /* two slots, two per slot, a floor of three: four procs fit */
+    prte_rmaps_base.max_procs_per_slot = 2;
+    prte_rmaps_base.max_procs_per_node_floor = 3;
+    node->slots = 2;
+    node->slots_available = 2;
+    job = mkjob("nplimit", false);
+    jtool = mkjob("nplimitT", true);
+    opts_init(&opts);
+    for (i = 0; i < 5; i++) {
+        p[i] = prte_rmaps_base_setup_proc(job, 0, node, NULL, &opts);
+    }
+    CHECK("procs up to the limit are placed",
+          NULL != p[0] && NULL != p[1] && NULL != p[2] && NULL != p[3]);
+    CHECK("the one past it is refused", NULL == p[4]);
+    CHECK("...and nothing of it is left on the node", 4 == node->num_procs);
+    t = prte_rmaps_base_setup_proc(jtool, 0, node, NULL, &opts);
+    CHECK("a tool proc takes no slot, so is not refused", NULL != t);
+    if (NULL != t) {
+        PMIX_RELEASE(t);
+    }
+
+    for (i = 0; i < 4; i++) {
+        if (NULL != p[i]) {
+            PMIX_RELEASE(p[i]);
+        }
+    }
+    retire(node, job);
+    retire(node, jtool);
+    PMIX_RELEASE(job);
+    PMIX_RELEASE(jtool);
+    PMIX_RELEASE(node);
+    prte_rmaps_base.max_procs_per_slot = saved_slot;
+    prte_rmaps_base.max_procs_per_node_floor = saved_floor;
+
+    if (0 == failures) {
+        fprintf(stderr, "test_node_proc_limit: PASS\n");
     }
     return failures;
 }

@@ -51,6 +51,7 @@ PRTE_EXPORT int prte_rmaps_base_get_target_nodes(pmix_list_t *node_list, int32_t
                                                  prte_mapping_policy_t policy, bool initial_map,
                                                  bool silent, bool keepall);
 
+PRTE_EXPORT int prte_rmaps_base_node_proc_limit(const prte_node_t *node);
 PRTE_EXPORT prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
                                                     prte_app_idx_t idx,
                                                     prte_node_t *node,
