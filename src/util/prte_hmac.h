@@ -10,15 +10,19 @@
 /*
  * SHA-256 (FIPS 180-4) and HMAC-SHA256 (RFC 2104).
  *
- * These exist for one purpose: daemons of a DVM prove to each other that they
- * hold the DVM's key, without ever sending it (see src/util/prte_dvm_key.h and
- * the connect handshake in src/rml/oob).  PRRTE has no cryptographic library
- * dependency and is built on systems where none is available, so the two
- * primitives that proof needs are carried here rather than taken from one.
+ * These exist for the OOB's use of the DVM's key, which never crosses the
+ * wire (see src/util/prte_dvm_key.h and the connect handshake in
+ * src/rml/oob): daemons of a DVM prove to each other that they hold it, and
+ * - when prte_oob_authenticate_messages is on - derive from it the keys each
+ * connection's messages are tagged under.  The tags themselves are Poly1305
+ * (prte_poly1305.[ch]); HMAC-SHA256 is kept to the proofs and the key
+ * derivation.  PRRTE has no cryptographic library dependency and is built on
+ * systems where none is available, so the primitives are carried here rather
+ * than taken from one.
  *
  * Nothing here is a general-purpose cryptography API.  There is no streaming
- * HMAC, no other digest, and no encryption: the OOB authenticates its peers,
- * it does not hide or sign the traffic that follows.
+ * HMAC, no other digest, and no encryption: the OOB authenticates its peers
+ * and, optionally, its messages; it does not encrypt them.
  */
 
 #ifndef PRTE_UTIL_HMAC_H
