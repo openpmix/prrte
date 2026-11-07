@@ -560,6 +560,16 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.no_foreign_tools);
 
+    /* the highest rank a tool may give itself in a namespace of its own */
+    prte_pmix_server_globals.tool_rank_limit = 1048576;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "tool_rank_limit",
+                                      "A tool connecting under a namespace of its own may "
+                                      "name itself only with a rank below this value. The "
+                                      "rank indexes the array the tool's job keeps its "
+                                      "processes in (default 1048576)",
+                                      PMIX_MCA_BASE_VAR_TYPE_UNSIGNED_INT,
+                                      &prte_pmix_server_globals.tool_rank_limit);
+
     /* the users a scheduler may run as, besides root and our own */
     prte_pmix_server_globals.scheduler_uids = NULL;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "scheduler_uids",

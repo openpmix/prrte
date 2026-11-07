@@ -1105,14 +1105,27 @@ errout:
  * job would keep the job from ever completing.
  * PRTE_EXISTS reaches the tool as PMIX_ERR_EXISTS, and its PMIx_tool_init
  * fails - unless the refused name came from its environment, when PMIx
- * connects it again under a namespace of its own. */
+ * connects it again under a namespace of its own.
+ *
+ * The rank is a subscript into jdata->procs, whose index is an int. A rank
+ * above INT_MAX - the sentinels among them - cannot be filed there at all,
+ * and pmix_pointer_array_set_item() refused it without anyone checking, so
+ * the proc was never found and the tool's job never retired. In a tool's
+ * own namespace the rank is also the size the array grows to, so it is
+ * held below prte_pmix_tool_rank_limit; in an application job it has to
+ * be a rank the job already has, which bounds it already. */
 int prte_pmix_server_tool_may_join(prte_job_t *jdata, pmix_rank_t rank)
 {
-    if (PMIX_RANK_VALID <= rank) {
+    if (PMIX_RANK_VALID <= rank || (pmix_rank_t) INT_MAX < rank) {
         return PRTE_ERR_BAD_PARAM;
     }
-    if (NULL != jdata && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
-        NULL == pmix_pointer_array_get_item(jdata->procs, rank)) {
+    if (NULL == jdata || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+        if (prte_pmix_server_globals.tool_rank_limit <= rank) {
+            return PRTE_ERR_BAD_PARAM;
+        }
+        return PRTE_SUCCESS;
+    }
+    if (NULL == pmix_pointer_array_get_item(jdata->procs, rank)) {
         return PRTE_EXISTS;
     }
     return PRTE_SUCCESS;
@@ -1211,7 +1224,12 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd)
     proc->app_rank = 0;
     proc->local_rank = 0;
     proc->node_rank = 0;
-    pmix_pointer_array_set_item(jdata->procs, cd->target.rank, proc);
+    if (PMIX_SUCCESS != pmix_pointer_array_set_item(jdata->procs, cd->target.rank, proc)) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIX_RELEASE(proc);
+        PMIX_RELEASE(jdata);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
     // find the node it is on - the tool is on our node, and our node is
     // whichever one carries our own daemon proc. Our vpid is not a subscript
     // into the node pool: the pool is indexed by node identity, and in a DVM

@@ -544,7 +544,11 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 proc = PMIX_NEW(prte_proc_t);
                 memcpy(&proc->name, &name, sizeof(pmix_proc_t));
                 proc->state = PRTE_PROC_STATE_RUNNING;
-                pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+                if (PMIX_SUCCESS != pmix_pointer_array_set_item(jdata->procs, name.rank, proc)) {
+                    PMIX_RELEASE(proc);
+                    ret = PMIX_ERR_OUT_OF_RESOURCE;
+                    goto TCONN_ANSWER;
+                }
                 jdata->num_procs++;
             }
             ret = PMIX_SUCCESS;
@@ -613,7 +617,16 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             memcpy(&proc->name, &name, sizeof(pmix_proc_t));
             proc->pid = pid;
             proc->state = PRTE_PROC_STATE_RUNNING;
-            pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+            /* the rank was screened by prte_pmix_server_tool_may_join(), but
+             * a proc the array will not take is one no lookup finds, and the
+             * tool's job would never retire */
+            if (PMIX_SUCCESS != pmix_pointer_array_set_item(jdata->procs, name.rank, proc)) {
+                PMIX_RELEASE(proc);
+                PMIX_RELEASE(jdata);
+                jdata = NULL;
+                ret = PMIX_ERR_OUT_OF_RESOURCE;
+                goto TCONN_ANSWER;
+            }
             /* Find the node the tool is on: it connected through the daemon
              * that is reporting it, so ask that DAEMON where it is.
              *
@@ -645,6 +658,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             }
             jdata->num_procs = 1;
         }
+    TCONN_ANSWER:
         /* setup the response */
         PMIX_DATA_BUFFER_CREATE(answer);
 

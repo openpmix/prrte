@@ -1699,6 +1699,16 @@ with the sentinel-rank screen, and both the master's own registration
 (`prte_pmix_server_register_tool()`) and its relay for a tool attached
 elsewhere call it, so both refuse the same attaches.
 
+**A tool's rank is a subscript, so it is bounded.** The proc is filed in
+`jdata->procs` at the tool's rank. That array is indexed by `int`, so a rank
+above `INT_MAX` is refused outright: `pmix_pointer_array_set_item()` would
+not take it, and a proc that was never filed is one
+`prte_state_base_track_procs()` never finds, so the tool's job never
+retired. In a tool's own namespace the rank is also how large the array
+grows, so it must be below `prte_pmix_tool_rank_limit` (default 1048576).
+In an application job the rank must already exist, which bounds it anyway.
+Both registration paths check what `set_item` returns.
+
 `lost_connection_hdlr()` in `pmix_server.c` is the other half — the
 *abnormal* departure — and it is registered at the end of
 `pmix_server_init()`. Watch what precedes that registration: an early
