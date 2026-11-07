@@ -152,3 +152,24 @@ Dynamic IPv6 ports:  %s
 
 Only one can be specified. Please choose either static or
 dynamic ports and try again.
+#
+[msg-auth-without-auth]
+PRRTE was asked to tag the messages between its daemons, but not to
+authenticate the daemons' connections:
+
+  node:  %s
+
+Each message's tag is keyed by what the two ends of a connection proved
+to each other when it was opened, so tagging needs that proof. Either
+leave "prte_oob_authenticate" on (the default), or turn
+"prte_oob_authenticate_messages" off.
+#
+[msg-auth-unfinished]
+PRRTE was asked to tag the messages between its daemons
+("prte_oob_authenticate_messages"), which this build cannot yet do:
+
+  node:  %s
+
+The parameter is reserved for that feature, and is refused rather than
+ignored so that no DVM runs believing its messages are tagged when they
+are not. Turn it off to start the DVM.
