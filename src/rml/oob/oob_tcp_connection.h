@@ -143,6 +143,21 @@ PRTE_EXPORT void prte_oob_tcp_handshake_clear(prte_oob_tcp_handshake_t *hs);
 PRTE_EXPORT void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer,
                                        pmix_rank_t listener, const uint8_t *dialer_nonce,
                                        const uint8_t *listener_nonce, uint8_t *mac);
+/* The two keys a connection's messages are tagged under
+ * (prte_oob_authenticate_messages), from the same endpoints as the proofs:
+ * `dialer_key` for what the dialer sends, `listener_key` for what the
+ * listener sends.  Each is PRTE_OOB_TCP_MSGKEY_LEN bytes.  Exported for the
+ * unit tests. */
+PRTE_EXPORT void prte_oob_tcp_msg_keys(const char *nspace, pmix_rank_t dialer,
+                                       pmix_rank_t listener, const uint8_t *dialer_nonce,
+                                       const uint8_t *listener_nonce, uint8_t *dialer_key,
+                                       uint8_t *listener_key);
+/* The PRTE_POLY1305_TAG_LEN-byte tag of message number `seq` in the direction
+ * `key` belongs to: `hdrlen` bytes of header exactly as it goes on the wire,
+ * then `len` bytes of payload (which may be NULL when `len` is 0). */
+PRTE_EXPORT void prte_oob_tcp_msg_tag(const uint8_t *key, uint64_t seq, const void *hdr,
+                                      size_t hdrlen, const void *payload, size_t len,
+                                      uint8_t *tag);
 PRTE_EXPORT void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer);
 /* start and stop the clock on a connection we opened finishing its handshake */
 PRTE_EXPORT void prte_oob_tcp_peer_arm_deadline(prte_oob_tcp_peer_t *peer);

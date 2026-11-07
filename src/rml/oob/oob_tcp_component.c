@@ -85,6 +85,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_hmac.h"
 
 #include "src/rml/oob/oob_tcp_peer.h"
 #include "src/rml/oob/oob_tcp.h"
@@ -184,6 +185,7 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
     memset(&peer->hshake, 0, sizeof(peer->hshake));
     memset(&peer->hs_deadline, 0, sizeof(peer->hs_deadline));
     peer->hs_deadline_active = false;
+    memset(&peer->msgauth, 0, sizeof(peer->msgauth));
 }
 static void peer_des(prte_oob_tcp_peer_t *peer)
 {
@@ -214,6 +216,7 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
     }
     PMIX_LIST_DESTRUCT(&peer->send_queue);
     prte_oob_tcp_handshake_clear(&peer->hshake);
+    prte_secure_zero(&peer->msgauth, sizeof(peer->msgauth));
     PMIX_DESTRUCT(&peer->lock);
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_t, pmix_list_item_t, peer_cons, peer_des);
