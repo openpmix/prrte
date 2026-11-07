@@ -62,6 +62,7 @@ typedef struct {
     prte_event_t ev;
     int fd;
     struct sockaddr_storage addr;
+    bool reserved; /**< its place in prte_oob_base.num_pending is already held */
 } prte_oob_tcp_pending_connection_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_pending_connection_t);
 

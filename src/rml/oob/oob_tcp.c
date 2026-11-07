@@ -115,6 +115,7 @@ prte_oob_base_t prte_oob_base = {
     .handshake_timeout = 30,
     .max_pending = 0,
     .max_pending_per_host = 64,
+    .pending_ipv6_prefix = 64,
     .num_pending = 0,
     .pending_hosts = PMIX_LIST_STATIC_INIT(prte_oob_base.pending_hosts)
 };
@@ -694,6 +695,17 @@ int prte_oob_register(void)
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.max_pending_per_host);
 
+    /* One host may own a whole IPv6 prefix - a /64 is what an interface is
+     * normally given - so counting IPv6 sources by full address would let
+     * one host take every place prte_oob_max_pending allows. */
+    prte_oob_base.pending_ipv6_prefix = 64;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_pending_ipv6_prefix",
+                                        "Number of leading bits of an IPv6 source address that "
+                                        "are counted as one host by prte_oob_max_pending_per_host "
+                                        "(1-128, default: 64)",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.pending_ipv6_prefix);
+
     prte_oob_base.max_msg_size = 100;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
                                         "Max size of an OOB message in Megabytes(default = 100)",
@@ -736,8 +748,30 @@ void prte_oob_simulate_node_failure(void)
  */
 static void recv_handler(int sd, short flags, void *user);
 
+#if PRTE_ENABLE_IPV6
+/* Do two IPv6 addresses share their first `bits` bits? */
+static bool same_prefix6(const struct in6_addr *a, const struct in6_addr *b, int bits)
+{
+    int whole = bits / 8, rest = bits % 8;
+    uint8_t mask;
+
+    if (0 != memcmp(a->s6_addr, b->s6_addr, whole)) {
+        return false;
+    }
+    if (0 == rest) {
+        return true;
+    }
+    mask = (uint8_t) (0xff << (8 - rest));
+    return (a->s6_addr[whole] & mask) == (b->s6_addr[whole] & mask);
+}
+#endif
+
 /* Do two socket addresses name the same host?  The port is not part of the
- * question: every connection from a host comes from a different one. */
+ * question: every connection from a host comes from a different one.  Nor,
+ * for IPv6, is the interface identifier: one host may hold any address in
+ * its prefix (prte_oob_pending_ipv6_prefix, default a /64), so the per-host
+ * count compares only that.  An IPv4 address mapped into IPv6 is still one
+ * IPv4 host. */
 static bool same_host(const struct sockaddr_storage *a, const struct sockaddr_storage *b)
 {
     if (a->ss_family != b->ss_family) {
@@ -749,9 +783,14 @@ static bool same_host(const struct sockaddr_storage *a, const struct sockaddr_st
     }
 #if PRTE_ENABLE_IPV6
     if (AF_INET6 == a->ss_family) {
-        return 0 == memcmp(&((const struct sockaddr_in6 *) a)->sin6_addr,
-                           &((const struct sockaddr_in6 *) b)->sin6_addr,
-                           sizeof(struct in6_addr));
+        const struct in6_addr *a6 = &((const struct sockaddr_in6 *) a)->sin6_addr;
+        const struct in6_addr *b6 = &((const struct sockaddr_in6 *) b)->sin6_addr;
+        int bits = prte_oob_base.pending_ipv6_prefix;
+
+        if (IN6_IS_ADDR_V4MAPPED(a6) || IN6_IS_ADDR_V4MAPPED(b6) || 0 >= bits || 128 < bits) {
+            bits = 128;
+        }
+        return same_prefix6(a6, b6, bits);
     }
 #endif
     return false;
@@ -777,15 +816,69 @@ static int max_pending(void)
     return 4096;
 }
 
-/* Count an inbound connection against the limits on handshakes in progress,
- * or say it may not be taken on.  Running out of room is reported once per
- * episode, not once per connection: a backlog is exactly when there would be a
- * great many of them. */
-static bool pending_admit(prte_oob_tcp_conn_op_t *op, const struct sockaddr *addr)
+/* Running out of room is reported once per episode, not once per
+ * connection: a backlog is exactly when there would be a great many of them.
+ * Either thread may be the one to refuse, so the flag is atomic; it is
+ * re-armed when the last held connection is given back. */
+static prte_atomic_bool_t pending_warned = false;
+
+static void report_pending_full(const struct sockaddr *addr, int per_host)
 {
-    static bool warned = false;
+    if (atomic_exchange(&pending_warned, true)) {
+        return;
+    }
+    pmix_output(0, "%s refusing connections: too many are part way through their "
+                "handshake (%d in all, at most %d allowed; at most %d from one "
+                "host, latest from %s). The next refusal is reported only once "
+                "this has cleared.",
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) prte_oob_base.num_pending,
+                max_pending(), per_host, pmix_net_get_hostname(addr));
+}
+
+/* Take a place for an inbound connection against the overall limit, or say
+ * there is none.  The listener thread calls this the moment accept() returns,
+ * before it queues the descriptor for the main thread: counting only once the
+ * main thread took the connection up let any number of descriptors pile up
+ * in that queue while it was busy - with a launch, say - which is how a burst
+ * of connections reached EMFILE regardless of the limit. */
+bool prte_oob_tcp_pending_reserve(const struct sockaddr *addr)
+{
+    if (atomic_fetch_add(&prte_oob_base.num_pending, 1) >= max_pending()) {
+        atomic_fetch_sub(&prte_oob_base.num_pending, 1);
+        report_pending_full(addr, prte_oob_base.max_pending_per_host);
+        return false;
+    }
+    return true;
+}
+
+/* Give back a place taken by prte_oob_tcp_pending_reserve() */
+static void pending_unreserve(void)
+{
+    int was = atomic_fetch_sub(&prte_oob_base.num_pending, 1);
+
+    if (1 >= was) {
+        if (0 >= was) {
+            /* prte_oob_close() zeroed the count under a connection still
+             * in flight - there should be none by then */
+            atomic_store(&prte_oob_base.num_pending, 0);
+        }
+        atomic_store(&pending_warned, false);
+    }
+}
+
+/* Count an inbound connection against the limits on handshakes in progress,
+ * or say it may not be taken on.  `reserved` says the listener thread already
+ * holds its place in the overall count; either way it is the op that gives it
+ * back, through prte_oob_tcp_pending_release(), once admitted, and this that
+ * gives it back if not. */
+static bool pending_admit(prte_oob_tcp_conn_op_t *op, const struct sockaddr *addr, bool reserved)
+{
     prte_oob_tcp_pending_host_t *ph, *found = NULL;
     size_t alen;
+
+    if (!reserved && !prte_oob_tcp_pending_reserve(addr)) {
+        return false;
+    }
 
     alen = (AF_INET6 == addr->sa_family) ? sizeof(struct sockaddr_in6)
                                          : sizeof(struct sockaddr_in);
@@ -797,23 +890,11 @@ static bool pending_admit(prte_oob_tcp_conn_op_t *op, const struct sockaddr *add
             break;
         }
     }
-    if (prte_oob_base.num_pending >= max_pending()
-        || (0 < prte_oob_base.max_pending_per_host && NULL != found
-            && found->count >= prte_oob_base.max_pending_per_host)) {
-        if (!warned) {
-            warned = true;
-            pmix_output(0, "%s refusing connections: too many are part way through their "
-                        "handshake (%d in all, at most %d allowed; at most %d from one "
-                        "address, latest from %s). The next refusal is reported only once "
-                        "this has cleared.",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_oob_base.num_pending,
-                        max_pending(), prte_oob_base.max_pending_per_host,
-                        pmix_net_get_hostname(addr));
-        }
+    if (0 < prte_oob_base.max_pending_per_host && NULL != found
+        && found->count >= prte_oob_base.max_pending_per_host) {
+        report_pending_full(addr, prte_oob_base.max_pending_per_host);
+        pending_unreserve();
         return false;
-    }
-    if (0 == prte_oob_base.num_pending) {
-        warned = false;
     }
     if (NULL == found) {
         found = PMIX_NEW(prte_oob_tcp_pending_host_t);
@@ -821,7 +902,6 @@ static bool pending_admit(prte_oob_tcp_conn_op_t *op, const struct sockaddr *add
         pmix_list_append(&prte_oob_base.pending_hosts, &found->super);
     }
     ++found->count;
-    ++prte_oob_base.num_pending;
     op->pending = true;
     return true;
 }
@@ -834,9 +914,6 @@ void prte_oob_tcp_pending_release(prte_oob_tcp_conn_op_t *op)
         return;
     }
     op->pending = false;
-    if (0 < prte_oob_base.num_pending) {
-        --prte_oob_base.num_pending;
-    }
     PMIX_LIST_FOREACH(ph, &prte_oob_base.pending_hosts, prte_oob_tcp_pending_host_t) {
         if (same_host(&ph->addr, &op->from)) {
             if (0 >= --ph->count) {
@@ -846,6 +923,7 @@ void prte_oob_tcp_pending_release(prte_oob_tcp_conn_op_t *op)
             break;
         }
     }
+    pending_unreserve();
 }
 
 /* An inbound connection has had its time to complete the handshake and has
@@ -878,6 +956,12 @@ static void handshake_expired(int fd, short flags, void *cbdata)
  */
 void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *addr)
 {
+    prte_oob_accept_reserved(accepted_fd, addr, false);
+}
+
+/* ...for a connection whose place the listener thread may already hold */
+void prte_oob_accept_reserved(const int accepted_fd, const struct sockaddr *addr, bool reserved)
+{
     prte_oob_tcp_conn_op_t *op;
     struct timeval tv;
     int flags;
@@ -893,7 +977,7 @@ void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *ad
      * them idle connections alone used up every descriptor, and the listener
      * that met EMFILE shut itself down for good. */
     op = PMIX_NEW(prte_oob_tcp_conn_op_t);
-    if (!pending_admit(op, addr)) {
+    if (!pending_admit(op, addr, reserved)) {
         PMIX_RELEASE(op);
         shutdown(accepted_fd, 2);
         close(accepted_fd);

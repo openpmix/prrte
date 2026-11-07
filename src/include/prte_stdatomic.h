@@ -22,10 +22,12 @@
 #    include <stdbool.h>
 
 /* PRRTE shares almost all of its threading primitives with PMIx and needs
- * exactly one atomic type of its own: the flag the OOB's listener thread
- * spins on while the main thread clears it (oob_tcp_listener.c).  The other
- * nine typedefs this header used to carry - int/long/int32/uint32/int64/
- * uint64/size/ssize/intptr/uintptr - had no users at all.
+ * exactly two atomic types of its own: the flag the OOB's listener thread
+ * spins on while the main thread clears it (oob_tcp_listener.c), and the
+ * count of inbound connections the listener thread takes and the main thread
+ * gives back (oob_tcp.c).  The other typedefs this header used to carry -
+ * long/int32/uint32/int64/uint64/size/ssize/intptr/uintptr - had no users at
+ * all.
  *
  * C11 atomics are a requirement, not a preference, so there is no
  * alternative arm here - PMIx's pmix_stdatomic.h says the same thing the
@@ -40,5 +42,6 @@
 #    include <stdatomic.h>
 
 typedef _Atomic bool prte_atomic_bool_t;
+typedef _Atomic int prte_atomic_int_t;
 
 #endif /* !defined(PRTE_STDATOMIC_H) */

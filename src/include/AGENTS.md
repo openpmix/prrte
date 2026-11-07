@@ -26,7 +26,7 @@ up as strange behavior in whatever subsystem happened to use it.
 | `prte_config_top.h` | Undefs the autoconf `PACKAGE_*` macros. Included at the *top* of `prte_config.h`. | no |
 | `prte_config_bottom.h` | The portability layer: the `__prte_attribute_*__` wrappers, `PRTE_EXPORT`, `PRTE_PATH_MAX`, the `sockaddr`/`AF_*` fallbacks. Included at the *bottom* of `prte_config.h`. | no |
 | `prte_stdint.h` | Pointer-sized integer fallbacks and `PRIsize_t`. | no |
-| `prte_stdatomic.h` | `prte_atomic_bool_t`. That is the whole file. | no |
+| `prte_stdatomic.h` | `prte_atomic_bool_t` and `prte_atomic_int_t`. That is the whole file. | no |
 | `prte_socket_errno.h` | `#define prte_socket_errno errno`. | no |
 | `prte_portable_platform.h`, `_real.h` | Compiler-identification macros, also read by `config/prte_check_compiler_version.m4`. | vendored — do not edit |
 | `prte_config.h.in` | autoheader output. | **yes** |
@@ -284,8 +284,10 @@ before and after.
 
 ## Atomics are C11, full stop
 
-`prte_stdatomic.h` declares exactly one type, `prte_atomic_bool_t`, with the
-`_Atomic` keyword and no alternative. PMIx's `pmix_stdatomic.h` says the same
+`prte_stdatomic.h` declares exactly two types, `prte_atomic_bool_t` and
+`prte_atomic_int_t` (the OOB's count of inbound connections, which its
+listen thread takes and the main thread gives back), with the `_Atomic`
+keyword and no alternative. PMIx's `pmix_stdatomic.h` says the same
 thing the same way, and the two projects share a threading model.
 
 There used to be a `volatile`-typed fallback here selected by
@@ -325,7 +327,7 @@ Three of the twins were pure dead weight and are gone:
 
 The twins that remain are load-bearing and must stay: `prte_config_bottom.h`
 needs `prte_stdint.h` before any PMIx header has been seen, and
-`prte_socket_errno.h`/`prte_stdatomic.h` are one line and one typedef
+`prte_socket_errno.h`/`prte_stdatomic.h` are one line and two typedefs
 respectively. **Do not add a fourth.** If PRRTE needs a generic helper PMIx
 does not have, add it to PMIx and require the PMIx that has it via
 `PRTE_CHECK_PMIX_CAP` — see the top-level `AGENTS.md`.
