@@ -1436,6 +1436,287 @@ static int test_msg_keys_installed(void)
     return failures;
 }
 
+/* A send that needs no RML message: a relay's, whose payload the send
+ * object owns.  Completing one releases it and calls nobody, which is what
+ * lets these tests drive prte_oob_tcp_send_handler() directly. */
+static prte_oob_tcp_send_t *relay_send(const uint8_t *payload, size_t plen)
+{
+    prte_oob_tcp_send_t *snd = PMIX_NEW(prte_oob_tcp_send_t);
+
+    snd->hdr.origin = PRTE_PROC_MY_NAME->rank;
+    snd->hdr.dst = 6;
+    snd->hdr.type = MCA_OOB_TCP_USER;
+    snd->hdr.tag = 7;
+    snd->hdr.seq_num = 9;
+    snd->hdr.epoch = 1;
+    snd->hdr.nbytes = (uint32_t) plen;
+    MCA_OOB_TCP_HDR_HTON(&snd->hdr);
+    if (0 < plen) {
+        snd->data = malloc(plen);
+        memcpy(snd->data, payload, plen);
+    }
+    return snd;
+}
+
+/* a peer whose connection to rank 6 is up on `sd`, tagging or not */
+static prte_oob_tcp_peer_t *connected_peer(int sd, bool tagging)
+{
+    prte_oob_tcp_peer_t *peer = PMIX_NEW(prte_oob_tcp_peer_t);
+
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 6);
+    peer->sd = sd;
+    peer->state = MCA_OOB_TCP_CONNECTED;
+    if (tagging) {
+        memset(peer->msgauth.send_key, 0xa1, PRTE_OOB_TCP_MSGKEY_LEN);
+        memset(peer->msgauth.recv_key, 0xb2, PRTE_OOB_TCP_MSGKEY_LEN);
+        peer->msgauth.on = true;
+    }
+    return peer;
+}
+
+/* what a message should look like on the wire: its header as sent, its
+ * payload, and - when `key` is given - its tag as message number `seq` */
+static size_t expected_wire(uint8_t *out, const prte_oob_tcp_send_t *snd, const uint8_t *payload,
+                            size_t plen, const uint8_t *key, uint64_t seq)
+{
+    size_t n = PRTE_OOB_TCP_HDR_FIXED;
+
+    memcpy(out, &snd->hdr, n);
+    if (0 < plen) {
+        memcpy(out + n, payload, plen);
+    }
+    if (NULL != key) {
+        prte_oob_tcp_msg_tag(key, seq, out, PRTE_OOB_TCP_HDR_FIXED, payload, plen, out + n + plen);
+        n += PRTE_POLY1305_TAG_LEN;
+    }
+    return n + plen;
+}
+
+/* everything the far end of the pair has to read right now */
+static size_t drain(int fd, uint8_t *buf, size_t max)
+{
+    size_t have = 0;
+    ssize_t n;
+
+    while (have < max) {
+        n = recv(fd, buf + have, max - have, MSG_DONTWAIT);
+        if (0 >= n) {
+            break;
+        }
+        have += (size_t) n;
+    }
+    return have;
+}
+
+/* A connection that tags its messages puts each one on the wire as header,
+ * payload and tag - the tag under the send key and the message's place in
+ * the sequence - whether the socket takes it in one write or many, and from
+ * wherever a write left off.  One that does not tag sends exactly what it
+ * always has. */
+static int test_send_tags_messages(void)
+{
+    int failures = 0, sv[2], i;
+    uint8_t payload[100], expect[PRTE_OOB_TCP_HDR_FIXED + 100 + PRTE_POLY1305_TAG_LEN];
+    uint8_t got[sizeof(expect) + 64];
+    prte_oob_tcp_peer_t *peer;
+    prte_oob_tcp_send_t *snd;
+    size_t len, n;
+
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+    for (i = 0; i < (int) sizeof(payload); i++) {
+        payload[i] = (uint8_t) i;
+    }
+
+    /* two messages in a row: numbers 0 and 1 */
+    CHECK("socketpair", make_pair(sv));
+    peer = connected_peer(sv[0], true);
+    for (i = 0; i < 2; i++) {
+        snd = relay_send(payload, sizeof(payload));
+        len = expected_wire(expect, snd, payload, sizeof(payload), peer->msgauth.send_key,
+                            (uint64_t) i);
+        peer->send_msg = snd;
+        prte_oob_tcp_send_handler(sv[0], 0, peer);
+        CHECK("the message was sent in full", NULL == peer->send_msg);
+        n = drain(sv[1], got, sizeof(got));
+        CHECK("as header, payload and tag", len == n && 0 == memcmp(expect, got, len));
+    }
+    CHECK("and each took the next number", 2 == peer->msgauth.send_seq);
+
+    /* an empty message is a header and a tag */
+    snd = relay_send(NULL, 0);
+    len = expected_wire(expect, snd, NULL, 0, peer->msgauth.send_key, 2);
+    peer->send_msg = snd;
+    prte_oob_tcp_send_handler(sv[0], 0, peer);
+    n = drain(sv[1], got, sizeof(got));
+    CHECK("an empty message is a header and a tag",
+          PRTE_OOB_TCP_HDR_FIXED + PRTE_POLY1305_TAG_LEN == len && len == n
+              && 0 == memcmp(expect, got, len));
+
+    /* a write that stopped anywhere - in the header, at its end, in the
+     * payload, at its end, in the tag - carries on from there and sends
+     * the rest, without tagging the message again */
+    {
+        size_t offs[] = {1, PRTE_OOB_TCP_HDR_FIXED - 1, PRTE_OOB_TCP_HDR_FIXED,
+                         PRTE_OOB_TCP_HDR_FIXED + 1, PRTE_OOB_TCP_HDR_FIXED + 99,
+                         PRTE_OOB_TCP_HDR_FIXED + 100, PRTE_OOB_TCP_HDR_FIXED + 115};
+        bool resumed = true;
+        uint64_t seq = peer->msgauth.send_seq;
+
+        for (i = 0; i < (int) (sizeof(offs) / sizeof(offs[0])); i++) {
+            snd = relay_send(payload, sizeof(payload));
+            len = expected_wire(expect, snd, payload, sizeof(payload), peer->msgauth.send_key, 5);
+            memcpy(snd->tag, expect + PRTE_OOB_TCP_HDR_FIXED + sizeof(payload),
+                   PRTE_POLY1305_TAG_LEN);
+            snd->tagged = true;
+            snd->sent = offs[i];
+            peer->send_msg = snd;
+            prte_oob_tcp_send_handler(sv[0], 0, peer);
+            n = drain(sv[1], got, sizeof(got));
+            if (NULL != peer->send_msg || len - offs[i] != n
+                || 0 != memcmp(expect + offs[i], got, n)) {
+                fprintf(stderr, "resuming from byte %zu sent %zu bytes\n", offs[i], n);
+                resumed = false;
+            }
+        }
+        CHECK("a part-sent message is finished from where it stopped", resumed);
+        CHECK("without taking another number", seq == peer->msgauth.send_seq);
+    }
+    peer->sd = -1;
+    PMIX_RELEASE(peer);
+    close(sv[0]);
+    close(sv[1]);
+
+    /* a message larger than the socket takes in one write */
+    CHECK("socketpair", make_pair(sv));
+    peer = connected_peer(sv[0], true);
+    {
+        size_t big = 256 * 1024, have = 0, total;
+        uint8_t *bp = malloc(big), *bexp = malloc(big + 64), *bgot = malloc(big + 64);
+        int calls = 0;
+
+        for (n = 0; n < big; n++) {
+            bp[n] = (uint8_t) (n * 7);
+        }
+        snd = relay_send(bp, big);
+        total = expected_wire(bexp, snd, bp, big, peer->msgauth.send_key, 0);
+        peer->send_msg = snd;
+        while (NULL != peer->send_msg && calls < 100000) {
+            prte_oob_tcp_send_handler(sv[0], 0, peer);
+            ++calls;
+            have += drain(sv[1], bgot + have, big + 64 - have);
+        }
+        have += drain(sv[1], bgot + have, big + 64 - have);
+        CHECK("a large message took more than one write", 1 < calls);
+        CHECK("and arrived whole, tag and all",
+              NULL == peer->send_msg && total == have && 0 == memcmp(bexp, bgot, total));
+        CHECK("as one message", 1 == peer->msgauth.send_seq);
+        free(bp);
+        free(bexp);
+        free(bgot);
+    }
+    peer->sd = -1;
+    PMIX_RELEASE(peer);
+    close(sv[0]);
+    close(sv[1]);
+
+    /* a connection that does not tag */
+    CHECK("socketpair", make_pair(sv));
+    peer = connected_peer(sv[0], false);
+    snd = relay_send(payload, sizeof(payload));
+    len = expected_wire(expect, snd, payload, sizeof(payload), NULL, 0);
+    peer->send_msg = snd;
+    prte_oob_tcp_send_handler(sv[0], 0, peer);
+    n = drain(sv[1], got, sizeof(got));
+    CHECK("without tagging, a message is its header and payload",
+          len == n && 0 == memcmp(expect, got, len));
+    CHECK("and takes no number", 0 == peer->msgauth.send_seq);
+    peer->sd = -1;
+    PMIX_RELEASE(peer);
+    close(sv[0]);
+    close(sv[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_send_tags_messages\n");
+    }
+    return failures;
+}
+
+/* When a connection that crossed ours wins, the message we were part way
+ * through sending on our own is started again on the new one - from its
+ * header, and tagged afresh under the new connection's keys, whose sequence
+ * starts at 0.  Carried across, its old tag would fail there. */
+static int test_adopted_connection_retags(void)
+{
+    int failures = 0, sv[2], rc;
+    char wire[PMIX_MAX_NSLEN + 512];
+    uint8_t payload[100], expect[PRTE_OOB_TCP_HDR_FIXED + 100 + PRTE_POLY1305_TAG_LEN];
+    uint8_t got[sizeof(expect) + 64];
+    uint8_t dkey[PRTE_OOB_TCP_MSGKEY_LEN], lkey[PRTE_OOB_TCP_MSGKEY_LEN];
+    prte_oob_tcp_handshake_t hs;
+    prte_oob_tcp_peer_t *peer;
+    prte_oob_tcp_send_t *snd;
+    prte_oob_tcp_hdr_t hdr;
+    size_t len, n;
+    bool proved;
+
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
+    PRTE_PROC_MY_NAME->rank = 0;
+    memset(&hs, 0, sizeof(hs));
+    memset(payload, 0x5c, sizeof(payload));
+    prte_oob_authenticate_messages = true;
+
+    /* we are dialing rank 3, a message part sent on our attempt */
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 3);
+    peer->state = MCA_OOB_TCP_CONNECT_ACK;
+    memset(peer->msgauth.send_key, 0xee, PRTE_OOB_TCP_MSGKEY_LEN);
+    peer->msgauth.send_seq = 41;
+    peer->msgauth.on = true;
+    snd = relay_send(payload, sizeof(payload));
+    snd->tagged = true;
+    memset(snd->tag, 0xdd, sizeof(snd->tag));
+    snd->sent = 17;
+    peer->send_msg = snd;
+    pmix_list_append(&prte_oob_base.peers, &peer->super);
+
+    /* and rank 3, which outranks us, dials us at the same time */
+    CHECK("socketpair", make_pair(sv));
+    rc = authenticate(sv, &hs, 3, ANSWER_HONEST, &proved);
+    CHECK("both ends proved themselves", PRTE_ERR_WOULD_BLOCK == rc && proved);
+    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 0);
+    CHECK("wrote the ident", (ssize_t) len == write(sv[1], wire, len));
+    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+    CHECK("its connection was taken", PRTE_SUCCESS == rc && sv[0] == peer->sd);
+    CHECK("the message starts again from its header", 0 == snd->sent && !snd->tagged);
+    prte_oob_tcp_msg_keys(PRTE_PROC_MY_NAME->nspace, 3, PRTE_PROC_MY_NAME->rank,
+                          hs.auth.dialer_nonce, hs.auth.listener_nonce, dkey, lkey);
+    CHECK("under the new connection's keys",
+          peer->msgauth.on && 0 == memcmp(peer->msgauth.send_key, lkey, sizeof(lkey))
+              && 0 == peer->msgauth.send_seq);
+
+    /* and goes out tagged as that connection's first message */
+    peer->state = MCA_OOB_TCP_CONNECTED;
+    len = expected_wire(expect, snd, payload, sizeof(payload), lkey, 0);
+    prte_oob_tcp_send_handler(sv[0], 0, peer);
+    n = drain(sv[1], got, sizeof(got));
+    CHECK("it is sent whole, tagged as number 0",
+          NULL == peer->send_msg && len == n && 0 == memcmp(expect, got, len));
+
+    pmix_list_remove_item(&prte_oob_base.peers, &peer->super);
+    peer->sd = -1;
+    PMIX_RELEASE(peer);
+    prte_oob_tcp_handshake_clear(&hs);
+    prte_oob_authenticate_messages = false;
+    close(sv[0]);
+    close(sv[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_adopted_connection_retags\n");
+    }
+    return failures;
+}
+
 /* An inbound connection cannot hold a descriptor for long, nor can many.
  *
  * Every connection that has not finished its handshake holds a descriptor,
@@ -2011,6 +2292,8 @@ int main(void)
     failures += test_dialer_checks_listener();
     failures += test_msg_key_derivation();
     failures += test_msg_keys_installed();
+    failures += test_send_tags_messages();
+    failures += test_adopted_connection_retags();
     failures += test_stale_attempt_does_not_dial();
     failures += test_outbound_handshake_deadline();
 
