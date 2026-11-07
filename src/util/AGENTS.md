@@ -37,7 +37,7 @@ linked into `libprrte`. There are no MCA components here.
 | **Tool option values** | `prte_cmd_line.[ch]` | Value interpreters more than one tool needs (`--pid`, `--app`, the daemon umask), and the vocabularies of the directive-valued options - see "Directive vocabularies" below. See [`src/tools/AGENTS.md`](../tools/AGENTS.md). |
 | **Bootstrap** | `prte_bootstrap.[ch]` | Reading `prte.conf` for a launcher-less DVM. |
 | **DVM key** | `prte_dvm_key.[ch]`, `prte_hmac.[ch]` | The per-DVM key daemons prove they hold before the OOB treats them as daemons, how each launcher delivers it, and the SHA-256/HMAC that proof is made with. See "The DVM key" below. |
-| **Process plumbing** | `daemon_init.c`, `sys_limits.[ch]`, `stacktrace.[ch]`, `ethtool.[ch]` | Daemonizing, `setrlimit`, the crash handler, and the Linux interface-speed ioctl. |
+| **Process plumbing** | `daemon_init.c`, `sys_limits.[ch]`, `stacktrace.[ch]` | Daemonizing, `setrlimit`, and the crash handler. |
 | **Help delivery** | `prte_show_help.[ch]` | `prte_show_help()` — a drop-in for `pmix_show_help()` that works on a **daemon**. See below. |
 | **Generated** | `prte_show_help_content.c`, `prte-convert-help.py` | Every `help-*.txt` in the tree, compiled in. **Never edit the generated file.** |
 

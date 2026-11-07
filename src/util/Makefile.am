@@ -49,7 +49,6 @@ headers = \
         daemon_init.h \
         dash_host/dash_host.h \
         error_strings.h \
-        ethtool.h \
         error.h \
         name_fns.h \
         nidmap.h \
@@ -71,7 +70,6 @@ sources = \
         daemon_init.c \
         dash_host/dash_host.c \
         error_strings.c \
-        ethtool.c \
         error.c \
         name_fns.c \
         nidmap.c \
