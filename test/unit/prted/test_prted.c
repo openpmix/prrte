@@ -2651,6 +2651,7 @@ static int test_tool_registration(void)
     prte_job_t *jdata;
     prte_proc_t *proc;
     bool made_array = false;
+    unsigned int saved_limit = prte_pmix_server_globals.tool_rank_limit;
     int rc;
 
     if (NULL == prte_job_data) {
@@ -2658,6 +2659,29 @@ static int test_tool_registration(void)
         pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
         made_array = true;
     }
+    /* the MCA default, which nothing registers here */
+    prte_pmix_server_globals.tool_rank_limit = 1048576;
+
+    /* A rank above INT_MAX but below the sentinels is not a subscript
+     * either: pmix_pointer_array_set_item() takes an int, refused it, and
+     * nobody looked, so the proc was never filed and the job never retired.
+     * In a tool's own namespace the rank is also how far the array grows,
+     * so it is held below prte_pmix_tool_rank_limit. */
+    CHECK("a rank above INT_MAX is refused",
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, (pmix_rank_t) INT_MAX + 1));
+    prte_pmix_server_globals.tool_rank_limit = 16;
+    CHECK("a tool rank at the limit is refused",
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, 16));
+    CHECK("...and one below it accepted",
+          PRTE_SUCCESS == prte_pmix_server_tool_may_join(NULL, 15));
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    PMIX_LOAD_PROCID(&req->target, "unit-test-tool@9", (pmix_rank_t) INT_MAX - 1);
+    rc = prte_pmix_server_register_tool(req);
+    CHECK("a tool naming itself with a huge rank is refused", PRTE_ERR_BAD_PARAM == rc);
+    CHECK("...before any job object is built",
+          NULL == prte_get_job_data_object(req->target.nspace));
+    PMIX_RELEASE(req);
+    prte_pmix_server_globals.tool_rank_limit = 1048576;
 
     /* A tool chooses its own rank, and the sentinel ranks are not
      * subscripts: the proc object is filed in jdata->procs at the tool's
@@ -2776,6 +2800,7 @@ static int test_tool_registration(void)
         PMIX_RELEASE(prte_job_data);
         prte_job_data = NULL;
     }
+    prte_pmix_server_globals.tool_rank_limit = saved_limit;
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_tool_registration\n");

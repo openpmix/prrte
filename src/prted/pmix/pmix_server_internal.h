@@ -673,6 +673,9 @@ typedef struct {
     unsigned int session_rndz_id;
     bool system_server;
     bool no_foreign_tools;
+    /* a tool's rank is a subscript into its job's procs array, so a rank
+     * of its own choosing must be below this */
+    unsigned int tool_rank_limit;
     /* the users, besides root and our own, a tool may run as to be accepted
      * as the scheduler: the MCA list, and what it resolved to */
     char *scheduler_uids;
