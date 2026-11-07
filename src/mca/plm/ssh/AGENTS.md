@@ -157,7 +157,13 @@ as plain text. `launch_agent_setup` marks `rsh` and `remsh`
 (`agent_unencrypted`), and `setup_launch` refuses them with
 `agent-unencrypted` while `prte_oob_authenticate` is on - there, and not
 when the agent is chosen, so a DVM that never launches a remote daemon is
-unaffected. That is also why `rsh` is no longer in the default agent list. See
+unaffected. That is also why `rsh` is no longer in the default agent list.
+Under Grid Engine the agent is `qrsh -inherit`, which is given `-nostdin`
+only when there is no key to send: with it, no daemon ever received its
+key, and Grid Engine sites could start a DVM only with authentication off.
+How private qrsh's channel is depends on the site's Grid Engine
+configuration (`qrsh_command`/`rsh_command`, or the builtin transport), which
+PRRTE cannot see. See
 `src/util/prte_dvm_key.h`. Both
 sides `setpgid` the child into its own process group so a `Ctrl-C` to
 the HNP doesn't `SIGINT` the ssh processes (which would litter the
