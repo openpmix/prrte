@@ -1863,6 +1863,44 @@ static void ds_unpub_msg(const char *nspace, pmix_rank_t rank)
     PMIX_DATA_BUFFER_DESTRUCT(&buf);
 }
 
+/* A count of directives comes off the wire and sizes PMIX_INFO_CREATE before
+ * anything has checked it.  One chosen so that count * sizeof(pmix_info_t)
+ * wraps must not become a short array that the constructor loop runs off the
+ * end of: PMIx's calloc refuses the product, and the lookup has to come back
+ * with an error rather than go on with no array at all. */
+static int test_data_server_wire_count(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t buf, answer;
+    pmix_proc_t requestor, sender;
+    size_t n = 1;
+    char *key = "prte.test.count";
+    pmix_status_t rc;
+
+    ds_store_open();
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    PMIX_DATA_BUFFER_CONSTRUCT(&answer);
+    PMIX_LOAD_PROCID(&requestor, "count.job1", 0);
+    PMIx_Data_pack(NULL, &buf, &requestor, 1, PMIX_PROC);
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, &buf, &key, 1, PMIX_STRING);
+    /* n * sizeof(pmix_info_t) wraps to a few bytes */
+    n = SIZE_MAX / sizeof(pmix_info_t) + 2;
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIX_LOAD_PROCID(&sender, "prte-daemons", 1);
+    rc = prte_ds_lookup(&sender, 0, &buf, &answer);
+    CHECK("lookup: a directive count that wraps the allocation is refused",
+          PMIX_SUCCESS != rc);
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    PMIX_DATA_BUFFER_DESTRUCT(&answer);
+    ds_store_close();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_data_server_wire_count\n");
+    }
+    return failures;
+}
+
 static int test_data_server_unpublish_reach(void)
 {
     int failures = 0;
@@ -2838,6 +2876,7 @@ int main(void)
     failures += test_data_server_collect();
     failures += test_data_server_cap();
     failures += test_data_server_purge_parked();
+    failures += test_data_server_wire_count();
     failures += test_data_server_unpublish_reach();
     failures += test_data_server_same_range();
     failures += test_data_server_named_uint8();
