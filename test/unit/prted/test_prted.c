@@ -770,6 +770,45 @@ static int test_xfer_app(void)
     PMIX_APP_DESTRUCT(&papp);
     PMIX_RELEASE(jdata);
 
+    /* a ppr pattern's pe= is a count of cpus held in a uint16: it must be a
+     * whole number from 1 to 65535, as PE= on a mapping policy must */
+    {
+        const char *bad[] = {"ppr:2:node:pe=-1", "ppr:2:node:pe=0", "ppr:2:node:pe=65536",
+                             "ppr:2:node:pe=abc", "ppr:2:node:pe=", "ppr:2:node:pe=3x"};
+        uint16_t pes = 0, *pesptr = &pes;
+        size_t b;
+
+        for (b = 0; b < sizeof(bad) / sizeof(bad[0]); b++) {
+            jdata = fresh_job();
+            PMIX_APP_CONSTRUCT(&papp);
+            papp.cmd = strdup("hostname");
+            papp.maxprocs = 1;
+            PMIX_INFO_CREATE(papp.info, 1);
+            papp.ninfo = 1;
+            PMIX_INFO_LOAD(&papp.info[0], PMIX_PPR, bad[b], PMIX_STRING);
+            CHECK("app/ppr-pe-refused", PRTE_SUCCESS != prte_pmix_xfer_app(jdata, &papp));
+            PMIX_APP_DESTRUCT(&papp);
+            PMIX_RELEASE(jdata);
+        }
+
+        jdata = fresh_job();
+        PMIX_APP_CONSTRUCT(&papp);
+        papp.cmd = strdup("hostname");
+        papp.maxprocs = 1;
+        PMIX_INFO_CREATE(papp.info, 1);
+        papp.ninfo = 1;
+        PMIX_INFO_LOAD(&papp.info[0], PMIX_PPR, "ppr:2:node:pe=4", PMIX_STRING);
+        CHECK("app/ppr-pe-rc", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+        CHECK("app/ppr-pe-set",
+              NULL != app &&
+              prte_get_attribute(&app->attributes, PRTE_APP_PES_PER_PROC, (void **) &pesptr,
+                                 PMIX_UINT16));
+        CHECK("app/ppr-pe-value", 4 == pes);
+        PMIX_APP_DESTRUCT(&papp);
+        PMIX_RELEASE(jdata);
+    }
+
     return failures;
 }
 
