@@ -1050,6 +1050,14 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     if (NULL != papp->cwd) {
         app->cwd = strdup(papp->cwd);
     }
+    /* zero asks the mapper to work the count out; a negative count is
+     * neither. ppr and seq skip the computation for it, map nothing, and
+     * add the negative value to the job's unsigned process count */
+    if (0 > papp->maxprocs) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-runtime.txt",
+                       "spawn-maxprocs", true, app->app, papp->maxprocs);
+        return PRTE_ERR_BAD_PARAM;
+    }
     app->num_procs = papp->maxprocs;
 
     if (NULL != papp->info) {

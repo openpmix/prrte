@@ -749,6 +749,27 @@ static int test_xfer_app(void)
         PMIX_RELEASE(jdata);
     }
 
+    /* zero processes asks the mapper for the count; a negative count is
+     * refused, because the mappers that do not compute one added it to the
+     * job's unsigned total */
+    jdata = fresh_job();
+    PMIX_APP_CONSTRUCT(&papp);
+    papp.cmd = strdup("hostname");
+    papp.maxprocs = -1;
+    CHECK("app/maxprocs-negative", PRTE_SUCCESS != prte_pmix_xfer_app(jdata, &papp));
+    PMIX_APP_DESTRUCT(&papp);
+    PMIX_RELEASE(jdata);
+
+    jdata = fresh_job();
+    PMIX_APP_CONSTRUCT(&papp);
+    papp.cmd = strdup("hostname");
+    papp.maxprocs = 0;
+    CHECK("app/maxprocs-zero", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+    CHECK("app/maxprocs-zero-kept", NULL != app && 0 == app->num_procs);
+    PMIX_APP_DESTRUCT(&papp);
+    PMIX_RELEASE(jdata);
+
     return failures;
 }
 
