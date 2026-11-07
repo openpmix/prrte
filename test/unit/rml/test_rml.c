@@ -1320,6 +1320,76 @@ static int test_pending_handshakes_bounded(void)
           && !fd_is_open(sv[0][0]));
     close(sv[0][1]);
 
+    /* The listener thread takes a connection's place as accept() returns,
+     * before the descriptor waits for the main thread, and the main thread
+     * does not count it again.  Counting only when the main thread took it
+     * up let descriptors pile up in between without limit. */
+    prte_oob_base.handshake_timeout = 0;
+    prte_oob_base.max_pending = 2;
+    prte_oob_base.max_pending_per_host = 0;
+    CHECK("a place is reserved", prte_oob_tcp_pending_reserve((struct sockaddr *) &a));
+    CHECK("and another", prte_oob_tcp_pending_reserve((struct sockaddr *) &b));
+    CHECK("both are counted", 2 == prte_oob_base.num_pending);
+    fprintf(stdout, "-- the next case is refused; the message it prints is expected --\n");
+    CHECK("none past the limit", !prte_oob_tcp_pending_reserve((struct sockaddr *) &a)
+          && 2 == prte_oob_base.num_pending);
+    CHECK("tcp pair", tcp_pair(sv[0]));
+    CHECK("tcp pair", tcp_pair(sv[1]));
+    prte_oob_accept_reserved(sv[0][0], (struct sockaddr *) &a, true);
+    prte_oob_accept_reserved(sv[1][0], (struct sockaddr *) &b, true);
+    CHECK("reserved connections are taken without being counted twice",
+          2 == prte_oob_base.num_pending && fd_is_open(sv[0][0]) && fd_is_open(sv[1][0]));
+    close(sv[0][1]);
+    close(sv[1][1]);
+    run_until_none_pending(5);
+    CHECK("and give their places back", 0 == prte_oob_base.num_pending);
+
+#if PRTE_ENABLE_IPV6
+    /* One host may hold any address in its IPv6 prefix, so the per-host
+     * count is of the prefix (a /64 unless prte_oob_pending_ipv6_prefix
+     * says otherwise), not of the full address. */
+    {
+        struct sockaddr_in6 c, d, e;
+        int save_prefix = prte_oob_base.pending_ipv6_prefix;
+
+        memset(&c, 0, sizeof(c));
+        c.sin6_family = AF_INET6;
+        c.sin6_port = htons(40000);
+        inet_pton(AF_INET6, "2001:db8:1:2::1", &c.sin6_addr);
+        d = c;
+        inet_pton(AF_INET6, "2001:db8:1:2:ffff::7", &d.sin6_addr);
+        e = c;
+        inet_pton(AF_INET6, "2001:db8:1:3::1", &e.sin6_addr);
+        prte_oob_base.max_pending = 8;
+        prte_oob_base.max_pending_per_host = 1;
+        prte_oob_base.pending_ipv6_prefix = 64;
+        for (i = 0; i < 3; i++) {
+            CHECK("tcp pair", tcp_pair(sv[i]));
+        }
+        prte_oob_accept_connection(sv[0][0], (struct sockaddr *) &c);
+        fprintf(stdout, "-- the next case is refused; the message it prints is expected --\n");
+        prte_oob_accept_connection(sv[1][0], (struct sockaddr *) &d);
+        CHECK("another address in the same /64 counts as the same host",
+              1 == prte_oob_base.num_pending && !fd_is_open(sv[1][0]));
+        prte_oob_accept_connection(sv[2][0], (struct sockaddr *) &e);
+        CHECK("one in another /64 does not", 2 == prte_oob_base.num_pending
+              && fd_is_open(sv[2][0]));
+        close(sv[1][1]);
+        prte_oob_base.pending_ipv6_prefix = 128;
+        CHECK("tcp pair", tcp_pair(sv[1]));
+        prte_oob_accept_connection(sv[1][0], (struct sockaddr *) &d);
+        CHECK("with a /128, each address is its own host", 3 == prte_oob_base.num_pending
+              && fd_is_open(sv[1][0]));
+        for (i = 0; i < 3; i++) {
+            close(sv[i][1]);
+        }
+        run_until_none_pending(5);
+        CHECK("all given back", 0 == prte_oob_base.num_pending
+              && 0 == pmix_list_get_size(&prte_oob_base.pending_hosts));
+        prte_oob_base.pending_ipv6_prefix = save_prefix;
+    }
+#endif
+
     prte_oob_base.max_pending = save_max;
     prte_oob_base.max_pending_per_host = save_host;
     prte_oob_base.handshake_timeout = save_tmo;

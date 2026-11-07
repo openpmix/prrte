@@ -68,6 +68,9 @@ PRTE_EXPORT void prte_oob_tcp_send_handler(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_tcp_recv_handler(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *addr);
+PRTE_EXPORT void prte_oob_accept_reserved(const int accepted_fd, const struct sockaddr *addr,
+                                          bool reserved);
+PRTE_EXPORT bool prte_oob_tcp_pending_reserve(const struct sockaddr *addr);
 PRTE_EXPORT void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
 

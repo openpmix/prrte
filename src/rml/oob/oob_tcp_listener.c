@@ -724,6 +724,16 @@ static void *listen_thread(pmix_object_t *obj)
                     }
                 }
 
+                /* Count it now, before it waits in the event queue for the
+                 * main thread: while that thread is busy the queue can grow
+                 * without bound, and every entry holds a descriptor. */
+                if (!prte_oob_tcp_pending_reserve((struct sockaddr *) &pending_connection->addr)) {
+                    CLOSE_THE_SOCKET(pending_connection->fd);
+                    PMIX_RELEASE(pending_connection);
+                    continue;
+                }
+                pending_connection->reserved = true;
+
                 /* activate the event */
                 PMIX_POST_OBJECT(pending_connection);
                 prte_event_active(&pending_connection->ev, PRTE_EV_WRITE, 1);
@@ -755,7 +765,8 @@ static void connection_handler(int sd, short flags, void *cbdata)
                         pmix_net_get_port((struct sockaddr *) &new_connection->addr));
 
     /* process the connection */
-    prte_oob_accept_connection(new_connection->fd, (struct sockaddr *) &(new_connection->addr));
+    prte_oob_accept_reserved(new_connection->fd, (struct sockaddr *) &(new_connection->addr),
+                             new_connection->reserved);
 
     /* cleanup */
     PMIX_RELEASE(new_connection);
@@ -860,4 +871,11 @@ static void tcp_ev_des(prte_oob_tcp_listener_t *event)
 
 PMIX_CLASS_INSTANCE(prte_oob_tcp_listener_t, pmix_list_item_t, tcp_ev_cons, tcp_ev_des);
 
-PMIX_CLASS_INSTANCE(prte_oob_tcp_pending_connection_t, pmix_object_t, NULL, NULL);
+static void pending_connection_cons(prte_oob_tcp_pending_connection_t *p)
+{
+    p->fd = -1;
+    memset(&p->addr, 0, sizeof(p->addr));
+    p->reserved = false;
+}
+PMIX_CLASS_INSTANCE(prte_oob_tcp_pending_connection_t, pmix_object_t, pending_connection_cons,
+                    NULL);
