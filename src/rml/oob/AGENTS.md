@@ -55,8 +55,9 @@ header, the payload and - on a connection that tags its messages - the tag.
 
 ## The recv path in one paragraph
 
-When a peer's socket has delivered a complete message, the recv handler in
-`oob_tcp_sendrecv.c` inspects `hdr.dst`. If it is us, it calls
+When a peer's socket has delivered a complete message - and, on a connection
+that tags its messages, the tag behind it, which has checked out - the recv
+handler in `oob_tcp_sendrecv.c` inspects `hdr.dst`. If it is us, it calls
 `PRTE_RML_POST_MESSAGE` to hand the message up to the RML matching layer. If it
 is not us, this daemon is an intermediate hop: the handler rebuilds a
 `prte_rml_send_t` with the same `origin`/`dst` and re-enters `PRTE_OOB_SEND`, so
@@ -168,6 +169,18 @@ Rules that are easy to break:
   is one offset into header, payload and tag together, so a write may stop
   anywhere and the next carries on from there; a write that took nothing
   must not take a second number, which is what `msg->tagged` is for.
+- **Nothing in a message is acted on until its tag has checked out**
+  (`recv_tag_ok()`): not the epoch check, not delivery, not the relay. The
+  tag is over the fixed header **as it came off the wire** - the recv object
+  keeps a copy (`wirehdr`) before `MCA_OOB_TCP_HDR_NTOH` converts it - then
+  the payload, under the receive key and the next expected number, which
+  advances only on a match. So a message repeated, out of order, left out, or
+  tagged in our own direction fails, as well as one that was changed. A
+  failure is not skipped: the stream can no longer be relied on, so the
+  connection is closed (`msg-auth-failed`, `FAILED`, `peer_close`). The
+  header's own bounds - `nslen` zero, `nbytes` under `prte_max_msg_size` -
+  are still checked before the payload is read, because they decide what is
+  allocated and read; the tag can only be checked once all of it is in.
 - **The dialer gives its proof only after checking the listener's.** Whatever
   answers at a dead daemon's address learns nothing.
 - **The proven rank is the identity.** The IDENT must name the rank the HELLO
@@ -654,7 +667,14 @@ challenge gets the proof and the IDENT, a listener without the key gets
 nothing), the
 pending-handshake bounds and deadline (`test_pending_handshakes_bounded`, over
 real loopback TCP), the dial guard (`test_stale_attempt_does_not_dial`),
-the outbound deadline (`test_outbound_handshake_deadline`), and the
+the outbound deadline (`test_outbound_handshake_deadline`), message tagging
+(`test_msg_key_derivation`; `test_msg_keys_installed`: each end's keys, and a
+handshake refused when the two ends' settings differ;
+`test_send_tags_messages`: tags in sequence, an empty message, a write
+resumed from every boundary, a message over many writes;
+`test_adopted_connection_retags`; `test_recv_checks_tags`: a tag read in
+pieces, and a changed byte, a repeat, a gap and a reflected message each
+closing the connection), and the
 queued-send drain above (`test_queued_sends_complete_on_close`), driven through
 `prte_oob_tcp_peer_close()` because that is the one give-up path reachable
 without sockets; the arms in `prte_oob_tcp_peer_try_connect()` share the same

@@ -164,6 +164,23 @@ to each other when it was opened, so tagging needs that proof. Either
 leave "prte_oob_authenticate" on (the default), or turn
 "prte_oob_authenticate_messages" off.
 #
+[msg-auth-failed]
+A message between two PRRTE daemons did not carry the tag it should
+have, so the connection it arrived on has been closed:
+
+  node:       %s
+  daemon:     %s
+  peer:       %s
+  message:    %llu  (counting from 0 on this connection)
+
+With "prte_oob_authenticate_messages" on, every message is tagged under
+keys the two daemons agreed when the connection was opened, and is
+acted on only once its tag checks out. A message whose tag does not
+match was changed between the two daemons, or was not sent by the
+daemon this connection was opened with. Both daemons must also come
+from the same build. If the network path between these nodes is
+known to be reliable, please report this to the PRRTE developers.
+#
 [msg-auth-unfinished]
 PRRTE was asked to tag the messages between its daemons
 ("prte_oob_authenticate_messages"), which this build cannot yet do:
