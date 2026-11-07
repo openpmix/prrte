@@ -1805,14 +1805,13 @@ void pmix_server_query_request(int status, pmix_proc_t *sender,
         rc = PMIX_ERR_BAD_PARAM;
         goto error;
     }
-    /* The count arrives off the wire in a size_t, and PMIX_QUERY_CREATE
-     * multiplies it by sizeof(pmix_query_t) with no overflow guard and then
-     * constructs every element it claimed - so a count large enough to wrap
-     * that product yields a short allocation whose constructor loop runs
-     * straight off the end, before the unpack below gets a chance to screen
-     * anything.  Require the count to survive the round trip through the
-     * int32_t the unpack consumes it as, which bounds it well clear of the
-     * wrap.  PMIx screens its own client-facing query the same way. */
+    /* The count arrives off the wire in a size_t, and the unpack below
+     * consumes it as an int32_t - so one that does not survive the round
+     * trip cannot describe this buffer, and is refused before
+     * PMIX_QUERY_CREATE allocates and constructs that many elements.  (The
+     * allocation itself cannot wrap: PMIx allocates with calloc, which
+     * refuses a product that overflows.)  PMIx screens its own client-facing
+     * query the same way. */
     cnt = (int32_t) nqueries;
     if (0 > cnt || (size_t) cnt != nqueries) {
         rc = PMIX_ERR_BAD_PARAM;

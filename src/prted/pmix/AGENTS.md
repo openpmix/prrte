@@ -347,16 +347,19 @@ not been checked. `pmix_pointer_array_get_item()` bounds-checks and
 returns NULL, so check for NULL — but do not then `return` without
 completing the request, because the requester is still waiting.
 
-**And a *count* arriving on the wire needs a second check.** The
-`PMIX_*_CREATE` macros multiply the count by the element size with no
-overflow guard and then run a constructor over every element they claimed,
-so a count large enough to wrap that product yields a short allocation and
-a constructor loop that walks off the end — before the unpack that would
-have rejected the buffer gets a chance to say anything. Screen it by
-requiring it to survive the round trip through the `int32_t` the unpack
-consumes it as (`pmix_server_query_request()` is the worked example; PMIx
-screens its own client-facing query the same way), and NULL-check the
-allocation afterwards.
+**And a *count* arriving on the wire sizes an allocation before anything
+has checked it.** The `PMIX_*_CREATE` macros allocate the count's worth of
+elements and construct every one of them, ahead of the unpack that would
+refuse a buffer too short to hold them. What they do *not* do is wrap: in
+every PMIx PRRTE supports (7.0.0 on) they allocate with `calloc(n, size)`,
+which refuses a product that overflows and returns NULL - so a count chosen
+to wrap gets no array, and the unpack into NULL fails with
+`PMIX_ERR_BAD_PARAM`. Two things follow. NULL-check the allocation, or at
+least let the unpack that follows see the NULL; and do not mistake a screen
+on the count's *range* - the round trip through `int32_t` in
+`pmix_server_query_request()`, say - for a bound on memory: a count just
+under `INT32_MAX` still asks for a terabyte of `pmix_info_t`, which `calloc`
+refuses for want of memory, not of arithmetic.
 
 **A relay must answer even a request it cannot parse.** Every `goto reply`
 in `pmix_server_sched()` happens after the requestor's index has been
