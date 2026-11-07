@@ -811,7 +811,11 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
     hwloc_obj_type_t obj_type = HWLOC_OBJ_CORE;
 
     package_core = PMIx_Argv_split(package_core_list, ':');
-    if (NULL == package_core || !parse_cpu_id(package_core[0], &package_id)) {
+    /* "P0:" splits to the package alone, and the loop below then has nothing
+     * to add - so it came back as success with an empty mask, a binding to
+     * no cpus at all. The whole package is spelled "P0" or "P0:*". */
+    if (NULL == package_core || NULL == package_core[1] ||
+        !parse_cpu_id(package_core[0], &package_id)) {
         PMIx_Argv_free(package_core);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -939,8 +943,15 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
 
     pmix_output_verbose(5, prte_hwloc_base_output, "slot assignment: slot_list == %s", slot_str);
 
-    /* split at ';' */
+    /* split at ';'. PMIx_Argv_split() returns NULL, not an empty array, for
+     * a string with no tokens in it - and the length test above does not
+     * catch that, because ";" is one character long. Every split below can
+     * produce the same NULL from a different input ("P", ","), so each
+     * result is checked before it is indexed. */
     item = PMIx_Argv_split(slot_str, ';');
+    if (NULL == item) {
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     /* start with a clean mask */
     hwloc_bitmap_zero(cpumask);
@@ -961,6 +972,11 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                  * Skip the P and look for ranges
                  */
                 rngs = PMIx_Argv_split(&item[i][1], ',');
+                if (NULL == rngs) {
+                    /* a bare "P" (or "P,") names no package */
+                    PMIx_Argv_free(item);
+                    return PRTE_ERR_BAD_PARAM;
+                }
                 for (j = 0; NULL != rngs[j]; j++) {
                     if (PRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, cpumask))) {
                         PMIx_Argv_free(rngs);
@@ -983,6 +999,11 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
             }
         } else {
             rngs = PMIx_Argv_split(item[i], ',');
+            if (NULL == rngs) {
+                /* an item of nothing but commas names no cpu */
+                PMIx_Argv_free(item);
+                return PRTE_ERR_BAD_PARAM;
+            }
             for (k = 0; NULL != rngs[k]; k++) {
                 /* just a core specification - see if one or a range was given */
                 range = PMIx_Argv_split(rngs[k], '-');
