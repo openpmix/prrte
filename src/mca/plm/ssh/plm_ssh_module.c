@@ -201,8 +201,18 @@ static int ssh_init(void)
         /* automatically add -inherit and grid engine PE related flags */
         PMIx_Argv_append_nosize(&ssh_agent_argv, "-inherit");
         /* Don't use the "-noshell" flag as qrsh would have a problem
-         * swallowing a long command */
-        PMIx_Argv_append_nosize(&ssh_agent_argv, "-nostdin");
+         * swallowing a long command.
+         *
+         * The daemon's key comes down the agent's stdin (process_launch_list),
+         * so qrsh must forward it: with "-nostdin" every daemon found its
+         * stdin empty and refused to start, and the only way to run under
+         * Grid Engine at all was to turn authentication off.  The flag was
+         * there to keep qrsh from reading our own stdin, which ssh_child
+         * replaces with the key pipe anyway - so it is wanted only when there
+         * is no key to send, and stdin is /dev/null. */
+        if (!prte_oob_authenticate) {
+            PMIx_Argv_append_nosize(&ssh_agent_argv, "-nostdin");
+        }
         PMIx_Argv_append_nosize(&ssh_agent_argv, "-V");
         if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             PMIx_Argv_append_nosize(&ssh_agent_argv, "-verbose");
