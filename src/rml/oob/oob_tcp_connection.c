@@ -1578,10 +1578,10 @@ static bool retry(prte_oob_tcp_peer_t *peer, int sd)
         }
         pmix_mutex_lock(&peer->lock);
         if (NULL != peer->send_msg) {
-            peer->send_msg->hdr_sent = false;
-            peer->send_msg->iovnum = 0;
-            peer->send_msg->sdptr = (char *) &peer->send_msg->hdr;
-            peer->send_msg->sdbytes = PRTE_OOB_TCP_HDR_LEN(&peer->send_msg->hdr);
+            /* and the new connection has keys and a sequence of its own,
+             * so the message is tagged again when it goes out on it */
+            peer->send_msg->sent = 0;
+            peer->send_msg->tagged = false;
         }
         peer->state = MCA_OOB_TCP_UNCONNECTED;
         pmix_mutex_unlock(&peer->lock);

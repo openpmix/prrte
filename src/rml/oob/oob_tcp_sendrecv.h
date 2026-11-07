@@ -37,6 +37,7 @@
 #include "src/rml/oob/oob_tcp_hdr.h"
 #include "src/rml/rml.h"
 #include "src/threads/pmix_threads.h"
+#include "src/util/prte_poly1305.h"
 
 /* forward declare */
 struct prte_oob_tcp_peer_t;
@@ -50,10 +51,16 @@ typedef struct {
     prte_oob_tcp_hdr_t hdr;
     prte_rml_send_t *msg;
     char *data;
-    bool hdr_sent;
-    int iovnum;
-    char *sdptr;
-    size_t sdbytes;
+    /* How much of the message has gone on the wire: one offset into the
+     * header, the payload and - when the connection tags its messages - the
+     * tag behind it, taken as one run of bytes.  0 until the first write. */
+    size_t sent;
+    /* whether `tag` holds this message's tag.  Made on the first write, on
+     * the thread servicing the socket, so the order sequence numbers are
+     * taken in is the order the messages go on the wire; cleared, with
+     * `sent`, when the message is started again on a new connection. */
+    bool tagged;
+    uint8_t tag[PRTE_POLY1305_TAG_LEN];
 } prte_oob_tcp_send_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_send_t);
 
@@ -130,9 +137,6 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         _s->hdr.nbytes = (m)->dbuf->bytes_used;                                                \
         /* prep header for xmission */                                                         \
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                        \
-        /* start the send with the header */                                                   \
-        _s->sdptr = (char *) &_s->hdr;                                                         \
-        _s->sdbytes = PRTE_OOB_TCP_HDR_LEN(&_s->hdr);                                          \
         /* add to the msg queue for this peer */                                               \
         MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                                                  \
     } while (0)
@@ -166,9 +170,6 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         _s->hdr.nbytes = (m)->dbuf->bytes_used;                                                   \
         /* prep header for xmission */                                                            \
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                           \
-        /* start the send with the header */                                                      \
-        _s->sdptr = (char *) &_s->hdr;                                                            \
-        _s->sdbytes = PRTE_OOB_TCP_HDR_LEN(&_s->hdr);                                             \
         /* add to the msg queue for this peer */                                                  \
         MCA_OOB_TCP_QUEUE_MSG((p), _s, false);                                                    \
     } while (0)

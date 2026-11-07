@@ -139,36 +139,79 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
     }
 }
 
+/* Write as much of a message as the socket will take.
+ *
+ * A message is its header, its payload and - on a connection that tags its
+ * messages - the tag behind them, and `msg->sent` says how far into that run
+ * of bytes it has got.  Each call builds the iovecs from that point on and
+ * advances it by what writev took, so a write may end anywhere, header and
+ * tag included.
+ *
+ * Runs only on the thread servicing the peer's socket, and that thread alone
+ * sends, one message at a time in queue order: so the sequence number taken
+ * when a message is tagged here is its place on the wire. */
 static int send_msg(prte_oob_tcp_peer_t *peer, prte_oob_tcp_send_t *msg)
 {
-    struct iovec iov[2];
-    int iov_count, retries = 0;
-    ssize_t remain = msg->sdbytes, rc;
+    prte_oob_tcp_msgauth_t *ma = &peer->msgauth;
+    struct iovec iov[3];
+    char *base[3];
+    size_t len[3], hdrlen, plen, total, off;
+    int i, iov_count = 0, retries = 0;
+    ssize_t remain, rc;
 
-    iov[0].iov_base = msg->sdptr;
-    iov[0].iov_len = msg->sdbytes;
-    if (!msg->hdr_sent) {
-        if (NULL != msg->data) {
-            /* relay message - just send that data */
-            iov[1].iov_base = msg->data;
-        } else {
-            /* buffer send */
-            iov[1].iov_base = msg->msg->dbuf->base_ptr;
-        }
-        iov[1].iov_len = ntohl(msg->hdr.nbytes);
-        remain += ntohl(msg->hdr.nbytes);
-        iov_count = 2;
+    hdrlen = PRTE_OOB_TCP_HDR_LEN(&msg->hdr);
+    plen = ntohl(msg->hdr.nbytes);
+    base[0] = (char *) &msg->hdr;
+    len[0] = hdrlen;
+    if (NULL != msg->data) {
+        /* relay message - just send that data */
+        base[1] = msg->data;
+    } else if (NULL != msg->msg) {
+        /* buffer send */
+        base[1] = msg->msg->dbuf->base_ptr;
     } else {
-        iov_count = 1;
+        /* a relay with no payload */
+        base[1] = NULL;
     }
+    len[1] = plen;
+
+    /* Tag it the first time it is written - and only then: a write that
+     * took nothing leaves the message where it was, and must not take a
+     * second sequence number for it.  The header is in network order
+     * already, which is how the receiver sees it too. */
+    if (ma->on && !msg->tagged) {
+        prte_oob_tcp_msg_tag(ma->send_key, ma->send_seq, &msg->hdr, hdrlen, base[1], plen,
+                             msg->tag);
+        ++ma->send_seq;
+        msg->tagged = true;
+    }
+    base[2] = (char *) msg->tag;
+    len[2] = msg->tagged ? sizeof(msg->tag) : 0;
+
+    total = len[0] + len[1] + len[2];
+    if (msg->sent >= total) {
+        return PRTE_SUCCESS;
+    }
+    /* what is left, from where the last write stopped - skipping anything
+     * of no length, since an empty payload may have no pointer at all */
+    off = msg->sent;
+    for (i = 0; i < 3; i++) {
+        if (off >= len[i]) {
+            off -= len[i];
+            continue;
+        }
+        iov[iov_count].iov_base = base[i] + off;
+        iov[iov_count].iov_len = len[i] - off;
+        ++iov_count;
+        off = 0;
+    }
+    remain = (ssize_t) (total - msg->sent);
 
 retry:
     rc = writev(peer->sd, iov, iov_count);
     if (PMIX_LIKELY(rc == remain)) {
-        /* we successfully sent the header and the msg data if any */
-        msg->hdr_sent = true;
-        msg->sdbytes = 0;
-        msg->sdptr = (char *) iov[iov_count - 1].iov_base + iov[iov_count - 1].iov_len;
+        /* the whole message is on the wire */
+        msg->sent = total;
         return PRTE_SUCCESS;
     } else if (rc < 0) {
         if (prte_socket_errno == EINTR) {
@@ -201,24 +244,12 @@ retry:
             }
             return PRTE_ERR_UNREACH;
         }
-    } else {
-        /* short writev. This usually means the kernel buffer is full,
-         * so there is no point for retrying at that time.
-         * simply update the msg and return with PMIX_ERR_RESOURCE_BUSY */
-        if ((size_t) rc < msg->sdbytes) {
-            /* partial write of the header or the msg data */
-            msg->sdptr = (char *) msg->sdptr + rc;
-            msg->sdbytes -= rc;
-        } else {
-            /* header was fully written, but only a part of the msg data was written */
-            msg->hdr_sent = true;
-            rc -= msg->sdbytes;
-            assert(2 == iov_count);
-            msg->sdptr = (char *) iov[1].iov_base + rc;
-            msg->sdbytes = ntohl(msg->hdr.nbytes) - rc;
-        }
-        return PRTE_ERR_RESOURCE_BUSY;
     }
+    /* short writev. This usually means the kernel buffer is full, so there
+     * is no point retrying now - note how far it got and come back when the
+     * socket is writable */
+    msg->sent += (size_t) rc;
+    return PRTE_ERR_RESOURCE_BUSY;
 }
 
 /*
@@ -668,10 +699,9 @@ static void snd_cons(prte_oob_tcp_send_t *ptr)
     memset(&ptr->hdr, 0, sizeof(prte_oob_tcp_hdr_t));
     ptr->msg = NULL;
     ptr->data = NULL;
-    ptr->hdr_sent = false;
-    ptr->iovnum = 0;
-    ptr->sdptr = NULL;
-    ptr->sdbytes = 0;
+    ptr->sent = 0;
+    ptr->tagged = false;
+    memset(ptr->tag, 0, sizeof(ptr->tag));
 }
 /* an OOB send owns the RML message attached to it until that message is
  * completed - completion clears the pointer, so anything still attached

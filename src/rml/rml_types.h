@@ -292,9 +292,9 @@ PMIX_CLASS_DECLARATION(prte_rml_recv_cb_t);
  * whichever send that turns out to be.
  *
  * Nothing about the transport had to change to allow this: the OOB reads
- * base_ptr/bytes_used and keeps all of its per-destination progress
- * (sdptr/sdbytes/hdr_sent) in the send object, so several sends can read one
- * buffer concurrently.  The one rule is the obvious one - a shared payload is
+ * base_ptr/bytes_used and keeps all of its per-destination progress (how
+ * far it has got, and the message's tag) in the send object, so several
+ * sends can read one buffer concurrently.  The one rule is the obvious one - a shared payload is
  * immutable from the moment it is first handed to a send.
  */
 typedef struct {

@@ -51,7 +51,7 @@ peer is connected the message is queued for immediate send
 (`MCA_OOB_TCP_QUEUE_PENDING`) and the connection state machine in
 `oob_tcp_connection.c` is started. Once the socket is up and the IDENT
 handshake has completed, the send handler in `oob_tcp_sendrecv.c` writes the
-header then the payload.
+header, the payload and - on a connection that tags its messages - the tag.
 
 ## The recv path in one paragraph
 
@@ -160,6 +160,14 @@ Rules that are easy to break:
   `CONNECTED` - so no worker ever sees a connection without them - and
   cleared when a new socket is made for the peer. Both sequence numbers start
   at 0 on every connection.
+- **A message is tagged on its first write, on the thread servicing the
+  socket** (`send_msg()`), and never again on that connection. That thread
+  alone sends, one message at a time in queue order, so the sequence number
+  taken there is the message's place on the wire; tagged when queued, from
+  whichever thread queued it, the numbers could go out of order. `msg->sent`
+  is one offset into header, payload and tag together, so a write may stop
+  anywhere and the next carries on from there; a write that took nothing
+  must not take a second number, which is what `msg->tagged` is for.
 - **The dialer gives its proof only after checking the listener's.** Whatever
   answers at a dead daemon's address learns nothing.
 - **The proven rank is the identity.** The IDENT must name the rank the HELLO
@@ -486,7 +494,9 @@ main thread reconnecting it:
 lock, then the deletes (which wait out a handler in flight). It also throws
 away the old stream's half-read message and restarts its half-sent one from
 the header - the far end discarded both with its end of that connection, and
-carried across they would splice two streams together.
+carried across they would splice two streams together. The restarted one
+is tagged again (`sent` and `tagged` cleared): the new connection has new
+keys and its sequence starts at 0, so the old tag would fail there.
 
 With an empty pool, `peer->evbase` **is** `prte_event_base`:
 `PRTE_OOB_COMPLETE_SEND` completes inline instead of posting, the rebind is a
