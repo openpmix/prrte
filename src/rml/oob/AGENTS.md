@@ -482,7 +482,11 @@ after it is gone, still gets a usable base.
 
 The one piece of state outside this directory that a worker touches directly is
 the RML's incarnation table (`prte_rml_epoch_ok`, bootstrap only), which
-reallocates; it carries its own mutex in `src/rml/rml.c`. Anything else you make
+reallocates; it carries its own mutex in `src/rml/rml.c`. The rank it is
+indexed by is the header's `origin`, so the table grows no further than
+`PRTE_RML_EPOCH_MAX_RANKS` (a rank past it is accepted untracked, as on a
+failed realloc), and a stamped message whose origin is a sentinel rank is
+refused. Anything else you make
 a socket handler call has to be safe off the main thread or has to be shifted.
 
 ## Interface selection and the listeners
