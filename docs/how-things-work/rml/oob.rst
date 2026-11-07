@@ -165,8 +165,12 @@ rather than by waiting for them.  A connection that sends part of one and
 stops costs its socket, not the daemon - and only for so long, and only so
 many of them:
 
-* ``prte_oob_handshake_timeout`` (default 30 seconds) is how long an inbound
-  connection has to finish its handshake before it is dropped;
+* ``prte_oob_handshake_timeout`` (default 30 seconds) is how long a
+  connection has to finish its handshake.  An inbound one is dropped when it
+  runs out; one this daemon opened is treated as a failed address, so the
+  daemon moves on to the peer's next address, or reports the peer
+  unreachable when none is left, instead of waiting on a port that accepted
+  the connection and never answered;
 * ``prte_oob_max_pending`` (default: half the process's file-descriptor limit)
   bounds how many inbound connections may be part way through their handshake
   at once, and ``prte_oob_max_pending_per_host`` (default 64) how many of

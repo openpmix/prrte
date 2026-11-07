@@ -172,7 +172,7 @@ Rules that are easy to break:
 This authenticates endpoints; it does not encrypt or sign the stream after
 it, and every daemon of the DVM holds the key.
 
-## An inbound connection may hold a descriptor only so long, and only so many may
+## A connection may hold a descriptor only so long, and only so many inbound ones may
 
 Every inbound connection that has not finished its handshake holds a
 descriptor for something that may never complete it. So
@@ -183,6 +183,19 @@ is full, and arms a deadline (`prte_oob_handshake_timeout`, default 30 s,
 `handshake_expired()`). The conn op's destructor undoes both - it is the one
 place every ending passes through - so a new exit path needs no bookkeeping
 of its own.
+
+A connection **we** open has the same deadline (`peer->hs_deadline`, armed by
+`prte_oob_tcp_peer_arm_deadline()` where the HELLO goes out and the peer enters
+`CONNECT_ACK`). Whatever accepted the dial - at the port of a daemon that has
+gone or not yet started, which a static bootstrap port makes easy to sit on -
+may never answer, and the read event fires only on bytes or a close, so
+nothing else ends that wait. On expiry the attempt is a failed address:
+`peer_close` moves on to the next one with the queue intact, and reports the
+peer when none is left, which in a bootstrapped DVM is what lets the tree heal
+round a parent that is not there. It is disarmed at `CONNECTED`, when a new
+socket is made, when `retry()` abandons our attempt for the peer's, and in
+`peer_close`'s still-connecting branch; all of those run on `prte_event_base`,
+where the timer lives.
 
 And when `accept()` still fails for want of descriptors or memory
 (`accept_error_is_exhaustion()`: `EMFILE`, `ENFILE`, `ENOBUFS`, `ENOMEM`), the
@@ -597,7 +610,7 @@ challenge gets the proof and the IDENT, a listener without the key gets
 nothing), the
 pending-handshake bounds and deadline (`test_pending_handshakes_bounded`, over
 real loopback TCP), the dial guard (`test_stale_attempt_does_not_dial`),
-and the
+the outbound deadline (`test_outbound_handshake_deadline`), and the
 queued-send drain above (`test_queued_sends_complete_on_close`), driven through
 `prte_oob_tcp_peer_close()` because that is the one give-up path reachable
 without sockets; the arms in `prte_oob_tcp_peer_try_connect()` share the same

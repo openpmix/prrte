@@ -1385,6 +1385,83 @@ static int test_stale_attempt_does_not_dial(void)
     return failures;
 }
 
+/* A connection we open has a deadline for its handshake too.
+ *
+ * Only inbound connections had one.  Whatever accepted a dial we made - at
+ * the port of a daemon that had gone, or not yet started - could hold it
+ * open and send nothing, and since the read event fires only when bytes or a
+ * close arrive, nothing ever gave up on it: the peer's messages queued
+ * behind it for good.  Now the dial is a failed address once
+ * prte_oob_handshake_timeout runs out, and the peer moves on.
+ */
+static int test_outbound_handshake_deadline(void)
+{
+    int failures = 0, sv[2], i;
+    int save_tmo = prte_oob_base.handshake_timeout;
+    bool save_fin = prte_finalizing;
+    prte_event_base_t *save_base = prte_event_base;
+    prte_reachable_base_module_reachable_fn_t save = prte_reachable.reachable;
+    prte_oob_tcp_peer_t *peer;
+
+    /* what runs is only what this test armed; and giving up on the peer
+     * once its last address has failed is not this test's business */
+    prte_event_base = prte_event_base_create();
+    CHECK("event base", NULL != prte_event_base);
+    prte_reachable.reachable = no_route;
+    prte_finalizing = true;
+
+    /* no deadline when the timeout is off */
+    prte_oob_base.handshake_timeout = 0;
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    prte_oob_tcp_peer_arm_deadline(peer);
+    CHECK("a zero timeout arms nothing", !peer->hs_deadline_active);
+    PMIX_RELEASE(peer);
+
+    /* a dial answered by silence */
+    prte_oob_base.handshake_timeout = 1;
+    CHECK("socketpair", make_pair(sv));
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 7);
+    peer->sd = sv[0];
+    peer->state = MCA_OOB_TCP_CONNECT_ACK;
+    prte_oob_tcp_peer_arm_deadline(peer);
+    CHECK("the deadline is armed", peer->hs_deadline_active);
+    fprintf(stdout, "-- the next case gives up on a peer; the message it prints is expected --\n");
+    for (i = 0; i < 500 && fd_is_open(sv[0]); i++) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_NONBLOCK);
+        if (fd_is_open(sv[0])) {
+            usleep(10000);
+        }
+    }
+    CHECK("a dial nobody answers is dropped at its deadline", !fd_is_open(sv[0]));
+    CHECK("...as a failed attempt, not a live connection",
+          MCA_OOB_TCP_CONNECT_ACK != peer->state && MCA_OOB_TCP_CONNECTED != peer->state);
+    CHECK("...and the deadline is spent", !peer->hs_deadline_active);
+    close(sv[1]);
+
+    prte_event_base_free(prte_event_base);
+    prte_event_base = save_base;
+    PMIX_RELEASE(peer);
+
+    /* reaching CONNECTED stops the clock */
+    prte_oob_base.handshake_timeout = 30;
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    peer->state = MCA_OOB_TCP_CONNECT_ACK;
+    prte_oob_tcp_peer_arm_deadline(peer);
+    prte_oob_tcp_peer_disarm_deadline(peer);
+    CHECK("disarming stops the clock", !peer->hs_deadline_active);
+    PMIX_RELEASE(peer);
+
+    prte_oob_base.handshake_timeout = save_tmo;
+    prte_finalizing = save_fin;
+    prte_reachable.reachable = save;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_outbound_handshake_deadline\n");
+    }
+    return failures;
+}
+
 /*
  * The interfaces prte_oob_open selects, and the sockets it listens on.
  *
@@ -1627,6 +1704,7 @@ int main(void)
     failures += test_handshake_authenticates();
     failures += test_dialer_checks_listener();
     failures += test_stale_attempt_does_not_dial();
+    failures += test_outbound_handshake_deadline();
 
     prte_finalize();
 

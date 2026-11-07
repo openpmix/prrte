@@ -94,6 +94,56 @@ static int tcp_peer_send_blocking(int sd, void *data, size_t size);
 static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs);
 static void tcp_peer_connected(prte_oob_tcp_peer_t *peer);
 
+/* A connection we opened has had prte_oob_handshake_timeout seconds to
+ * finish its handshake and has not.  Whatever accepted it may hold the port
+ * of a daemon that has gone or not yet started, and never answer: nothing
+ * else ends that wait, since the read event only fires when bytes or a close
+ * arrive.  So treat it as a failed address - peer_close moves on to the
+ * peer's next one with the queued messages intact, and reports the peer when
+ * none is left, which in a bootstrapped DVM is what lets the tree heal round
+ * a parent that is not there.  This runs on prte_event_base, as the whole
+ * handshake does. */
+static void tcp_peer_handshake_expired(int fd, short flags, void *cbdata)
+{
+    prte_oob_tcp_peer_t *peer = (prte_oob_tcp_peer_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
+
+    PMIX_ACQUIRE_OBJECT(peer);
+    peer->hs_deadline_active = false;
+    if (MCA_OOB_TCP_CONNECT_ACK != peer->state || peer->established) {
+        return;
+    }
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                        "%s-%s handshake did not complete within %d seconds",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
+                        prte_oob_base.handshake_timeout);
+    peer->state = MCA_OOB_TCP_FAILED;
+    prte_oob_tcp_peer_close(peer);
+}
+
+void prte_oob_tcp_peer_arm_deadline(prte_oob_tcp_peer_t *peer)
+{
+    struct timeval tv;
+
+    prte_oob_tcp_peer_disarm_deadline(peer);
+    if (0 >= prte_oob_base.handshake_timeout) {
+        return;
+    }
+    tv.tv_sec = prte_oob_base.handshake_timeout;
+    tv.tv_usec = 0;
+    prte_event_evtimer_set(prte_event_base, &peer->hs_deadline, tcp_peer_handshake_expired, peer);
+    prte_event_evtimer_add(&peer->hs_deadline, &tv);
+    peer->hs_deadline_active = true;
+}
+
+void prte_oob_tcp_peer_disarm_deadline(prte_oob_tcp_peer_t *peer)
+{
+    if (peer->hs_deadline_active) {
+        prte_event_del(&peer->hs_deadline);
+        peer->hs_deadline_active = false;
+    }
+}
+
 static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
 {
     int flags;
@@ -125,8 +175,10 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
     prte_oob_tcp_set_socket_options(peer->sd);
 
     /* a new socket gets a new handshake - forget whatever part of a reply
-     * the last one had received, and how far it had got proving who it was */
+     * the last one had received, and how far it had got proving who it was,
+     * and the clock on it */
     prte_oob_tcp_handshake_clear(&peer->hshake);
+    prte_oob_tcp_peer_disarm_deadline(peer);
 
     /* setup event callbacks */
     tcp_peer_event_init(peer);
@@ -689,6 +741,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     /* open the handshake: prove ourselves, and ask the peer to */
     if (PRTE_SUCCESS == (rc = tcp_peer_send_hello(peer))) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
+        prte_oob_tcp_peer_arm_deadline(peer);
     } else {
         /* The connection came up and died before it would take a few hundred
          * bytes, so this address has failed.  peer_close is what deals with
@@ -1293,6 +1346,7 @@ void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer)
 
     if (tcp_peer_send_hello(peer) == PRTE_SUCCESS) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
+        prte_oob_tcp_peer_arm_deadline(peer);
         pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s tcp_peer_complete_connect: "
                             "setting read event on connection to %s",
@@ -1384,6 +1438,8 @@ static bool retry(prte_oob_tcp_peer_t *peer, int sd)
             peer->recv_ev_active = false;
         }
         CLOSE_THE_SOCKET(peer->sd);
+        /* our attempt is abandoned, and with it the clock on its handshake */
+        prte_oob_tcp_peer_disarm_deadline(peer);
         /* We have just thrown away our own socket in favour of the one
          * the caller accepted, and the caller carries on to finish the
          * handshake there, so that socket is the peer's from here on.
@@ -1687,6 +1743,8 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
     if (NULL != peer->active_addr) {
         peer->active_addr->retries = 0;
     }
+    /* still on prte_event_base, where the deadline lives */
+    prte_oob_tcp_peer_disarm_deadline(peer);
 
     /* Publishing CONNECTED is what makes this peer reachable from a worker
      * base: prte_oob_base_send_nb tests the state and MCA_OOB_TCP_QUEUE_MSG
@@ -1782,6 +1840,8 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
          * connection attempt was in flight */
         peer->state = MCA_OOB_TCP_CONNECTING;
         pmix_mutex_unlock(&peer->lock);
+        /* this attempt is over, so is its deadline */
+        prte_oob_tcp_peer_disarm_deadline(peer);
         /* drop any registration on the socket we are about to discard:
          * tcp_peer_event_init asserts that neither event is active, and
          * try_connect always reaches it once peer->sd is reset below */

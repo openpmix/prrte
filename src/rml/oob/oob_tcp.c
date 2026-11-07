@@ -663,14 +663,18 @@ int prte_oob_register(void)
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.silent_loss_vpid);
 
-    /* An inbound connection is given this long to prove it belongs to the
-     * DVM.  A daemon's own handshake takes a few round trips; the bound is
-     * generous because the handshake is serviced by the progress thread,
-     * which may be busy with a launch when a connection arrives. */
+    /* A connection is given this long to complete its handshake: an
+     * inbound one to prove it belongs to the DVM, and one we opened for the
+     * far end to answer.  A daemon's own handshake takes a few round trips;
+     * the bound is generous because the handshake is serviced by the
+     * progress thread, which may be busy with a launch when a connection
+     * arrives. */
     prte_oob_base.handshake_timeout = 30;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_handshake_timeout",
-                                        "Seconds an inbound daemon connection has to complete its "
-                                        "connect handshake before it is dropped (default: 30)",
+                                        "Seconds a daemon connection has to complete its connect "
+                                        "handshake: an inbound one is then dropped, and one this "
+                                        "daemon opened is given up on and the peer's next address "
+                                        "tried (default: 30)",
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.handshake_timeout);
 
