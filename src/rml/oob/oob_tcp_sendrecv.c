@@ -73,6 +73,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
+#include "src/util/prte_hmac.h"
 
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_common.h"
@@ -439,6 +440,26 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
     return PRTE_SUCCESS;
 }
 
+/* Does the message just read carry the tag the far end should have given
+ * it - under its direction's key, as the next message in that direction?
+ * Advances the expected number when it does, so a message repeated, sent out
+ * of order or left out fails at the next one.  Runs on the thread servicing
+ * the socket, which alone reads the receive keys. */
+static bool recv_tag_ok(prte_oob_tcp_peer_t *peer)
+{
+    prte_oob_tcp_recv_t *m = peer->recv_msg;
+    uint8_t expect[PRTE_POLY1305_TAG_LEN];
+    bool ok;
+
+    prte_oob_tcp_msg_tag(peer->msgauth.recv_key, peer->msgauth.recv_seq, m->wirehdr,
+                         sizeof(m->wirehdr), m->data, m->hdr.nbytes, expect);
+    ok = prte_secure_equal(expect, m->tag, sizeof(expect));
+    if (ok) {
+        ++peer->msgauth.recv_seq;
+    }
+    return ok;
+}
+
 /*
  * Dispatch to the appropriate action routine based on the state
  * of the connection with the peer.
@@ -514,6 +535,8 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             if (PRTE_SUCCESS == (rc = read_bytes(peer))) {
                 /* completed reading the fixed part of the header */
                 peer->recv_msg->hdr_recvd = true;
+                /* keep it as it arrived - the tag is over these bytes */
+                memcpy(peer->recv_msg->wirehdr, &peer->recv_msg->hdr, PRTE_OOB_TCP_HDR_FIXED);
                 /* convert the header */
                 MCA_OOB_TCP_HDR_NTOH(&peer->recv_msg->hdr);
                 /* only the connect handshake sends a namespace - a message
@@ -596,7 +619,29 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
              * wherever we left off, which could be at the
              * beginning or somewhere in the message
              */
-            if (PRTE_SUCCESS == (rc = read_bytes(peer))) {
+            rc = read_bytes(peer);
+            if (PRTE_SUCCESS == rc && peer->msgauth.on && !peer->recv_msg->data_recvd) {
+                /* the payload is in; the tag follows it */
+                peer->recv_msg->data_recvd = true;
+                peer->recv_msg->rdptr = (char *) peer->recv_msg->tag;
+                peer->recv_msg->rdbytes = sizeof(peer->recv_msg->tag);
+                rc = read_bytes(peer);
+            }
+            if (PRTE_SUCCESS == rc) {
+                /* Nothing in a message is acted on - not its epoch, not
+                 * its delivery, not its relay - until its tag has checked
+                 * out.  A message that fails is not skipped: the stream
+                 * can no longer be relied on, so the connection goes. */
+                if (peer->msgauth.on && !recv_tag_ok(peer)) {
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt",
+                                   "msg-auth-failed", true, prte_process_info.nodename,
+                                   PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                   PRTE_NAME_PRINT(&peer->name),
+                                   (unsigned long long) peer->msgauth.recv_seq);
+                    peer->state = MCA_OOB_TCP_FAILED;
+                    prte_oob_tcp_peer_close(peer);
+                    return;
+                }
                 /* we recvd all of the message */
                 pmix_output_verbose(
                     OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
@@ -725,6 +770,9 @@ static void rcv_cons(prte_oob_tcp_recv_t *ptr)
     memset(&ptr->hdr, 0, sizeof(prte_oob_tcp_hdr_t));
     ptr->hdr_recvd = false;
     ptr->nspace_recvd = false;
+    ptr->data_recvd = false;
+    memset(ptr->wirehdr, 0, sizeof(ptr->wirehdr));
+    memset(ptr->tag, 0, sizeof(ptr->tag));
     ptr->data = NULL;
     ptr->rdptr = NULL;
     ptr->rdbytes = 0;

@@ -72,6 +72,13 @@ typedef struct {
     /* the nspace trails the fixed part of the header and is read separately,
      * so "we have the header" is two steps, not one */
     bool nspace_recvd;
+    /* the payload is in, and - on a connection that tags its messages -
+     * what is being read now is the tag behind it */
+    bool data_recvd;
+    /* the fixed header exactly as it came off the wire, before it was
+     * converted: what the sender's tag covers */
+    uint8_t wirehdr[PRTE_OOB_TCP_HDR_FIXED];
+    uint8_t tag[PRTE_POLY1305_TAG_LEN];
     char *data;
     char *rdptr;
     size_t rdbytes;
