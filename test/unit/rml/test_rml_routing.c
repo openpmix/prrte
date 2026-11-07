@@ -1153,6 +1153,20 @@ static int test_epoch_guard(void)
     CHECK("...and read back", 77 == prte_rml_get_epoch(400));
     CHECK("a far rank rejects a stale epoch", !prte_rml_epoch_ok(400, 76));
 
+    /* The rank comes off the wire, and the table was grown to whatever it
+     * said - near the top of the range, some 32 GiB.  A rank past any DVM is
+     * not tracked, and a sentinel is no daemon's rank at all. */
+    CHECK("a rank past the table's reach is accepted untracked",
+          prte_rml_epoch_ok(PMIX_RANK_VALID - 1, 5)
+          && 0 == prte_rml_get_epoch(PMIX_RANK_VALID - 1));
+    CHECK("...without growing the table to it",
+          prte_rml_base.peer_epochs_size < (size_t) 1 << 21);
+    prte_rml_record_epoch(PMIX_RANK_VALID - 2, 9);
+    CHECK("...nor can one be recorded there", 0 == prte_rml_get_epoch(PMIX_RANK_VALID - 2)
+          && prte_rml_base.peer_epochs_size < (size_t) 1 << 21);
+    CHECK("a stamped message from a sentinel rank is refused",
+          !prte_rml_epoch_ok(PMIX_RANK_WILDCARD, 5));
+
     if (0 == failures) {
         fprintf(stdout, "PASSED test_epoch_guard\n");
     }
