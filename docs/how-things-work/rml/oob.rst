@@ -173,8 +173,11 @@ many of them:
   the connection and never answered;
 * ``prte_oob_max_pending`` (default: half the process's file-descriptor limit)
   bounds how many inbound connections may be part way through their handshake
-  at once, and ``prte_oob_max_pending_per_host`` (default 64) how many of
-  those may come from any one address.
+  at once, counted from the moment ``accept()`` returns them, and
+  ``prte_oob_max_pending_per_host`` (default 64) how many of those may come
+  from any one host.  An IPv6 host is identified by the leading
+  ``prte_oob_pending_ipv6_prefix`` bits of its address (default 64), since one
+  host may use any address in its prefix.
 
 Should ``accept()`` nonetheless run out of descriptors or memory, the listener
 pauses for a second and tries again; it used to close for good, after which

@@ -117,8 +117,11 @@ typedef struct {
      * connections alone exhaust the daemon's descriptors. */
     int handshake_timeout;    /**< seconds an inbound connection has to finish its handshake */
     int max_pending;          /**< inbound handshakes held at once (0 => from the fd limit) */
-    int max_pending_per_host; /**< ... of which from any one source address */
-    int num_pending;          /**< inbound handshakes in progress now */
+    int max_pending_per_host; /**< ... of which from any one source host */
+    int pending_ipv6_prefix;  /**< leading bits of an IPv6 source address that name its host */
+    prte_atomic_int_t num_pending; /**< inbound connections held now, from accept() until the
+                                        handshake ends - taken by the listener thread, given back
+                                        on the main progress thread */
     pmix_list_t pending_hosts; /**< prte_oob_tcp_pending_host_t: per-source counts */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;

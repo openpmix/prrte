@@ -175,14 +175,29 @@ it, and every daemon of the DVM holds the key.
 ## A connection may hold a descriptor only so long, and only so many inbound ones may
 
 Every inbound connection that has not finished its handshake holds a
-descriptor for something that may never complete it. So
-`prte_oob_accept_connection()` counts it (`pending_admit()`: overall against
-`prte_oob_max_pending`, default half the fd limit, and per source address
-against `prte_oob_max_pending_per_host`, default 64), refuses it when either
-is full, and arms a deadline (`prte_oob_handshake_timeout`, default 30 s,
-`handshake_expired()`). The conn op's destructor undoes both - it is the one
-place every ending passes through - so a new exit path needs no bookkeeping
-of its own.
+descriptor for something that may never complete it. So it is counted
+overall against `prte_oob_max_pending` (default half the fd limit) and per
+source host against `prte_oob_max_pending_per_host` (default 64), refused
+when either is full, and given a deadline (`prte_oob_handshake_timeout`,
+default 30 s, `handshake_expired()`). The conn op's destructor gives back
+both counts and the deadline - it is the one place every ending passes
+through - so a new exit path needs no bookkeeping of its own.
+
+Two things about the counting are easy to undo by "simplifying":
+
+- **The overall count starts at `accept()`, in the listen thread.**
+  `prte_oob_tcp_pending_reserve()` takes the place before the descriptor is
+  queued for the main thread, and `prte_oob_accept_reserved(..., true)` does
+  not take it again. Counted only once the main thread took the connection
+  up, as it used to be, descriptors piled up in that queue without limit
+  while the main thread was busy. So `num_pending` is a `prte_atomic_int_t`:
+  the listen thread adds, the main thread gives back. The event-driven
+  listener, which accepts on the main thread, reserves inside
+  `pending_admit()` instead.
+- **An IPv6 host is a prefix, not an address.** `same_host()` compares the
+  leading `prte_oob_pending_ipv6_prefix` bits (default 64) - a host may use
+  any address in its /64, so counting by full address gave one host the
+  whole overall limit. A v4-mapped address is compared whole.
 
 A connection **we** open has the same deadline (`peer->hs_deadline`, armed by
 `prte_oob_tcp_peer_arm_deadline()` where the HELLO goes out and the peer enters
