@@ -140,6 +140,7 @@ bool prte_persistent = false;
  * another daemon will talk to them (src/util/prte_dvm_key.h).  On unless an
  * operator turns it off, and the HNP tells each daemon when it has been. */
 bool prte_oob_authenticate = true;
+bool prte_oob_authenticate_messages = false;
 /* A daemon's cue that plm/ssh is writing its DVM key down its stdin */
 bool prte_dvm_key_stdin = false;
 bool prte_allow_run_as_root = false;

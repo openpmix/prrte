@@ -184,6 +184,22 @@ int prte_oob_open(void)
     pmix_output_verbose(5, prte_oob_base.output,
                         "oob:tcp: component_available called");
 
+    /* a message's tag is keyed by what the handshake's proofs established,
+     * so there is nothing to key it with when there are no proofs */
+    if (prte_oob_authenticate_messages && !prte_oob_authenticate) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "msg-auth-without-auth",
+                       true, prte_process_info.nodename);
+        return PRTE_ERR_SILENT;
+    }
+    /* Tagging is not implemented yet - only its parameter and its primitive
+     * (src/util/prte_poly1305.[ch]) are in.  Refuse the setting rather than
+     * ignore it: a DVM must not run believing its messages are tagged. */
+    if (prte_oob_authenticate_messages) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-oob-tcp.txt", "msg-auth-unfinished",
+                       true, prte_process_info.nodename);
+        return PRTE_ERR_SILENT;
+    }
+
      PMIX_CONSTRUCT(&prte_oob_base.listeners, pmix_list_t);
     if (PRTE_PROC_IS_MASTER) {
         PMIX_CONSTRUCT(&prte_oob_base.listen_thread, pmix_thread_t);

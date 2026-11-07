@@ -2448,6 +2448,13 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         pmix_argv_append(argc, argv, "prte_oob_authenticate");
         pmix_argv_append(argc, argv, "0");
     }
+    /* ...and if their messages are to be tagged: a daemon that did not tag
+     * would be refused by every peer that does */
+    if (prte_oob_authenticate_messages) {
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "prte_oob_authenticate_messages");
+        pmix_argv_append(argc, argv, "1");
+    }
 
     /* look for any envars that relate to us and pass
      * them along on the cmd line - unless we were told not to */
