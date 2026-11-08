@@ -62,6 +62,9 @@ In the absence of the slot extension, one slot will be assigned to the
 node. Duplicate entries are aggregated and the number of slots
 assigned to that node are summed together.
 
+An entry may begin with "user@" to name the user to reach that node as.
+That is accepted only from root and the user the DVM runs as.
+
 Note:
 
   A "slot" is the PRRTE term for an allocatable unit where we can
@@ -213,6 +216,18 @@ You may have forgotten to preface a node with "N" or "n", or used the
 "e" or "E" to indicate empty nodes, or you ended the value with a
 colon but forgot to include the number of empty nodes you were
 requesting.
+
+Re-run this command with "--help hosts" for further information.
+#
+[dash-host:invalid-name]
+
+A host given in a list of hosts is not a name a host can have:
+
+   Host:   %s
+
+A host's name is made of letters, digits, ".", "-" and "_", and does
+not begin with "-". It may be preceded by "user@" to name the user to
+reach the host as, which follows the same rule.
 
 Re-run this command with "--help hosts" for further information.
 #
