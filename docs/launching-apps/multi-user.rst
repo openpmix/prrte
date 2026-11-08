@@ -43,10 +43,10 @@ What the DVM does not do for another user
 -----------------------------------------
 
 Some directives ask the DVM itself, rather than the job's processes, to
-open a file or to add hosts. The DVM does those as the user it runs as,
-so they are accepted only from root and from the DVM's own user:
+open a file. The DVM does that as the user it runs as, so they are
+accepted only from root and from the DVM's own user:
 
-* a hostfile, or a hostfile or hosts to add to the DVM;
+* a hostfile, or a hostfile of hosts to add to the DVM;
 * a rankfile or sequential-mapping file;
 * a file for the process table (``--output-proctable``);
 * binaries or files to preload.
@@ -54,3 +54,18 @@ so they are accepted only from root and from the DVM's own user:
 A job of any other user that asks for one of them is refused, naming the
 directive. Output files a job's ``--output`` directive names are not on
 this list: they are opened as the job's own user.
+
+Who may grow the DVM
+--------------------
+
+Bringing hosts into an elastic DVM - with ``--add-host`` or
+``--activate`` on a job, or with an allocation request
+(``PMIx_Allocation_request``) that names nodes - changes what the DVM
+consists of. It is accepted from root, the DVM's own user, and the users
+and groups the DVM was started with (``prte --rtos users=...,groups=...``),
+as creating a session is. When the DVM hands such requests to a PMIx
+scheduler, the scheduler decides instead.
+
+A host may be given as ``user@host`` to name the user the DVM logs in to
+it as. That is accepted only from root and the DVM's own user, and a host
+name may contain only letters, digits, ``.``, ``-`` and ``_``.
