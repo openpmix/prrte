@@ -432,11 +432,11 @@ int prte_plm_base_comm_stop(void)
  * NOTE: THIS OCCURS INSIDE OF AN EVENT AND IS
  * THEREFORE THREAD-SAFE
  */
-/* The first directive of jdata's that has the master open a file it names,
- * or add hosts to the DVM - NULL if it has none. The master acts on these
- * as itself, whoever asked, so for anybody but root and our own user they
- * are refused (prte_plm_base_recv). Running the job as its owner does not
- * cover them: they are not the job's processes. */
+/* The first directive of jdata's that has the master open a file it names
+ * - NULL if it has none. The master reads these as itself, whoever asked,
+ * so for anybody but root and our own user they are refused
+ * (prte_plm_base_recv). Running the job as its owner does not cover them:
+ * they are not the job's processes. */
 static const char *foreign_directive(prte_job_t *jdata)
 {
     static const struct {
@@ -445,7 +445,6 @@ static const char *foreign_directive(prte_job_t *jdata)
     } app_keys[] = {
         {PRTE_APP_HOSTFILE, "a hostfile"},
         {PRTE_APP_ADD_HOSTFILE, "a hostfile to add"},
-        {PRTE_APP_ADD_HOST, "hosts to add"},
         {PRTE_APP_MAP_FILE, "a rankfile or sequential mapping file"},
         {PRTE_APP_PRELOAD_FILES, "files to preload"},
     };
@@ -472,6 +471,48 @@ static const char *foreign_directive(prte_job_t *jdata)
         /* the master reads the binary to copy it out */
         if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_PRELOAD_BIN)) {
             return "a binary to preload";
+        }
+    }
+    return NULL;
+}
+
+/* The first of jdata's directives that names hosts to bring into the DVM, or
+ * to start daemons on, which its owner may not ask for - NULL if none. That
+ * is for whoever may change the DVM, and a user to reach a host as
+ * ("user@host") for root and our own user alone
+ * (prte_pmix_server_grow_permitted_uid) - the same rule an allocation
+ * request naming hosts is held to. */
+static const char *grow_directive(prte_job_t *jdata, uid_t owner)
+{
+    static const struct {
+        prte_attribute_key_t key;
+        const char *name;
+    } keys[] = {
+        {PRTE_APP_ADD_HOST, "hosts to add"},
+        {PRTE_APP_ACTIVATE_HOSTS, "hosts to activate"},
+    };
+    prte_app_context_t *app;
+    char *hosts;
+    bool user;
+    size_t k;
+    int n;
+
+    for (n = 0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
+            continue;
+        }
+        for (k = 0; k < sizeof(keys) / sizeof(keys[0]); k++) {
+            hosts = NULL;
+            if (!prte_get_attribute(&app->attributes, keys[k].key, (void **) &hosts,
+                                    PMIX_STRING)) {
+                continue;
+            }
+            user = (NULL != hosts && NULL != strchr(hosts, '@'));
+            free(hosts);
+            if (!prte_pmix_server_grow_permitted_uid(owner, false, user)) {
+                return user ? "a user to reach a host as" : keys[k].name;
+            }
         }
     }
     return NULL;
@@ -866,6 +907,13 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-plm-base.txt", "foreign-directive",
                                true, PRTE_JOB_NSPACE(jdata),
                                (unsigned long) prte_pmix_server_job_owner(jdata), what);
+                rc = PRTE_ERR_PERM;
+                goto ANSWER_LAUNCH;
+            }
+            /* and the hosts it would have the DVM bring in */
+            if (NULL != (what = grow_directive(jdata, prte_pmix_server_job_owner(jdata)))) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt",
+                               "ras-base:grow-not-permitted", true, "spawn", what);
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
