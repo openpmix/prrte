@@ -4384,6 +4384,74 @@ test_requesters() {
     cleanup_swarm
 }
 
+# Who may bring hosts into an elastic DVM (P02's fix). Naming hosts is for
+# whoever may change the DVM - root, its own user, and the users it was
+# started with - on the allocation route and the spawn route alike. A user
+# to reach a host as ("user@host") is for root and its own user alone, and
+# is kept apart from the host's name. See src/mca/ras/AGENTS.md.
+test_grow_authz() {
+    local out uri
+    local u65534 u65533
+
+    banner "grow: an unlisted user may not bring a host into the DVM"
+    cleanup_swarm
+    if ! RUN 'test "$(id -u)" = 0 && command -v setpriv >/dev/null'; then
+        skp "requesting as a second user needs root and setpriv on the head node"
+        return
+    fi
+    if ! prted_dvm_start_mca 'node1:1,node2:1' \
+            '--prtemca prte_elastic_mode 1 --prtemca prte_pmix_no_foreign_tools 0 --rtos users=65533'; then
+        bad "could not start an elastic DVM that accepts other users' tools"
+        return
+    fi
+    uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
+    u65534="setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp PRTE_DVM_URI='$uri'"
+    u65533="setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp PRTE_DVM_URI='$uri'"
+
+    out=$(RUN "cd /tmp && timeout 60 $u65534 elastic grow node3:1" 2>&1)
+    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_NO_PERMISSIONS" \
+        && ok "its allocation request naming a host is refused" \
+        || bad "an unlisted user's grow was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    out=$(RUN "cd /tmp && timeout 60 setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp prun --dvm-uri '$uri' --add-host node3 -n 1 hostname" 2>&1)
+    if echo "$out" | grep -q "PMIX_ERR_NO_PERMISSIONS" && echo "$out" | grep -q "hosts to add"; then
+        ok "its spawn adding a host is refused, saying why"
+    else
+        bad "an unlisted user's --add-host was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    [ "$(prted_count 3)" = 1 ] \
+        && bad "a daemon was started on node3 anyway" \
+        || ok "no daemon was started on node3"
+
+    banner "grow: a user the DVM was started with may - but not with a user@"
+    out=$(RUN "cd /tmp && timeout 90 $u65533 elastic grow node3:1" 2>&1)
+    if echo "$out" | grep -q "PMIX_DVM_IS_READY" && [ "$(prted_count 3)" = 1 ]; then
+        ok "a listed user's grow brings node3 in"
+    else
+        bad "a listed user's grow did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "cd /tmp && timeout 60 $u65533 elastic grow root@node4:1" 2>&1)
+    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_NO_PERMISSIONS" \
+        && ok "a listed user may not name a user to reach a host as" \
+        || bad "a listed user's user@host was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    [ "$(prted_count 4)" = 1 ] \
+        && bad "a daemon was started on node4 anyway" \
+        || ok "no daemon was started on node4"
+
+    banner "grow: root may name a user, and the node is named for the host"
+    out=$(RUN "timeout 90 env PRTE_DVM_URI='$uri' elastic grow root@node4:1" 2>&1)
+    if echo "$out" | grep -q "PMIX_DVM_IS_READY" && [ "$(prted_count 4)" = 1 ]; then
+        ok "root's grow onto root@node4 brings node4 in"
+    else
+        bad "root's grow onto root@node4 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "timeout 60 prun --dvm-uri '$uri' --host node4 -n 1 hostname" 2>&1)
+    [ "$(echo "$out" | tr -d '\r' | grep -c '^node4$')" = 1 ] \
+        && ok "a job placed on node4 by its own name runs there" \
+        || bad "node4 is not known by its own name: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+}
+
 # A job's processes run as the user the job belongs to. On a root DVM that
 # takes other users' tools, another user's job runs as that user on every
 # node - as its processes see themselves, as their PMIx server judges them,
@@ -11236,6 +11304,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     phase test_requesters
 
     phase test_run_as
+
+    phase test_grow_authz
 
     phase test_tools
 
