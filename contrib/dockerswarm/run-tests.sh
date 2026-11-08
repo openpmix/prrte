@@ -4418,6 +4418,16 @@ test_grow_authz() {
     else
         bad "an unlisted user's --add-host was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
+    out=$(RUN "cd /tmp && timeout 60 $u65534 elastic spawnalloc node3:1 -- hostname" 2>&1)
+    # the refusal is the allocation's, so the spawn fails as a refused
+    # allocation does; its message is the one the grow above already
+    # printed, and a repeated message is not printed twice
+    if echo "$out" | grep -q "SPAWN FAILED: PMIX_ERR_JOB_ALLOC_FAILED" &&
+       echo "$out" | grep -q "ALLOCATION REFUSED"; then
+        ok "its spawn carrying an allocation that names a host is refused"
+    else
+        bad "an unlisted user's PMIX_SPAWN_ALLOC was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
     [ "$(prted_count 3)" = 1 ] \
         && bad "a daemon was started on node3 anyway" \
         || ok "no daemon was started on node3"
@@ -4443,6 +4453,12 @@ test_grow_authz() {
         ok "root's grow onto root@node4 brings node4 in"
     else
         bad "root's grow onto root@node4 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "timeout 90 env PRTE_DVM_URI='$uri' elastic spawnalloc node5:1 -- hostname" 2>&1)
+    if echo "$out" | tr -d '\r' | grep -q '^node5$' && [ "$(prted_count 5)" = 1 ]; then
+        ok "root's spawn carrying an allocation of node5 runs there"
+    else
+        bad "root's PMIX_SPAWN_ALLOC of node5 did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
     out=$(RUN "timeout 60 prun --dvm-uri '$uri' --host node4 -n 1 hostname" 2>&1)
     [ "$(echo "$out" | tr -d '\r' | grep -c '^node4$')" = 1 ] \
