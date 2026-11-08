@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -20,12 +20,21 @@ Many PRRTE commands accept the ``--host`` CLI parameter.
 
 .. code::
 
-   host[:slots]
+   [user@]host[:slots]
 
 The ``host`` token can be either:
 
 * A name that resolves to an IP address, or
 * An IP address
+
+A name is made of letters, digits, ``.``, ``-`` and ``_``, and does not
+begin with ``-``; anything else is refused.
+
+The optional ``user@`` names the user to log in to the host as when a
+daemon is started there, as ``user@host`` does in a hostfile. The host
+is known by its own name either way. When a running DVM is asked to add
+hosts, a ``user@`` is accepted only from root and the user the DVM runs
+as.
 
 .. note:: The names and/or IP addresses of hosts are *only* used for
           identifying the target host on which to launch.  They are

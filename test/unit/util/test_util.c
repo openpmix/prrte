@@ -805,6 +805,61 @@ static prte_node_t *find_node(pmix_list_t *list, const char *name)
     return NULL;
 }
 
+/* "user@host" in a list of hosts names the user to reach the host as. The
+ * user is kept apart - the node is named for the host alone, as a hostfile
+ * entry would be - and a name with characters no host or user name has is
+ * refused, since it goes on the launch agent's command line. */
+static int test_dash_host_names(void)
+{
+    int failures = 0;
+    pmix_list_t nodes;
+    prte_node_t *nd;
+    char *spec, *user;
+    size_t k;
+    const char *bad[] = {"no de", "node$x", "-node", "@node", "alice@", "a@b@c", "node'1",
+                         "alice@-node", "al;ice@node", NULL};
+
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    spec = strdup("alice@nodeU:2,node_1.a-b");
+    CHECK("names: a user and a host, and a host of every allowed character",
+          PRTE_SUCCESS == prte_util_add_dash_host_nodes(&nodes, spec));
+    free(spec);
+    nd = find_node(&nodes, "nodeU");
+    CHECK("names: the node is named for the host alone", NULL != nd && 2 == nd->slots);
+    user = NULL;
+    CHECK("names: the user is recorded apart",
+          NULL != nd &&
+          prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, (void **) &user, PMIX_STRING) &&
+          NULL != user && 0 == strcmp(user, "alice"));
+    free(user);
+    CHECK("names: and is not taken for an alias",
+          NULL == nd || NULL == nd->aliases || 0 == PMIx_Argv_count(nd->aliases));
+    CHECK("names: no node is named with the user in it", NULL == find_node(&nodes, "alice@nodeU"));
+    nd = find_node(&nodes, "node_1.a-b");
+    CHECK("names: dots, dashes and underscores are taken",
+          NULL != nd && !prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, NULL,
+                                            PMIX_STRING));
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    fprintf(stdout, "-- the next cases are refused; the messages they print are expected --\n");
+    for (k = 0; NULL != bad[k]; k++) {
+        char label[96];
+
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        spec = strdup(bad[k]);
+        snprintf(label, sizeof(label), "names: \"%s\" is refused, adding nothing", bad[k]);
+        CHECK(label, PRTE_ERR_SILENT == prte_util_add_dash_host_nodes(&nodes, spec) &&
+                         0 == pmix_list_get_size(&nodes));
+        free(spec);
+        PMIX_LIST_DESTRUCT(&nodes);
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_dash_host_names\n");
+    }
+    return failures;
+}
+
 static int test_dash_host(void)
 {
     int failures = 0;
@@ -1998,6 +2053,7 @@ int main(void)
     failures += test_attr_key_names();
     failures += test_attr_round_trip();
     failures += test_dash_host();
+    failures += test_dash_host_names();
     failures += test_hostfile();
     failures += test_textfile();
     failures += test_hostfile_corpus();
