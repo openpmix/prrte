@@ -216,6 +216,23 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
  * job from an allocation that already exists goes through
  * prte_util_filter_dash_host_nodes instead.
  */
+/* Is this a name a host, or the user to reach it as, may have? Letters,
+ * digits, '.', '-' and '_', not starting with '-'. Anything else - a quote,
+ * a '$', a space - is no name, and the launcher puts these on a command
+ * line. */
+static bool dash_host_name_ok(const char *s)
+{
+    if (NULL == s || '\0' == *s || '-' == *s) {
+        return false;
+    }
+    for (; '\0' != *s; s++) {
+        if (!isalnum((unsigned char) *s) && NULL == strchr("._-", *s)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
 {
     pmix_list_item_t *item;
@@ -228,7 +245,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
     bool needcheck;
     int slots;
     bool slots_given;
-    char *cptr;
+    char *cptr, *username, *entry, *given;
     bool add_slots;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -309,6 +326,14 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
         slots = 0;
         add_slots = false;
         slots_given = false;
+        username = NULL;
+        /* as given, for a refusal to quote */
+        entry = strdup(mini_map[i]);
+        if (NULL == entry) {
+            PMIx_Argv_free(mini_map);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
         if (NULL != (cptr = strchr(mini_map[i], ':'))) {
             *cptr = '\0';
             ++cptr;
@@ -320,6 +345,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
                 if (!dash_count(cptr, true, &slots)) {
                     prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
                                    "dash-host:invalid-slots", true, mini_map[i], cptr);
+                    free(entry);
                     PMIx_Argv_free(mini_map);
                     rc = PRTE_ERR_SILENT;
                     goto cleanup;
@@ -332,11 +358,30 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
             }
         }
 
+        /* "user@host" names the user to reach the host as - as a hostfile
+         * entry does - and the user is kept apart from the host's name. Left
+         * in it, the name is one no daemon reports, and the launch agent
+         * reads the part before the '@' as a login. */
+        ndname = mini_map[i];
+        if (NULL != (cptr = strchr(mini_map[i], '@'))) {
+            *cptr = '\0';
+            username = mini_map[i];
+            ndname = cptr + 1;
+        }
+        if (!dash_host_name_ok(ndname) || (NULL != username && !dash_host_name_ok(username))) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
+                           "dash-host:invalid-name", true, entry);
+            free(entry);
+            PMIx_Argv_free(mini_map);
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
+        }
+        free(entry);
+        given = ndname;
+
         /* check for local name */
-        if (prte_check_host_is_local(mini_map[i])) {
+        if (prte_check_host_is_local(ndname)) {
             ndname = prte_process_info.nodename;
-        } else {
-            ndname = mini_map[i];
         }
 
         /* see if a node of this name is already on the list */
@@ -387,9 +432,14 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
             }
             pmix_list_append(&adds, &node->super);
         }
-        if (0 != strcmp(node->name, mini_map[i])) {
-            // add the mini_map entry as an alias if it differs from the resolved name
-            PMIx_Argv_append_unique_nosize(&node->aliases, mini_map[i]);
+        if (NULL != username &&
+            !prte_get_attribute(&node->attributes, PRTE_NODE_USERNAME, NULL, PMIX_STRING)) {
+            prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
+                               PMIX_STRING);
+        }
+        if (0 != strcmp(node->name, given)) {
+            // add the name as given as an alias if it differs from the resolved name
+            PMIx_Argv_append_unique_nosize(&node->aliases, given);
         }
     }
     PMIx_Argv_free(mini_map);
