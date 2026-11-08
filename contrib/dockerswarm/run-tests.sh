@@ -4384,6 +4384,127 @@ test_requesters() {
     cleanup_swarm
 }
 
+# A job's processes run as the user the job belongs to. On a root DVM that
+# takes other users' tools, another user's job runs as that user on every
+# node - as its processes see themselves, as their PMIx server judges them,
+# and in the session directories they are given. A DVM that cannot become
+# the user (not root) refuses the job, and no DVM acts for another user on a
+# file or host it names. See src/mca/odls/AGENTS.md, "Who the child runs as".
+test_run_as() {
+    local out uri n rq jd ownuri
+    local probe=/tmp/runas-probe.sh
+
+    banner "run-as: another user's job runs as that user, on every node"
+    cleanup_swarm
+    if ! RUN 'test "$(id -u)" = 0 && command -v setpriv >/dev/null'; then
+        skp "running a job as a second user needs root and setpriv on the head node"
+        return
+    fi
+    if ! prted_dvm_start_mca 'node1:2,node2:2' '--prtemca prte_pmix_no_foreign_tools 0'; then
+        bad "could not start a DVM that accepts other users' tools"
+        return
+    fi
+    uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
+    # HOME too: root's is not readable by the second user
+    rq="setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp prun --dvm-uri '$uri'"
+
+    out=$(RUN "cd /tmp && timeout 60 $rq -n 4 --map-by node sh -c 'echo RUNAS \$(hostname) \$(id -u) \$(id -g) \$(id -G)'" 2>&1)
+    n=$(echo "$out" | grep -c '^RUNAS node[12] 65534 65534 65534$')
+    [ "$n" = 4 ] \
+        && ok "all 4 processes, on both nodes, run as user 65534 with its group alone" \
+        || bad "another user's job did not run as that user (matched $n of 4): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+    banner "run-as: such a process is a client its PMIx server accepts"
+    # PMIx_Init, then gets of every peer's placement - across the two nodes
+    out=$(RUN "cd /tmp && timeout 60 $rq -n 4 --map-by node /opt/prte/prte/bin/peerinfo" 2>&1)
+    n=$(echo "$out" | grep -c '^PEERINFO-DONE')
+    [ "$n" = 4 ] \
+        && ok "all 4 initialized and read their peers" \
+        || bad "another user's processes could not use their PMIx server ($n of 4): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+    banner "run-as: its session directories are its own, and no one else's"
+    # the probe waits while root looks at the job's directories on node2
+    ON 2 "printf '#!/bin/sh\\nsleep 8\\n' > $probe && chmod 755 $probe"
+    RUN "cd /tmp && ($rq -n 1 --host node2 $probe > /dev/null 2>&1 &)"
+    jd=""
+    for _ in $(seq 1 10); do
+        jd=$(ON 2 'find /tmp -mindepth 2 -maxdepth 2 -path "/tmp/prted.*" -type d -user 65534 2>/dev/null | head -1' | tr -d '\r')
+        [ -n "$jd" ] && break
+        sleep 1
+    done
+    if [ -z "$jd" ]; then
+        bad "found no session directory of the job's user on node2"
+    else
+        out=$(ON 2 "stat -c '%a %u' '$jd'" | tr -d '\r')
+        [ "$out" = "700 65534" ] \
+            && ok "the job's directory is the user's own, mode 700" \
+            || bad "the job's directory is $out, not 700 65534"
+        ON 2 "setpriv --reuid=65534 --regid=65534 --clear-groups touch '$jd/runas-probe'" \
+            && ok "the job's user can write in it" \
+            || bad "the job's user cannot write in its own directory"
+        ON 2 "setpriv --reuid=65533 --regid=65533 --clear-groups ls '$jd' >/dev/null 2>&1" \
+            && bad "another user can list the job's directory" \
+            || ok "another user cannot list it"
+    fi
+    sleep 8
+    n=$(ON 2 'find /tmp -mindepth 2 -maxdepth 3 -path "/tmp/prted.*" -user 65534 2>/dev/null | wc -l' | tr -d ' \r')
+    [ "$n" = 0 ] \
+        && ok "the job's directories are removed when it ends" \
+        || bad "$n of the job's directories were left behind"
+
+    banner "run-as: root's own job still runs as root"
+    out=$(RUN "cd /tmp && timeout 60 prun --dvm-uri '$uri' -n 2 --map-by node sh -c 'echo RUNAS \$(id -u)'" 2>&1)
+    n=$(echo "$out" | grep -c '^RUNAS 0$')
+    [ "$n" = 2 ] && ok "root's job runs as root" \
+                 || bad "root's job did not run as root: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "run-as: another user may not have the DVM read a hostfile for it"
+    ON 1 'printf "node1 slots=2\nnode2 slots=2\n" > /tmp/runas-hosts && chmod 644 /tmp/runas-hosts'
+    out=$(RUN "cd /tmp && timeout 60 $rq --hostfile /tmp/runas-hosts -n 2 hostname" 2>&1)
+    if echo "$out" | grep -q "Asked for: *a hostfile" &&
+       echo "$out" | grep -q "PMIX_ERR_NO_PERMISSIONS"; then
+        ok "another user's hostfile is refused, saying why"
+    else
+        bad "another user's hostfile was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "cd /tmp && timeout 60 prun --dvm-uri '$uri' --hostfile /tmp/runas-hosts -n 2 hostname" 2>&1)
+    [ "$(echo "$out" | grep -c '^node')" = 2 ] \
+        && ok "root's hostfile is used as before" \
+        || bad "root's hostfile was not used: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "run-as: a DVM not running as root refuses another user's job"
+    ON 1 'mkdir -p /tmp/runas-dvm && chown 65533:65533 /tmp/runas-dvm'
+    ownuri=/tmp/runas-dvm/dvm.uri
+    EXEC_SH_BG 1 "cd /tmp/runas-dvm && setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp/runas-dvm TMPDIR=/tmp/runas-dvm timeout -k 5 120 prte --report-uri $ownuri --prtemca prte_pmix_no_foreign_tools 0 --host node1:2 > /tmp/runas-dvm/prte.out 2>&1"
+    uri=""
+    for _ in $(seq 1 15); do
+        uri=$(ON 1 "head -1 $ownuri 2>/dev/null" | tr -d '\r\n')
+        [ -n "$uri" ] && break
+        sleep 1
+    done
+    if [ -z "$uri" ]; then
+        bad "a DVM of user 65533 did not start"
+    else
+        out=$(RUN "cd /tmp/runas-dvm && timeout 60 setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp/runas-dvm prun --dvm-uri '$uri' -n 1 sh -c 'echo RUNAS \$(id -u)'" 2>&1)
+        echo "$out" | grep -q '^RUNAS 65533$' \
+            && ok "the DVM's own user's job runs" \
+            || bad "the DVM's own user's job did not run: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        # a tool trusts another user's server only when told to
+        out=$(RUN "cd /tmp && timeout 60 setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp PMIX_MCA_ptl_base_server_access=users=65533 prun --dvm-uri '$uri' -n 1 sh -c 'echo RUNAS \$(id -u)'" 2>&1)
+        if echo "$out" | grep -q '^RUNAS'; then
+            bad "a DVM of user 65533 ran another user's job"
+        elif echo "$out" | grep -q "cannot run" && echo "$out" | grep -q "PMIX_ERR_NO_PERMISSIONS"; then
+            ok "another user's job is refused, saying why"
+        else
+            bad "another user's job failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+    fi
+    ON 1 'pkill -u 65533 -x prte; sleep 1; true'
+    cleanup_swarm
+}
+
 #   * prte-info describing the build that is actually installed on each node
 #     -- a swarm running a stale install on some nodes is otherwise a launch
 #     failure with no obvious cause
@@ -11113,6 +11234,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     phase test_session
 
     phase test_requesters
+
+    phase test_run_as
 
     phase test_tools
 
