@@ -223,6 +223,35 @@ can still be refused cleanly:
   session at a time - and serves the allocation path through the same
   function.
 
+**And only some requesters may.** Bringing hosts into the DVM - or starting
+daemons on hosts it holds - changes what it consists of, and the daemons
+started there are given the DVM's key, so it is held to
+`prte_pmix_server_grow_permitted()` (`src/prted/pmix/pmix_server_access.c`),
+the rule creating a session follows: root, the DVM's own user, and the users
+and groups `--rtos users=`/`groups=` named when it started. Two things the
+master does *as itself* are narrower - reading a file of hosts
+(`PMIX_ADD_HOSTFILE`, an activation's `PMIX_HOSTFILE`) and logging in as a
+named user (`user@host`) - and are for root and the DVM's own user alone.
+It is judged in two places, with the same rule:
+
+- `prte_ras_base_modify()`, for an allocation request: a NEW or EXTEND that
+  names nodes (`ras_base_names_hosts()`, which reads a node list through
+  `prte_ras_base_parse_node_list()` so a user inside a regex is seen), and
+  every ACTIVATE. A grow is not judged there when `ras/pmix` is the
+  selected module: its scheduler decides, and is told who asked
+  (`PMIX_REQUESTOR`). Every other module acts on the names itself.
+- spawn admission (`plm_base_receive.c`): `--add-host` and `--activate`
+  (`grow_directive()`), and `--add-hostfile` among the files the master
+  reads (`foreign_directive()`). The request `prte_ras_base_add_hosts()`
+  then builds names the master as its requester, since the job was judged
+  already.
+
+`user@host` in a list of hosts (`prte_util_add_dash_host_nodes()`) is split
+the way a hostfile entry is: the node is named for the host, and the user is
+kept as `PRTE_NODE_USERNAME` for the launch agent. A name with any character
+other than letters, digits, `.`, `-` and `_` is refused
+(`dash-host:invalid-name`), since it goes on that agent's command line.
+
 A non-elastic DVM used to serve these. An `--add-host` launched its daemon,
 and when that daemon failed to start the requester waited forever on a daemon
 count nothing would complete - and so did every later launch that needed a

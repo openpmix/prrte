@@ -865,6 +865,63 @@ static bool ras_base_session_has_daemons(prte_session_t *session)
     return false;
 }
 
+/* Does this request bring hosts into the DVM, or start daemons on hosts it
+ * holds, by naming them - and does it name a file the master reads for
+ * that (`files`), or a user to reach a host as (`user`)? A node list is
+ * looked at as it will be read, so a user hidden in a regex is seen. */
+static bool ras_base_names_hosts(prte_pmix_server_req_t *req, bool *files, bool *user)
+{
+    bool named = false, activate = false;
+    char *ndstring;
+
+    *files = false;
+    *user = false;
+#if defined(PMIX_ALLOC_ACTIVATE)
+    activate = (PMIX_ALLOC_ACTIVATE == req->allocdir);
+#endif
+    if (!activate && PMIX_ALLOC_NEW != req->allocdir && PMIX_ALLOC_EXTEND != req->allocdir) {
+        return false;
+    }
+    for (size_t n = 0; n < req->ninfo; n++) {
+        pmix_info_t *info = &req->info[n];
+
+        if (activate ? PMIx_Check_key(info->key, PMIX_HOSTFILE)
+                     : PMIx_Check_key(info->key, PMIX_ADD_HOSTFILE)) {
+            named = true;
+            *files = true;
+        } else if (activate ? PMIx_Check_key(info->key, PMIX_HOST)
+                            : PMIx_Check_key(info->key, PMIX_ADD_HOST)) {
+            named = true;
+            if (PMIX_STRING == info->value.type && NULL != info->value.data.string &&
+                NULL != strchr(info->value.data.string, '@')) {
+                *user = true;
+            }
+        } else if (!activate && PMIx_Check_key(info->key, PMIX_ALLOC_NODE_LIST)) {
+            named = true;
+            ndstring = NULL;
+            if (PMIX_SUCCESS == prte_ras_base_parse_node_list(info, &ndstring) &&
+                NULL != ndstring && NULL != strchr(ndstring, '@')) {
+                *user = true;
+            }
+            free(ndstring);
+        }
+    }
+    return named;
+}
+
+/* is the request decided by a scheduler the DVM hands it to? Only ras/pmix
+ * does that, telling it who asked; every other module acts on the names
+ * itself - with ras/hosts, or with a resource manager's grant made in the
+ * DVM's own name */
+static bool ras_base_scheduler_decides(void)
+{
+    prte_ras_base_selected_module_t *mod;
+
+    mod = (prte_ras_base_selected_module_t *) pmix_list_get_first(&prte_ras_base.selected_modules);
+    return (pmix_list_get_end(&prte_ras_base.selected_modules) != &mod->super &&
+            0 == strcmp(mod->component->pmix_mca_component_name, "pmix"));
+}
+
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -933,6 +990,31 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         }
         if (resize &&
             !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+            goto respond;
+        }
+    }
+
+    /* Naming hosts to bring into the DVM, or to start daemons on, is for
+     * whoever may change the DVM - and naming a file the master reads, or a
+     * user to reach a host as, for root and our own user alone
+     * (prte_pmix_server_grow_permitted). Activation is served here, so it
+     * is always judged here; a grow is judged here unless a scheduler is to
+     * decide it. */
+    {
+        bool files, user, activate = false;
+
+#if defined(PMIX_ALLOC_ACTIVATE)
+        activate = (PMIX_ALLOC_ACTIVATE == req->allocdir);
+#endif
+        if (ras_base_names_hosts(req, &files, &user) &&
+            (activate || !ras_base_scheduler_decides()) &&
+            !prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, files, user)) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:grow-not-permitted", true,
+                           PMIx_Alloc_directive_string(req->allocdir),
+                           files ? "a file of hosts"
+                                 : (user ? "a user to reach a host as" : "hosts"));
+            req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }
     }
@@ -2449,6 +2531,9 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     req->key = strdup("hosts");
     req->operation = strdup("ADDHOSTS");
     req->allocdir = PMIX_ALLOC_EXTEND;
+    /* ours: the job's own request was judged when it arrived
+     * (plm_base_receive.c), and this one carries no requester of its own */
+    PMIX_LOAD_PROCID(&req->tproc, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     /* the request OWNS whatever job object it carries - its destructor
      * releases it - and this one is not ours to give away: the job is
      * still on its way to launch, and the parent's child list is holding

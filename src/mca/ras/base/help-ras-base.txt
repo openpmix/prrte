@@ -199,3 +199,17 @@ A request named a node that another session holds:
 
 A session keeps its nodes until it ends or releases them, so they cannot
 be given to another session or reservation. The request was refused.
+#
+[ras-base:grow-not-permitted]
+A request to bring hosts into the DVM was refused, because the user
+who made it may not ask for what it named:
+
+  Request:  %s
+  Named:    %s
+
+Bringing hosts into a DVM changes what it consists of, and is for root,
+the user the DVM runs as, and the users and groups the DVM was started
+with ("--rtos users=..." and "groups=..."). A file of hosts the DVM is
+to read, or a user to reach a host as ("user@host"), is accepted only
+from root and the user the DVM runs as, since the DVM reads the file,
+and logs in, as that user.

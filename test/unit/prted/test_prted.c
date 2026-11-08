@@ -4429,7 +4429,25 @@ static int test_access(void)
         PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
         CHECK("dvm/listed", prte_pmix_server_dvm_permitted(&other, info, 1));
         CHECK("dvm/listed-not-job-member", !prte_pmix_server_job_permitted(ACC_LISTED, dvm));
+        /* bringing hosts in (P02): a listed user may name hosts, as it may
+         * create a session - but not a file the master reads for it, nor a
+         * user to reach a host as, which the master does as itself */
+        CHECK("grow/listed names hosts",
+              prte_pmix_server_grow_permitted(&other, info, 1, false, false));
+        CHECK("grow/listed may not name a file",
+              !prte_pmix_server_grow_permitted(&other, info, 1, true, false));
+        CHECK("grow/listed may not name a user",
+              !prte_pmix_server_grow_permitted(&other, info, 1, false, true));
         PMIX_INFO_DESTRUCT(&info[0]);
+        CHECK("grow/root may name all three", prte_pmix_server_grow_permitted_uid(0, true, true));
+        CHECK("grow/our user may name all three",
+              prte_pmix_server_grow_permitted_uid(prte_process_info.euid, true, true));
+        CHECK("grow/a stranger may not name hosts",
+              !prte_pmix_server_grow_permitted_uid(ACC_STRANGER, false, false));
+        CHECK("grow/a request of our own may name all three",
+              prte_pmix_server_grow_permitted(PRTE_PROC_MY_NAME, NULL, 0, true, true));
+        CHECK("grow/an unnamed request may not",
+              !prte_pmix_server_grow_permitted(&other, NULL, 0, false, false));
         id = ACC_STRANGER;
         PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
         CHECK("dvm/unlisted", !prte_pmix_server_dvm_permitted(&other, info, 1));

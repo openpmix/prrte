@@ -791,6 +791,22 @@ PRTE_EXPORT bool prte_pmix_server_privileged(uid_t uid);
 /* the user jdata belongs to - our own user when none is known */
 PRTE_EXPORT uid_t prte_pmix_server_job_owner(prte_job_t *jdata);
 
+/* May uid change what the DVM consists of: root, our own user, or the users
+ * and groups the DVM was started with (--rtos users=/groups=). The rule
+ * prte_pmix_server_dvm_permitted applies once it knows who is asking. */
+PRTE_EXPORT bool prte_pmix_server_dvm_permitted_uid(uid_t uid);
+
+/* May a requester have the DVM bring hosts in, or start daemons on hosts
+ * it holds, naming them itself? Naming hosts is for whoever may change the
+ * DVM (prte_pmix_server_dvm_permitted_uid). Naming a file the master reads
+ * for it (`files`), or a user to reach a host as (`user` - "user@host"), is
+ * for root and our own user alone: the master does both as itself. The
+ * scheduler, and a request we made of ourselves, may do all three. */
+PRTE_EXPORT bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor,
+                                                 const pmix_info_t *info, size_t ninfo,
+                                                 bool files, bool user);
+PRTE_EXPORT bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool files, bool user);
+
 /* Who a job owned by `owner` may be started as by a process running as
  * `me`. PRTE_SUCCESS with *change false: as `me`, because it is ours or
  * root's. PRTE_SUCCESS with *change true: as the owner, because `me` is
