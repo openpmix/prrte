@@ -137,3 +137,17 @@ decimal number of slots to apply to every node.
 
 Nodes that arrived without slot information will be sized by the number
 of cores instead.  Please correct the value and try again.
+#
+[foreign-directive]
+A job was refused because it asked for something PRRTE would have to do
+with the DVM's own privileges:
+
+  Job:         %s
+  Job's user:  %lu
+  Asked for:   %s
+
+PRRTE opens the files these directives name, and adds the hosts they
+name to the DVM, as the user the DVM runs as - not as the user the job
+belongs to. They are accepted only from root and from the DVM's own
+user. Start the job without the directive, or have it started by the
+DVM's own user.

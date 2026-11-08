@@ -432,6 +432,51 @@ int prte_plm_base_comm_stop(void)
  * NOTE: THIS OCCURS INSIDE OF AN EVENT AND IS
  * THEREFORE THREAD-SAFE
  */
+/* The first directive of jdata's that has the master open a file it names,
+ * or add hosts to the DVM - NULL if it has none. The master acts on these
+ * as itself, whoever asked, so for anybody but root and our own user they
+ * are refused (prte_plm_base_recv). Running the job as its owner does not
+ * cover them: they are not the job's processes. */
+static const char *foreign_directive(prte_job_t *jdata)
+{
+    static const struct {
+        prte_attribute_key_t key;
+        const char *name;
+    } app_keys[] = {
+        {PRTE_APP_HOSTFILE, "a hostfile"},
+        {PRTE_APP_ADD_HOSTFILE, "a hostfile to add"},
+        {PRTE_APP_ADD_HOST, "hosts to add"},
+        {PRTE_APP_MAP_FILE, "a rankfile or sequential mapping file"},
+        {PRTE_APP_PRELOAD_FILES, "files to preload"},
+    };
+    prte_app_context_t *app;
+    size_t k;
+    int n;
+
+    if (NULL != prte_fetch_attribute(&jdata->attributes, NULL, PRTE_JOB_FILE)) {
+        return "a rankfile or sequential mapping file";
+    }
+    if (NULL != prte_fetch_attribute(&jdata->attributes, NULL, PRTE_JOB_OUTPUT_PROCTABLE)) {
+        return "a file for the process table";
+    }
+    for (n = 0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
+            continue;
+        }
+        for (k = 0; k < sizeof(app_keys) / sizeof(app_keys[0]); k++) {
+            if (NULL != prte_fetch_attribute(&app->attributes, NULL, app_keys[k].key)) {
+                return app_keys[k].name;
+            }
+        }
+        /* the master reads the binary to copy it out */
+        if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_PRELOAD_BIN)) {
+            return "a binary to preload";
+        }
+    }
+    return NULL;
+}
+
 void prte_plm_base_recv(int status, pmix_proc_t *sender,
                         pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tag, void *cbdata)
@@ -785,6 +830,44 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 uint32_t owngid = (uint32_t) jdata->gid;
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, PRTE_ATTR_GLOBAL,
                                    &owngid, PMIX_UINT32);
+            }
+        }
+
+        /* A job runs as the user it belongs to (prte_pmix_server_job_run_as).
+         * One this DVM cannot start as its owner it must not start as
+         * itself either, so it is refused here, before anything is mapped
+         * or sent, and the requester told why. */
+        {
+            uid_t ruid;
+            gid_t rgid;
+            bool change;
+            const char *what;
+
+            rc = prte_pmix_server_job_run_as(jdata, &ruid, &rgid, &change);
+            if (PRTE_ERR_PERM == rc) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-odls-base.txt",
+                               "run-as-refused", true, prte_process_info.nodename,
+                               PRTE_JOB_NSPACE(jdata),
+                               (unsigned long) prte_pmix_server_job_owner(jdata),
+                               (unsigned long) prte_process_info.euid);
+                goto ANSWER_LAUNCH;
+            }
+            if (PRTE_SUCCESS != rc) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-odls-base.txt",
+                               "run-as-no-group", true, prte_process_info.nodename,
+                               PRTE_JOB_NSPACE(jdata),
+                               (unsigned long) prte_pmix_server_job_owner(jdata));
+                rc = PRTE_ERR_PERM;
+                goto ANSWER_LAUNCH;
+            }
+            /* and what the master would do for it as itself */
+            if (!prte_pmix_server_privileged(prte_pmix_server_job_owner(jdata)) &&
+                NULL != (what = foreign_directive(jdata))) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-plm-base.txt", "foreign-directive",
+                               true, PRTE_JOB_NSPACE(jdata),
+                               (unsigned long) prte_pmix_server_job_owner(jdata), what);
+                rc = PRTE_ERR_PERM;
+                goto ANSWER_LAUNCH;
             }
         }
 
