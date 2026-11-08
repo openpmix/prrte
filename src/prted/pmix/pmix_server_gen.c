@@ -67,8 +67,8 @@ static void _client_conn(int sd, short args, void *cbdata)
     prte_proc_t *p = NULL, *p2;
     pmix_status_t rc = PMIX_SUCCESS;
     size_t n;
-    uid_t euid;
-    gid_t egid;
+    uid_t euid, runas_uid;
+    gid_t egid, runas_gid;
     pid_t pid;
     bool singleton = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
@@ -121,6 +121,21 @@ static void _client_conn(int sd, short args, void *cbdata)
         }
     }
 
+    /* The user and group the client must have connected as: the ones its
+     * job's processes are started as here, which is the user and group its
+     * registration named (prte_pmix_server_job_run_as) - our own, or the
+     * job's owner when we start its processes as the owner */
+    {
+        prte_job_t *jdata = prte_get_job_data_object(cd->proc.nspace);
+        bool change;
+
+        if (NULL == jdata ||
+            PRTE_SUCCESS != prte_pmix_server_job_run_as(jdata, &runas_uid, &runas_gid, &change)) {
+            rc = PMIX_ERR_NOT_SUPPORTED;
+            goto complete;
+        }
+    }
+
     // check if the uid, gid, and pid match
     for (n=0; n < cd->ninfo; n++) {
         if (PMIx_Check_key(cd->info[n].key, PMIX_USERID)) {
@@ -129,7 +144,7 @@ static void _client_conn(int sd, short args, void *cbdata)
                 PMIX_ERROR_LOG(rc);
                 goto complete;
             }
-            if (prte_process_info.euid != euid) {
+            if (runas_uid != euid) {
                 rc = PMIX_ERR_NOT_SUPPORTED;
                 PMIX_ERROR_LOG(rc);
                 goto complete;
@@ -142,7 +157,7 @@ static void _client_conn(int sd, short args, void *cbdata)
                 PMIX_ERROR_LOG(rc);
                 goto complete;
             }
-            if (prte_process_info.egid != egid) {
+            if (runas_gid != egid) {
                 rc = PMIX_ERR_NOT_SUPPORTED;
                 PMIX_ERROR_LOG(rc);
                 goto complete;

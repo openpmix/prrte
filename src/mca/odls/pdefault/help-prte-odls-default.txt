@@ -13,7 +13,7 @@
 # Copyright (c) 2009      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2024-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -104,3 +104,13 @@ A negative value was returned from the "open" system call:
   Path:        %s
 
 Your job will now abort.
+#
+[credentials]
+PRTE could not start a process as the user its job belongs to, so the
+process was not started. Your job will now abort.
+
+  Local host:        %s
+  Application name:  %s
+  User:              %lu
+  Group:             %lu
+  Error:             %s

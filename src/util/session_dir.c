@@ -69,6 +69,7 @@
 #include "src/mca/ras/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 #include "src/util/session_dir.h"
 
@@ -105,8 +106,14 @@ static bool setup_base_complete = false;
  *
  * A directory we own is refused too if it is writable by group or
  * other: we never create one that way.
+ *
+ * A job whose processes we start as the user it belongs to has its
+ * directories made that user's (`owner`, `group`): ours when they were
+ * just made, given away through the descriptor checked, and that user's
+ * when they already were. PRTE_INVALID_UID means they stay ours.
  */
-static int _check_owner(const pmix_nspace_t nspace, const char *directory)
+static int _check_owner(const pmix_nspace_t nspace, const char *directory, uid_t owner,
+                        gid_t group)
 {
     struct stat buf;
     int fd, save;
@@ -125,9 +132,18 @@ static int _check_owner(const pmix_nspace_t nspace, const char *directory)
                        directory, strerror(save));
         return PRTE_ERR_SILENT;
     }
+    if (PRTE_INVALID_UID != owner && owner != geteuid() && buf.st_uid == geteuid()) {
+        if (0 != fchown(fd, owner, group) || 0 != fstat(fd, &buf)) {
+            save = errno;
+            close(fd);
+            prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:inspect", true,
+                           directory, strerror(save));
+            return PRTE_ERR_SILENT;
+        }
+    }
     close(fd);
 
-    if (buf.st_uid != geteuid()) {
+    if (buf.st_uid != geteuid() && (PRTE_INVALID_UID == owner || buf.st_uid != owner)) {
         prte_show_help(nspace, "help-prte-runtime.txt", "prte:session:dir:owner", true,
                        directory, (unsigned long) buf.st_uid, (unsigned long) geteuid());
         return PRTE_ERR_SILENT;
@@ -143,7 +159,8 @@ static int _check_owner(const pmix_nspace_t nspace, const char *directory)
 /*
  * Check and create the directory requested
  */
-static int _create_dir(const pmix_nspace_t nspace, const char *directory, bool *created)
+static int _create_dir(const pmix_nspace_t nspace, const char *directory, bool *created,
+                       uid_t owner, gid_t group)
 {
     mode_t my_mode = S_IRWXU; /* I'm looking for full rights */
     int ret;
@@ -166,7 +183,7 @@ static int _create_dir(const pmix_nspace_t nspace, const char *directory, bool *
     // check a freshly created directory as well: the check is cheap,
     // and pmix_os_dirpath_create() answers success, not EXISTS, when
     // the final component appeared while it was building the tree
-    return _check_owner(nspace, directory);
+    return _check_owner(nspace, directory, owner, group);
 }
 
 /*
@@ -304,9 +321,24 @@ exit:
     return rc;
 }
 
+/* The user and group a job's directories belong to: the job's owner when
+ * we start its processes as the owner, so they can use them - else ours,
+ * PRTE_INVALID_UID */
+static void _job_dir_owner(prte_job_t *jdata, uid_t *owner, gid_t *group)
+{
+    bool change = false;
+
+    if (PRTE_SUCCESS != prte_pmix_server_job_run_as(jdata, owner, group, &change) || !change) {
+        *owner = PRTE_INVALID_UID;
+        *group = PRTE_INVALID_GID;
+    }
+}
+
 static int _setup_job_session_dir(prte_job_t *jdata)
 {
     int rc = PRTE_SUCCESS;
+    uid_t owner;
+    gid_t group;
 
     if (NULL == jdata->session_dir) {
         if (0 > pmix_asprintf(&jdata->session_dir, "%s/%s",
@@ -314,7 +346,8 @@ static int _setup_job_session_dir(prte_job_t *jdata)
                               PRTE_LOCAL_JOBID_PRINT(jdata->nspace))) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        rc = _create_dir(jdata->nspace, jdata->session_dir, NULL);
+        _job_dir_owner(jdata, &owner, &group);
+        rc = _create_dir(jdata->nspace, jdata->session_dir, NULL, owner, group);
         if (PRTE_SUCCESS != rc) {
             // forget a directory we did not get: the finalize path
             // recursively destroys whatever this names, and it may be
@@ -331,12 +364,15 @@ static int _setup_proc_session_dir(prte_job_t *jdata,
 {
     int rc;
     char *tmp;
+    uid_t owner;
+    gid_t group;
 
     if (0 > pmix_asprintf(&tmp, "%s/%s", jdata->session_dir,
                           PMIX_RANK_PRINT(p->rank))) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    rc = _create_dir(jdata->nspace, tmp, NULL);
+    _job_dir_owner(jdata, &owner, &group);
+    rc = _create_dir(jdata->nspace, tmp, NULL, owner, group);
     free(tmp);
     return rc;
 }

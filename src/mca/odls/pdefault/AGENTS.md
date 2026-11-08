@@ -206,10 +206,16 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
    `SIG_DFL`; every one of them must be. Note that a Linux-only harness
    cannot see this at all, so a container test for it would pass
    vacuously.
-7. `chdir(cd->wdir)` to the app's working directory.
-8. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
+7. `prte_odls_base_set_credentials()` - become the job's owner when the
+   caddy says to (`cd->cred_switch`): `setgroups`, `setgid`, `setuid`, and
+   a check that it took and cannot be undone. Here, after the binding and
+   the descriptors and before the working directory and the exec, so the
+   kernel judges both as the user. See the framework guide, "Who the child
+   runs as".
+8. `chdir(cd->wdir)` to the app's working directory.
+9. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
    `execve` for a debugger to attach.
-9. **`execve(cd->cmd, cd->argv, cd->env)`.** On return (always an error) it
+10. **`execve(cd->cmd, cd->argv, cd->env)`.** On return (always an error) it
    simply reports `PRTE_ODLS_CHILD_ERR_EXEC` plus `errno`; the *parent*
    inspects `errno` and `stat`s the app to distinguish a bad interpreter
    (`ENOENT` but the file exists) from a missing/failed executable and

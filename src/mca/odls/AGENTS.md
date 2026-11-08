@@ -589,6 +589,55 @@ not the one that *refuses* to: Docker's default seccomp profile denies
 announced that "the memory was left unbound", aborting the job outright
 under `mem_bind_failure_action=error`.
 
+### 6a. Who the child runs as — `spawn_caddy_credentials()` + `prte_odls_base_set_credentials()`
+
+A job's processes run as the user the job belongs to. Who that is, here, is
+`prte_pmix_server_job_run_as()` (`src/prted/pmix/pmix_server_access.c`),
+and it has three answers:
+
+| This daemon runs as | The job belongs to | The processes run as |
+|---|---|---|
+| anyone | that same user, or root's job on a non-root DVM | us, unchanged |
+| root | anyone else | **the owner**, with its group and groups |
+| not root | anyone else | **nobody** - the job is refused (`run-as-refused`) |
+
+The last row is the one that must never be "simplified" into running the job
+as ourselves: that is lending another user the DVM's privileges, which is
+what this exists to stop. The master refuses such a job at admission
+(`plm_base_receive.c`), so a daemon meets it only when something got past
+that; it refuses again rather than trusting it did not.
+
+Split across the fork like the binding, for the same reason:
+
+- **`spawn_caddy_credentials()`**, on the progress thread, resolves the uid
+  and gid and looks up the owner's groups (`prte_pmix_server_owner_groups`,
+  capped at `_SC_NGROUPS_MAX` - leaving groups out loses access, never gains
+  it). It runs once per job onto the prototype caddy and again in the
+  restart path, and `spawn_caddy_copy()` deep-copies the list; a copy that
+  cannot be made fails the launch rather than start a child without it.
+- **`prte_odls_base_set_credentials()`** (`odls_base_cred.c`), in the child,
+  makes the three calls and checks the result, reporting
+  `PRTE_ODLS_CHILD_ERR_CREDENTIALS` up the pipe on any failure. It may not
+  look anything up: `initgroups()` is a name-service lookup, which is not
+  async-signal-safe and can deadlock in a child forked from this
+  multithreaded daemon.
+
+Everything that names "the user this process runs as" to PMIx must give the
+same answer, or PMIx refuses the client at `PMIx_Init`: the client
+registration (`prte_pmix_server_register_nspace`, and the restart's
+`PMIx_server_register_client`, which uses `cd->cred_uid`), the setup
+application's `PMIX_USERID` (`get_add_procs_data`), and the check made when
+the client connects (`_client_conn` in `prted/pmix`). The job's session
+directories become the owner's too (`src/util/session_dir.c`), and a root
+daemon of a DVM open to other users opens its socket's path to them
+(`pmix_server.c`).
+
+`test_set_credentials` (`test/unit/odls`) drives the child half across a
+real fork - as root it checks the switch took and cannot be undone, as
+anyone else that a child unable to switch reports and dies.
+`test_run_as` (`test/unit/prted`) covers the decision, and the swarm's
+`test_run_as` the whole of it on two nodes.
+
 ### 7. Reaping children — `prte_odls_base_default_wait_local_proc()`
 
 The `waitpid` callback, registered per child and fired by

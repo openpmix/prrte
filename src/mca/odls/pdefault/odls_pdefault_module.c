@@ -398,6 +398,12 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd, int gate_fd)
     sigprocmask(0, 0, &sigs);
     sigprocmask(SIG_UNBLOCK, &sigs, 0);
 
+    /* Become the job's owner, when that is not who we are. Here: after the
+     * binding and the descriptors, which need nothing of the user, and
+     * before the working directory and the exec, so the kernel judges both
+     * as the user. */
+    prte_odls_base_set_credentials(cd, write_fd);
+
     /* take us to the correct wdir */
     if (NULL != cd->wdir) {
         if (0 != chdir(cd->wdir)) {
@@ -491,6 +497,11 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
     case PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND:
         prte_show_help(PRTE_JOB_NSPACE(cd->jdata), "help-prte-odls-default.txt", "memory not bound", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
+        break;
+    case PRTE_ODLS_CHILD_ERR_CREDENTIALS:
+        prte_show_help(PRTE_JOB_NSPACE(cd->jdata), "help-prte-odls-default.txt", "credentials", true,
+                       prte_process_info.nodename, cd->app->app, (unsigned long) cd->cred_uid,
+                       (unsigned long) cd->cred_gid, strerror(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_INCORRECT:
         prte_show_help(PRTE_JOB_NSPACE(cd->jdata), "help-prte-odls-default.txt", "incorrectly bound", true,

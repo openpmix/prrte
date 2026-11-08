@@ -31,4 +31,5 @@ libprtemca_odls_la_SOURCES += \
         base/odls_base_frame.c \
         base/odls_base_select.c \
         base/odls_base_default_fns.c \
-        base/odls_base_bind.c
+        base/odls_base_bind.c \
+        base/odls_base_cred.c

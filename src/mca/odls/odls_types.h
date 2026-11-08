@@ -110,6 +110,7 @@ typedef enum {
     PRTE_ODLS_CHILD_ERR_WDIR,           /* chdir to the working dir failed */
     PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC,   /* ptrace(TRACEME) failed */
     PRTE_ODLS_CHILD_ERR_EXEC,           /* execve failed */
+    PRTE_ODLS_CHILD_ERR_CREDENTIALS,    /* could not become the job's owner */
     /* non-fatal warnings - the child continues on toward execve */
     PRTE_ODLS_CHILD_WARN_NOT_BOUND,     /* could not apply cpu binding */
     PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND, /* could not apply memory binding */

@@ -50,6 +50,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -244,7 +245,8 @@ static int test_child_err_enum(void)
 
     /* the last fatal code precedes the first warn code */
     CHECK("fatal group before warn group",
-          PRTE_ODLS_CHILD_ERR_EXEC < PRTE_ODLS_CHILD_WARN_NOT_BOUND);
+          PRTE_ODLS_CHILD_ERR_EXEC < PRTE_ODLS_CHILD_ERR_CREDENTIALS &&
+          PRTE_ODLS_CHILD_ERR_CREDENTIALS < PRTE_ODLS_CHILD_WARN_NOT_BOUND);
     CHECK("warn NOT_BOUND ordered",
           PRTE_ODLS_CHILD_WARN_NOT_BOUND < PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND);
     CHECK("warn MEM ordered",
@@ -280,6 +282,9 @@ static int test_classes(void)
     CHECK("spawn bind_cpuset NULL", NULL == cd->bind_cpuset);
     CHECK("spawn bind_fatal false", !cd->bind_fatal);
     CHECK("spawn do_membind false", !cd->do_membind);
+    CHECK("spawn changes no credentials",
+          !cd->cred_switch && NULL == cd->cred_gids && 0 == cd->cred_ngids &&
+          PRTE_INVALID_UID == cd->cred_uid && PRTE_INVALID_GID == cd->cred_gid);
     CHECK("spawn job attributes unresolved",
           !cd->do_not_spawn && !cd->stop_on_exec && !cd->report_bindings &&
           !cd->hwt_cpus && !cd->report_physical_cpus && NULL == cd->exec_agent);
@@ -294,6 +299,8 @@ static int test_classes(void)
     cd->env = PMIx_Argv_split("X=1 Y=2", ' ');
     cd->bind_cpuset = hwloc_bitmap_alloc();
     cd->exec_agent = strdup("/usr/bin/env");
+    cd->cred_gids = (gid_t *) calloc(2, sizeof(gid_t));
+    cd->cred_ngids = 2;
     PMIX_RELEASE(cd);
 
     /* spawn caddy again, released untouched: the all-NULL destructor path
@@ -567,6 +574,105 @@ static int test_child_pipe_protocol(void)
     return failures;
 }
 
+
+/*
+ * Becoming the job's owner, in the forked child.
+ *
+ * The child half of prte_odls_base_set_credentials() runs between fork()
+ * and execve(), so like child_fail it is driven across a real fork. With
+ * no switch asked for it must do nothing at all. With one, a child that
+ * could not become the owner must report CREDENTIALS up the pipe and die
+ * rather than carry on as us - which is what an unprivileged test process
+ * always meets, setgroups() needing root. Run as root, the switch has to
+ * take: the child is then the owner, real, effective and saved, and cannot
+ * become root again.
+ */
+static int run_set_credentials(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg_t *msg,
+                               ssize_t *n, int *status)
+{
+    int p[2];
+    pid_t pid;
+    uid_t me = getuid();
+
+    if (0 != pipe(p)) {
+        return -1;
+    }
+    pid = fork();
+    if (0 == pid) {
+        close(p[0]);
+        prte_odls_base_set_credentials(cd, p[1]);
+        /* switched, or nothing to do: say who we are now by exit status */
+        if (cd->cred_switch) {
+            _exit((getuid() == cd->cred_uid && geteuid() == cd->cred_uid &&
+                   getgid() == cd->cred_gid && 0 != setuid(0)) ? 0 : 3);
+        }
+        _exit((getuid() == me) ? 0 : 4);
+    }
+    if (0 > pid) {
+        close(p[0]);
+        close(p[1]);
+        return -1;
+    }
+    close(p[1]);
+    memset(msg, 0, sizeof(*msg));
+    *n = read(p[0], msg, sizeof(*msg));
+    close(p[0]);
+    while (pid != waitpid(pid, status, 0) && EINTR == errno) {
+        continue;
+    }
+    return 0;
+}
+
+static int test_set_credentials(void)
+{
+    int failures = 0, status = 0;
+    prte_odls_pipe_err_msg_t msg;
+    prte_odls_spawn_caddy_t *cd;
+    gid_t groups[1];
+    ssize_t n = 0;
+
+    cd = PMIX_NEW(prte_odls_spawn_caddy_t);
+
+    /* nothing asked for: the child carries on as us, saying nothing */
+    if (0 != run_set_credentials(cd, &msg, &n, &status)) {
+        fprintf(stdout, "SKIPPED test_set_credentials (pipe or fork failed)\n");
+        PMIX_RELEASE(cd);
+        return 0;
+    }
+    CHECK("no switch writes nothing", 0 == n);
+    CHECK("no switch leaves the child as us", WIFEXITED(status) && 0 == WEXITSTATUS(status));
+
+    /* the owner: nobody, by its conventional ids */
+    groups[0] = 65534;
+    cd->cred_switch = true;
+    cd->cred_uid = 65534;
+    cd->cred_gid = 65534;
+    cd->cred_gids = groups;
+    cd->cred_ngids = 1;
+    if (0 != run_set_credentials(cd, &msg, &n, &status)) {
+        failures++;
+    } else if (0 == geteuid()) {
+        CHECK("as root, the switch reports nothing", 0 == n);
+        CHECK("as root, the child is the owner and cannot be root again",
+              WIFEXITED(status) && 0 == WEXITSTATUS(status));
+    } else {
+        CHECK("unable to switch, the child reports one whole record", (ssize_t) sizeof(msg) == n);
+        CHECK("it is fatal", msg.fatal);
+        CHECK("it names the credentials", PRTE_ODLS_CHILD_ERR_CREDENTIALS == msg.which);
+        CHECK("with the reason", EPERM == msg.errnum);
+        CHECK("and the child exits rather than run as us",
+              WIFEXITED(status) && 1 == WEXITSTATUS(status));
+    }
+    /* the array is the test's own */
+    cd->cred_gids = NULL;
+    cd->cred_ngids = 0;
+    PMIX_RELEASE(cd);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_set_credentials\n");
+    }
+    return failures;
+}
 
 /*
  * Signalling a proc that has no pid must not reach the daemon.
@@ -1058,6 +1164,7 @@ int main(void)
     failures += test_attribute_order();
     failures += test_process_envars();
     failures += test_child_pipe_protocol();
+    failures += test_set_credentials();
     failures += test_signal_skips_dead_procs();
     failures += test_mempolicy();
     failures += test_slice_discard();
