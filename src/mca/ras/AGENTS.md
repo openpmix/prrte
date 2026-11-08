@@ -240,6 +240,12 @@ It is judged in two places, with the same rule:
   every ACTIVATE. A grow is not judged there when `ras/pmix` is the
   selected module: its scheduler decides, and is told who asked
   (`PMIX_REQUESTOR`). Every other module acts on the names itself.
+  An allocation a spawn carries (`PMIX_SPAWN_ALLOC`) comes here too, built
+  by `prte_ras_base_spawn_alloc()`, and is judged as the job's owner: that
+  function drops every identity key from the client's array
+  (`prte_pmix_server_is_identity_key()`) and puts in the owner's
+  `PMIX_USERID`, since the array is the client's own and only PMIx or the
+  spawn's admission may say who asked.
 - spawn admission (`plm_base_receive.c`): `--add-host` and `--activate`
   (`grow_directive()`), and `--add-hostfile` among the files the master
   reads (`foreign_directive()`). The request `prte_ras_base_add_hosts()`

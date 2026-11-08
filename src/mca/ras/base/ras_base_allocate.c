@@ -2648,6 +2648,7 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
     bool have_directive = false;
     prte_pmix_server_req_t *req;
     pmix_proc_t *proxy = NULL;
+    uint32_t owner;
 
     *posted = false;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC,
@@ -2669,10 +2670,14 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
 
     /* Split the request into its directive and its info array - the shape a
      * request has everywhere else in the code, and the shape the modules
-     * expect.  Everything that is not the directive is the request.  The
-     * array is sized for the whole thing and filled short by exactly the
-     * directive; the tail stays as PMIX_INFO_CREATE left it, which destructs
-     * to nothing, so the request may carry the filled count. */
+     * expect.  Everything that is not the directive is the request - except
+     * what says who asked: the array is the client's own, and the only
+     * PMIX_USERID a request may carry is one PMIx or the spawn's admission
+     * established, so the job owner's is put in its place below. The array
+     * is sized for the whole thing and filled short by at least the
+     * directive, which leaves room for the owner; the tail stays as
+     * PMIX_INFO_CREATE left it, which destructs to nothing, so the request
+     * may carry the filled count. */
     PMIX_INFO_CREATE(info, nalloc);
     if (NULL == info) {
         PMIX_DATA_ARRAY_FREE(darray);
@@ -2689,9 +2694,11 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
             have_directive = true;
             continue;
         }
+        if (prte_pmix_server_is_identity_key(src[n].key)) {
+            continue;
+        }
         PMIX_INFO_XFER(&info[idx++], &src[n]);
     }
-    ninfo = idx;
     PMIX_DATA_ARRAY_FREE(darray);
 
     if (!have_directive) {
@@ -2701,6 +2708,12 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
         PMIX_INFO_FREE(info, nalloc);
         return PRTE_ERR_BAD_PARAM;
     }
+    /* the request is the spawn's, so it is judged as the user the spawn was
+     * admitted for (prte_ras_base_modify) and told to a scheduler as that
+     * user - as an allocation request is judged and told as its client */
+    owner = (uint32_t) prte_pmix_server_job_owner(jdata);
+    PMIX_INFO_LOAD(&info[idx++], PMIX_USERID, &owner, PMIX_UINT32);
+    ninfo = idx;
 
     req = PMIX_NEW(prte_pmix_server_req_t);
     if (NULL == req) {
