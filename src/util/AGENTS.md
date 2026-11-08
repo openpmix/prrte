@@ -199,6 +199,17 @@ inside the top-level directory, which no one else can write to, and
 `_check_owner()` still refuses one not owned by our euid or group/other
 writable, inspecting it through an `O_NOFOLLOW` descriptor - cheap, and it
 keeps the rule should a directory ever be composed elsewhere.
+
+**A job whose processes run as its owner has directories that are the
+owner's.** A root daemon starts another user's job as that user
+(`prte_pmix_server_job_run_as`, see `src/mca/odls/AGENTS.md`), and those
+processes are handed their job and rank directories as `PMIX_NSDIR` and
+`PMIX_PROCDIR` - where an MPI library keeps its shared-memory files. So
+`_check_owner()` is told the user and group the job runs as: a directory
+we just made is given to them through the descriptor it checked
+(`fchown`), still `0700`, and one already theirs is accepted. The
+top-level directory stays ours; `open_to_foreign_tools()` gives it search
+permission only.
 A job whose directory is refused must also forget
 the path (`jdata->session_dir = NULL`), because finalize recursively destroys
 whatever that names. Verifying the foreign-owner refusal needs a second uid,

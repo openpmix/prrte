@@ -1272,6 +1272,22 @@ int pmix_server_init(void)
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
+#if defined(PMIX_SOCKET_MODE)
+        /* A DVM that takes other users' tools takes their jobs too, and a
+         * daemon running as root starts those jobs' processes as the users
+         * they belong to (prte_pmix_server_job_run_as) - which must then
+         * reach this daemon's socket, by the same path the master opens to
+         * tools. PMIx still lets in only the processes it was told of, as
+         * the user it was told. A daemon not running as root starts no other
+         * user's processes, so has nothing to open. */
+        if (!prte_pmix_server_globals.no_foreign_tools && 0 == prte_process_info.euid) {
+            rc = open_to_foreign_tools(ilist);
+            if (PRTE_SUCCESS != rc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                return rc;
+            }
+        }
+#endif
     }
 
     /* if requested, tell the server library to output our PMIx URI */

@@ -78,6 +78,7 @@
 #include "src/mca/state/state.h"
 
 #include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
@@ -400,10 +401,20 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_INFO_LIST_RELEASE(mlist);
 
-    /* add in the user's uid and gid */
-    uid = geteuid();
+    /* add in the uid and gid the job's processes run as */
+    {
+        uid_t ruid;
+        gid_t rgid;
+        bool change;
+
+        if (PRTE_SUCCESS != prte_pmix_server_job_run_as(jdata, &ruid, &rgid, &change)) {
+            ruid = geteuid();
+            rgid = getegid();
+        }
+        uid = (uint32_t) ruid;
+        gid = (uint32_t) rgid;
+    }
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_USERID, &uid, PMIX_UINT32);
-    gid = getegid();
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_GRPID, &gid, PMIX_UINT32);
 
     /* if they haven't harvested envars, do so now */
@@ -1997,6 +2008,83 @@ static void spawn_caddy_resolve(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat)
     }
 }
 
+/* Who this job's processes are started as here, and - when that is its
+ * owner rather than ourselves - the groups they take. Resolved before
+ * dispatch with the rest, because the lookup behind the groups may not be
+ * made in the child: it can only make async-signal-safe calls. A job this
+ * daemon may not start (prte_pmix_server_job_run_as) is reported here and
+ * answered PRTE_ERR_SILENT. Progress thread only. */
+static int spawn_caddy_credentials(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat)
+{
+    pmix_data_array_t *groups = NULL;
+    pmix_status_t prc;
+    size_t n, ngids;
+    long max;
+    bool change;
+    int rc;
+
+    if (NULL != cd->cred_gids) {
+        free(cd->cred_gids);
+        cd->cred_gids = NULL;
+    }
+    cd->cred_ngids = 0;
+    cd->cred_switch = false;
+    rc = prte_pmix_server_job_run_as(jobdat, &cd->cred_uid, &cd->cred_gid, &change);
+    if (PRTE_ERR_PERM == rc) {
+        prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "run-as-refused",
+                       true, prte_process_info.nodename, PRTE_JOB_NSPACE(jobdat),
+                       (unsigned long) prte_pmix_server_job_owner(jobdat),
+                       (unsigned long) prte_process_info.euid);
+        return PRTE_ERR_SILENT;
+    }
+    if (PRTE_SUCCESS != rc) {
+        prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "run-as-no-group",
+                       true, prte_process_info.nodename, PRTE_JOB_NSPACE(jobdat),
+                       (unsigned long) prte_pmix_server_job_owner(jobdat));
+        return PRTE_ERR_SILENT;
+    }
+    if (!change) {
+        return PRTE_SUCCESS;
+    }
+
+    prc = prte_pmix_server_owner_groups(cd->cred_uid, &groups);
+    if (PMIX_SUCCESS != prc) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    ngids = (NULL == groups) ? 0 : groups->size;
+    if (0 == ngids) {
+        /* none found - an owner with no account on this node, say - so
+         * it keeps its own group alone */
+        cd->cred_gids = (gid_t *) malloc(sizeof(gid_t));
+        if (NULL == cd->cred_gids) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        cd->cred_gids[0] = cd->cred_gid;
+        cd->cred_ngids = 1;
+    } else {
+        /* no more than the kernel takes. Leaving groups out loses the
+         * process access it would have had, never gains it any */
+        max = sysconf(_SC_NGROUPS_MAX);
+        if (0 < max && (long) ngids > max) {
+            ngids = (size_t) max;
+        }
+        cd->cred_gids = (gid_t *) malloc(ngids * sizeof(gid_t));
+        if (NULL == cd->cred_gids) {
+            PMIX_DATA_ARRAY_FREE(groups);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        for (n = 0; n < ngids; n++) {
+            cd->cred_gids[n] = (gid_t) ((uint32_t *) groups->array)[n];
+        }
+        cd->cred_ngids = (int) ngids;
+    }
+    if (NULL != groups) {
+        PMIX_DATA_ARRAY_FREE(groups);
+    }
+    cd->cred_switch = true;
+    return PRTE_SUCCESS;
+}
+
 /* Decide whether this child is to be run inside an xterm and, if so,
  * build the command to do it.  "--xterm" is a directive of the job, not of
  * the DVM: a persistent DVM's daemons were started long before the job that
@@ -2066,7 +2154,7 @@ static int xterm_select(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat, prte_pr
     return PRTE_SUCCESS;
 }
 
-static void spawn_caddy_copy(prte_odls_spawn_caddy_t *dst, prte_odls_spawn_caddy_t *src)
+static int spawn_caddy_copy(prte_odls_spawn_caddy_t *dst, prte_odls_spawn_caddy_t *src)
 {
     dst->do_not_spawn = src->do_not_spawn;
     dst->stop_on_exec = src->stop_on_exec;
@@ -2079,6 +2167,20 @@ static void spawn_caddy_copy(prte_odls_spawn_caddy_t *dst, prte_odls_spawn_caddy
     if (NULL != src->xterm_spec) {
         dst->xterm_spec = strdup(src->xterm_spec);
     }
+    dst->cred_uid = src->cred_uid;
+    dst->cred_gid = src->cred_gid;
+    if (src->cred_switch) {
+        /* a child that cannot be given its groups must not be started:
+         * without them it would keep ours */
+        dst->cred_gids = (gid_t *) malloc(src->cred_ngids * sizeof(gid_t));
+        if (NULL == dst->cred_gids) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        memcpy(dst->cred_gids, src->cred_gids, src->cred_ngids * sizeof(gid_t));
+        dst->cred_ngids = src->cred_ngids;
+        dst->cred_switch = true;
+    }
+    return PRTE_SUCCESS;
 }
 
 /* Clear a child's record of any previous launch before handing it to a
@@ -2227,6 +2329,11 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
      * (see prte_odls_spawn_caddy_t) - resolved here, past the retries above,
      * which return without passing the cleanup below */
     spawn_caddy_resolve(&proto, jobdat);
+    if (PRTE_SUCCESS != (rc = spawn_caddy_credentials(&proto, jobdat))) {
+        PRTE_ODLS_SET_ERROR(job, rc, UINT_MAX);
+        PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
+        goto GETOUT;
+    }
 
     for (j = 0; j < jobdat->apps->size; j++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jobdat->apps, j);
@@ -2427,10 +2534,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd->child = child;
             cd->fork_local = fork_local;
             cd->index_argv = index_argv;
-            spawn_caddy_copy(cd, &proto);
+            rc = spawn_caddy_copy(cd, &proto);
             /* per app, so not part of the job-level prototype */
             cd->membind_memattr = membind_resolve(jobdat, app);
-            if (PRTE_SUCCESS != (rc = xterm_select(cd, jobdat, child))) {
+            if (PRTE_SUCCESS != rc || PRTE_SUCCESS != (rc = xterm_select(cd, jobdat, child))) {
                 child->exit_code = rc;
                 PMIX_RELEASE(cd);
                 /* see the note on the prefork failure below */
@@ -3202,7 +3309,8 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     cd->fork_local = fork_local;
     spawn_caddy_resolve(cd, jobdat);
     cd->membind_memattr = membind_resolve(jobdat, app);
-    if (PRTE_SUCCESS != (rc = xterm_select(cd, jobdat, child))) {
+    if (PRTE_SUCCESS != (rc = spawn_caddy_credentials(cd, jobdat)) ||
+        PRTE_SUCCESS != (rc = xterm_select(cd, jobdat, child))) {
         child->exit_code = rc;
         PMIX_RELEASE(cd);
         PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
@@ -3249,7 +3357,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
      *    collectives there. A rank still registered is updated, which is
      *    not a failure. */
     prte_grpcomm_proc_restarted(&child->name);
-    rc = PMIx_server_register_client(&child->name, geteuid(), getegid(),
+    rc = PMIx_server_register_client(&child->name, cd->cred_uid, cd->cred_gid,
                                      (void *) child, NULL, NULL);
     if (PMIX_ERR_DUPLICATE_KEY == rc ||
 #ifdef PMIX_UPDATED

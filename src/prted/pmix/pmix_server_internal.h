@@ -791,6 +791,22 @@ PRTE_EXPORT bool prte_pmix_server_privileged(uid_t uid);
 /* the user jdata belongs to - our own user when none is known */
 PRTE_EXPORT uid_t prte_pmix_server_job_owner(prte_job_t *jdata);
 
+/* Who a job owned by `owner` may be started as by a process running as
+ * `me`. PRTE_SUCCESS with *change false: as `me`, because it is ours or
+ * root's. PRTE_SUCCESS with *change true: as the owner, because `me` is
+ * root and must not lend it root's privileges. PRTE_ERR_PERM: not at all -
+ * we cannot become the owner, and must not run the job as ourselves. */
+PRTE_EXPORT int prte_pmix_server_run_as(uid_t me, uid_t owner, bool *change);
+
+/* The user and group jdata's processes run as on this daemon, and whether
+ * that means changing credentials when they are started. Our own user and
+ * group when no change is needed. PRTE_ERR_PERM when the job may not be
+ * started here at all, PRTE_ERR_NOT_FOUND when its owner's group is not
+ * known. Every PMIx registration of the job's clients names the same user,
+ * since PMIx refuses a client that connects as anyone else. */
+PRTE_EXPORT int prte_pmix_server_job_run_as(prte_job_t *jdata, uid_t *uid, gid_t *gid,
+                                            bool *change);
+
 /* May uid act on jdata? PMIx's rule (pmix_server_access_check) over our
  * copy of the job's owner and access list and our record of the user. A
  * NULL jdata admits only root and our own user. */

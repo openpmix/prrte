@@ -145,6 +145,55 @@ uid_t prte_pmix_server_job_owner(prte_job_t *jdata)
     return prte_process_info.euid;
 }
 
+int prte_pmix_server_run_as(uid_t me, uid_t owner, bool *change)
+{
+    *change = false;
+    if (owner == me) {
+        return PRTE_SUCCESS;
+    }
+    if (0 == me) {
+        /* root can start the job as the user it belongs to - and so it
+         * must: started as root, it would act with root's privileges */
+        *change = true;
+        return PRTE_SUCCESS;
+    }
+    if (0 == owner) {
+        /* root may always act as our user, so a job root asked for may
+         * run as us */
+        return PRTE_SUCCESS;
+    }
+    /* we cannot become the owner, and must not run its job as ourselves */
+    return PRTE_ERR_PERM;
+}
+
+int prte_pmix_server_job_run_as(prte_job_t *jdata, uid_t *uid, gid_t *gid, bool *change)
+{
+    uint32_t id, *idptr = &id;
+    uid_t owner = prte_pmix_server_job_owner(jdata);
+    int rc;
+
+    *uid = prte_process_info.euid;
+    *gid = prte_process_info.egid;
+    rc = prte_pmix_server_run_as(prte_process_info.euid, owner, change);
+    if (PRTE_SUCCESS != rc || !*change) {
+        return rc;
+    }
+    /* the owner's group, as every daemon is told of it - or the HNP's own
+     * record. An owner with no group known leaves nothing to run the job
+     * under: guessing one could hand it a group it does not have */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, (void **) &idptr,
+                           PMIX_UINT32)) {
+        *gid = (gid_t) id;
+    } else if (PRTE_INVALID_GID != jdata->gid) {
+        *gid = jdata->gid;
+    } else {
+        *change = false;
+        return PRTE_ERR_NOT_FOUND;
+    }
+    *uid = owner;
+    return PRTE_SUCCESS;
+}
+
 typedef struct {
     pmix_info_t *info;
     size_t ninfo;

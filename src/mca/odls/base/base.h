@@ -165,6 +165,17 @@ typedef struct {
      * both settled on the progress thread before dispatch */
     char *xterm_spec;
     char **xterm_argv;
+    /* Who the child runs as (prte_pmix_server_job_run_as), settled on the
+     * progress thread before dispatch. When cred_switch is set the child
+     * takes these groups, group and user before it execs - all looked up
+     * here, because the child may make only async-signal-safe calls and a
+     * group lookup is not one. cred_uid/cred_gid are the user and group
+     * its PMIx registration names either way. */
+    bool cred_switch;
+    uid_t cred_uid;
+    gid_t cred_gid;
+    gid_t *cred_gids;
+    int cred_ngids;
     prte_iof_base_io_conf_t opts;
     prte_odls_base_fork_local_proc_fn_t fork_local;
     /* CPU/memory binding computed by the parent
@@ -276,6 +287,12 @@ PRTE_EXPORT void prte_odls_base_child_fail(int write_fd, int exit_status,
                                            int errnum) __prte_attribute_noreturn__;
 PRTE_EXPORT void prte_odls_base_child_warn(int write_fd, prte_odls_child_err_t which,
                                            int errnum);
+
+/* In the forked child: become the user, group and groups the caddy names
+ * (cd->cred_switch), and check that it took - reporting a failure up the
+ * pipe, which does not return. Nothing to do when no switch is asked for.
+ * Async-signal-safe; see odls_base_cred.c. */
+PRTE_EXPORT void prte_odls_base_set_credentials(prte_odls_spawn_caddy_t *cd, int write_fd);
 
 
 /* Fail every local child of job "ns" belonging to app index "j" (UINT_MAX
