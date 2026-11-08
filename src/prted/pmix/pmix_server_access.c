@@ -415,7 +415,6 @@ bool prte_pmix_server_dvm_permitted(const pmix_proc_t *requestor, const pmix_inf
                                     size_t ninfo)
 {
     uid_t uid;
-    pmix_user_t *user;
 
     /* the scheduler - only if there IS one: an empty nspace is
      * PMIX_CHECK_PROCID's wildcard */
@@ -429,6 +428,13 @@ bool prte_pmix_server_dvm_permitted(const pmix_proc_t *requestor, const pmix_inf
          * prte_pmix_server_request_permitted */
         return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
     }
+    return prte_pmix_server_dvm_permitted_uid(uid);
+}
+
+bool prte_pmix_server_dvm_permitted_uid(uid_t uid)
+{
+    pmix_user_t *user;
+
     if (prte_pmix_server_privileged(uid)) {
         return true;
     }
@@ -443,6 +449,38 @@ bool prte_pmix_server_dvm_permitted(const pmix_proc_t *requestor, const pmix_inf
     }
     return (PMIX_SUCCESS ==
             pmix_server_access_check(user, (pmix_access_t *) prte_pmix_server_globals.dvm_access));
+}
+
+bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool files, bool user)
+{
+    /* a file the master reads, or a login it uses, is done as the DVM's own
+     * user - so for root and that user only */
+    if (files || user) {
+        return prte_pmix_server_privileged(uid);
+    }
+    /* hosts brought into the DVM change what it consists of, and get the
+     * DVM's key: for whoever may change the DVM, as creating a session is */
+    return prte_pmix_server_dvm_permitted_uid(uid);
+}
+
+bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor, const pmix_info_t *info,
+                                     size_t ninfo, bool files, bool user)
+{
+    uid_t uid;
+
+    /* the scheduler - only if there IS one: an empty nspace is
+     * PMIX_CHECK_PROCID's wildcard */
+    if (NULL != requestor &&
+        !PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+        PMIX_CHECK_PROCID(&prte_pmix_server_globals.scheduler, requestor)) {
+        return true;
+    }
+    if (!prte_pmix_server_requester_uid(info, ninfo, &uid)) {
+        /* a request we made of ourselves - see
+         * prte_pmix_server_request_permitted */
+        return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
+    }
+    return prte_pmix_server_grow_permitted_uid(uid, files, user);
 }
 
 void prte_pmix_server_access_release_dvm(void)
