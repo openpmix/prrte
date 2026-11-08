@@ -215,6 +215,11 @@ static void sccon(prte_odls_spawn_caddy_t *p)
     p->exec_agent = NULL;
     p->xterm_spec = NULL;
     p->xterm_argv = NULL;
+    p->cred_switch = false;
+    p->cred_uid = PRTE_INVALID_UID;
+    p->cred_gid = PRTE_INVALID_GID;
+    p->cred_gids = NULL;
+    p->cred_ngids = 0;
     p->bind_cpuset = NULL;
     p->bind_fatal = false;
     p->do_membind = false;
@@ -250,6 +255,9 @@ static void scdes(prte_odls_spawn_caddy_t *p)
     }
     if (NULL != p->xterm_argv) {
         PMIx_Argv_free(p->xterm_argv);
+    }
+    if (NULL != p->cred_gids) {
+        free(p->cred_gids);
     }
     if (NULL != p->bind_cpuset) {
         hwloc_bitmap_free(p->bind_cpuset);

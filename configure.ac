@@ -416,7 +416,7 @@ PRTE_CFLAGS_save_for_headers=$CFLAGS
 _PRTE_CHECK_SPECIFIC_CFLAGS(-Werror, Werror)
 
 AC_CHECK_HEADERS([arpa/inet.h dirent.h \
-                  dlfcn.h endian.h execinfo.h fcntl.h \
+                  dlfcn.h endian.h execinfo.h fcntl.h grp.h \
                   libutil.h netdb.h netinet/in.h netinet/tcp.h \
                   poll.h  pty.h pwd.h sched.h \
                   strings.h \

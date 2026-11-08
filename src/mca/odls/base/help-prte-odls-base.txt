@@ -7,7 +7,7 @@
 # Copyright (c) 2014      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2024-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -50,3 +50,28 @@ The specified fork agent was not found:
   Fork agent:  %s
 
 The application cannot be launched.
+#
+[run-as-refused]
+A job was refused, because it belongs to a user the DVM cannot run
+processes as:
+
+  Node:       %s
+  Job:        %s
+  Job's user: %lu
+  DVM's user: %lu
+
+A job's processes run as the user the job belongs to. Only a DVM
+running as root can start processes as another user, and a DVM
+running as any other user does not run another user's job as itself.
+To run other users' jobs, run the DVM as root.
+#
+[run-as-no-group]
+A job was refused, because the group of the user it belongs to is not
+known:
+
+  Node:       %s
+  Job:        %s
+  Job's user: %lu
+
+A job's processes run as the user and group the job belongs to, and
+this job reached the daemon without a group.

@@ -193,8 +193,18 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    uid = geteuid();
-    gid = getegid();
+    /* who this job's clients run as here - its owner when this daemon
+     * starts them as the owner, else ourselves. PMIx refuses a client that
+     * connects as anyone other than the user it was registered with. A job
+     * that may not run here has no clients here, and keeps our own */
+    {
+        bool change;
+
+        if (PRTE_SUCCESS != prte_pmix_server_job_run_as(jdata, &uid, &gid, &change)) {
+            uid = geteuid();
+            gid = getegid();
+        }
+    }
     topo.source = "hwloc";
 
     /* pass the session ID */

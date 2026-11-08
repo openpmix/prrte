@@ -4150,6 +4150,72 @@ static bool cached(prte_job_t *jdata, const char *key)
     return false;
 }
 
+/* Who a job's processes run as (P01's rule): ours or root's as ourselves;
+ * anybody else's as its owner when we are root, and not at all when we
+ * are not - never as ourselves, which would lend the job our privileges.
+ * Where the owner is taken on, its group is the one every daemon is told
+ * of, else the HNP's record, and with neither the job cannot be started. */
+static int test_run_as(void)
+{
+    int failures = 0, rc;
+    prte_job_t *jdata;
+    uid_t uid, save_euid = prte_process_info.euid;
+    gid_t gid;
+    uint32_t owner = ACC_OWNER, grp = ACC_OWNGRP;
+    bool change = true;
+
+    /* the rule itself */
+    rc = prte_pmix_server_run_as(ACC_OWNER, ACC_OWNER, &change);
+    CHECK("run-as/own job as ourselves", PRTE_SUCCESS == rc && !change);
+    rc = prte_pmix_server_run_as(0, ACC_OWNER, &change);
+    CHECK("run-as/root takes on the owner", PRTE_SUCCESS == rc && change);
+    rc = prte_pmix_server_run_as(0, 0, &change);
+    CHECK("run-as/root's own job as root", PRTE_SUCCESS == rc && !change);
+    rc = prte_pmix_server_run_as(ACC_OWNER, 0, &change);
+    CHECK("run-as/root's job on a user's DVM as that user", PRTE_SUCCESS == rc && !change);
+    rc = prte_pmix_server_run_as(ACC_OWNER, ACC_STRANGER, &change);
+    CHECK("run-as/a stranger's job refused", PRTE_ERR_PERM == rc && !change);
+
+    /* a job, as this (unprivileged) process sees it */
+    jdata = fresh_job();
+    rc = prte_pmix_server_job_run_as(jdata, &uid, &gid, &change);
+    CHECK("run-as/a job with no owner is ours",
+          PRTE_SUCCESS == rc && !change && prte_process_info.euid == uid &&
+          prte_process_info.egid == gid);
+    if (0 != prte_process_info.euid) {
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL, &owner,
+                           PMIX_UINT32);
+        rc = prte_pmix_server_job_run_as(jdata, &uid, &gid, &change);
+        CHECK("run-as/another's job refused, naming ourselves",
+              PRTE_ERR_PERM == rc && !change && prte_process_info.euid == uid);
+    }
+
+    /* and as root would - the group the job is run under */
+    prte_process_info.euid = 0;
+    PMIX_RELEASE(jdata);
+    jdata = fresh_job();
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL, &owner,
+                       PMIX_UINT32);
+    rc = prte_pmix_server_job_run_as(jdata, &uid, &gid, &change);
+    CHECK("run-as/no group known: not started", PRTE_ERR_NOT_FOUND == rc && !change);
+    jdata->gid = (gid_t) 4444;
+    rc = prte_pmix_server_job_run_as(jdata, &uid, &gid, &change);
+    CHECK("run-as/the HNP's record of the group",
+          PRTE_SUCCESS == rc && change && ACC_OWNER == uid && 4444 == gid);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, PRTE_ATTR_GLOBAL, &grp,
+                       PMIX_UINT32);
+    rc = prte_pmix_server_job_run_as(jdata, &uid, &gid, &change);
+    CHECK("run-as/the group every daemon is told of comes first",
+          PRTE_SUCCESS == rc && change && ACC_OWNER == uid && ACC_OWNGRP == gid);
+    prte_process_info.euid = save_euid;
+    PMIX_RELEASE(jdata);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_run_as\n");
+    }
+    return failures;
+}
+
 static int test_access(void)
 {
     int failures = 0;
@@ -4669,6 +4735,7 @@ int main(void)
     failures += test_envar_order_permutations(&skipped);
     failures += test_envar_order_mpmd(&skipped);
     failures += test_access();
+    failures += test_run_as();
     /* it packs what it would broadcast, which needs the PMIx that
      * test_access() leaves up */
     failures += test_connection_departures();
