@@ -53,6 +53,7 @@
 
 /* Adapt this copied code for PRTE */
 #include "src/util/pmix_output.h"
+#include "src/runtime/prte_globals.h"
 
 static struct nla_policy route_policy[RTA_MAX+1] = {
 	[RTA_IIF]	= { .type = NLA_STRING, .maxlen = IFNAMSIZ },
@@ -68,6 +69,8 @@ static struct nla_policy route_policy[RTA_MAX+1] = {
 static int prte_reachable_netlink_is_nlreply_expected(struct prte_reachable_netlink_sk *unlsk,
                                                       struct nlmsghdr *nlm_hdr)
 {
+    /* both are only read by the debug check below */
+    PRTE_HIDE_UNUSED_PARAMS(unlsk, nlm_hdr);
 #if PRTE_ENABLE_DEBUG
     if (nlm_hdr->nlmsg_pid != nl_socket_get_local_port(unlsk->nlh) ||
         nlm_hdr->nlmsg_seq != unlsk->seq) {
