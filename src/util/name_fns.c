@@ -177,7 +177,7 @@ char *prte_util_print_jobids(const pmix_nspace_t job)
 char *prte_util_print_job_family(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
-    char *cptr;
+    const char *cptr;
 
     ptr = get_print_name_buffer();
 
@@ -201,9 +201,9 @@ char *prte_util_print_job_family(const pmix_nspace_t job)
             /* this isn't a PRRTE job */
             snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
         } else {
-            *cptr = '\0';
-            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
-            *cptr = '@';
+            /* copy up to the '@' rather than writing into the caller's const nspace */
+            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%.*s",
+                     (int) (cptr - job), job);
         }
     }
     return ptr->buffers[ptr->cntr - 1];
@@ -212,7 +212,7 @@ char *prte_util_print_job_family(const pmix_nspace_t job)
 char *prte_util_print_local_jobid(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
-    char *cptr;
+    const char *cptr;
 
     ptr = get_print_name_buffer();
 
@@ -300,7 +300,8 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
 
 int prte_util_convert_string_to_process_name(pmix_proc_t *name, const char *name_string)
 {
-    char *p;
+    const char *p;
+    size_t len;
 
     /* check for NULL string - error */
     if (NULL == name_string) {
@@ -315,9 +316,14 @@ int prte_util_convert_string_to_process_name(pmix_proc_t *name, const char *name
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
-    *p = '\0';
-    PMIX_LOAD_NSPACE(name->nspace, name_string);
-    *p = '.';
+    /* copy out the nspace rather than writing into the caller's const string;
+     * truncate at PMIX_MAX_NSLEN as PMIX_LOAD_NSPACE() would */
+    len = (size_t) (p - name_string);
+    if (PMIX_MAX_NSLEN < len) {
+        len = PMIX_MAX_NSLEN;
+    }
+    memset(name->nspace, 0, sizeof(name->nspace));
+    memcpy(name->nspace, name_string, len);
     ++p;
     name->rank = strtoul(p, NULL, 10);
 
