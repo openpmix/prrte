@@ -1113,12 +1113,10 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
                 PMIX_ERROR_LOG(rc);
                 goto next;
             }
-            if (first) {
-                cnt = 2;
-                first = false;
-            } else {
-                cnt = 1;
-            }
+            /* info only has room for the context ID if one was assigned,
+             * and it is only passed along with the first entry */
+            cnt = (first && assignedID) ? 2 : 1;
+            first = false;
             /* use the register_nspace API to enter this information - it
              * will see that it already knows the nspace, and so it will
              * simply cache the data for later retrieval when requested */
@@ -1141,7 +1139,7 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             cnt = 1;
             rc = PMIx_Data_unpack(NULL, buf, &nspace, &cnt, PMIX_PROC_NSPACE);
         }
-        PMIX_INFO_DESTRUCT(&info[1]);
+        PMIX_INFO_FREE(info, ninfo);
     }
 
     /* now release the connect call */
