@@ -77,7 +77,10 @@ Tools
 -----
 
 In the case of tools, the rendezvous files containing connection
-information for a target server are located in the session directory
-tree. Thus, it may be necessary to point the tool at the location
-where those files can be found if that location is other than the
-expected default.
+information for a target server are not in the session directory tree:
+each daemon writes them in its temporary directory, in a subdirectory
+named ``pmix-user.<uid>``, and a tool such as ``prun`` looks for them
+under its own. A tool started with a different ``TMPDIR`` than the
+daemon it is to reach therefore finds nothing, and has to be pointed at
+the daemon's rendezvous file (``prun --dvm-uri file:<path>``). See
+:ref:`label-prun-local-daemon`.
