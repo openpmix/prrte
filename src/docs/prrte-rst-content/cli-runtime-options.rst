@@ -207,3 +207,12 @@ the spawn request sets any of the three itself, in which case it has chosen
 its own error handling and takes the defaults for the rest. A job spawned
 with ``PMIX_SPAWN_CHILD_SEP``, or by a tool, has no parent job and takes
 the defaults.
+
+Connected jobs |mdash| a spawned job and its parent, or jobs joined by
+``PMIx_Connect`` |mdash| are treated as one application when a failure
+terminates one of them: by default, every other job connected to it is
+terminated too. A job that is ``RECOVERABLE`` or ``CONTINUOUS`` is the
+exception. It is not terminated; it is notified of the failure and of the
+connected jobs that end, and carries on. The ``pmix_terminate_connected``
+MCA parameter set to ``0`` confines a failure to the job it happened in,
+whatever the job's options.

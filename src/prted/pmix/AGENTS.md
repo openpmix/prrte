@@ -1283,6 +1283,15 @@ Two things follow from that record, and they are the rest of the definition:
   The assemblage is marked `terminating` as it goes, so the failures its own
   teardown produces do not drive it again.
 
+  **A recoverable or continuous member is spared.** PMIx terminates an
+  assemblage as one application only "in the absence of any application
+  directives", and `PRTE_JOB_RECOVERABLE`/`PRTE_JOB_CONTINUOUS` are such
+  directives: the job said it survives the loss of a process. The sweep does
+  not kill it, does not condemn anything through it, and leaves its
+  assemblage unmarked so it still hears the departures. Each job the sweep
+  does condemn has its departures held (`connection_teardown()`), so a spared
+  member hears of it once, as `<nspace>:WILDCARD`, when it ends.
+
   **A spawned job takes its parent's error handling** (`inherit_error_handling()`
   in `pmix_server_dyn.c`): recoverable, continuous and notify-errors, ahead of
   the site defaults - as one choice, so a spawn that sets any of the three
