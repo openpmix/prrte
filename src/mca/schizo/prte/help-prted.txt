@@ -292,8 +292,10 @@ taken as a failure of them all. A job leaves an assemblage by calling
 PMIx_Disconnect; a job that is still connected when another member fails
 is terminated with it.
 
-Run with "--prtemca pmix_terminate_connected 0" to confine a failure to
-the job it happened in.
+A job that is recoverable or continuous (--rtos recoverable, or
+--with-ft ulfm) is notified rather than terminated. Run with
+"--prtemca pmix_terminate_connected 0" to confine a failure to the job it
+happened in.
 #
 [debug-daemons-file]
 
