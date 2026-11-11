@@ -19,10 +19,19 @@ DESCRIPTION
 
 ``pterm`` terminates an instance of the PMIx Reference Runtime
 Environment (PRRTE) distributed virtual machine (DVM) that was started
-by :ref:`prte(1) <man1-prte>`. It connects to the DVM controller as a
-PMIx tool and directs it to shut the DVM down, taking with it any jobs
-still running in it. The connection options below select which DVM
-controller ``pterm`` connects to.
+by :ref:`prte(1) <man1-prte>`. It connects, as a PMIx tool, to the DVM
+daemon on the node where it runs |mdash| the DVM controller on the node
+where ``prte`` was started, or the :ref:`prted(1) <man1-prted>` daemon on
+any other node of the DVM |mdash| and directs the DVM to shut down,
+taking with it any jobs still running in it.
+
+The connection is local to the node, as it is for
+:ref:`prun(1) <man1-prun>`: ``pterm`` must run on a node where one of the
+DVM's daemons is running, with the ``TMPDIR`` that daemon was started
+with, or be given the daemon's rendezvous file with
+``--dvm-uri file:<path>``. See :ref:`label-prun-local-daemon`. The
+connection options below select which of this node's daemons ``pterm``
+connects to.
 
 ``pterm`` accepts no arguments other than the options listed here.
 ``pterm --help <option>`` prints the full description of an option.
@@ -100,13 +109,14 @@ launches nothing, so no root-execution guard applies.
 EXIT STATUS
 -----------
 
-``pterm`` exits with status 0 if it reached the DVM controller and the
+``pterm`` exits with status 0 if it reached a daemon of the DVM and the
 DVM was directed to terminate, and non-zero otherwise.
 
 EXAMPLES
 --------
 
-Terminate the DVM whose controller wrote its URI to a file:
+On the node where ``prte`` runs, terminate the DVM whose controller
+wrote its URI to a file:
 
 .. code:: sh
 

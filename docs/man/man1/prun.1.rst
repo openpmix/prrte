@@ -33,8 +33,26 @@ one started by :ref:`prte(1) <man1-prte>` |mdash| and waits for it to
 complete. Use :ref:`prterun(1) <man1-prterun>` instead to start a DVM,
 run a single job in it, and shut it down again.
 
-``prun`` connects to the DVM controller as a PMIx tool; the connection
-options below select which controller it connects to.
+``prun`` connects, as a PMIx tool, to the DVM daemon on the node where
+it runs |mdash| the DVM controller on the node where ``prte`` was
+started, or the :ref:`prted(1) <man1-prted>` daemon on any other node of
+the DVM |mdash| and that daemon passes the job to the controller. The job
+runs across the whole DVM whichever daemon ``prun`` reached.
+
+**The connection is local to the node.** ``prun`` does not reach a DVM
+over the network, so it must run on a node where one of the DVM's
+daemons is running. To use a DVM from a machine outside it, such as a
+login node, log in to one of the DVM's nodes and run ``prun`` there.
+``prun`` finds the daemon through the rendezvous files the daemon wrote
+in its temporary directory (``$TMPDIR``, else ``/tmp``), so it must run
+with the ``TMPDIR`` that daemon was started with, or be given the
+daemon's rendezvous file with ``--dvm-uri file:<path>``. When it finds no
+daemon, ``prun`` exits reporting that it failed to initialize, "likely
+due to no DVM being available". See :ref:`label-prun-local-daemon` for
+details.
+
+The connection options below select which of this node's daemons
+``prun`` connects to.
 
 Each application context on the command line is separated by a ``:``.
 The options that precede a context's program apply to that context.
@@ -267,12 +285,21 @@ it:
 
    shell$ prun --rtos donotlaunch --display map -n 16 ./a.out
 
-Connect to the DVM whose controller wrote its URI to a file:
+On the node where ``prte`` runs, connect to the DVM whose controller
+wrote its URI to a file. The URI names a socket on that node, so it is
+no use on any other:
 
 .. code:: sh
 
    shell$ prte --report-uri dvm.uri --daemonize
    shell$ prun --dvm-uri file:dvm.uri -n 4 ./a.out
+
+From a login node outside the DVM, run a job in it by logging in to one
+of the DVM's nodes:
+
+.. code:: sh
+
+   login$ ssh node2 prun -n 4 ./a.out
 
 .. seealso::
    :ref:`prte(1) <man1-prte>`,
