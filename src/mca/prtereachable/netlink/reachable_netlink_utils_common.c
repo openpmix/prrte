@@ -66,8 +66,12 @@ static struct nla_policy route_policy[RTA_MAX + 1] = {
     [RTA_MULTIPATH] = {.type = NLA_NESTED},
 };
 
-static int prte_reachable_netlink_is_nlreply_expected(struct prte_reachable_netlink_sk *unlsk,
-                                                      struct nlmsghdr *nlm_hdr)
+/* Both parameters are read only by the debug check, so a build without
+ * PRTE_ENABLE_DEBUG leaves them unused */
+static int prte_reachable_netlink_is_nlreply_expected(struct prte_reachable_netlink_sk *unlsk
+                                                          __prte_attribute_unused__,
+                                                      struct nlmsghdr *nlm_hdr
+                                                          __prte_attribute_unused__)
 {
 #if PRTE_ENABLE_DEBUG
     if (nlm_hdr->nlmsg_pid != nl_socket_get_local_port(unlsk->nlh) ||
