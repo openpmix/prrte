@@ -198,3 +198,12 @@ one app context of an MPMD command line not launching |mdash| so it may be
 written in *any* app context and applies to all of them. Two app
 contexts that ask for opposite things are refused, since there is no way to
 honor both.
+
+A job spawned by a process of another job |mdash| ``MPI_Comm_spawn``, or
+``PMIx_Spawn`` from an application process |mdash| is part of that
+process's application. It takes ``RECOVERABLE``, ``CONTINUOUS`` and
+``NOTIFYERRORS`` from its parent job, ahead of the defaults |mdash| unless
+the spawn request sets any of the three itself, in which case it has chosen
+its own error handling and takes the defaults for the rest. A job spawned
+with ``PMIX_SPAWN_CHILD_SEP``, or by a tool, has no parent job and takes
+the defaults.

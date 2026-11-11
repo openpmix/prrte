@@ -1283,6 +1283,19 @@ Two things follow from that record, and they are the rest of the definition:
   The assemblage is marked `terminating` as it goes, so the failures its own
   teardown produces do not drive it again.
 
+  **A spawned job takes its parent's error handling** (`inherit_error_handling()`
+  in `pmix_server_dyn.c`): recoverable, continuous and notify-errors, ahead of
+  the site defaults - as one choice, so a spawn that sets any of the three
+  gets none of the parent's (mixing them made notify-errors without
+  recoverable, which `prte_state_base_set_runtime_options()` refuses). Without it, a parent
+  started with `--with-ft ulfm` spawned a child that was not recoverable; the
+  child's first failure terminated the child job, and through the sweep above,
+  the parent. "Has a parent" is `prte_pmix_server_spawn_parent()`, the same
+  screen `connection_spawned()` uses. The site defaults are therefore filled in
+  (`set_default_rto`) *after* the spawn's job info is read and its parent
+  settled, not before - an explicit spawn directive wins, then the parent, then
+  the default.
+
   **That termination is transitive, and has to be.** Killing a job because a
   job it was connected to failed is itself the loss of that job, so whatever
   *it* was connected to has lost a member too. The case is ordinary rather
