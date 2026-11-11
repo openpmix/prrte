@@ -645,6 +645,13 @@ PRTE_EXPORT void prte_pmix_server_connection_job_ended(prte_job_t *jdata);
  * the default for PMIx_Spawn; PMIX_SPAWN_CHILD_SEP opts out. */
 PRTE_EXPORT void prte_pmix_server_connection_spawned(prte_job_t *jdata);
 
+/* The job of the process that spawned this one, or NULL when there is no
+ * parent process - a launch by a daemon or a tool, a tool that asked for the
+ * job for itself, or a spawn that asked for PMIX_SPAWN_CHILD_SEP.  proxy is
+ * the process that asked for the job (PRTE_JOB_LAUNCH_PROXY, or the spawn's
+ * originator before that is recorded). */
+PRTE_EXPORT prte_job_t *prte_pmix_server_spawn_parent(prte_job_t *jdata, const pmix_proc_t *proxy);
+
 /* A failure has cost this job its life.  The proc that failed is announced
  * at once and the rest of the job is held as for a teardown.  "Connected"
  * means the host treats the assemblage as a single application, so every

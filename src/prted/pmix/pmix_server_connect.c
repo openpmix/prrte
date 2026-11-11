@@ -876,10 +876,45 @@ void prte_pmix_server_connection_job_ended(prte_job_t *jdata)
  *
  * PMIX_SPAWN_CHILD_SEP is honored as the opt-out: a spawn that asked for the
  * child to be independent of its parent has said in as many words that the
- * two jobs' fates are not to be linked. */
-void prte_pmix_server_connection_spawned(prte_job_t *jdata)
+ * two jobs' fates are not to be linked.
+ *
+ * The spawn path asks the same question, before the job has a launch proxy
+ * recorded, to decide whose error-handling settings the new job takes - so
+ * the screening lives in prte_pmix_server_spawn_parent(), and the proxy is
+ * passed in. */
+prte_job_t *prte_pmix_server_spawn_parent(prte_job_t *jdata, const pmix_proc_t *proxy)
 {
     prte_job_t *parent;
+
+    if (NULL == jdata || NULL == proxy) {
+        return NULL;
+    }
+    if (PMIX_NSPACE_INVALID(proxy->nspace) || PMIX_RANK_INVALID == proxy->rank ||
+        same_nspace(proxy->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        /* no requestor, or one of our own daemons - either way there is no
+         * parent process */
+        return NULL;
+    }
+    parent = prte_get_job_data_object(proxy->nspace);
+    if (NULL == parent || PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+        return NULL;
+    }
+    /* nor is there one when a tool asked for the job for itself, whatever
+     * name it holds - see PRTE_JOB_NO_PARENT_PROC */
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC)) {
+        return NULL;
+    }
+    /* PMIX_SPAWN_CHILD_SEP opts the child out of being connected to its
+     * parent.  Only an explicit TRUE does so: not having said is not an
+     * opt-out, and the PMIx default is that a spawn connects the two. */
+    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CHILD_SEP)) {
+        return NULL;
+    }
+    return parent;
+}
+
+void prte_pmix_server_connection_spawned(prte_job_t *jdata)
+{
     pmix_proc_t *proxy = NULL, members[2];
 
     if (!registry_live() || NULL == jdata) {
@@ -889,25 +924,7 @@ void prte_pmix_server_connection_spawned(prte_job_t *jdata)
                             (void **) &proxy, PMIX_PROC) || NULL == proxy) {
         return;
     }
-    if (PMIX_NSPACE_INVALID(proxy->nspace) || PMIX_RANK_INVALID == proxy->rank ||
-        same_nspace(proxy->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        /* no requestor, or one of our own daemons - either way there is no
-         * parent process to connect to */
-        goto done;
-    }
-    parent = prte_get_job_data_object(proxy->nspace);
-    if (NULL == parent || PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
-        goto done;
-    }
-    /* nor is there one when a tool asked for the job for itself, whatever
-     * name it holds - see PRTE_JOB_NO_PARENT_PROC */
-    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC)) {
-        goto done;
-    }
-    /* PMIX_SPAWN_CHILD_SEP opts the child out of being connected to its
-     * parent.  Only an explicit TRUE does so: not having said is not an
-     * opt-out, and the PMIx default is that a spawn connects the two. */
-    if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CHILD_SEP)) {
+    if (NULL == prte_pmix_server_spawn_parent(jdata, proxy)) {
         goto done;
     }
 
