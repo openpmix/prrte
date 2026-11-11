@@ -12,4 +12,4 @@
    about this file not being directly included in some toctree
 
 Delay the specified number of seconds between attempts to connect to
-the DVM controller.
+the DVM daemon.

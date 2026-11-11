@@ -20,6 +20,8 @@ PRRTE provides two commands for starting applications:
    for execution. The DVM continues execution once the application has
    completed. The prun command will remain active until the application
    completes. All application and error output will flow through prun.
+   ``prun`` must run on a node where one of the DVM's daemons is
+   running: see :ref:`label-prun-local-daemon`.
 #. ``prterun`` - starts a DVM instance and submits the specified application
    to it for execution. The DVM is terminated once the application completes.
    All application and error output will flow through prterun.

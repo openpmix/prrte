@@ -63,6 +63,59 @@ Note that the ``prterun`` command supports a
 *large* number of options. Detailed help on any option can be obtained
 using the hierarchical help system - e.g., ``prterun --help map-by``.
 
+.. _label-prun-local-daemon:
+
+Using ``prun`` with a running DVM
+---------------------------------
+
+``prun`` and ``pterm`` do not start a DVM; they attach to one that
+:ref:`prte(1) <man1-prte>` started. Each attaches to the DVM daemon on
+the node where it runs: on the node where ``prte`` was started that is
+the DVM controller itself, and on any other node of the DVM it is the
+:ref:`prted(1) <man1-prted>` daemon there, which passes the request on to
+the controller. Either way a job submitted with ``prun`` runs across the
+whole DVM and its output comes back to ``prun``, and ``pterm`` shuts the
+whole DVM down.
+
+The connection is local to the node. ``prun`` does not reach a DVM over
+the network, so it has to run on a node where one of the DVM's daemons
+is running. To use a DVM from a machine outside it |mdash| a login node,
+or a workstation |mdash| log in to one of the DVM's nodes and run
+``prun`` there:
+
+.. code-block:: sh
+
+   login$ ssh node2
+   node2$ prun -n 4 mpi-hello-world
+
+Run on a node with no daemon of the DVM, ``prun`` exits with:
+
+.. code-block:: text
+
+   prun failed to initialize, likely due to no DVM being available
+
+**Run with the daemon's** ``TMPDIR``. ``prun`` finds the daemon through
+the rendezvous files the daemon wrote in its temporary directory
+(``$TMPDIR``, or ``/tmp`` when that is not set), in a subdirectory named
+``pmix-user.<uid>``. A ``prun`` started with a different ``TMPDIR``
+looks in a different place and reports the same message, even though a
+daemon is running on the node. A daemon's ``TMPDIR`` is the one it was
+started with on its own node, which need not be the one ``prte`` had
+|mdash| a daemon started over ``ssh``, for instance, has the environment
+of a non-interactive login on its node. When the two cannot be made to
+agree, name the daemon's rendezvous file instead. On ``node2``, with the
+daemon's temporary directory at ``/tmp``:
+
+.. code-block:: sh
+
+   node2$ ls /tmp/pmix-user.$(id -u)/
+   pmix.node2.session.3995028138  pmix.node2.tool.75  ...
+   node2$ prun --dvm-uri file:/tmp/pmix-user.$(id -u)/pmix.node2.session.3995028138 -n 4 mpi-hello-world
+
+The URI that ``prte --report-uri`` writes names the controller's socket
+on the controller's node, so ``--dvm-uri`` with that file works only on
+that node.
+
 Launching on a single host
 --------------------------
 

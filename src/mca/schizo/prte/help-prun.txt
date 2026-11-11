@@ -272,8 +272,8 @@ option to the help request as "--help <option>".
 |======================|===============================================|
 | "--do-not-connect"   | Do not connect to a server                    |
 +----------------------+-----------------------------------------------+
-| "--dvm-uri <uri>"    | Specify the URI of the DVM master, or the     |
-|                      | name of the file (specified as                |
+| "--dvm-uri <uri>"    | Specify the URI of the DVM daemon on this     |
+|                      | node, or the name of the file (specified as   |
 |                      | "file:filename") that contains that info      |
 +----------------------+-----------------------------------------------+
 | "--namespace <name>" | Namespace of the daemon to which we should    |
@@ -319,36 +319,40 @@ option to the help request as "--help <option>".
 #
 [dvm-uri]
 
-Specify the URI of the DVM controller to connect to, or the name of the
-file (specified as "file:<filename>") that contains that info.
+Specify the URI of the DVM daemon on this node to connect to, or the
+name of the file (specified as "file:<filename>") that contains that
+info. A daemon's URI names a socket on the daemon's own node, so it
+can be used only there.
 #
 [num-connect-retries]
 
-Maximum number of times to try to connect to the DVM controller.
+Maximum number of times to try to connect to the DVM daemon.
 #
 [pid]
 
-PID of the DVM controller to connect to, given either as an integer or
-as "file:<filename>" naming a file that contains the PID.
+PID of the DVM daemon on this node to connect to, given either as an
+integer or as "file:<filename>" naming a file that contains the PID.
 #
 [namespace]
 
-Namespace of the DVM controller to connect to.
+Namespace of the DVM to connect to. The connection is made to that
+DVM's daemon on this node.
 #
 [system-server-first]
 
-First look for a system-level DVM controller and connect to it if found;
-otherwise, fall back to searching for any other DVM controller.
+First look on this node for a daemon of a system-level DVM and
+connect to it if found; otherwise, fall back to searching this node
+for any other DVM daemon.
 #
 [system-server-only]
 
-Connect only to a system-level DVM controller — abort if one is not
-found.
+Connect only to a daemon of a system-level DVM on this node —
+abort if one is not found.
 #
 [wait-to-connect]
 
-Delay the specified number of seconds between attempts to connect to the
-DVM controller.
+Delay the specified number of seconds between attempts to connect to
+the DVM daemon.
 #
 [x]
 
