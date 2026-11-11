@@ -930,7 +930,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 inherit = true;
                 // if they didn't specifically direct it not inherit, then pass this on to the child
                 if (!PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOINHERIT)) {
-                    prte_set_bool_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_INHERIT, true);
+                    prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL, true);
                 }
 
             } else if (PRTE_ATTR_IS_TRUE(&parent->attributes, PRTE_JOB_NOINHERIT)) {
