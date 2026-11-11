@@ -141,9 +141,23 @@ typedef void (*prte_iof_base_complete_fn_t)(const prte_job_t *jdata);
 typedef int (*prte_iof_base_finalize_fn_t)(void);
 
 /**
+ * Relay output this process produced about a job - its map, its bindings,
+ * its allocation, written through prte_iof_base_output() - to every other
+ * daemon hosting a tool that follows the job's output. The local PMIx
+ * server reaches only the tools attached to us; a tool attached to another
+ * daemon registered its request there, and only that daemon's server can
+ * deliver to it. The caller still delivers locally, and keeps the bytes.
+ *
+ * Only the master has anything to relay, so a module may leave it NULL.
+ */
+typedef void (*prte_iof_base_relay_fn_t)(const pmix_proc_t *source,
+                                         pmix_iof_channel_t channel,
+                                         char *data, size_t numbytes);
+
+/**
  *  IOF module.
  */
-struct prte_iof_base_module_2_0_0_t {
+struct prte_iof_base_module_3_0_0_t {
     prte_iof_base_init_fn_t init;
     prte_iof_base_push_fn_t push;
     prte_iof_base_pull_fn_t pull;
@@ -151,10 +165,11 @@ struct prte_iof_base_module_2_0_0_t {
     prte_iof_base_complete_fn_t complete;
     prte_iof_base_finalize_fn_t finalize;
     prte_iof_base_push_stdin_fn_t push_stdin;
+    prte_iof_base_relay_fn_t relay;
 };
 
-typedef struct prte_iof_base_module_2_0_0_t prte_iof_base_module_2_0_0_t;
-typedef prte_iof_base_module_2_0_0_t prte_iof_base_module_t;
+typedef struct prte_iof_base_module_3_0_0_t prte_iof_base_module_3_0_0_t;
+typedef prte_iof_base_module_3_0_0_t prte_iof_base_module_t;
 PRTE_EXPORT extern prte_iof_base_module_t prte_iof;
 
 typedef pmix_mca_base_component_t prte_iof_base_component_t;
@@ -167,7 +182,7 @@ END_C_DECLS
  * the same three by pasting its name, so the two cannot drift apart.
  * Bump it on any change to the module interface that a component built
  * against the previous one would not survive. */
-#define PRTE_MCA_iof_MAJOR_VERSION   2
+#define PRTE_MCA_iof_MAJOR_VERSION   3
 #define PRTE_MCA_iof_MINOR_VERSION   0
 #define PRTE_MCA_iof_RELEASE_VERSION 0
 

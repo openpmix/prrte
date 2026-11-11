@@ -75,6 +75,8 @@ static void hnp_complete(const prte_job_t *jdata);
 static int finalize(void);
 
 static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz);
+static void hnp_relay(const pmix_proc_t *source, pmix_iof_channel_t channel,
+                      char *data, size_t numbytes);
 static void release_flow_control(void);
 
 /* The API's in this module are solely used to support LOCAL
@@ -90,7 +92,8 @@ prte_iof_base_module_t prte_iof_hnp_module = {
     .close = hnp_close,
     .complete = hnp_complete,
     .finalize = finalize,
-    .push_stdin = push_stdin
+    .push_stdin = push_stdin,
+    .relay = hnp_relay
 };
 
 /* Initialize the module */
@@ -406,6 +409,33 @@ static int hnp_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
         }
     }
     return PRTE_SUCCESS;
+}
+
+/* Send a copy of output we produced about a job - prte_iof_base_output's
+ * map, bindings and allocation displays - to every daemon hosting a tool
+ * that follows the job, exactly as a remote proc's output is relayed in
+ * prte_iof_hnp_recv. Nobody else has delivered it, so the only daemon to
+ * skip is ourselves, whose server the caller hands it to */
+static void hnp_relay(const pmix_proc_t *source, pmix_iof_channel_t channel,
+                      char *data, size_t numbytes)
+{
+    prte_iof_tag_t stream = 0;
+
+    if (PMIX_FWD_STDOUT_CHANNEL & channel) {
+        stream |= PRTE_IOF_STDOUT;
+    }
+    if (PMIX_FWD_STDERR_CHANNEL & channel) {
+        stream |= PRTE_IOF_STDERR;
+    }
+    if (PMIX_FWD_STDDIAG_CHANNEL & channel) {
+        stream |= PRTE_IOF_STDDIAG;
+    }
+    /* the relay message carries a 32-bit count */
+    if (0 == stream || 0 == numbytes || INT32_MAX < numbytes) {
+        return;
+    }
+    prte_iof_hnp_relay_to_tool(source, stream, (unsigned char *) data, (int) numbytes,
+                               PRTE_PROC_MY_NAME->rank);
 }
 
 static void hnp_complete(const prte_job_t *jdata)
