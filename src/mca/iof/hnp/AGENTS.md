@@ -184,9 +184,12 @@ server can deliver to it. We are the only process that sees all of the job's
 output, so we send a copy back out.
 
 `prte_iof_hnp_relay_to_tool(source, stream, data, numbytes, already_delivered)`
-is called from **both** output paths, just before the local delivery: from
-`prte_iof_hnp_recv` (passing the forwarding daemon's rank) and from
-`prte_iof_hnp_read_local_handler` (passing our own). It sends on
+is called from **all three** output paths, just before the local delivery:
+from `prte_iof_hnp_recv` (passing the forwarding daemon's rank), from
+`prte_iof_hnp_read_local_handler` (passing our own), and - through the
+module's `relay` entry, `hnp_relay` in `iof_hnp.c` - from
+`prte_iof_base_output()`, for the map, bindings and allocation displays the
+master produces itself (passing our own). It sends on
 `PRTE_RML_TAG_IOF_PROXY` with the stream tag leading, which is how the
 daemon tells it from stdin.
 

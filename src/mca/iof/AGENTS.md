@@ -116,12 +116,12 @@ read→forward story).
 ## The module contract
 
 Every component fills in a `prte_iof_base_module_t` (defined in
-[`iof.h`](iof.h) as `prte_iof_base_module_2_0_0_t`). It is a small,
+[`iof.h`](iof.h) as `prte_iof_base_module_3_0_0_t`). It is a small,
 fixed vtable — there is no return-code "try the next component" protocol
 like `rmaps` has, because only one iof module is ever selected:
 
 ```c
-struct prte_iof_base_module_2_0_0_t {
+struct prte_iof_base_module_3_0_0_t {
     prte_iof_base_init_fn_t       init;        /* void -> int   */
     prte_iof_base_push_fn_t       push;        /* (peer, tag, fd) -> int */
     prte_iof_base_pull_fn_t       pull;        /* (peer, tag, fd) -> int */
@@ -129,6 +129,7 @@ struct prte_iof_base_module_2_0_0_t {
     prte_iof_base_complete_fn_t   complete;    /* (jdata) -> void */
     prte_iof_base_finalize_fn_t   finalize;    /* void -> int */
     prte_iof_base_push_stdin_fn_t push_stdin;  /* (dst, data, sz) -> int */
+    prte_iof_base_relay_fn_t      relay;       /* (source, channel, data, sz) -> void */
 };
 ```
 
@@ -140,6 +141,7 @@ struct prte_iof_base_module_2_0_0_t {
 | `close` | Tear down the read events and/or sink for the named peer for the streams in `source_tag`; drop the proc from `procs` once all three are gone. | teardown paths |
 | `complete` | Job finished: purge any lingering `prte_iof_proc_t`s belonging to `jdata->nspace` — releasing each one's stream slots **before** the proc, because the proc and its read events reference each other (see [`base/AGENTS.md`](base/AGENTS.md)). | `state` machine on `JOB`/`PROC` completion |
 | `finalize` | Cancel the RML receive and destruct the `procs` list. | framework close |
+| `relay` | **Copy runtime output to tools on other daemons.** Send what `prte_iof_base_output()` emits about a job - its map, bindings, allocation - to every daemon hosting a tool that follows the job. Only `hnp` fills it in; see `prte_iof_base_output()` below. | `prte_iof_base_output` |
 | `push_stdin` | **Inject stdin.** Deliver a chunk of stdin to a target proc (or wildcard). In the `hnp` module that means routing it — to the hosting daemon over RML, or to a local proc's sink. In the `prted` module it means relaying to the HNP, which is the only process that can do the routing. Implemented in **both**; a tool can attach to any daemon. | PMIx server glue (`pmix_server_gen.c`) |
 
 Note the naming is a little counter-intuitive and the [`iof.h`](iof.h)
@@ -147,9 +149,11 @@ docstrings are stale: **`push` handles the OUTPUT (read) side**, **`pull`
 handles the STDIN (write/sink) side**. Trust the implementations, not the
 header prose.
 
-`init`/`finalize`/`push_stdin`/`complete` may legitimately be `NULL` in a
-module; the base and callers all guard with `if (NULL != prte_iof.xxx)`.
-Both shipped modules do fill all seven — `push_stdin` was `NULL` in `prted`
+`init`/`finalize`/`push_stdin`/`complete`/`relay` may legitimately be
+`NULL` in a module; the base and callers all guard with
+`if (NULL != prte_iof.xxx)`. Both shipped modules fill the first seven,
+and `prted` leaves `relay` NULL because only the master has anything to
+relay — `push_stdin` was `NULL` in `prted`
 until a tool attaching to a non-master daemon turned that into a segfault
 ([#2568](https://github.com/openpmix/prrte/issues/2568)) — but the guards
 are the contract, so keep them.
@@ -301,6 +305,15 @@ proc — e.g. `--display-map` / allocation dumps. It wraps the string in a
 `prte_iof_deliver_t` and calls `PMIx_server_IOF_deliver` so the output
 threads through the same PMIx output path as real proc output. It does
 not touch the sink engine.
+
+**It also calls the module's `relay` first.** Our PMIx server reaches only
+the tools attached to us, and a `prun` on another node of the DVM attaches
+to the daemon there. Job output reaches such a tool because `hnp` relays
+it (`prte_iof_hnp_relay_to_tool`, see [`hnp/AGENTS.md`](hnp/AGENTS.md));
+this output used to be delivered locally only, so a `prun --display map`
+on a compute node printed the job's output and no map. `relay` sends the
+same copy the job's own output gets. The string's ownership is unchanged:
+`relay` copies what it sends.
 
 **Ownership: it frees your string.** `prte_iof_base_output` stores the
 passed `char *string` directly into `deliver->bo.bytes` and the

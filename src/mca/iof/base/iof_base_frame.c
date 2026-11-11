@@ -133,6 +133,13 @@ void prte_iof_base_output(const pmix_proc_t *source,
     PMIX_XFER_PROCID(&p->source, source);
     p->bo.bytes = string;
     p->bo.size = strlen(string);
+    /* our PMIx server reaches only the tools attached to us. A prun on
+     * another node of the DVM attached to the daemon there, so without a
+     * copy sent to it this output - a --display map, say - never reached
+     * the user who asked for it, while the job's own output did */
+    if (NULL != prte_iof.relay) {
+        prte_iof.relay(&p->source, channel, p->bo.bytes, p->bo.size);
+    }
     rc = PMIx_server_IOF_deliver(&p->source, channel, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
