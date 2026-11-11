@@ -1352,6 +1352,51 @@ static bool parent_named(const pmix_info_t *info, size_t ninfo)
     return false;
 }
 
+/* The settings that say what a failure does to a job: whether it survives
+ * the loss of a process (recoverable), runs on regardless (continuous), and
+ * is told of errors (notify-errors).
+ *
+ * A spawned job takes these from its parent job when the spawn did not set
+ * them, ahead of the site defaults. PMIx connects a spawned job to its parent
+ * process and asks that the two be treated as one application, and these
+ * settings are how that application asked failures to be handled: a parent
+ * started with "--with-ft ulfm" is recoverable, and a child that is not would
+ * be terminated by its first failure - and, being connected, take the parent
+ * with it. Only a job that has a parent process inherits - see
+ * prte_pmix_server_spawn_parent().
+ *
+ * The three are taken as one choice. A spawn that set any of them has chosen
+ * its own error handling, and gets the site defaults for the rest rather than
+ * the parent's: mixing the two could make a combination neither asked for,
+ * such as notify-errors without recoverable or continuous, which is refused. */
+static void inherit_error_handling(prte_job_t *jdata)
+{
+    static const prte_attribute_key_t keys[] = {PRTE_JOB_RECOVERABLE, PRTE_JOB_CONTINUOUS,
+                                                PRTE_JOB_NOTIFY_ERRORS};
+    const size_t nkeys = sizeof(keys) / sizeof(keys[0]);
+    prte_job_t *parent;
+    prte_attr_state_t value;
+    size_t n;
+
+    for (n = 0; n < nkeys; n++) {
+        if (PRTE_ATTR_NOT_SET != prte_get_bool_attribute(&jdata->attributes, keys[n])) {
+            /* the spawn chose */
+            return;
+        }
+    }
+    parent = prte_pmix_server_spawn_parent(jdata, &jdata->originator);
+    if (NULL == parent) {
+        return;
+    }
+    for (n = 0; n < nkeys; n++) {
+        value = prte_get_bool_attribute(&parent->attributes, keys[n]);
+        if (PRTE_ATTR_NOT_SET != value) {
+            prte_set_bool_attribute(&jdata->attributes, keys[n], PRTE_ATTR_GLOBAL,
+                                    PRTE_ATTR_TRUE == value);
+        }
+    }
+}
+
 static void interim(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -1418,19 +1463,6 @@ static void interim(int sd, short args, void *cbdata)
         }
     }
 
-    /* initiate the default runtime options - had to delay this until
-     * after we parsed the apps as some runtime options are for
-     * the apps themselves */
-    memset(&options, 0, sizeof(prte_rmaps_options_t));
-    options.stream = prte_rmaps_base_framework.framework_output;
-    options.verbosity = 5;  // usual value for base-level functions
-    schizo = (prte_schizo_base_module_t*)jdata->schizo;
-    rc = schizo->set_default_rto(jdata, &options);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        goto complete;
-    }
-
     /* transfer the job info across */
     rc = prte_pmix_xfer_job_info(jdata, cd->info, cd->ninfo);
     if (PRTE_SUCCESS != rc) {
@@ -1473,6 +1505,25 @@ static void interim(int sd, short args, void *cbdata)
         !parent_named(cd->info, cd->ninfo)) {
         prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC,
                                 PRTE_ATTR_GLOBAL, true);
+    }
+
+    /* A job spawned by an application process belongs to that process's
+     * application, so it takes the parent job's error handling for anything
+     * the spawn did not say - see inherit_error_handling() */
+    inherit_error_handling(jdata);
+
+    /* fill in the runtime options nobody has expressed a view on. This
+     * comes after the apps, as some runtime options are for the apps
+     * themselves, and after the job info and the parent, since it fills in
+     * only what neither the spawn nor the parent settled */
+    memset(&options, 0, sizeof(prte_rmaps_options_t));
+    options.stream = prte_rmaps_base_framework.framework_output;
+    options.verbosity = 5;  // usual value for base-level functions
+    schizo = (prte_schizo_base_module_t*)jdata->schizo;
+    rc = schizo->set_default_rto(jdata, &options);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        goto complete;
     }
 
     /* indicate the requestor so bookmarks can be correctly set */
