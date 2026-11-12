@@ -273,7 +273,12 @@ is placed and bound against its GPUs exactly as without it.
   same `prte_hwloc_base_host_bridge()` key the `ndev` grouping uses. They
   are ranked OpenFabrics before plain Ethernet, then by the depth of the
   deepest common I/O ancestor with the group's GPUs (same PCIe switch
-  first), then by how many groups already have the NIC, then bus order.
+  first), then by PCIe link speed, then by how many groups already have the
+  NIC, then bus order. The link speed is what keeps a management port off a
+  GPU: on the Slingshot node (`test/topologies/slingshot.xml`) a 1 GbE port
+  and the Slingshot NIC share a host bridge with an A100, neither is an
+  OpenFabrics device and both are one root port down, so nothing earlier
+  separates them.
   Depth is counted by hand (`obj_depth()`, `io_common_ancestor()`): every
   I/O object has the same special depth for its type, so
   `hwloc_get_common_ancestor_obj()` cannot compare them.

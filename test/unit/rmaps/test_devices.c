@@ -472,14 +472,15 @@ static void check_ndev_root_complex(void)
 }
 
 /* Load a shared test topology with some of its text replaced, or NULL.
- * Each "from" must occur exactly once and be the same length as its "to",
- * so the edit cannot shift anything else in the file. */
+ * Each "from" must occur exactly once - an edit that could land in two
+ * places, or none, is a test that no longer says what it was written to. */
 static prte_topology_t *load_topo_edited(const char *file, const char **from,
                                          const char **to)
 {
     hwloc_topology_t topo;
     prte_topology_t *t;
-    char path[1024], *buf, *hit;
+    char path[1024], *buf, *hit, *nbuf;
+    size_t flen, tlen, blen;
     FILE *fp;
     long len;
     int n;
@@ -503,18 +504,29 @@ static prte_topology_t *load_topo_edited(const char *file, const char **from,
     buf[len] = '\0';
     for (n = 0; NULL != from[n]; n++) {
         hit = strstr(buf, from[n]);
-        if (NULL == hit || strlen(from[n]) != strlen(to[n])
-            || NULL != strstr(hit + 1, from[n])) {
+        if (NULL == hit || NULL != strstr(hit + 1, from[n])) {
             free(buf);
             return NULL;
         }
-        memcpy(hit, to[n], strlen(to[n]));
+        flen = strlen(from[n]);
+        tlen = strlen(to[n]);
+        blen = strlen(buf);
+        nbuf = (char *) malloc(blen - flen + tlen + 1);
+        if (NULL == nbuf) {
+            free(buf);
+            return NULL;
+        }
+        memcpy(nbuf, buf, hit - buf);
+        memcpy(nbuf + (hit - buf), to[n], tlen);
+        memcpy(nbuf + (hit - buf) + tlen, hit + flen, blen - (hit - buf) - flen + 1);
+        free(buf);
+        buf = nbuf;
     }
     if (0 != hwloc_topology_init(&topo)) {
         free(buf);
         return NULL;
     }
-    if (0 != hwloc_topology_set_xmlbuffer(topo, buf, (int) len + 1)
+    if (0 != hwloc_topology_set_xmlbuffer(topo, buf, (int) strlen(buf) + 1)
         || 0 != hwloc_topology_set_io_types_filter(topo, HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
         || 0 != hwloc_topology_load(topo)) {
         hwloc_topology_destroy(topo);
@@ -525,6 +537,76 @@ static prte_topology_t *load_topo_edited(const char *file, const char **from,
     t = PMIX_NEW(prte_topology_t);
     t->topo = topo;
     return t;
+}
+
+/* A management port beside a GPU is not the GPU's NIC.
+ *
+ * The Slingshot node: the A100 at c1:00.0 shares its host bridge with a
+ * Slingshot NIC (hsn0, a 31.5 GB/s link) and a 1 GbE management port
+ * (nmn0, 0.25 GB/s).  Neither carries an OpenFabrics device and each sits
+ * one root port below the host bridge, so the OpenFabrics and depth rules
+ * cannot tell them apart.  The topology's own bus order happens to put
+ * hsn0 first; here the management port is moved ahead of it, which is what
+ * a different slot assignment would do, and the GPU must still get hsn0.
+ *
+ * That hwloc recorded no GPU backend, so the A100 is given the cuda and
+ * nvml OS devices an hwloc with one would have - otherwise it is not a GPU
+ * PRRTE can map against at all. */
+static void check_nic_link_speed(void)
+{
+    static const char *from[] = {
+        "pci_busid=\"0000:c1:00.0\" pci_type=\"0302 [10de:20b0] [10de:144e] a1\" pci_link_speed=\"31.507692\">\n"
+        "              <info name=\"PCIVendor\" value=\"NVIDIA Corporation\"/>\n"
+        "              <info name=\"PCIDevice\" value=\"GA100 [A100 SXM4 40GB]\"/>\n",
+        "pci_busid=\"0000:c3:00.0\"",
+        NULL};
+    static const char *to[] = {
+        "pci_busid=\"0000:c1:00.0\" pci_type=\"0302 [10de:20b0] [10de:144e] a1\" pci_link_speed=\"31.507692\">\n"
+        "              <info name=\"PCIVendor\" value=\"NVIDIA Corporation\"/>\n"
+        "              <info name=\"PCIDevice\" value=\"GA100 [A100 SXM4 40GB]\"/>\n"
+        "              <object type=\"OSDev\" gp_index=\"9001\" name=\"cuda0\" subtype=\"CUDA\" osdev_type=\"5\">\n"
+        "                <info name=\"Backend\" value=\"CUDA\"/>\n"
+        "              </object>\n"
+        "              <object type=\"OSDev\" gp_index=\"9002\" name=\"nvml0\" subtype=\"NVML\" osdev_type=\"1\">\n"
+        "                <info name=\"Backend\" value=\"NVML\"/>\n"
+        "                <info name=\"NVIDIAUUID\" value=\"GPU-00000000-0000-0000-0000-000000000001\"/>\n"
+        "              </object>\n",
+        "pci_busid=\"0000:c1:00.1\"",
+        NULL};
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    char *order;
+
+    t = load_topo_edited("slingshot.xml", from, to);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices nic link speed (could not load slingshot.xml)\n");
+        failures++;
+        return;
+    }
+    node = build_node("node-lambda", t);
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.map_nic = 1;
+    opts.bind = PRTE_BIND_TO_NONE;
+    order = device_order(node, &opts);
+    CHECK("the gpu gets the fabric nic, not the management port", NULL != order
+          && 0 == strcmp(order, "cuda0+hsn0"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+hsn0")) {
+        fprintf(stderr, "  slingshot gpu nic: %s\n", order);
+    }
+    free(order);
+
+    /* asked for two, it gets the faster one first and the port second -
+     * what the complex has, in rank order */
+    opts.map_nic = 2;
+    order = device_order(node, &opts);
+    CHECK("nic=2 lists the fabric nic first", NULL != order
+          && 0 == strcmp(order, "cuda0+hsn0+nmn0"));
+    free(order);
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
 }
 
 /* "nic" gives each GPU the NICs under its own root complex.
@@ -739,6 +821,7 @@ int test_devices(bool pmix_up)
     check_ndev_root_complex();
     check_host_bridge_not_locality();
     check_gpu_nic();
+    check_nic_link_speed();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");

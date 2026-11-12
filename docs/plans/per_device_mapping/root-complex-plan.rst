@@ -353,8 +353,13 @@ The candidates for a GPU are ordered by:
    ahead of one that only shares the host bridge.  This comes from the
    review of the OMPI PR, which named it as the next step for nodes such
    as ``p5en`` where GPUs and NICs share switches below the root complex;
-3. how many groups already hold the NIC, fewest first;
-4. bus order.
+3. the faster PCIe link.  Added after the user's HPE Cray EX235n topology
+   (``test/topologies/slingshot.xml``) showed a 1 GbE management port and
+   the Slingshot NIC under the same host bridge as an A100, neither an
+   OpenFabrics device and both one root port down: without it, only bus
+   order kept the management port off the GPU;
+4. how many groups already hold the NIC, fewest first;
+5. bus order.
 
 With ``ndev`` greater than one, a group's candidates are the union over its
 GPUs' complexes, and depth is measured against the nearest of the group's
