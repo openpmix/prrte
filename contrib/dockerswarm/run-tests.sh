@@ -3869,6 +3869,38 @@ test_prted() {
                     && ok "...and the daemon that does host a rank still wrote its file" \
                     || bad "output-to-file broke on the hosting daemon ($m files, expected 1)"
             fi
+
+            # What the master writes about a job ITSELF - the map, the
+            # allocation, a donotlaunch job's bindings - does not come
+            # through a daemon's read handler or the forwarded path above.
+            # It goes through prte_iof_base_output, which handed it to the
+            # master's own PMIx server and nothing else, so a tool on a
+            # non-master daemon printed its job's output and none of the
+            # displays it had asked for.  The iof module's relay entry now
+            # sends it the same copy job output gets.  Each display has to
+            # arrive exactly once: nothing but the relay delivers it to
+            # node3, and a relay that also went to the master's own server
+            # would print it twice on node1.
+            out=$(ONT 3 'timeout -k 5 45 prun --display map --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
+            n=$(echo "$out" | grep -c 'JOB MAP')
+            [ "$n" = 1 ] \
+                && ok "--display map reached a tool on a non-master daemon, once" \
+                || bad "a tool on node3 got $n job maps, expected 1: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(ONT 3 'timeout -k 5 45 prun --display allocation --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
+            n=$(echo "$out" | grep -c 'ALLOCATED NODES')
+            [ "$n" = 1 ] \
+                && ok "...and so did --display allocation" \
+                || bad "a tool on node3 got $n allocation displays, expected 1: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(ONT 3 'timeout -k 5 45 prun --rtos donotlaunch --display bindings --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
+            n=$(echo "$out" | grep -cE '^Proc .* Node node[12] (bound to|is UNBOUND)')
+            [ "$n" = 2 ] \
+                && ok "...and a donotlaunch job's bindings, one line per rank" \
+                || bad "a tool on node3 got $n binding lines for 2 ranks: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(ONT 1 'timeout -k 5 45 prun --display map --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
+            n=$(echo "$out" | grep -c 'JOB MAP')
+            [ "$n" = 1 ] \
+                && ok "...while a tool on the master's own node still gets the map once" \
+                || bad "a tool on node1 got $n job maps, expected 1: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
