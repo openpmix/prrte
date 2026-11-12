@@ -469,6 +469,16 @@ static unsigned obj_depth(hwloc_obj_t obj)
     return d;
 }
 
+/* The PCIe link speed of the function a device hangs off, in GB/s, or zero
+ * for a device with no PCI function. */
+static float link_speed(hwloc_obj_t obj)
+{
+    if (NULL != obj && HWLOC_OBJ_PCI_DEVICE == obj->type) {
+        return obj->attr->pcidev.linkspeed;
+    }
+    return 0.0f;
+}
+
 /* The nearest object above both a and b.  Walked by hand rather than with
  * hwloc_get_common_ancestor_obj(), which compares depths, and every object
  * in the I/O tree has the same special (negative) depth for its type. */
@@ -507,10 +517,16 @@ static hwloc_obj_t io_common_ancestor(hwloc_obj_t a, hwloc_obj_t b)
  *   2. the deeper the common ancestor with the nearest of the group's GPUs,
  *      the better - a NIC behind the GPU's own PCIe switch ahead of one that
  *      only shares the host bridge;
- *   3. the fewer groups already given it, so that groups sharing a complex
+ *   3. the faster PCIe link.  A node's management port is not an
+ *      OpenFabrics device and often shares a host bridge with a GPU, as the
+ *      1 GbE port beside a Slingshot NIC does on an HPE Cray EX235n: with
+ *      neither carrying an OpenFabrics device and both one root port below
+ *      the host bridge, nothing above tells them apart, and bus order alone
+ *      would hand the GPU whichever came first;
+ *   4. the fewer groups already given it, so that groups sharing a complex
  *      get distinct NICs while there are enough and share once there are
  *      not;
- *   4. bus order, which makes the choice the same on every run.
+ *   5. bus order, which makes the choice the same on every run.
  *
  * A group whose complexes carry no NIC gets none, and the job is told -
  * once per node, under the job's nspace, so that PMIx's duplicate
@@ -639,6 +655,12 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
                 }
                 if (depth[k] != depth[best]) {
                     if (depth[k] > depth[best]) {
+                        best = k;
+                    }
+                    continue;
+                }
+                if (link_speed(dc->nics[k].obj) != link_speed(dc->nics[best].obj)) {
+                    if (link_speed(dc->nics[k].obj) > link_speed(dc->nics[best].obj)) {
                         best = k;
                     }
                     continue;
