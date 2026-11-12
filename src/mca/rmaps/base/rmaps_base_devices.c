@@ -313,6 +313,110 @@ static void interleave_devices(hwloc_topology_t topo, hwloc_obj_type_t level,
     free(counts);
 }
 
+/* Reorder the device list so that, as far as the counts allow, every group
+ * of "per" devices lies under one PCI root complex.
+ *
+ * A process driving devices under two root complexes can do much worse
+ * than one using fewer devices under a single complex - Open MPI measured
+ * an order of magnitude on EFA for concurrent RDMA reads (open-mpi/ompi
+ * #14800), and GPU peer-to-peer between complexes crosses the CPU
+ * interconnect or is not offered at all.  PMIx's list is in PCI bus order,
+ * which keeps each complex's devices contiguous, but cutting it into groups
+ * of "per" from the top paid no attention to where one complex ends: on a
+ * node with one NIC per complex except for one dual-port card, every group
+ * of two spanned two complexes and the dual-port card was split between two
+ * processes.
+ *
+ * So: partition by host bridge, in order of each partition's first device,
+ * and lay down every whole group a partition can make; then pool what is
+ * left over from all of them, in bus order, and lay that down last.  The
+ * pooled groups are the ones that have to span, and putting them after
+ * every single-complex group means a job that does not need them never gets
+ * them.  The number of groups is unchanged - the whole groups plus the
+ * groups in the pool is floor(ndevs / per) whatever the partition sizes -
+ * so the pre-count in prte_rmaps_base_devices_total() needs no change.
+ *
+ * Where no complex holds "per" devices everything is pooled, and the pool
+ * in bus order IS the input order.
+ *
+ * The key is the host bridge above each device's I/O object, not its
+ * locality.  Two host bridges routinely report the same cpuset, so the CPU
+ * side of the topology cannot see this at all.  A device with no host bridge
+ * recorded above it is a complex of its own.
+ *
+ * Like interleave_devices(), this moves each entry exactly once - every
+ * index lands either in a whole group or in the pool - so a shallow copy
+ * and memcpy back carry the ownership of each entry's strings with it, and
+ * an allocation failure leaves the list in bus order, which is a valid
+ * answer. */
+static void group_by_complex(pmix_hwloc_device_t *devs, size_t ndevs, size_t per)
+{
+    pmix_hwloc_device_t *out;
+    hwloc_obj_t *key;
+    bool *placed;
+    size_t n, m, count, take, o = 0;
+
+    if (2 > per || per > ndevs) {
+        return;
+    }
+    out = (pmix_hwloc_device_t *) malloc(ndevs * sizeof(pmix_hwloc_device_t));
+    key = (hwloc_obj_t *) calloc(ndevs, sizeof(hwloc_obj_t));
+    placed = (bool *) calloc(ndevs, sizeof(bool));
+    if (NULL == out || NULL == key || NULL == placed) {
+        free(out);
+        free(key);
+        free(placed);
+        return;
+    }
+
+    for (n = 0; n < ndevs; n++) {
+        key[n] = prte_hwloc_base_host_bridge(devs[n].obj);
+    }
+
+    /* the whole groups, one partition at a time in order of first
+     * appearance */
+    for (n = 0; n < ndevs; n++) {
+        if (NULL == key[n] || placed[n]) {
+            continue;
+        }
+        /* is this the first device of its partition? */
+        for (m = 0; m < n; m++) {
+            if (key[m] == key[n]) {
+                break;
+            }
+        }
+        if (m < n) {
+            continue;
+        }
+        count = 0;
+        for (m = n; m < ndevs; m++) {
+            if (key[m] == key[n]) {
+                ++count;
+            }
+        }
+        take = (count / per) * per;
+        for (m = n; m < ndevs && 0 < take; m++) {
+            if (key[m] == key[n]) {
+                out[o++] = devs[m];
+                placed[m] = true;
+                --take;
+            }
+        }
+    }
+
+    /* and the pool, in bus order */
+    for (n = 0; n < ndevs; n++) {
+        if (!placed[n]) {
+            out[o++] = devs[n];
+        }
+    }
+
+    memcpy(devs, out, ndevs * sizeof(pmix_hwloc_device_t));
+    free(out);
+    free(key);
+    free(placed);
+}
+
 /* The devices the request names on this node, in PMIx's order. */
 static int enumerate_devices(prte_node_t *node, prte_rmaps_options_t *opts,
                              pmix_hwloc_device_t **devs, size_t *ndevs)
@@ -427,6 +531,12 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
 
     /* Group the devices, one group per proc */
     dc->per = (0 == opts->map_ndev) ? 1 : opts->map_ndev;
+    /* ...keeping each group under one root complex where the counts allow.
+     * Not when interleaving: ndev with interleave asks for groups that span
+     * the interleave level, and applying both would answer neither. */
+    if (NULL == opts->map_interleave) {
+        group_by_complex(dc->devs, dc->ndevs, dc->per);
+    }
     dc->ngroups = dc->ndevs / dc->per;
     if (0 == dc->ngroups) {
         /* not enough devices on this node to make even one group - the

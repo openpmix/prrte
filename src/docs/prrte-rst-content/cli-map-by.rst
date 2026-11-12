@@ -270,11 +270,30 @@ while ``--mapby device=gpu,ndev=2`` names a device called
   one of the process's GPUs, and ``--bindto core`` to a core in one of them
   --- never to a part of the package that is local to neither.
 
-  Devices are handed out in groups taken in order from the device list, so a
-  group is a contiguous run of that order and the ``INTERLEAVE`` qualifier
-  composes with this one. On a node with two GPUs per socket, interleaving
-  across packages and then taking ``ndev=2`` gives each process one GPU from
-  each socket.
+  Devices are handed out in groups, and a group is kept under one PCI root
+  complex wherever the counts allow. A process driving devices under two
+  root complexes can do much worse than one using fewer devices under a
+  single complex, and GPU peer-to-peer traffic between complexes crosses
+  the CPU interconnect, where it is offered at all. So the devices under
+  each root complex are cut into whole groups first, in PCI bus order, and
+  the devices left over from every complex are pooled and grouped after
+  them; those last groups are the only ones that span complexes, and a job
+  with fewer processes never gets them. The number of groups is the same
+  either way. Where no complex holds enough devices for a whole group, the
+  groups are simply consecutive devices in bus order.
+
+  Keeping a group under one complex usually makes it local to less of the
+  machine, so a binding a spanning group admitted can be refused for it: on
+  a node whose dual-port NIC is the only pair under one complex,
+  ``--mapby device=nic:ndev=2 --bindto package`` is refused for that pair,
+  exactly as ``--mapby device=nic --bindto package`` is for any one of its
+  ports.
+
+  The ``INTERLEAVE`` qualifier turns the root-complex grouping off: with it,
+  groups are taken as consecutive runs of the interleaved order, which is
+  what asking for both means. On a node with two GPUs per socket,
+  interleaving across packages and then taking ``ndev=2`` gives each process
+  one GPU from each socket.
 
 * ``ORDERED`` only applies to the ``PE-LIST`` option to indicate that
   procs are to be bound to each of the specified CPUs in the order in

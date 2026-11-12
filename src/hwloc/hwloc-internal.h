@@ -383,6 +383,17 @@ PRTE_EXPORT bool prte_hwloc_base_core_cpus(hwloc_topology_t topo);
  * map and bind to. */
 PRTE_EXPORT bool prte_hwloc_base_has_cores(hwloc_topology_t topo);
 
+/* The host bridge above an I/O object - the PCI root its device hangs
+ * off - or NULL if the object is not in the I/O tree or no host bridge is
+ * recorded above it.  Two devices under the same host bridge share a root
+ * complex.
+ *
+ * This is a question the CPU side of the topology cannot answer: two host
+ * bridges routinely report the same cpuset, so devices with identical
+ * localities can still be under different complexes.  The returned object
+ * belongs to the topology and is only meaningful as long as it is. */
+PRTE_EXPORT hwloc_obj_t prte_hwloc_base_host_bridge(hwloc_obj_t obj);
+
 END_C_DECLS
 
 #endif /* PRTE_HWLOC_H_ */
