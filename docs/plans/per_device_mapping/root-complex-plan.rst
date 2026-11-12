@@ -532,6 +532,40 @@ Still to confirm before landing
   GUIDs and, for Slingshot, the NID.  Replace them before anything is
   checked in.
 
+Part 3 as landed
+~~~~~~~~~~~~~~~~
+
+The user's HPE Cray EX235n topology (``test/topologies/slingshot.xml``,
+read by hwloc 2.10) settled several of the items above and changed three
+decisions.
+
+* **Slingshot's vendor id is confirmed**: Cassini reports ``[17db:0501]``,
+  class ``0x0200``.
+* **pnet/cxi reads sysfs when the topology has no cxi device.**  hwloc 2.10
+  records only ``hsnN``; the node itself names the matching device under
+  ``/sys/class/net/<hsnN>/device/cxi/`` - which is where hwloc 2.14 finds it
+  too.  Exactly one ``cxiN`` entry there is used; none, several or an
+  unreadable directory declines.  The name is never derived from the
+  ``hsn`` number, so the rule against guessing still holds.  The root is the
+  ``pnet_cxi_sysfs_root`` parameter.
+* **The node-type check is Intel's only.**  Only ``irdma`` can be iWARP, so
+  only Intel's adapters are asked.  Asking NVIDIA's and Broadcom's made their
+  naming depend on a file that changes nothing about them, and dropped them
+  wherever it was absent - a topology loaded on a machine without the
+  hardware, which is how this path is tested.
+* **A 3D controller is a GPU without OS devices.**  The node's A100s (class
+  ``0x0302``) carry none: that hwloc had no vendor backend and the node no
+  render nodes, so ``--map-by device=gpu`` said there was no GPU.  PMIx now
+  reports such a function as a GPU named by its PCI bus id, with no vendor
+  identity, so PRRTE refuses it as unnameable instead - which names the fix.
+  This is a separate PMIx change, and PRRTE's offline harness mirrors it in a
+  PRRTE change that lands after it.  Class ``0x0380`` is left alone; those
+  parts get render nodes from their drivers.
+* **opa's ``PSM3_NIC`` named several HFIs with commas**, which PSM3 matches
+  as one ``fnmatch`` pattern and so matched nothing.  It now writes a single
+  plain name or nothing.  An E810 entry was not added to ``opa``: whether
+  PSM3's verbs layer drives an iWARP ``irdma`` is unresolved.
+
 Separately, and not part of this work: hwloc master (3.0, unreleased) turns
 the OS device ``type`` attribute into a ``types`` bitmask.  PMIx's
 ``pmix_hwloc.c`` reads ``attr->osdev.type`` throughout and has no
@@ -590,15 +624,22 @@ Task checklist
 
 **Part 3** (openpmix)
 
-- [ ] ``types`` field in ``pmix_pnet_pcimatch_t``, honored by
+- [x] ``types`` field in ``pmix_pnet_pcimatch_t``, honored by
       ``pmix_pnet_base_get_assigned_devices()``; pnet version bump
-- [ ] ``osdev_preferred()``: the ``cxi`` OS device over ``hsnN``
-- [ ] ``nvd``: NVIDIA, Broadcom and Intel RoCE entries; ``node_type``
+- [x] ``osdev_preferred()``: the ``cxi`` OS device over ``hsnN``
+- [x] ``nvd``: NVIDIA, Broadcom and Intel RoCE entries; ``node_type``
       check; ``FI_VERBS_DEVICE_NAME`` with the prefix-collision rule
-- [ ] ``pnet/efa``: ``FI_EFA_IFACE``
-- [ ] ``pnet/cxi``: ``FI_CXI_DEVICE_NAME``, declining non-``cxiN`` selectors
-- [ ] Unit tests on hand-edited topologies; real Slingshot, EFA, Broadcom
-      and Intel topologies obtained, scrubbed and checked in
+- [x] ``pnet/efa``: ``FI_EFA_IFACE``
+- [x] ``pnet/cxi``: ``FI_CXI_DEVICE_NAME``, declining non-``cxiN`` selectors
+- [x] Unit tests on hand-edited topologies; the real Slingshot topology
+      scrubbed and checked in to both trees
+- [x] ``pnet/cxi``: the cxi device found in sysfs under hwloc < 2.14
+- [x] ``nvd``: the node-type check limited to Intel's adapters
+- [x] PMIx: a class ``0x0302`` function is a GPU without OS devices; PRRTE's
+      harness mirrors it once that lands
+- [ ] Real EFA, Broadcom and Intel topologies (and a Slingshot one from
+      hwloc 2.14 or later)
 - [ ] Propose a node-type info attribute to hwloc
-- [ ] ``pnet`` AGENTS.md and the PRRTE ``cli-map-by.rst`` list of
-      variables set
+- [x] ``pnet`` AGENTS.md
+- [ ] the PRRTE ``cli-map-by.rst`` list of variables set, with the harness
+      change once the PMIx side has landed
