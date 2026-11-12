@@ -307,7 +307,9 @@ while ``--mapby device=gpu,ndev=2`` names a device called
 
   Among the NICs under a GPU's root complex, one carrying an OpenFabrics
   (RDMA) device is preferred to plain Ethernet, then one behind the same
-  PCIe switch as the GPU, then one fewer processes have been given, so that
+  PCIe switch as the GPU, then one with the faster PCIe link (which keeps a
+  management port beside the GPU from being chosen over the fabric NIC
+  next to it), then one fewer processes have been given, so that
   GPUs sharing a complex get different NICs while there are enough of them.
   Processes sharing a GPU (``SHARED``) share its NICs. A GPU whose root
   complex has no NIC is still assigned, and its process gets no NIC rather
