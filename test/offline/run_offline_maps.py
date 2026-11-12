@@ -137,21 +137,29 @@ class Obj:
 def _count_gpus(root):
     """How many compute GPUs this topology holds.
 
-    Mirrors the two rules pmix_hwloc_get_devices() applies, because the
+    Mirrors the rules pmix_hwloc_get_devices() applies, because the
     interesting number here is the one the runtime will arrive at: the unit
     is the PCI *function* (a GPU commonly exposes a card node, a render node
     and a vendor compute node, and they are one device), and a display-class
     function counts only if it carries a vendor backend or a DRM render node
     -- which is what separates a real GPU from a management controller's VGA
-    adapter.
+    adapter -- except a 3D controller (class 0302), which is never a
+    management controller's display and counts with no OS device at all.
     """
     backends = ("cuda", "nvml", "rsmi", "levelzero", "opencl")
     ngpu = 0
     for pci in root.iter("object"):
         if pci.get("type") != "PCIDev":
             continue
+        # A 3D controller (class 0302) is a GPU whether or not hwloc gave it
+        # an OS device: an hwloc without the vendor backend, on a node with
+        # no render nodes, records the function and nothing under it.
+        cls_id = (pci.get("pci_type") or "").split()
+        cls = cls_id[0].lower() if cls_id else ""
+        is_display = cls.startswith("03")
+        is_3d = (cls == "0302")
         osdevs = [c for c in pci if c.tag == "object" and c.get("type") == "OSDev"]
-        if not osdevs:
+        if not osdevs and not is_3d:
             continue
         compute = False
         render = False
@@ -164,9 +172,7 @@ def _count_gpus(root):
                     compute = True
             if (od.get("name") or "").lower().startswith("renderd"):
                 render = True
-        cls_id = (pci.get("pci_type") or "").split()
-        is_display = bool(cls_id) and cls_id[0].startswith("03")
-        if compute or (render and is_display):
+        if compute or (render and is_display) or is_3d:
             ngpu += 1
     return ngpu
 
@@ -189,8 +195,15 @@ def _gpus_nameable(root):
     for pci in root.iter("object"):
         if pci.get("type") != "PCIDev":
             continue
+        # A 3D controller (class 0302) is a GPU whether or not hwloc gave it
+        # an OS device: an hwloc without the vendor backend, on a node with
+        # no render nodes, records the function and nothing under it.
+        cls_id = (pci.get("pci_type") or "").split()
+        cls = cls_id[0].lower() if cls_id else ""
+        is_display = cls.startswith("03")
+        is_3d = (cls == "0302")
         osdevs = [c for c in pci if c.tag == "object" and c.get("type") == "OSDev"]
-        if not osdevs:
+        if not osdevs and not is_3d:
             continue
         compute = False
         render = False
@@ -206,9 +219,7 @@ def _gpus_nameable(root):
                     named = True
             if (od.get("name") or "").lower().startswith("renderd"):
                 render = True
-        cls_id = (pci.get("pci_type") or "").split()
-        is_display = bool(cls_id) and cls_id[0].startswith("03")
-        if (compute or (render and is_display)) and not named:
+        if (compute or (render and is_display) or is_3d) and not named:
             return False
     return True
 
