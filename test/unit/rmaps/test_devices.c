@@ -549,28 +549,42 @@ static prte_topology_t *load_topo_edited(const char *file, const char **from,
  * hsn0 first; here the management port is moved ahead of it, which is what
  * a different slot assignment would do, and the GPU must still get hsn0.
  *
- * That hwloc recorded no GPU backend, so the A100 is given the cuda and
- * nvml OS devices an hwloc with one would have - otherwise it is not a GPU
- * PRRTE can map against at all. */
+ * That hwloc recorded no GPU backend, so each A100 is given the cuda and
+ * nvml OS devices an hwloc with one would have.  All four need them: PMIx
+ * counts a 3D controller with no OS device as a GPU it cannot name, and a
+ * node holding one is refused for mapping by GPU at all. */
+#define A100_HEAD(bus)                                                                     \
+    "pci_busid=\"0000:" bus "\" pci_type=\"0302 [10de:20b0] [10de:144e] a1\""              \
+    " pci_link_speed=\"31.507692\">\n"
+#define A100_INFO                                                                          \
+    "              <info name=\"PCIVendor\" value=\"NVIDIA Corporation\"/>\n"              \
+    "              <info name=\"PCIDevice\" value=\"GA100 [A100 SXM4 40GB]\"/>\n"
+#define A100_SLOT "              <info name=\"PCISlot\" value=\"6\"/>\n"
+#define A100_OSDEVS(n)                                                                     \
+    "              <object type=\"OSDev\" gp_index=\"900" n "1\" name=\"cuda" n "\""     \
+    " subtype=\"CUDA\" osdev_type=\"5\">\n"                                                \
+    "                <info name=\"Backend\" value=\"CUDA\"/>\n"                            \
+    "              </object>\n"                                                            \
+    "              <object type=\"OSDev\" gp_index=\"900" n "2\" name=\"nvml" n "\""     \
+    " subtype=\"NVML\" osdev_type=\"1\">\n"                                                \
+    "                <info name=\"Backend\" value=\"NVML\"/>\n"                            \
+    "                <info name=\"NVIDIAUUID\""                                            \
+    " value=\"GPU-00000000-0000-0000-0000-00000000000" n "\"/>\n"                          \
+    "              </object>\n"
 static void check_nic_link_speed(void)
 {
     static const char *from[] = {
-        "pci_busid=\"0000:c1:00.0\" pci_type=\"0302 [10de:20b0] [10de:144e] a1\" pci_link_speed=\"31.507692\">\n"
-        "              <info name=\"PCIVendor\" value=\"NVIDIA Corporation\"/>\n"
-        "              <info name=\"PCIDevice\" value=\"GA100 [A100 SXM4 40GB]\"/>\n",
+        A100_HEAD("03:00.0") A100_SLOT A100_INFO,
+        A100_HEAD("41:00.0") A100_INFO,
+        A100_HEAD("82:00.0") A100_INFO,
+        A100_HEAD("c1:00.0") A100_INFO,
         "pci_busid=\"0000:c3:00.0\"",
         NULL};
     static const char *to[] = {
-        "pci_busid=\"0000:c1:00.0\" pci_type=\"0302 [10de:20b0] [10de:144e] a1\" pci_link_speed=\"31.507692\">\n"
-        "              <info name=\"PCIVendor\" value=\"NVIDIA Corporation\"/>\n"
-        "              <info name=\"PCIDevice\" value=\"GA100 [A100 SXM4 40GB]\"/>\n"
-        "              <object type=\"OSDev\" gp_index=\"9001\" name=\"cuda0\" subtype=\"CUDA\" osdev_type=\"5\">\n"
-        "                <info name=\"Backend\" value=\"CUDA\"/>\n"
-        "              </object>\n"
-        "              <object type=\"OSDev\" gp_index=\"9002\" name=\"nvml0\" subtype=\"NVML\" osdev_type=\"1\">\n"
-        "                <info name=\"Backend\" value=\"NVML\"/>\n"
-        "                <info name=\"NVIDIAUUID\" value=\"GPU-00000000-0000-0000-0000-000000000001\"/>\n"
-        "              </object>\n",
+        A100_HEAD("03:00.0") A100_SLOT A100_INFO A100_OSDEVS("0"),
+        A100_HEAD("41:00.0") A100_INFO A100_OSDEVS("1"),
+        A100_HEAD("82:00.0") A100_INFO A100_OSDEVS("2"),
+        A100_HEAD("c1:00.0") A100_INFO A100_OSDEVS("3"),
         "pci_busid=\"0000:c1:00.1\"",
         NULL};
     prte_rmaps_options_t opts;
@@ -590,10 +604,12 @@ static void check_nic_link_speed(void)
     opts.map_device = "gpu";
     opts.map_nic = 1;
     opts.bind = PRTE_BIND_TO_NONE;
+    /* each of the other three complexes holds one GPU and one Slingshot
+     * NIC; the A100 at c1:00.0 is cuda3 */
     order = device_order(node, &opts);
     CHECK("the gpu gets the fabric nic, not the management port", NULL != order
-          && 0 == strcmp(order, "cuda0+hsn0"));
-    if (NULL != order && 0 != strcmp(order, "cuda0+hsn0")) {
+          && 0 == strcmp(order, "cuda0+hsn3,cuda1+hsn2,cuda2+hsn1,cuda3+hsn0"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+hsn3,cuda1+hsn2,cuda2+hsn1,cuda3+hsn0")) {
         fprintf(stderr, "  slingshot gpu nic: %s\n", order);
     }
     free(order);
@@ -603,7 +619,10 @@ static void check_nic_link_speed(void)
     opts.map_nic = 2;
     order = device_order(node, &opts);
     CHECK("nic=2 lists the fabric nic first", NULL != order
-          && 0 == strcmp(order, "cuda0+hsn0+nmn0"));
+          && 0 == strcmp(order, "cuda0+hsn3,cuda1+hsn2,cuda2+hsn1,cuda3+hsn0+nmn0"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+hsn3,cuda1+hsn2,cuda2+hsn1,cuda3+hsn0+nmn0")) {
+        fprintf(stderr, "  slingshot gpu nic=2: %s\n", order);
+    }
     free(order);
     PMIX_RELEASE(node);
     PMIX_RELEASE(t);
