@@ -295,6 +295,30 @@ while ``--mapby device=gpu,ndev=2`` names a device called
   interleaving across packages and then taking ``ndev=2`` gives each process
   one GPU from each socket.
 
+* ``NIC[=<n>]`` only applies to the ``DEVICE`` directive, and only when the
+  devices are GPUs. In addition to its GPUs, each process is assigned up to
+  *n* NICs (one when *n* is not given) from the PCI root complexes of those
+  GPUs. A process told which GPU it has is otherwise left to guess which NIC
+  goes with it, and every communication library guesses differently; PRRTE
+  placed the GPU, so it can say. For example::
+
+     --mapby device=gpu:nic           each GPU with the NIC beside it
+     --mapby device=gpu:ndev=2:nic=2  two GPUs and their two NICs
+
+  Among the NICs under a GPU's root complex, one carrying an OpenFabrics
+  (RDMA) device is preferred to plain Ethernet, then one behind the same
+  PCIe switch as the GPU, then one fewer processes have been given, so that
+  GPUs sharing a complex get different NICs while there are enough of them.
+  Processes sharing a GPU (``SHARED``) share its NICs. A GPU whose root
+  complex has no NIC is still assigned, and its process gets no NIC rather
+  than one from elsewhere, since naming a distant NIC to the libraries
+  would override their own choice; the job is told so, once. Placement and
+  binding are decided by the GPUs alone.
+
+  The NICs are reported with the GPUs, in the ``PMIX_DEVICE_ID`` key of the
+  process's job data, and are named to the libraries that will use them
+  through the same variables a ``--mapby device=nic`` assignment sets.
+
 * ``ORDERED`` only applies to the ``PE-LIST`` option to indicate that
   procs are to be bound to each of the specified CPUs in the order in
   which they are assigned (i.e., the first proc on a node shall be

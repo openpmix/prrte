@@ -654,6 +654,41 @@ The "ndev" qualifier was given with a mapping policy it cannot apply to:
 "ndev" says how many devices each process is to be assigned, so it is
 meaningful only in combination with "--map-by device=<class|name>".
 #
+[rmaps:nic-needs-device]
+The "nic" qualifier was given with a mapping policy it cannot apply to:
+
+  Mapping policy: %s
+
+"nic" gives each process the NICs that share a PCI root complex with the
+GPUs it was assigned, so it is meaningful only in combination with
+"--map-by device=gpu" (or a device named by one GPU).
+#
+[rmaps:nic-needs-gpu]
+The "nic" qualifier was given, but the job is not being mapped against
+GPUs:
+
+  Devices:  %s
+  Node:     %s
+  Device:   %s
+
+"nic" gives each process the NICs that share a PCI root complex with the
+GPUs it was assigned, so the devices the job is mapped against have to be
+GPUs. To give each process NICs on their own, map by "--map-by
+device=nic" instead.
+#
+[rmaps:no-nic-near-gpu]
+A process was mapped against a GPU that has no NIC under the same PCI
+root complex, so it was not given a NIC:
+
+  Node:  %s
+  GPU:   %s
+
+The process keeps its GPU. No NIC from another root complex was
+substituted: naming a distant NIC to the communication libraries would
+override their own choice, which is likely to be at least as good. The
+same may hold for other GPUs and other nodes in this job; any further
+occurrences are counted below rather than shown.
+#
 [must-map-by-obj]
 When ranking by FILL or by SPAN, you must map by an object
 type (e.g., HWTHREAD, CORE, a cache level, PACKAGE or NUMA):

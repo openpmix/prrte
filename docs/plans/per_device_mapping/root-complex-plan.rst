@@ -283,21 +283,24 @@ NICs are those under the host bridge of any of the group's GPUs.  Within
 the candidates, a PCI function carrying an OpenFabrics device ranks ahead
 of one that does not, then bus order.
 
-When several groups share a complex (two GPUs under one host bridge, or
-``shared`` putting several processes on one GPU), the complex's candidates
-are dealt round-robin across those groups, ``N`` each, so processes get
-distinct NICs while there are enough and share once there are not.  That
-is the OMPI PR's division of a complex's NICs among the processes on it,
-done with the real assignment rather than a guess.
+When several groups share a complex (two GPUs under one host bridge),
+the complex's candidates are dealt so that the groups get distinct NICs
+while there are enough and share once there are not.  That is the OMPI
+PR's division of a complex's NICs among the processes on it, done with the
+real assignment rather than a guess.  Processes that share one GPU
+(``shared``) share its NICs: the choice is made per group, which is what
+``devices_record()`` publishes.
 
-Both mappers get it for free, because ``round_robin`` and ``ppr`` already
-go through ``devices_begin()`` / ``devices_record()``.
+Both mappers go through ``devices_begin()`` / ``devices_record()``, but
+``ppr`` refuses device qualifiers in its parser (``ndev`` included), so in
+practice the qualifier applies to ``--map-by device=``.
 
-The qualifier is a new field in ``prte_rmaps_options_t``, so the rmaps
-interface version bumps (``PRTE_MCA_rmaps_MAJOR_VERSION`` in
-``rmaps_types.h``), with a new ``PRTE_JOB_MAP_NIC`` / ``PRTE_APP_MAP_NIC``
-pair at the next free offsets, parsed by both ``--map-by`` parsers and
-added to ``prte_cli_mapquals``.
+The qualifier is a new field at the end of ``prte_rmaps_options_t``, with
+a new ``PRTE_JOB_MAP_NIC`` / ``PRTE_APP_MAP_NIC`` pair at the next free
+offsets, parsed by both ``--map-by`` parsers and added to
+``prte_cli_mapquals``.  Only the base reads the field, and it is appended,
+so the rmaps interface version does not change - the same reasoning under
+which ``ndev``, ``shared`` and ``interleave`` were added.
 
 Decisions
 ~~~~~~~~~
@@ -350,7 +353,8 @@ The candidates for a GPU are ordered by:
    ahead of one that only shares the host bridge.  This comes from the
    review of the OMPI PR, which named it as the next step for nodes such
    as ``p5en`` where GPUs and NICs share switches below the root complex;
-3. bus order.
+3. how many groups already hold the NIC, fewest first;
+4. bus order.
 
 With ``ndev`` greater than one, a group's candidates are the union over its
 GPUs' complexes, and depth is measured against the nearest of the group's
@@ -568,16 +572,16 @@ Task checklist
 
 **Part 2**
 
-- [ ] Qualifier vocabulary, both parsers, job/app attributes, options field,
-      rmaps version bump
-- [ ] Second enumeration and per-complex dealing in ``devices_begin()``;
+- [x] Qualifier vocabulary, both parsers, job/app attributes, options field
+      (appended, so no rmaps version bump)
+- [x] Second enumeration and per-complex dealing in ``devices_begin()``;
       NICs appended in ``devices_record()``
-- [ ] Candidate ranking: OpenFabrics first, deepest common ancestor, bus
+- [x] Candidate ranking: OpenFabrics first, deepest common ancestor, bus
       order
-- [ ] Refusal for a non-GPU class; the ``rmaps:no-nic-near-gpu`` topic,
+- [x] Refusal for a non-GPU class; the ``rmaps:no-nic-near-gpu`` topic,
       shown per node under the job's nspace so show_help aggregates it
-- [ ] Unit, offline and end-to-end envar tests
-- [ ] ``cli-map-by.rst``, ``help-mapby.txt``, placement examples
+- [x] Unit, offline and end-to-end envar tests
+- [x] ``cli-map-by.rst``, ``help-mapby.txt``, placement examples
 
 **Part 3** (openpmix)
 

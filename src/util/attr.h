@@ -104,6 +104,7 @@ typedef uint8_t prte_app_context_flags_t;
 /* this app's "--membind": the prte_hwloc_base_memattr_t to bind its procs'
  * memory by. Takes precedence over the job's PRTE_JOB_MEMBIND. */
 #define PRTE_APP_MEMBIND            43 /* uint16_t memory binding attribute */
+#define PRTE_APP_MAP_NIC            44 /* uint16_t: NICs from its GPU's root complex given to each proc */
 
 #define PRTE_APP_MAX_KEY 100
 
@@ -340,6 +341,7 @@ typedef uint16_t prte_job_flags_t;
                                                                        // process's identity, as a prun in a job script does. Not
                                                                        // linked into its requester's spawn tree, connected to it,
                                                                        // or told it has a PMIX_PARENT_ID
+#define PRTE_JOB_MAP_NIC                    (PRTE_JOB_START_KEY + 140) // uint16_t - NICs from its GPU's root complex given to each proc
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

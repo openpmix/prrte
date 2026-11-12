@@ -472,6 +472,44 @@ int test_policy_parse(void)
     CHECK("mapby numa:ndev: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
+    /* --- nic: NICs from the GPU's root complex; one when not given --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:nic");
+    CHECK("mapby nic: rc", PRTE_SUCCESS == rc);
+    CHECK("mapby nic: one by default", 1 == get_u16(&app->attributes, PRTE_APP_MAP_NIC));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:ndev=2:nic=2");
+    CHECK("mapby nic=2: rc", PRTE_SUCCESS == rc);
+    CHECK("mapby nic=2: value", 2 == get_u16(&app->attributes, PRTE_APP_MAP_NIC));
+    CHECK("mapby nic=2: ndev kept", 2 == get_u16(&app->attributes, PRTE_APP_MAP_NDEV));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:nic=0");
+    CHECK("mapby nic=0: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:nic=one");
+    CHECK("mapby nic=one: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "core:nic");
+    CHECK("mapby core:nic: refused", PRTE_SUCCESS != rc);
+    CHECK("mapby core:nic: no mapping recorded",
+          !prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, NULL, PMIX_UINT16));
+    PMIX_RELEASE(app);
+
+    /* "nd" still means ndev: adding "nic" left it unique */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:nd=2");
+    CHECK("mapby ':nd' is still ndev", PRTE_SUCCESS == rc
+          && 2 == get_u16(&app->attributes, PRTE_APP_MAP_NDEV));
+    PMIX_RELEASE(app);
+
     /* "interleave" and "inherit" share their first letters.  Tested one
      * option at a time, ":i" and ":in" were INHERIT only because that arm
      * came first; they fit both, and are refused as such rather than
