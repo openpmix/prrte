@@ -18,4 +18,13 @@
 # same directive is accepted. Neither is synthetic, and the pair is the
 # only thing in the tree that exercises both arms of that decision.
 
-EXTRA_DIST = test-topo.xml test-topo2.xml turin-4gpu.xml turin-4gpu-nvml.xml
+# slingshot.xml is an HPE Cray EX235n node read by hwloc 2.10: four A100s and
+# four Slingshot (Cassini) NICs, one of each under every PCI host bridge,
+# plus a 1 GbE management port under one of them. That hwloc had no vendor
+# GPU backend and the node no render nodes, so the A100s carry no OS
+# devices at all, and it predates the cxiN devices hwloc 2.14 records
+# beside each hsnN. The host name, MAC addresses and cgroup path were
+# replaced before it was checked in.
+
+EXTRA_DIST = test-topo.xml test-topo2.xml turin-4gpu.xml turin-4gpu-nvml.xml \
+             slingshot.xml
