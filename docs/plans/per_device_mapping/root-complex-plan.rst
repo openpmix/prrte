@@ -641,5 +641,5 @@ Task checklist
       hwloc 2.14 or later)
 - [ ] Propose a node-type info attribute to hwloc
 - [x] ``pnet`` AGENTS.md
-- [ ] the PRRTE ``cli-map-by.rst`` list of variables set, with the harness
+- [x] the PRRTE ``cli-map-by.rst`` list of variables set, with the harness
       change once the PMIx side has landed

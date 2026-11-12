@@ -471,13 +471,25 @@ in the environment variables the fabric libraries read:
      - Adapters
 
    * - ``NCCL_IB_HCA``
-     - Mellanox / NVIDIA InfiniBand adapters
+     - InfiniBand and RoCE adapters: NVIDIA, Broadcom, and Intel's when in
+       RoCE mode (an Intel adapter in iWARP mode is not named)
 
    * - ``UCX_NET_DEVICES``
-     - Mellanox / NVIDIA InfiniBand adapters
+     - The same adapters
+
+   * - ``FI_VERBS_DEVICE_NAME``
+     - The same adapters, unless the name would also select another device
+       on the node: libfabric's verbs provider matches it as a prefix
+
+   * - ``FI_EFA_IFACE``
+     - AWS EFA devices
+
+   * - ``FI_CXI_DEVICE_NAME``
+     - HPE Slingshot NICs, by their ``cxi`` device
 
    * - ``PSM3_NIC``
-     - Intel Omni-Path adapters
+     - A single Cornelis Omni-Path adapter (PSM3 matches the variable as one
+       pattern, so several cannot be named)
 
 named as those libraries name the device --- ``mlx5_0`` --- which is
 the name hwloc gave it. Unlike a GPU's vendor identity that name is
