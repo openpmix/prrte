@@ -371,6 +371,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_MAP_SHARED";
         case PRTE_APP_MAP_NDEV:
             return "PRTE_APP_MAP_NDEV";
+        case PRTE_APP_MAP_NIC:
+            return "PRTE_APP_MAP_NIC";
         case PRTE_APP_HWT_CPUS:
             return "PRTE_APP_HWT_CPUS";
         case PRTE_APP_CORE_CPUS:
@@ -547,6 +549,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB_MAP_SHARED";
         case PRTE_JOB_MAP_NDEV:
             return "JOB_MAP_NDEV";
+        case PRTE_JOB_MAP_NIC:
+            return "JOB_MAP_NIC";
         case PRTE_JOB_HWT_CPUS:
             return "JOB_HWT_CPUS";
         case PRTE_JOB_CORE_CPUS:

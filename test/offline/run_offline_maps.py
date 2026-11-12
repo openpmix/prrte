@@ -951,6 +951,16 @@ def device_cases(topo):
                    hostspec, pool, map_by="device=mlx5_0", rank_by="slot",
                    bind_to="core", n=n, expect="map")
 
+    # each GPU with the NIC under its own root complex; the map shows both
+    yield Case("device.%s.gpu-nic" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="device=gpu:nic", rank_by="slot",
+               bind_to="core", n=n, expect="map")
+    # nic adds NICs to GPUs: on a map by NICs there is nothing to add to
+    yield Case("device.%s.nic-nic" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="device=nic:nic", rank_by="slot",
+               bind_to="core", n=2, expect="reject",
+               expect_banner="not being mapped against")
+
     # the reverse ratio: N procs on each device
     yield Case("device.%s.ppr2" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="ppr:2:device=gpu", rank_by="slot",

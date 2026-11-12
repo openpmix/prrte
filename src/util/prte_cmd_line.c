@@ -85,6 +85,9 @@ const pmix_cli_choice_t prte_cli_mapquals[] = {
     /* a truth value; true when not given */
     PMIX_CLI_CHOICE(PRTE_CLI_SHARED, PRTE_MAPQUAL_SHARED, OPTVAL),
     PMIX_CLI_CHOICE(PRTE_CLI_NDEV, PRTE_MAPQUAL_NDEV, REQVAL),
+    /* NICs to give each GPU-mapped proc from its GPU's root complex;
+     * one when not given */
+    PMIX_CLI_CHOICE(PRTE_CLI_NIC, PRTE_MAPQUAL_NIC, OPTVAL),
     PMIX_CLI_CHOICE_END
 };
 

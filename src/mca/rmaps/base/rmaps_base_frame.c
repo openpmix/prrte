@@ -641,6 +641,32 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                                (NULL != app) ? PRTE_APP_MAP_NDEV : PRTE_JOB_MAP_NDEV,
                                PRTE_ATTR_GLOBAL, &ndev16, PMIX_UINT16);
 
+        } else if (PRTE_MAPQUAL_NIC == tag) {
+            /* how many NICs from its GPU's root complex each proc is also
+             * given; the bare qualifier asks for one */
+            val = pmix_cli_qualifier_value(ck2[i]);
+            if (NULL == val) {
+                ndev = 1;
+            } else {
+                ndev = strtol(val, &eptr, 10);
+                if ('\0' != *eptr || 0 >= ndev || UINT16_MAX < ndev) {
+                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "mapping policy", "NIC", ck2[i]);
+                    PMIx_Argv_free(ck2);
+                    return PRTE_ERR_SILENT;
+                }
+            }
+            if (NULL == attrs) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                               true, "mapping policy", PRTE_CLI_NIC);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            ndev16 = (uint16_t) ndev;
+            prte_set_attribute(attrs,
+                               (NULL != app) ? PRTE_APP_MAP_NIC : PRTE_JOB_MAP_NIC,
+                               PRTE_ATTR_GLOBAL, &ndev16, PMIX_UINT16);
+
         } else if (PRTE_MAPQUAL_SHARED == tag) {
             val = pmix_cli_qualifier_value(ck2[i]);
             if (NULL == val) {
@@ -1178,6 +1204,17 @@ setpolicy:
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
+    /* "nic" adds NICs to a GPU assignment, so there must be a device
+     * assignment to add them to.  Whether the devices are GPUs is only
+     * known once a node's devices are enumerated - a device may be named
+     * rather than classed - so that half is checked by the mapper. */
+    if (NULL != jdata
+        && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_NIC, NULL, PMIX_UINT16)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:nic-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
 
     if (NULL == jdata) {
         prte_rmaps_base.mapping = tmp;
@@ -1528,6 +1565,12 @@ setpolicy:
     if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_NDEV, NULL, PMIX_UINT16)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_NIC, NULL, PMIX_UINT16)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt", "rmaps:nic-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }

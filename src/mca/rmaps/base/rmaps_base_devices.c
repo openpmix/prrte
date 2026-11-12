@@ -81,6 +81,15 @@ typedef struct {
     hwloc_cpuset_t *groupcpus;
     size_t ngroups;
     size_t per;                 /* devices per group */
+    /* With "nic": the node's NICs, and for each group the NICs chosen for
+     * it from its GPUs' root complexes - gnicn[g] of them, at
+     * gnic[g * nicper ...], as indices into nics.  A group may get fewer
+     * than nicper, or none, when its complexes have fewer. */
+    pmix_hwloc_device_t *nics;
+    size_t nnics;
+    size_t nicper;
+    size_t *gnic;
+    size_t *gnicn;
 } prte_rmaps_device_map_t;
 
 /* The device classes, and the spellings of each.
@@ -448,6 +457,216 @@ static int enumerate_devices(prte_node_t *node, prte_rmaps_options_t *opts,
     return PRTE_SUCCESS;
 }
 
+/* How far an object sits below the root of its topology. */
+static unsigned obj_depth(hwloc_obj_t obj)
+{
+    unsigned d = 0;
+
+    while (NULL != obj && NULL != obj->parent) {
+        ++d;
+        obj = obj->parent;
+    }
+    return d;
+}
+
+/* The nearest object above both a and b.  Walked by hand rather than with
+ * hwloc_get_common_ancestor_obj(), which compares depths, and every object
+ * in the I/O tree has the same special (negative) depth for its type. */
+static hwloc_obj_t io_common_ancestor(hwloc_obj_t a, hwloc_obj_t b)
+{
+    hwloc_obj_t x, y;
+
+    for (x = a; NULL != x; x = x->parent) {
+        for (y = b; NULL != y; y = y->parent) {
+            if (x == y) {
+                return x;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* Choose, for each GPU group on this node, the NICs that share a PCI root
+ * complex with its GPUs - "--map-by device=gpu:nic[=N]".
+ *
+ * A process told which GPU it has is still left to guess which NIC to use
+ * with it, and every communication library guesses differently - Open MPI's
+ * btl/ofi assumes the GPU from the local rank (open-mpi/ompi#14800).  We
+ * placed the GPU, so we can say.  The NICs travel in the same
+ * PRTE_PROC_DEVICE_ID array as the GPUs; PMIx's pgpu components keep only
+ * the GPUs of their vendor and its pnet components only the NICs of theirs,
+ * so each library is told about its own device.
+ *
+ * The candidates for a group are the NICs under the host bridge of any of
+ * its GPUs.  They are ranked:
+ *
+ *   1. a PCI function carrying an OpenFabrics device ahead of plain
+ *      Ethernet - on a RoCE-only node the Ethernet function IS the answer,
+ *      but a management port should only be picked when nothing better
+ *      shares the complex;
+ *   2. the deeper the common ancestor with the nearest of the group's GPUs,
+ *      the better - a NIC behind the GPU's own PCIe switch ahead of one that
+ *      only shares the host bridge;
+ *   3. the fewer groups already given it, so that groups sharing a complex
+ *      get distinct NICs while there are enough and share once there are
+ *      not;
+ *   4. bus order, which makes the choice the same on every run.
+ *
+ * A group whose complexes carry no NIC gets none, and the job is told -
+ * once per node, under the job's nspace, so that PMIx's duplicate
+ * suppression folds a homogeneous cluster's thousand identical reports into
+ * one and a count.  No NIC from another complex is substituted: naming a far
+ * NIC to the libraries overrides a choice of theirs that is likely to be at
+ * least as good.  Processes sharing a GPU ("shared") share its NICs. */
+static int assign_nics(prte_job_t *jdata, prte_node_t *node,
+                       prte_rmaps_options_t *opts, prte_rmaps_device_map_t *dc)
+{
+    pmix_topology_t topo;
+    pmix_status_t prc;
+    hwloc_obj_t *nicbr = NULL, gpubr, anc;
+    unsigned *depth = NULL;
+    size_t *used = NULL;
+    bool *chosen = NULL, warned = false;
+    size_t g, m, k, best, ngpu = dc->ngroups * dc->per;
+    bool havebest;
+    unsigned d;
+
+    dc->nicper = opts->map_nic;
+
+    /* "nic" adds NICs to a GPU assignment: the devices have to be GPUs.
+     * Decided by each device's type, as the identity refusal is, because a
+     * device may be named rather than classed. */
+    for (m = 0; m < ngpu; m++) {
+        if (0 == (dc->devs[m].dev.type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))) {
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:nic-needs-gpu",
+                           true, opts->map_device, node->name,
+                           (NULL == dc->devs[m].dev.osname) ? "(unnamed)" : dc->devs[m].dev.osname);
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    /* the node's NICs, named for the node the topology describes - see
+     * enumerate_devices() for why the name matters */
+    topo.source = "hwloc";
+    topo.topology = node->topology->topo;
+    prc = pmix_hwloc_get_devices(&topo, node->name,
+                                 PMIX_DEVTYPE_NETWORK | PMIX_DEVTYPE_OPENFABRICS,
+                                 NULL, &dc->nics, &dc->nnics);
+    if (PMIX_SUCCESS != prc) {
+        dc->nics = NULL;
+        dc->nnics = 0;
+        return prte_pmix_convert_status(prc);
+    }
+
+    dc->gnic = (size_t *) calloc(dc->ngroups * dc->nicper, sizeof(size_t));
+    dc->gnicn = (size_t *) calloc(dc->ngroups, sizeof(size_t));
+    if (NULL == dc->gnic || NULL == dc->gnicn) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (0 < dc->nnics) {
+        nicbr = (hwloc_obj_t *) calloc(dc->nnics, sizeof(hwloc_obj_t));
+        depth = (unsigned *) calloc(dc->nnics, sizeof(unsigned));
+        used = (size_t *) calloc(dc->nnics, sizeof(size_t));
+        chosen = (bool *) calloc(dc->nnics, sizeof(bool));
+        if (NULL == nicbr || NULL == depth || NULL == used || NULL == chosen) {
+            free(nicbr);
+            free(depth);
+            free(used);
+            free(chosen);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        for (k = 0; k < dc->nnics; k++) {
+            nicbr[k] = prte_hwloc_base_host_bridge(dc->nics[k].obj);
+        }
+    }
+
+    for (g = 0; g < dc->ngroups; g++) {
+        /* score every NIC against this group: zero depth means "not under
+         * any of its GPUs' complexes", and a NIC with no host bridge never
+         * qualifies, since sharing nothing is not sharing a complex */
+        bool any = false;
+        for (k = 0; k < dc->nnics; k++) {
+            depth[k] = 0;
+            chosen[k] = false;
+            if (NULL == nicbr[k]) {
+                continue;
+            }
+            for (m = 0; m < dc->per; m++) {
+                gpubr = prte_hwloc_base_host_bridge(dc->devs[g * dc->per + m].obj);
+                if (gpubr != nicbr[k]) {
+                    continue;
+                }
+                anc = io_common_ancestor(dc->nics[k].obj, dc->devs[g * dc->per + m].obj);
+                d = obj_depth(anc) + 1;
+                if (d > depth[k]) {
+                    depth[k] = d;
+                }
+            }
+            if (0 < depth[k]) {
+                any = true;
+            }
+        }
+        if (!any) {
+            if (!warned) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-nic-near-gpu",
+                               true, node->name,
+                               (NULL == dc->devs[g * dc->per].dev.osname) ? "(unnamed)"
+                                   : dc->devs[g * dc->per].dev.osname);
+                warned = true;
+            }
+            continue;
+        }
+        while (dc->gnicn[g] < dc->nicper) {
+            havebest = false;
+            best = 0;
+            for (k = 0; k < dc->nnics; k++) {
+                bool kofa, bofa;
+                if (0 == depth[k] || chosen[k]) {
+                    continue;
+                }
+                if (!havebest) {
+                    best = k;
+                    havebest = true;
+                    continue;
+                }
+                kofa = (0 != (dc->nics[k].dev.type & PMIX_DEVTYPE_OPENFABRICS));
+                bofa = (0 != (dc->nics[best].dev.type & PMIX_DEVTYPE_OPENFABRICS));
+                if (kofa != bofa) {
+                    if (kofa) {
+                        best = k;
+                    }
+                    continue;
+                }
+                if (depth[k] != depth[best]) {
+                    if (depth[k] > depth[best]) {
+                        best = k;
+                    }
+                    continue;
+                }
+                if (used[k] < used[best]) {
+                    best = k;
+                }
+                /* otherwise the earlier one in bus order stands */
+            }
+            if (!havebest) {
+                /* the complex has fewer NICs than were asked for: the group
+                 * gets what is there, never one from elsewhere */
+                break;
+            }
+            chosen[best] = true;
+            ++used[best];
+            dc->gnic[g * dc->nicper + dc->gnicn[g]] = best;
+            ++dc->gnicn[g];
+        }
+    }
+
+    free(nicbr);
+    free(depth);
+    free(used);
+    free(chosen);
+    return PRTE_SUCCESS;
+}
+
 int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
                                   prte_rmaps_options_t *opts, void **ctx)
 {
@@ -614,6 +833,18 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
                        true, opts->map_device, node->name, (int) (dc->ngroups * dc->per));
     }
 
+    /* and the NICs to go with the GPUs, if asked for */
+    if (0 < opts->map_nic) {
+        rc = assign_nics(jdata, node, opts, dc);
+        if (PRTE_SUCCESS != rc) {
+            if (PRTE_ERR_SILENT != rc) {
+                PRTE_ERROR_LOG(rc);
+            }
+            prte_rmaps_base_devices_end(dc);
+            return rc;
+        }
+    }
+
     *ctx = dc;
     return PRTE_SUCCESS;
 }
@@ -668,7 +899,7 @@ int prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opts
     prte_rmaps_device_map_t *dc = (prte_rmaps_device_map_t *) ctx;
     pmix_data_array_t *darray;
     pmix_device_t *dev;
-    size_t m;
+    size_t m, nnic;
     int rc;
 
     PRTE_HIDE_UNUSED_PARAMS(opts);
@@ -697,14 +928,17 @@ int prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opts
      * launched without its assignment is the silent outcome this whole
      * feature exists to prevent: it runs, it looks right, and it computes
      * on whichever device its runtime picks by default. */
-    PMIX_DATA_ARRAY_CREATE(darray, dc->per, PMIX_DEVICE);
+    /* the group's devices, then any NICs chosen for it */
+    nnic = (NULL == dc->gnicn) ? 0 : dc->gnicn[j];
+    PMIX_DATA_ARRAY_CREATE(darray, dc->per + nnic, PMIX_DEVICE);
     if (NULL == darray) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     dev = (pmix_device_t *) darray->array;
-    for (m = 0; m < dc->per; m++) {
-        pmix_device_t *src = &dc->devs[j * dc->per + m].dev;
+    for (m = 0; m < dc->per + nnic; m++) {
+        pmix_device_t *src = (m < dc->per) ? &dc->devs[j * dc->per + m].dev
+                                           : &dc->nics[dc->gnic[j * dc->nicper + (m - dc->per)]].dev;
         PMIx_Device_construct(&dev[m]);
         if (NULL != src->uuid) {
             dev[m].uuid = strdup(src->uuid);
@@ -745,6 +979,11 @@ void prte_rmaps_base_devices_end(void *ctx)
     if (NULL != dc->grouploc) {
         free(dc->grouploc);
     }
+    if (NULL != dc->nics) {
+        pmix_hwloc_release_devices(dc->nics, dc->nnics);
+    }
+    free(dc->gnic);
+    free(dc->gnicn);
     if (NULL != dc->groupcpus) {
         for (n = 0; n < dc->ngroups; n++) {
             if (NULL != dc->groupcpus[n]) {

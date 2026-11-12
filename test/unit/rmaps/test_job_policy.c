@@ -232,6 +232,31 @@ int test_job_policy(void)
     CHECK("job ppr:2:device=gpu,ndev=2: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(jdata);
 
+    /* nic, as the per-app parser reads it */
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "device=gpu:nic");
+    CHECK("job device=gpu:nic: rc", PRTE_SUCCESS == rc);
+    CHECK("job device=gpu:nic: one by default",
+          1 == get_u16(&jdata->attributes, PRTE_JOB_MAP_NIC));
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "device=gpu:nic=3");
+    CHECK("job device=gpu:nic=3: value", PRTE_SUCCESS == rc
+          && 3 == get_u16(&jdata->attributes, PRTE_JOB_MAP_NIC));
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "device=gpu:nic=0");
+    CHECK("job device=gpu:nic=0: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "package:nic");
+    CHECK("job package:nic: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
+
     /* abbreviated, and the value read after the "=" rather than at a fixed
      * offset past the full spelling */
     jdata = newjob();
