@@ -26,5 +26,15 @@
 # beside each hsnN. The host name, MAC addresses and cgroup path were
 # replaced before it was checked in.
 
+# mi350-bcm57608.xml is a real node read by hwloc 2.15 with the RSMI
+# backend: eight AMD MI350s (PCI class 0x1200, a processing accelerator,
+# each named rsmiN with its AMDUUID) and eight dual-port Broadcom BCM57608
+# RoCE adapters, one GPU and one adapter under every PCI host bridge. The
+# adapters' RDMA devices carry rdma-core's PCI-path names (rocep6s0f0)
+# rather than bnxt_reN. Its host name, cgroup path, board and BIOS
+# strings, MAC addresses and the GUIDs and GIDs derived from them, GPU and
+# disk serials, GPU uuids and XGMI hive id were replaced with synthetic
+# values before it was checked in.
+
 EXTRA_DIST = test-topo.xml test-topo2.xml turin-4gpu.xml turin-4gpu-nvml.xml \
-             slingshot.xml
+             slingshot.xml mi350-bcm57608.xml
