@@ -995,10 +995,10 @@ somebody else's NIC in your variable is worse than naming none.
      - ``mlx5_0:*`` — UCX names a device *port* and matches each entry as
        a glob, so this is "this card, whatever ports it has".  The ``:``
        is load-bearing: ``mlx5_1*`` would also match ``mlx5_10``.
-   * - Intel Omni-Path
+   * - Cornelis Omni-Path
      - ``PSM3_NIC``
      - The device name; PSM3 selects by NIC name.
-   * - Intel Omni-Path
+   * - Cornelis Omni-Path
      - ``HFI_UNIT``, ``FI_OPX_HFI_SELECT``
      - **Deliberately not set.**  Both take a unit *ordinal*, which is
        meaningful only against the driver's enumeration rather than one
