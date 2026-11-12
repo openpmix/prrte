@@ -471,6 +471,158 @@ static void check_ndev_root_complex(void)
     PMIX_RELEASE(t);
 }
 
+/* Load a shared test topology with some of its text replaced, or NULL.
+ * Each "from" must occur exactly once and be the same length as its "to",
+ * so the edit cannot shift anything else in the file. */
+static prte_topology_t *load_topo_edited(const char *file, const char **from,
+                                         const char **to)
+{
+    hwloc_topology_t topo;
+    prte_topology_t *t;
+    char path[1024], *buf, *hit;
+    FILE *fp;
+    long len;
+    int n;
+
+    snprintf(path, sizeof(path), "%s/%s", PRTE_TEST_TOPO_DIR, file);
+    fp = fopen(path, "r");
+    if (NULL == fp) {
+        return NULL;
+    }
+    if (0 != fseek(fp, 0, SEEK_END) || 0 > (len = ftell(fp)) || 0 != fseek(fp, 0, SEEK_SET)) {
+        fclose(fp);
+        return NULL;
+    }
+    buf = (char *) malloc(len + 1);
+    if (NULL == buf || (size_t) len != fread(buf, 1, len, fp)) {
+        free(buf);
+        fclose(fp);
+        return NULL;
+    }
+    fclose(fp);
+    buf[len] = '\0';
+    for (n = 0; NULL != from[n]; n++) {
+        hit = strstr(buf, from[n]);
+        if (NULL == hit || strlen(from[n]) != strlen(to[n])
+            || NULL != strstr(hit + 1, from[n])) {
+            free(buf);
+            return NULL;
+        }
+        memcpy(hit, to[n], strlen(to[n]));
+    }
+    if (0 != hwloc_topology_init(&topo)) {
+        free(buf);
+        return NULL;
+    }
+    if (0 != hwloc_topology_set_xmlbuffer(topo, buf, (int) len + 1)
+        || 0 != hwloc_topology_set_io_types_filter(topo, HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
+        || 0 != hwloc_topology_load(topo)) {
+        hwloc_topology_destroy(topo);
+        free(buf);
+        return NULL;
+    }
+    free(buf);
+    t = PMIX_NEW(prte_topology_t);
+    t->topo = topo;
+    return t;
+}
+
+/* "nic" gives each GPU the NICs under its own root complex.
+ *
+ * On this machine every GPU shares a host bridge with exactly one HCA, so
+ * the answer is a pairing nobody has to guess at: cuda0 with mlx5_0, cuda1
+ * with mlx5_3, cuda2 with mlx5_4, cuda3 with mlx5_5.  Asking for more NICs
+ * than a complex has gets what is there and never one from elsewhere, and
+ * a GPU whose complex has no NIC keeps its GPU and gets no NIC. */
+static void check_gpu_nic(void)
+{
+    static const char *from[] = {"name=\"ib0\" osdev_type=\"2\"",
+                                 "name=\"mlx5_5\" osdev_type=\"3\"", NULL};
+    static const char *to[] = {"name=\"ib0\" osdev_type=\"0\"",
+                               "name=\"mlx5_5\" osdev_type=\"0\"", NULL};
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    void *ctx = NULL;
+    char *order;
+
+    t = load_topo(TOPO_FILE);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices gpu nic (no %s)\n", TOPO_FILE);
+        return;
+    }
+    node = build_node("node-iota", t);
+
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.map_nic = 1;
+    opts.bind = PRTE_BIND_TO_NONE;
+    order = device_order(node, &opts);
+    CHECK("each gpu gets the nic on its complex", NULL != order
+          && 0 == strcmp(order, "cuda0+mlx5_0,cuda1+mlx5_3,cuda2+mlx5_4,cuda3+mlx5_5"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+mlx5_0,cuda1+mlx5_3,cuda2+mlx5_4,cuda3+mlx5_5")) {
+        fprintf(stderr, "  gpu nic: %s\n", order);
+    }
+    free(order);
+
+    /* more than the complex has: what is there, nothing from elsewhere */
+    opts.map_nic = 3;
+    order = device_order(node, &opts);
+    CHECK("nic=3 takes only the complex's own", NULL != order
+          && 0 == strcmp(order, "cuda0+mlx5_0,cuda1+mlx5_3,cuda2+mlx5_4,cuda3+mlx5_5"));
+    free(order);
+
+    /* two GPUs per proc: the NICs of both complexes */
+    opts.map_ndev = 2;
+    opts.map_nic = 2;
+    order = device_order(node, &opts);
+    CHECK("ndev=2 nic=2 takes both complexes' nics", NULL != order
+          && 0 == strcmp(order, "cuda0+cuda1+mlx5_0+mlx5_3,cuda2+cuda3+mlx5_4+mlx5_5"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+cuda1+mlx5_0+mlx5_3,cuda2+cuda3+mlx5_4+mlx5_5")) {
+        fprintf(stderr, "  gpu ndev=2 nic=2: %s\n", order);
+    }
+    free(order);
+
+    /* not GPUs: refused, and nothing is left behind */
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "network";
+    opts.map_nic = 1;
+    opts.bind = PRTE_BIND_TO_NONE;
+    fprintf(stderr, "--- expected error output follows (nic on a nic map) ---\n");
+    CHECK("nic on a nic map: refused",
+          PRTE_SUCCESS != prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx));
+    CHECK("nic on a nic map: no context", NULL == ctx);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+
+    /* the same machine with the HCA under cuda3's host bridge turned into
+     * something that is not a NIC: cuda3 keeps its GPU and gets no NIC */
+    t = load_topo_edited(TOPO_FILE, from, to);
+    CHECK("edited topology loads", NULL != t);
+    if (NULL == t) {
+        return;
+    }
+    node = build_node("node-kappa", t);
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.map_nic = 1;
+    opts.bind = PRTE_BIND_TO_NONE;
+    fprintf(stderr, "--- expected error output follows (no nic near cuda3) ---\n");
+    order = device_order(node, &opts);
+    CHECK("no nic on the complex: gpu only", NULL != order
+          && 0 == strcmp(order, "cuda0+mlx5_0,cuda1+mlx5_3,cuda2+mlx5_4,cuda3"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+mlx5_0,cuda1+mlx5_3,cuda2+mlx5_4,cuda3")) {
+        fprintf(stderr, "  gpu nic, cuda3 bare: %s\n", order);
+    }
+    free(order);
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
 /* Two devices with the same locality can be under different root complexes.
  *
  * That is why the grouping keys on the host bridge and not on the locality
@@ -586,6 +738,7 @@ int test_devices(bool pmix_up)
     check_interleave_numa();
     check_ndev_root_complex();
     check_host_bridge_not_locality();
+    check_gpu_nic();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");

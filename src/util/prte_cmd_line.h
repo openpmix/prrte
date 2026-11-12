@@ -281,6 +281,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_INTERLEAVE "interleave"
 #define PRTE_CLI_SHARED     "shared"
 #define PRTE_CLI_NDEV       "ndev"
+#define PRTE_CLI_NIC        "nic"
 #define PRTE_CLI_REPORT     "report"
 #define PRTE_CLI_DISPALLOC  "displayalloc"
 // PRTE_CLI_DISPLAY reused here
@@ -361,7 +362,8 @@ typedef enum {
     PRTE_MAPQUAL_ORDERED,
     PRTE_MAPQUAL_INTERLEAVE,
     PRTE_MAPQUAL_SHARED,
-    PRTE_MAPQUAL_NDEV
+    PRTE_MAPQUAL_NDEV,
+    PRTE_MAPQUAL_NIC
 } prte_cli_mapqual_t;
 PRTE_EXPORT extern const pmix_cli_choice_t prte_cli_mapquals[];
 

@@ -165,6 +165,11 @@ typedef struct {
     /* how many devices each proc is assigned, from
      * --map-by device=X:ndev=N. Zero means the default of one. */
     uint16_t map_ndev;
+    /* how many NICs each GPU-mapped proc is also given from its GPUs' root
+     * complexes, from --map-by device=gpu:nic[=N]. Zero means none were
+     * asked for. Read only by the base, which is why adding it at the end
+     * needs no interface version change. */
+    uint16_t map_nic;
 
 } prte_rmaps_options_t;
 
