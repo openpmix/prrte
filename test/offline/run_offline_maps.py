@@ -922,8 +922,13 @@ def device_cases(topo):
     """
     if getattr(topo, "ngpus", 0) < 2:
         return
-    hostspec, pool = LAYOUTS["single"]
     n = topo.ngpus
+    # Room for the largest case below, two procs per GPU, so that a case
+    # meant to map is never refused for want of slots.  "single" has 8,
+    # which is exactly that on a four-GPU node and too few on an eight-GPU
+    # one; gpu-toomany is still refused, for want of devices.
+    nslots = max(8, 2 * n)
+    hostspec, pool = "node0:%d" % nslots, [("node0", nslots)]
     if not getattr(topo, "gpus_nameable", True):
         yield Case("device.%s.gpu-unnameable" % topo.name, "device", topo,
                    "single", hostspec, pool, map_by="device=gpu",
