@@ -390,7 +390,8 @@ Verified against libfabric and hwloc master (November 2026):
        ``0x15b3`` / ``0x10de``.  Same selector as InfiniBand.
    * - RoCE (Broadcom)
      - ``NCCL_IB_HCA``, ``UCX_NET_DEVICES``
-     - The verbs device name (``bnxt_re0``); both libraries drive any
+     - The verbs device name (``bnxt_re0``, or ``rocep6s0f0`` where
+       rdma-core's PCI-path naming is in use); both libraries drive any
        IB/RoCE verbs device, not only NVIDIA's
      - An OpenFabrics OS device on a class ``0x200`` function of vendor
        ``0x14e4``.  ``bnxt_re`` is RoCE only.
@@ -558,6 +559,29 @@ decisions.
   render nodes, so ``--map-by device=gpu`` said there was no GPU.  PMIx now
   reports such a function as a GPU named by its PCI bus id, with no vendor
   identity, so PRRTE refuses it as unnameable instead - which names the fix.
+
+A Broadcom node (``test/topologies/mi350-bcm57608.xml``, read by hwloc
+2.15) confirmed the RoCE rule on real hardware and found one defect
+elsewhere.
+
+* **Broadcom RoCE is named as planned.**  Each BCM57608 port
+  (``[14e4:1760]``, class ``0x0200``) carries an OpenFabrics device, and a
+  process mapped against it gets ``NCCL_IB_HCA``, ``UCX_NET_DEVICES`` and
+  ``FI_VERBS_DEVICE_NAME``.  The names are rdma-core's PCI-path names
+  (``rocep6s0f0``), not ``bnxt_reN``; nothing here depends on the name,
+  and those names cannot prefix one another, so ``FI_VERBS_DEVICE_NAME`` is
+  always written.  A BCM57508 on the same node with no OpenFabrics device
+  is plain Ethernet and is named to nothing.
+* **The grouping and pairing hold.**  Each host bridge holds one MI350
+  and one dual-port adapter: ``device=gpu:nic`` gives each GPU port 0,
+  ``nic=2`` both ports, and ``device=nic:ndev=2`` keeps each card's ports
+  together.
+* **PMIx's ``pgpu/amd`` did not open on this node.**  It asked only for an
+  AMD function in the display class ``0x03``, and an MI350 reports
+  ``0x1200``, a processing accelerator, so no process was given
+  ``ROCR_VISIBLE_DEVICES``.  PRRTE's map was unaffected: the device
+  enumeration counts the GPUs by their RSMI devices.  The fix is in PMIx
+  (openpmix/openpmix#4442).
   This is a separate PMIx change, and PRRTE's offline harness mirrors it in a
   PRRTE change that lands after it.  Class ``0x0380`` is left alone; those
   parts get render nodes from their drivers.
@@ -637,7 +661,8 @@ Task checklist
 - [x] ``nvd``: the node-type check limited to Intel's adapters
 - [x] PMIx: a class ``0x0302`` function is a GPU without OS devices; PRRTE's
       harness mirrors it once that lands
-- [ ] Real EFA, Broadcom and Intel topologies (and a Slingshot one from
+- [x] A real Broadcom topology (``mi350-bcm57608.xml``)
+- [ ] Real EFA, Intel and AMD Pensando topologies (and a Slingshot one from
       hwloc 2.14 or later)
 - [ ] Propose a node-type info attribute to hwloc
 - [x] ``pnet`` AGENTS.md

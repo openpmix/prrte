@@ -628,6 +628,64 @@ static void check_nic_link_speed(void)
     PMIX_RELEASE(t);
 }
 
+/* The same rule on a node from another pair of vendors.
+ *
+ * mi350-bcm57608.xml is a real node: eight AMD MI350s, which report PCI
+ * class 0x1200 (a processing accelerator) rather than a display class, and
+ * eight dual-port Broadcom BCM57608 RoCE adapters, one GPU and one adapter
+ * under every host bridge.  The GPU and the adapter hang off one PCIe
+ * switch, and the adapter's two ports are at the same depth with the same
+ * link, so nothing but bus order chooses between them: port 0 for nic,
+ * both ports for nic=2.  The RDMA
+ * devices carry rdma-core's PCI-path names (rocep6s0f0), which the device
+ * map uses as it finds them. */
+static void check_mi350_gpu_nic(void)
+{
+    static const char *one =
+        "rsmi0+rocep6s0f0,rsmi1+rocep22s0f0,rsmi2+rocep102s0f0,rsmi3+rocep118s0f0,"
+        "rsmi4+rocep134s0f0,rsmi5+rocep150s0f0,rsmi6+rocep230s0f0,rsmi7+rocep246s0f0";
+    static const char *two =
+        "rsmi0+rocep6s0f0+rocep6s0f1,rsmi1+rocep22s0f0+rocep22s0f1,"
+        "rsmi2+rocep102s0f0+rocep102s0f1,rsmi3+rocep118s0f0+rocep118s0f1,"
+        "rsmi4+rocep134s0f0+rocep134s0f1,rsmi5+rocep150s0f0+rocep150s0f1,"
+        "rsmi6+rocep230s0f0+rocep230s0f1,rsmi7+rocep246s0f0+rocep246s0f1";
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    char *order;
+
+    t = load_topo("mi350-bcm57608.xml");
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices mi350 gpu nic (could not load mi350-bcm57608.xml)\n");
+        failures++;
+        return;
+    }
+    node = build_node("node-mu", t);
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.map_nic = 1;
+    opts.bind = PRTE_BIND_TO_NONE;
+    order = device_order(node, &opts);
+    CHECK("mi350: each accelerator gets port 0 of the adapter on its complex",
+          NULL != order && 0 == strcmp(order, one));
+    if (NULL != order && 0 != strcmp(order, one)) {
+        fprintf(stderr, "  mi350 gpu nic: %s\n", order);
+    }
+    free(order);
+
+    opts.map_nic = 2;
+    order = device_order(node, &opts);
+    CHECK("mi350: nic=2 gets both ports of that adapter",
+          NULL != order && 0 == strcmp(order, two));
+    if (NULL != order && 0 != strcmp(order, two)) {
+        fprintf(stderr, "  mi350 gpu nic=2: %s\n", order);
+    }
+    free(order);
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
 /* "nic" gives each GPU the NICs under its own root complex.
  *
  * On this machine every GPU shares a host bridge with exactly one HCA, so
@@ -841,6 +899,7 @@ int test_devices(bool pmix_up)
     check_host_bridge_not_locality();
     check_gpu_nic();
     check_nic_link_speed();
+    check_mi350_gpu_nic();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");
