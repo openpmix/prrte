@@ -11,3 +11,4 @@ that happens to sit near one.  Source: `Open MPI issue #14169
 
    per-device-mapping.rst
    impl-plan.rst
+   root-complex-plan.rst
