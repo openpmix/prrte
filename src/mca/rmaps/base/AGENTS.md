@@ -229,6 +229,38 @@ the context.
 `interleave_devices()` reorders the array with a shallow copy and a
 `memcpy` back. That is safe because each entry is moved exactly once — the
 per-group counts are exact — so ownership of every string moves with it.
+`group_by_complex()` reorders the same way and for the same reason: every
+entry lands either in a whole group or in the pool, once.
+
+### `ndev` groups stay under one PCI root complex
+
+With `ndev > 1`, `devices_begin()` runs `group_by_complex()` before cutting
+the list into groups: each host bridge's devices are laid down as whole
+groups first, in bus order, and whatever no partition could make a whole
+group of is pooled, in bus order, after them. A process driving devices
+under two root complexes can do far worse than one under a single complex
+(open-mpi/ompi#14800 measured an order of magnitude for RDMA reads on EFA),
+and PMIx's bus order, cut from the top, ignored where one complex ends.
+
+- **The key is the host bridge, not the locality.** It comes from the
+  device's I/O object (`pmix_hwloc_device_t.obj`) through
+  `prte_hwloc_base_host_bridge()`. Two host bridges routinely report the
+  same cpuset — `test-topo.xml` has two NICs that do — so nothing on the CPU
+  side of the topology can see a group span complexes. A device with no host
+  bridge above it is a complex of its own, so it always goes to the pool.
+- **The group count does not change.** Whole groups plus pooled groups is
+  `floor(ndevs / per)` whatever the partition sizes, so
+  `prte_rmaps_base_devices_total()` is untouched — no job that fitted is
+  refused for want of devices.
+- **Not under `interleave`.** `ndev` with `interleave` asks for groups that
+  span the interleave level; grouping by complex first would answer
+  neither request.
+- **It can turn a map into a binding refusal, and that is intended.** A
+  group under one complex usually has a finer locality than the spanning
+  group it replaced, so `binding_fits()` can now refuse a coarse binding it
+  used to admit (`device=nic:ndev=2 --bind-to package` on the turin
+  topologies). That binding was admitted only because the group spanned,
+  and `ndev=1` already refuses it for the same devices.
 
 ### Traps
 

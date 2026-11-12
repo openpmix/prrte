@@ -31,7 +31,7 @@ is the property to preserve.
 | Caller | What it wants |
 |--------|---------------|
 | `ess/hnp`, `plm/base` | `prte_hwloc_base_get_topology()`, `_filter_cpus()`, `_setup_summary()` — acquiring the local topology and receiving remote ones |
-| `rmaps/*` | `_get_nbobjs_by_type()`, `_get_obj_by_type()`, `_generate_cpuset()`, `_cpu_list_parse()`, `_reset_counters()`, `_has_cores()`/`_core_cpus()`, `prte_hwloc_obj_data_t` |
+| `rmaps/*` | `_get_nbobjs_by_type()`, `_get_obj_by_type()`, `_generate_cpuset()`, `_cpu_list_parse()`, `_reset_counters()`, `_has_cores()`/`_core_cpus()`, `_host_bridge()` (the PCI root complex a device is under, for grouping `ndev` devices), `prte_hwloc_obj_data_t` |
 | `ras/simulator` | `_get_npus()`, `_filter_cpus()` — the only caller of `_get_npus()`, which fabricates a node's slot count from a synthetic topology |
 | `odls/base` | `prte_hwloc_base_map` / `_mbfa` (the memory-policy globals) and `_cset2str()` |
 | `runtime/data_type_support`, `ras/base` | `_cset2str()`, `_cpuset2ranges()`, `prte_hwloc_get_binding_info()`, `prte_hwloc_print()` — every `--display` variant |

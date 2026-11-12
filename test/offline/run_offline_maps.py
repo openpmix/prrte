@@ -996,6 +996,35 @@ def device_cases(topo):
                    bind_to="core", n=n // 2, expect="map")
 
 
+def nic_cases(topo):
+    """--map-by device=nic with several NICs per proc, whose groups must stay
+    under one PCI root complex where the counts allow.
+
+    Emitted only for a topology carrying the shape that tells the two rules
+    apart: the turin machines have one NIC per host bridge except for the two
+    ports of one card (mlx5_1, mlx5_2), which share one.  Cut into pairs in
+    bus order every group spanned two complexes and that card was split
+    across two processes; grouped by complex, it is the first pair.  No GPU
+    identity is involved, so both turin topologies get these.
+
+    The package binding is the case the grouping changes from a map to a
+    refusal, deliberately: a group under one complex is local to less of
+    the machine than a group spanning two, and a binding coarser than a
+    group's locality is refused exactly as it is with one NIC per proc.
+    """
+    names = getattr(topo, "osdev_names", ())
+    if "mlx5_1" not in names or "mlx5_2" not in names:
+        return
+    hostspec, pool = LAYOUTS["single"]
+    yield Case("device.%s.nic-ndev2" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="device=nic:ndev=2", rank_by="slot",
+               bind_to="core", n=3, expect="map")
+    yield Case("device.%s.nic-ndev2-package" % topo.name, "device", topo,
+               "single", hostspec, pool, map_by="device=nic:ndev=2",
+               rank_by="slot", bind_to="package", n=3, expect="reject",
+               expect_banner="coarser than the devices")
+
+
 def perapp_cases(topo):
     """MPMD lines carrying distinct per-app --map-by/--rank-by/--bind-to
     directives - the rmaps per-app dispatch path.  Placement/ranking/binding
@@ -1098,6 +1127,7 @@ def generate_cases(topos, layouts, ns, full):
         cases.extend(group_cases(topo))
         cases.extend(hostcap_cases(topo))
         cases.extend(device_cases(topo))
+        cases.extend(nic_cases(topo))
         cases.extend(perapp_cases(topo))
         cases.extend(hwtcpus_cases(topo))
     return cases
