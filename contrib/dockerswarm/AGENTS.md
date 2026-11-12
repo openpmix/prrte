@@ -729,6 +729,17 @@ that need a second daemon, plus two cheap startup-hardening cases:
   one killed both. It takes two jobs whose procs land on the *same* daemon,
   which means a persistent DVM and more than one node. This case does catch
   the regression: against the unfixed daemon both jobs die.
+- a **tool attached to a non-master daemon** — a `prun` on a compute node,
+  which finds that node's daemon and attaches there. Its job's output
+  reaches it only because the master relays each chunk to the tool's
+  daemon, so the case puts the tool on node3 and the ranks on node1 and
+  node2 and requires every line exactly once. It then requires the
+  displays the master writes itself (`--display map`, `--display
+  allocation`, a `donotlaunch` job's `--display bindings`) to arrive
+  there once each too, and the map once on the master's own node. Those
+  go through `prte_iof_base_output()`, not the job-output path, and used
+  to reach only the master's own PMIx server: against the unfixed master
+  the tool on node3 gets the hostnames and no display at all.
 - a **malformed `--singleton`** and a **`--prefix /`**. Both are startup
   paths that used to fault (the first inside PMIx, the second by
   overrunning a two-byte heap allocation), and both are one line to check
