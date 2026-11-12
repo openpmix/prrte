@@ -36,6 +36,7 @@
 
 #include "constants.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/hwloc/pmix_hwloc.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
@@ -303,8 +304,9 @@ static void check_named_unnameable_refused(void)
     PMIX_RELEASE(t);
 }
 
-/* The order the devices come out in, as the OS names each group was given,
- * joined with ','.  Caller frees. */
+/* The order the devices come out in, as the OS names each group was given:
+ * groups joined with ',', the members of one group with '+'.  Caller
+ * frees. */
 static char *device_order(prte_node_t *node, prte_rmaps_options_t *opts)
 {
     pmix_data_array_t *darray;
@@ -313,6 +315,7 @@ static char *device_order(prte_node_t *node, prte_rmaps_options_t *opts)
     void *ctx = NULL;
     char *order = NULL, *tmp;
     unsigned n, count;
+    size_t m;
 
     if (PRTE_SUCCESS != prte_rmaps_base_devices_begin(NULL, node, opts, &ctx)) {
         return NULL;
@@ -326,10 +329,13 @@ static char *device_order(prte_node_t *node, prte_rmaps_options_t *opts)
                                   (void **) &darray, PMIX_DATA_ARRAY)
             && NULL != darray && 0 < darray->size) {
             dev = (pmix_device_t *) darray->array;
-            pmix_asprintf(&tmp, "%s%s%s", (NULL == order) ? "" : order,
-                          (NULL == order) ? "" : ",", dev[0].osname);
-            free(order);
-            order = tmp;
+            for (m = 0; m < darray->size; m++) {
+                pmix_asprintf(&tmp, "%s%s%s", (NULL == order) ? "" : order,
+                              (NULL == order) ? "" : ((0 == m) ? "," : "+"),
+                              dev[m].osname);
+                free(order);
+                order = tmp;
+            }
         }
         if (NULL != darray) {
             PMIX_DATA_ARRAY_FREE(darray);
@@ -386,6 +392,133 @@ static void check_interleave_numa(void)
     free(numa);
 
     PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
+/* An ndev group stays under one PCI root complex where the counts allow.
+ *
+ * Seven network cards in bus order, each under a host bridge of its own
+ * except mlx5_1 and mlx5_2 - the two ports of one card - which share one.
+ * Cut into pairs from the top of that list, every pair spanned two
+ * complexes and the one pair the machine has was split between two
+ * processes.  The pair now comes first, the cards that have to share a
+ * group with a card from another complex follow in bus order, and mlx5_5
+ * is left over exactly as before: seven cards still make three pairs.
+ *
+ * The GPUs are one per complex, so nothing can be kept together and the
+ * order must be the one it always was.  And interleave asks for groups
+ * that span, so it must not be overridden. */
+static void check_ndev_root_complex(void)
+{
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    char *order;
+
+    t = load_topo(TOPO_FILE);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices ndev root complex (no %s)\n", TOPO_FILE);
+        return;
+    }
+    node = build_node("node-eta", t);
+
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "network";
+    opts.map_ndev = 2;
+    opts.bind = PRTE_BIND_TO_NONE;
+    order = device_order(node, &opts);
+    CHECK("nic pairs keep the shared complex together", NULL != order
+          && 0 == strcmp(order, "mlx5_1+mlx5_2,mlx5_0+mlx5_3,eno6+mlx5_4"));
+    if (NULL != order && 0 != strcmp(order, "mlx5_1+mlx5_2,mlx5_0+mlx5_3,eno6+mlx5_4")) {
+        fprintf(stderr, "  network ndev=2: %s\n", order);
+    }
+    free(order);
+
+    /* one device per proc is not a group, and the order is untouched */
+    opts.map_ndev = 1;
+    order = device_order(node, &opts);
+    CHECK("ndev=1 keeps bus order", NULL != order
+          && 0 == strcmp(order, "mlx5_0,mlx5_3,eno6,mlx5_1,mlx5_2,mlx5_4,mlx5_5"));
+    free(order);
+
+    /* interleave asks for groups that span the level */
+    opts.map_ndev = 2;
+    opts.map_interleave = "numa";
+    order = device_order(node, &opts);
+    CHECK("interleave is not overridden", NULL != order
+          && 0 == strcmp(order, "mlx5_0+mlx5_3,eno6+mlx5_1,mlx5_4+mlx5_5"));
+    if (NULL != order && 0 != strcmp(order, "mlx5_0+mlx5_3,eno6+mlx5_1,mlx5_4+mlx5_5")) {
+        fprintf(stderr, "  network ndev=2 interleave=numa: %s\n", order);
+    }
+    free(order);
+
+    /* the GPUs sit one per complex: nothing to keep together */
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.map_ndev = 2;
+    opts.bind = PRTE_BIND_TO_NONE;
+    order = device_order(node, &opts);
+    CHECK("gpu pairs keep bus order", NULL != order
+          && 0 == strcmp(order, "cuda0+cuda1,cuda2+cuda3"));
+    if (NULL != order && 0 != strcmp(order, "cuda0+cuda1,cuda2+cuda3")) {
+        fprintf(stderr, "  gpu ndev=2: %s\n", order);
+    }
+    free(order);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
+/* Two devices with the same locality can be under different root complexes.
+ *
+ * That is why the grouping keys on the host bridge and not on the locality
+ * every other part of the device mapper uses: on this machine both network
+ * cards report the same cpuset and hang off different host bridges, so
+ * nothing on the CPU side of the topology could tell a group holding both
+ * from a group under one complex. */
+static void check_host_bridge_not_locality(void)
+{
+    pmix_hwloc_device_t *devs = NULL, *pci[2] = {NULL, NULL};
+    pmix_topology_t topo;
+    prte_topology_t *t;
+    size_t ndevs = 0, n, npci = 0;
+
+    t = load_topo("test-topo.xml");
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices host bridge (no test-topo.xml)\n");
+        return;
+    }
+    topo.source = "hwloc";
+    topo.topology = t->topo;
+    CHECK("enumerate", PMIX_SUCCESS == pmix_hwloc_get_devices(&topo, "node-theta",
+                                                              PMIX_DEVTYPE_NETWORK
+                                                                  | PMIX_DEVTYPE_OPENFABRICS,
+                                                              NULL, &devs, &ndevs));
+    /* the two PCI cards; eth0 has no PCI ancestor and no host bridge */
+    for (n = 0; n < ndevs && npci < 2; n++) {
+        if (NULL != devs[n].busid) {
+            pci[npci++] = &devs[n];
+        }
+    }
+    CHECK("two cards", 2 == npci);
+    if (2 == npci) {
+        CHECK("same locality", NULL != pci[0]->locality && NULL != pci[1]->locality
+              && hwloc_bitmap_isequal(pci[0]->locality->cpuset, pci[1]->locality->cpuset));
+        CHECK("each has a host bridge", NULL != prte_hwloc_base_host_bridge(pci[0]->obj)
+              && NULL != prte_hwloc_base_host_bridge(pci[1]->obj));
+        CHECK("different host bridges", prte_hwloc_base_host_bridge(pci[0]->obj)
+              != prte_hwloc_base_host_bridge(pci[1]->obj));
+    }
+    for (n = 0; n < ndevs; n++) {
+        if (NULL == devs[n].busid) {
+            CHECK("no PCI, no host bridge", NULL == prte_hwloc_base_host_bridge(devs[n].obj));
+        }
+    }
+    if (NULL != devs) {
+        pmix_hwloc_release_devices(devs, ndevs);
+    }
     PMIX_RELEASE(t);
 }
 
@@ -451,6 +584,8 @@ int test_devices(bool pmix_up)
     check_named_unnameable_refused();
     check_network_synonyms();
     check_interleave_numa();
+    check_ndev_root_complex();
+    check_host_bridge_not_locality();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");

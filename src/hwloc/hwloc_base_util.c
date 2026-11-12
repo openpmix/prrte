@@ -95,6 +95,27 @@ bool prte_hwloc_base_has_cores(hwloc_topology_t topo)
     return (NULL != hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0));
 }
 
+hwloc_obj_t prte_hwloc_base_host_bridge(hwloc_obj_t obj)
+{
+    /* Climb the I/O tree.  hwloc records a PCI root as a bridge whose
+     * upstream side is the host; everything else on the way up is a PCI
+     * function, a PCI-to-PCI bridge (a switch port), or the OS device we
+     * started from.  Anything else means we have left the I/O tree without
+     * finding one, which is an answer too: no recorded root complex. */
+    while (NULL != obj) {
+        if (HWLOC_OBJ_BRIDGE == obj->type
+            && HWLOC_OBJ_BRIDGE_HOST == obj->attr->bridge.upstream_type) {
+            return obj;
+        }
+        if (HWLOC_OBJ_BRIDGE != obj->type && HWLOC_OBJ_PCI_DEVICE != obj->type
+            && HWLOC_OBJ_OS_DEVICE != obj->type) {
+            return NULL;
+        }
+        obj = obj->parent;
+    }
+    return NULL;
+}
+
 /*
  * Provide the hwloc object that corresponds to the given
  * processor id of the given type.  Remember: "processor" here [usually] means "core" --
