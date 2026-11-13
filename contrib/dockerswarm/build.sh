@@ -984,7 +984,16 @@ build_macos() {
         echo ">>> PMIx native VPATH build from $psrc -> $pfx"
         ( cd "$psrc" && { [ -x configure ] || ./autogen.pl; } )
         mkdir -p "$root/vpath-macos-pmix" && cd "$root/vpath-macos-pmix"
-        [ -f config.status ] || "$psrc/configure" --prefix="$pfx"
+        # PMIx needs the same libevent and hwloc PRRTE is pointed at, so it
+        # gets EXTRA_CONFIGURE_ARGS too (configure only warns about an
+        # option it does not know), and is reconfigured when they change
+        local pcfg_args="--prefix=$pfx ${EXTRA_CONFIGURE_ARGS:-}"
+        if [ ! -f config.status ] ||
+           [ "$(cat .pmix-configure-args 2>/dev/null)" != "$pcfg_args" ]; then
+            # shellcheck disable=SC2086
+            "$psrc/configure" $pcfg_args
+            printf '%s' "$pcfg_args" > .pmix-configure-args
+        fi
         make -j"$(sysctl -n hw.ncpu)"
         make install
         pmix_arg="--with-pmix=$pfx"
