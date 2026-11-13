@@ -43,6 +43,25 @@ file could not be opened for reading:
 
 Please check the filename and try again.
 #
+[ras-base:addhost-not-a-file]
+A request was made to add hosts from a hostfile, but the
+path given is not a regular file:
+
+  File: %s
+
+A directory, FIFO, device or socket cannot be read as a hostfile.
+Please check the filename and try again.
+#
+[ras-base:addhost-bad-name]
+A host in an add-hostfile is not a name a host can have:
+
+  Host: %s
+  File: %s
+
+A host's name is made of letters, digits, ".", "-" and "_", and does
+not begin with "-". It may be preceded by "user@" to name the user to
+reach the host as, which follows the same rule.
+#
 [negative-slots]
 A host was provided in an add-hostfile that is unknown
 to the DVM but was given a negative number of slots:

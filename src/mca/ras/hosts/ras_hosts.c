@@ -30,6 +30,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
+#include "src/util/textfile.h"
 #include "ras_hosts.h"
 
 /*
@@ -296,20 +297,30 @@ static bool parse_slots(const char *value, int *result)
 
 static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
 {
+    prte_textfile_t tf;
     FILE *fp;
-    char *line, *cptr, *ptr;
+    char *line, *cptr, *ptr, *ndname, *username;
     bool addslots, failed = false;
-    int slots;
+    int slots, rc;
     prte_node_t *nptr, *node;
 
     /* We don't use the hostfile parsing code in src/util because it
      * has a stricter idea of the range of allowed
-     * syntax here */
-    fp = fopen(hostfile, "r");
-    if (NULL == fp) {
+     * syntax here. The file is still opened the way that code opens
+     * one: this runs on the master's progress thread, and a bare fopen()
+     * of a FIFO with no writer would block that thread for good, so the
+     * open is non-blocking and only a regular file is read */
+    rc = prte_textfile_open(&tf, hostfile);
+    if (PRTE_ERR_BAD_PARAM == rc) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                       "ras-base:addhost-not-a-file", true, hostfile);
+        return PMIX_ERR_SILENT;
+    }
+    if (PRTE_SUCCESS != rc) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
         return PMIX_ERR_SILENT;
     }
+    fp = tf.fp;
 
     while (NULL != (line = pmix_getline(fp, &failed))) {
         // ignore comments and blank lines
@@ -360,7 +371,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         if ('\0' == *ptr) {
             // bad syntax
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            fclose(fp);
+            prte_textfile_close(&tf);
             free(line);
             return PMIX_ERR_SILENT;
         }
@@ -372,12 +383,37 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         if (!parse_slots(ptr, &slots)) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:bad-slots", true,
                            cptr, hostfile, ptr);
-            fclose(fp);
+            prte_textfile_close(&tf);
             free(line);
             return PMIX_ERR_BAD_PARAM;
         }
 
 process:
+        /* "user@host" names the user to reach the host as, as it does in
+         * a --host list, and the user is kept apart from the host's name:
+         * left in it, the name is one no daemon reports, and the launch
+         * agent reads the part before the '@' as a login. Both halves must
+         * be names a host or user can have, since the launch agent puts
+         * them on a command line */
+        ndname = cptr;
+        username = NULL;
+        if (NULL != (ptr = strchr(cptr, '@'))) {
+            *ptr = '\0';
+            username = cptr;
+            ndname = ptr + 1;
+        }
+        if (!prte_util_host_name_ok(ndname) ||
+            (NULL != username && !prte_util_host_name_ok(username))) {
+            if (NULL != username) {
+                ndname[-1] = '@';
+            }
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:addhost-bad-name", true, cptr, hostfile);
+            prte_textfile_close(&tf);
+            free(line);
+            return PMIX_ERR_SILENT;
+        }
+
         /* See if we already have this node.
          *
          * prte_node_match() is the one place that knows how a name reaches a
@@ -387,7 +423,7 @@ process:
          * out for itself and had already drifted from it - it compared
          * nptr->name with no NULL check, which is the same drift the framework
          * guide records for --display-cpus. */
-        nptr = prte_node_match(NULL, cptr);
+        nptr = prte_node_match(NULL, ndname);
         if (NULL != nptr) {
             if (addslots) {
                 adjust_slots(nptr, slots);
@@ -395,7 +431,7 @@ process:
         } else {
             // this is a new node - add it
             node = PMIX_NEW(prte_node_t);
-            node->name = strdup(cptr);
+            node->name = strdup(ndname);
             node->state = PRTE_NODE_STATE_ADDED;
             if (0 <= slots) {
                 /* they gave us the number of slots, so set it - including an
@@ -409,17 +445,23 @@ process:
                 // cannot have a new node with negative slots - the -1
                 // is a marker for a node without slots being specified
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "negative-slots", true,
-                               cptr, slots);
+                               ndname, slots);
                 PMIX_RELEASE(node);
                 free(line);
-                fclose(fp);
+                prte_textfile_close(&tf);
                 return PMIX_ERR_BAD_PARAM;
+            }
+            /* the user matters only to a host the DVM has yet to reach:
+             * one it already holds has its daemon */
+            if (NULL != username) {
+                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
+                                   username, PMIX_STRING);
             }
             pmix_list_append(nodes, &node->super);
         }
         free(line);
     }
-    fclose(fp);
+    prte_textfile_close(&tf);
     if (failed) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, hostfile);
         return PMIX_ERR_SILENT;
