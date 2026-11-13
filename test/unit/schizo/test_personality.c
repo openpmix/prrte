@@ -250,9 +250,32 @@ int test_personality(void)
           NULL != mod && 0 == strcmp(mod->name, "prte"));
 
     if (NULL != ompi_mod) {
+        const char *v;
+
+        /*** The ompi personality translates OMPI_MCA_* settings into PRRTE
+         *** and PMIx ones with setenv(), which may move environ under a
+         *** thread reading it. So the DVM master does that once at startup,
+         *** through the modules' init (prte_schizo_base_init_modules), before
+         *** the PMIx server's thread exists - and the detect_proxy() a spawn
+         *** naming this personality makes afterwards changes nothing. This
+         *** has to come before any other detect_proxy("ompi") here, which
+         *** would do the translation first ***/
+        CHECK("ompi:has-init", NULL != ompi_mod->init);
+        unsetenv("PRTE_MCA_plm_prte_unit_xlate");
+        unsetenv("PRTE_MCA_plm_prte_unit_late");
+        setenv("OMPI_MCA_plm_prte_unit_xlate", "7", 1);
+        CHECK("ompi:init-modules", PRTE_SUCCESS == prte_schizo_base_init_modules());
+        v = getenv("PRTE_MCA_plm_prte_unit_xlate");
+        CHECK("ompi:translated-at-init", NULL != v && 0 == strcmp(v, "7"));
+
+        setenv("OMPI_MCA_plm_prte_unit_late", "1", 1);
         mod = prte_schizo_base_detect_proxy("ompi");
         CHECK("detect:explicit-ompi",
               NULL != mod && 0 == strcmp(mod->name, "ompi"));
+        CHECK("ompi:not-translated-at-spawn", NULL == getenv("PRTE_MCA_plm_prte_unit_late"));
+        unsetenv("OMPI_MCA_plm_prte_unit_xlate");
+        unsetenv("OMPI_MCA_plm_prte_unit_late");
+        unsetenv("PRTE_MCA_plm_prte_unit_xlate");
     }
 
     /*** A personality nobody claims falls back to the DEFAULT one - never to

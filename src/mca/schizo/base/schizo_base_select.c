@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "src/mca/base/pmix_base.h"
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_output.h"
 
@@ -115,5 +116,22 @@ int prte_schizo_base_select(void)
     }
 
     return PRTE_SUCCESS;
-    ;
+}
+
+int prte_schizo_base_init_modules(void)
+{
+    prte_schizo_base_active_module_t *mod;
+    int rc;
+
+    PMIX_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
+        if (NULL != mod->module->init) {
+            rc = mod->module->init();
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
+            }
+        }
+    }
+    return PRTE_SUCCESS;
 }
