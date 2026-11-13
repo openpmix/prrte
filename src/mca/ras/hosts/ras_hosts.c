@@ -409,7 +409,7 @@ process:
                 // cannot have a new node with negative slots - the -1
                 // is a marker for a node without slots being specified
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "negative-slots", true,
-                               hostfile, cptr);
+                               cptr, slots);
                 PMIX_RELEASE(node);
                 free(line);
                 fclose(fp);
