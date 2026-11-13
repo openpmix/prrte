@@ -29,10 +29,14 @@
 
 #include "prte_config.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_output.h"
@@ -102,11 +106,63 @@ int prte_pmix_server_init_pubsub(void)
     return server_init_rc;
 }
 
+/* Open the file naming the data server. Whatever it names is where every
+ * publish and lookup goes, so it is read only when it is the file at that
+ * name - not a symbolic link to one, nor one of several names for it - a
+ * regular file that only its owner can write, and that owner is the user
+ * we run as or root: the test PMIx applies to a rendezvous file. The
+ * tests are made on the descriptor actually opened, and the open is
+ * non-blocking, since a FIFO would block it.
+ *
+ * Returns the stream, or NULL with *why saying which test failed (NULL
+ * when the file could not be opened at all) */
+static FILE *open_server_file(const char *filename, const char **why)
+{
+    struct stat st;
+    int fd, flags;
+    FILE *fp;
+
+    *why = NULL;
+    fd = open(filename, O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
+    if (0 > fd) {
+        /* FreeBSD reports a link refused by O_NOFOLLOW as EMLINK */
+        if (ELOOP == errno || EMLINK == errno) {
+            *why = "it is a symbolic link";
+        }
+        return NULL;
+    }
+    if (0 != fstat(fd, &st)) {
+        close(fd);
+        return NULL;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        *why = "it is not a regular file";
+    } else if (1 != st.st_nlink) {
+        *why = "it has more than one name";
+    } else if (0 != (st.st_mode & (S_IWGRP | S_IWOTH))) {
+        *why = "its group or others can write it";
+    } else if (geteuid() != st.st_uid && 0 != st.st_uid) {
+        *why = "it is owned by another user";
+    }
+    if (NULL != *why) {
+        close(fd);
+        return NULL;
+    }
+    /* a regular file never blocks, and stdio does not expect EAGAIN */
+    flags = fcntl(fd, F_GETFL);
+    if (0 > flags || 0 > fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) ||
+        NULL == (fp = fdopen(fd, "r"))) {
+        close(fd);
+        return NULL;
+    }
+    return fp;
+}
+
 static int init_server(void)
 {
     char *server;
     char *input, *second, *filename;
-    const char *key;
+    const char *key, *why;
     size_t len;
     FILE *fp;
     pmix_status_t ret;
@@ -154,7 +210,13 @@ static int init_server(void)
              * no version line. PMIx would take the server for one of an
              * early release and refuse it, so that line is passed as the
              * URI, as it always was */
-            fp = fopen(filename, "r");
+            fp = open_server_file(filename, &why);
+            if (NULL == fp && NULL != why) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt",
+                               "prun:ompi-server-file-unsound", true, prte_tool_basename,
+                               filename, why, prte_tool_basename);
+                return PRTE_ERR_BAD_PARAM;
+            }
             if (NULL == fp) { /* can't find or read file! */
                 prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prun.txt", "prun:ompi-server-filename-access", true,
                                prte_tool_basename, prte_data_server_uri);

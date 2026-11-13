@@ -3124,6 +3124,40 @@ test_runtime() {
                 && ok "...and it took only that job's data, not the whole store" \
                 || bad "the purge removed data belonging to a job that is still alive: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         fi
+        banner "runtime/data_server: the server's URI file is read only when it is sound"
+        # The file pmix_server_uri names says which server every publish
+        # and lookup goes to, so the master reads it only if it is the file
+        # at that name (not a symbolic link), has one name, cannot be
+        # written by its group or others, and is owned by root or the
+        # DVM's own user.  A DVM is pointed at each variant of the server's
+        # own file in turn; a failed attach fails every request after it,
+        # so a publish says which were read.  The 0644 copy is the control.
+        RUN 'rm -f /tmp/ds-copy.uri /tmp/ds-link.uri /tmp/ds-gw.uri /tmp/ds-hl.uri /tmp/ds-hl2.uri &&
+             cp /tmp/ds-server.uri /tmp/ds-copy.uri && chmod 0644 /tmp/ds-copy.uri &&
+             ln -s /tmp/ds-copy.uri /tmp/ds-link.uri &&
+             cp /tmp/ds-server.uri /tmp/ds-gw.uri && chmod 0664 /tmp/ds-gw.uri &&
+             cp /tmp/ds-server.uri /tmp/ds-hl.uri && chmod 0644 /tmp/ds-hl.uri &&
+             ln /tmp/ds-hl.uri /tmp/ds-hl2.uri' >/dev/null 2>&1
+        for v in copy:read link:refused gw:refused hl:refused; do
+            f=${v%%:*}; want=${v##*:}
+            if ! dvm_start_uri /tmp/ds-c.uri 'node8:2' "--prtemca pmix_server_uri file:/tmp/ds-$f.uri"; then
+                bad "could not start a DVM pointed at the $f file"
+                continue
+            fi
+            out=$(PRUN_URI /tmp/ds-c.uri "--host node8:1 -n 1 $DS publish prte.test.sound.$f v session 2" 2>&1)
+            if echo "$out" | grep -q "^PUBLISHED prte.test.sound.$f"; then
+                [ "$want" = read ] \
+                    && ok "a sound URI file ($f) is read" \
+                    || bad "a URI file that is not sound ($f) was read"
+            else
+                [ "$want" = refused ] \
+                    && ok "a URI file that is not sound ($f) is refused" \
+                    || bad "a sound URI file ($f) was not read: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            fi
+            RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/ds-c.uri" >/dev/null 2>&1
+        done
+        RUN 'rm -f /tmp/ds-copy.uri /tmp/ds-link.uri /tmp/ds-gw.uri /tmp/ds-hl.uri /tmp/ds-hl2.uri' >/dev/null 2>&1
+
         for u in /tmp/ds-b.uri /tmp/ds-a.uri /tmp/ds-server.uri; do
             RUN "timeout -k 5 30 pterm --dvm-uri file:$u" >/dev/null 2>&1
         done
