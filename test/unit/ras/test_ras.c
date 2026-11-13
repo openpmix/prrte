@@ -60,6 +60,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "constants.h"
 #include "src/class/pmix_pointer_array.h"
@@ -1065,6 +1066,141 @@ static int test_hosts_empty_hostfile(void)
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_hosts_empty_hostfile\n");
+    }
+    return failures;
+}
+
+/*
+ * ras/hosts modify(): the hostfile an allocation request names with
+ * PMIX_ADD_HOSTFILE.
+ *
+ * It is read on the master's progress thread, so it is opened the way the
+ * other hostfile readers open one - non-blocking, and only a regular file
+ * is read. A bare fopen() of a FIFO with no writer never returned, which
+ * left the progress thread blocked; the alarm turns a regression of that
+ * into a failure rather than a hang. Each host's name, and the user before
+ * an '@', must be a name a host or user can have, as on a --host list.
+ */
+static pmix_status_t hosts_add_hostfile(prte_ras_base_module_t *mod, const char *path)
+{
+    prte_pmix_server_req_t *req;
+    pmix_status_t rc;
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    req->ninfo = 1;
+    req->info = PMIx_Info_create(1);
+    PMIX_INFO_LOAD(&req->info[0], PMIX_ADD_HOSTFILE, path, PMIX_STRING);
+    rc = mod->modify(req);
+    PMIX_RELEASE(req);
+    return rc;
+}
+
+static int write_hostfile(const char *path, const char *content)
+{
+    FILE *fp = fopen(path, "w");
+
+    if (NULL == fp) {
+        return -1;
+    }
+    fputs(content, fp);
+    return fclose(fp);
+}
+
+static int test_hosts_add_hostfile(void)
+{
+    int failures = 0;
+    pmix_mca_base_component_t *comp;
+    pmix_mca_base_module_t *module = NULL;
+    prte_ras_base_module_t *mod;
+    int pri = -1;
+    char dir[] = "/tmp/prte-ras-addhf-XXXXXX";
+    char *path = NULL;
+    size_t n;
+    prte_node_t *hnp;
+    struct {
+        const char *content;
+        bool accepted;
+    } cases[] = {
+        {"prte-unit-test-hnp\n", true},
+        {"prte-unit-test-hnp slots=1\n", true},
+        {"someuser@prte-unit-test-hnp\n", true},
+        {"# a comment\n\n  prte-unit-test-hnp\n", true},
+        {"bad$name\n", false},
+        {"-oops\n", false},
+        {"\"quoted\"\n", false},
+        {"someuser@\n", false},
+        {"@prte-unit-test-hnp\n", false},
+        {"bad;user@prte-unit-test-hnp\n", false},
+        {"-l@prte-unit-test-hnp\n", false},
+        {"prte-unit-test-hnp\nok-host\nnot`ok\n", false},
+    };
+
+    comp = find_ras_component("hosts");
+    if (NULL == comp || NULL == comp->pmix_mca_query_component ||
+        PRTE_SUCCESS != comp->pmix_mca_query_component(&module, &pri) || NULL == module) {
+        fprintf(stdout, "SKIP test_hosts_add_hostfile: ras/hosts not found\n");
+        return 0;
+    }
+    mod = (prte_ras_base_module_t *) module;
+    CHECK("addhf: has a modify", NULL != mod->modify);
+    if (NULL == mod->modify || NULL == mkdtemp(dir)) {
+        return failures + 1;
+    }
+    hnp = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+
+    /* a FIFO with no writer: refused, and at once */
+    pmix_asprintf(&path, "%s/fifo", dir);
+    CHECK("addhf: mkfifo", 0 == mkfifo(path, 0600));
+    alarm(30);
+    CHECK("addhf: a FIFO is refused",
+          PMIX_OPERATION_SUCCEEDED != hosts_add_hostfile(mod, path));
+    alarm(0);
+    unlink(path);
+    free(path);
+
+    /* a directory */
+    CHECK("addhf: a directory is refused",
+          PMIX_OPERATION_SUCCEEDED != hosts_add_hostfile(mod, dir));
+
+    /* a path that is not there */
+    pmix_asprintf(&path, "%s/nosuch", dir);
+    CHECK("addhf: a missing file is refused",
+          PMIX_OPERATION_SUCCEEDED != hosts_add_hostfile(mod, path));
+    free(path);
+
+    /* the names in the file. Every accepted case names only the HNP's node,
+     * which is already in the pool, so nothing is inserted */
+    pmix_asprintf(&path, "%s/hostfile", dir);
+    for (n = 0; n < sizeof(cases) / sizeof(cases[0]); n++) {
+        char label[128];
+        pmix_status_t rc;
+
+        if (0 != write_hostfile(path, cases[n].content)) {
+            CHECK("addhf: write hostfile", false);
+            continue;
+        }
+        rc = hosts_add_hostfile(mod, path);
+        snprintf(label, sizeof(label), "addhf: %s %s", cases[n].accepted ? "accepts" : "refuses",
+                 cases[n].content);
+        if (cases[n].accepted) {
+            CHECK(label, PMIX_OPERATION_SUCCEEDED == rc);
+        } else {
+            CHECK(label, PMIX_OPERATION_SUCCEEDED != rc);
+        }
+    }
+    unlink(path);
+    free(path);
+    rmdir(dir);
+
+    /* the user named for a node the DVM already holds is not recorded on
+     * it - its daemon is already there */
+    if (NULL != hnp) {
+        CHECK("addhf: an existing node is not given a user",
+              !prte_get_attribute(&hnp->attributes, PRTE_NODE_USERNAME, NULL, PMIX_STRING));
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_hosts_add_hostfile\n");
     }
     return failures;
 }
@@ -2212,6 +2348,7 @@ int main(void)
      * nothing has called slurm's init() before this does */
     failures += test_pmix_gate();
     failures += test_hosts_empty_hostfile();
+    failures += test_hosts_add_hostfile();
     failures += test_slurm_allocation();
 
     /* PMIx last, and after the frameworks are closed: finalizing it unloads
