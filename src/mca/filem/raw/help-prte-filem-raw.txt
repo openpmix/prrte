@@ -60,3 +60,16 @@ does not contain a file it was promised. This is an internal
 inconsistency - the job should not have been launched until every daemon
 acknowledged every file - so please report it, along with the output of
 "prte_info --all", at https://github.com/openpmix/prrte/issues.
+#
+[preload-archive-refused]
+An archive requested for preloading was not unpacked, because one of
+its members would be written outside the directory it is unpacked in:
+
+   Archive: %s
+   Member:  %s
+   Node:    %s
+
+An archive is unpacked only if every member has a relative name with
+no ".." in it, and no member lies beneath another that is not a
+directory (a symbolic link, for example). Please rebuild the archive
+from within the directory whose contents it should deliver.

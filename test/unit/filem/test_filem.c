@@ -54,7 +54,9 @@
 #include "constants.h"
 #include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_printf.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/filem/base/base.h"
@@ -250,6 +252,124 @@ static int test_path_rules(void)
 }
 
 /*
+ * An archive is extracted only if its listing keeps every member below the
+ * directory it is unpacked in: no absolute name, no "..", and nothing
+ * beneath a member that is not a directory, which is how a member is
+ * written through a symbolic link the same archive made.
+ */
+static int members_ok(const char *list, const char *expect_bad)
+{
+    char **members = PMIx_Argv_split(list, ',');
+    const char *bad = NULL;
+    bool ok;
+    int failures = 0;
+
+    ok = prte_filem_base_archive_members_ok(members, &bad);
+    if (NULL == expect_bad) {
+        if (!ok) {
+            fprintf(stderr, "FAIL [archive %s]: refused at %s\n", list,
+                    (NULL == bad) ? "(null)" : bad);
+            failures++;
+        }
+    } else if (ok || NULL == bad || 0 != strcmp(bad, expect_bad)) {
+        fprintf(stderr, "FAIL [archive %s]: expected refusal at %s, got %s\n", list,
+                expect_bad, ok ? "accepted" : (NULL == bad ? "(null)" : bad));
+        failures++;
+    }
+    PMIx_Argv_free(members);
+    return failures;
+}
+
+static int test_archive_members(void)
+{
+    int failures = 0;
+    const char *bad = NULL;
+    char dir[] = "/tmp/prte-filem-ar-XXXXXX";
+    char *cmd = NULL, *line;
+    char **listed = NULL;
+    FILE *fp;
+    bool failed = false;
+
+    /* ordinary archives */
+    failures += members_ok("a,b/,b/c,b/d/,b/d/e", NULL);
+    failures += members_ok("./,./a,./b/,./b/c", NULL);
+    failures += members_ok("x-y,x/,x/y", NULL);
+    failures += members_ok("x,x-y/z,x.d/z", NULL);
+    failures += members_ok(".bashrc,..f,a..b/c", NULL);
+    CHECK("archive: no members", prte_filem_base_archive_members_ok(NULL, &bad));
+
+    /* names that leave the directory themselves */
+    failures += members_ok("a,/etc/f", "/etc/f");
+    failures += members_ok("a,../f", "../f");
+    failures += members_ok("a,b/../../f", "b/../../f");
+
+    /* a name beneath a member that is not a directory: whatever that
+     * member is - a link, say - the second is written through it */
+    failures += members_ok("link,link/f", "link/f");
+    failures += members_ok("d/,d/link,d/link/sub/f", "d/link/sub/f");
+    /* the order does not matter, nor how the names are spelled */
+    failures += members_ok("link/f,link", "link/f");
+    failures += members_ok("./link,link/f", "link/f");
+    failures += members_ok("link,.//link/./f", ".//link/./f");
+
+    /* and the listing that check is made on is the one tar really gives:
+     * an archive holding a symbolic link and a file beneath it is refused,
+     * an ordinary one is not. Skipped where there is no tar to ask */
+    if (NULL == mkdtemp(dir)) {
+        CHECK("archive: mkdtemp", false);
+        return failures;
+    }
+    pmix_asprintf(&cmd,
+                  "cd %s && mkdir -p tree/sub && echo x > tree/sub/f && "
+                  "tar cf ok.tar tree 2>/dev/null && "
+                  "mkdir -p bad && ln -s /nonexistent-prte-dir bad/link && "
+                  "tar cf a1.tar -C bad link 2>/dev/null && "
+                  "mkdir -p bad2/link && echo x > bad2/link/f && "
+                  "tar cf a2.tar -C bad2 link/f 2>/dev/null", dir);
+    if (0 != system(cmd)) {
+        fprintf(stdout, "SKIP test_archive_members (tar): could not build archives\n");
+    } else {
+        free(cmd);
+        /* the ordinary archive */
+        pmix_asprintf(&cmd, "tar tf %s/ok.tar", dir);
+        fp = popen(cmd, "r");
+        while (NULL != fp && NULL != (line = pmix_getline(fp, &failed))) {
+            PMIx_Argv_append_nosize(&listed, line);
+            free(line);
+        }
+        CHECK("archive: tar lists the ordinary archive", NULL != fp && 0 == pclose(fp));
+        CHECK("archive: ... and it is accepted",
+              prte_filem_base_archive_members_ok(listed, &bad));
+        PMIx_Argv_free(listed);
+        listed = NULL;
+        free(cmd);
+        /* the link, then a file beneath it: two archives' listings joined,
+         * as one archive holding both would list them */
+        pmix_asprintf(&cmd, "tar tf %s/a1.tar; tar tf %s/a2.tar", dir, dir);
+        fp = popen(cmd, "r");
+        while (NULL != fp && NULL != (line = pmix_getline(fp, &failed))) {
+            PMIx_Argv_append_nosize(&listed, line);
+            free(line);
+        }
+        CHECK("archive: tar lists the link archive", NULL != fp && 0 == pclose(fp));
+        CHECK("archive: a link then a file beneath it is refused",
+              !prte_filem_base_archive_members_ok(listed, &bad));
+        PMIx_Argv_free(listed);
+    }
+    free(cmd);
+    pmix_asprintf(&cmd, "rm -rf %s", dir);
+    if (0 != system(cmd)) {
+        fprintf(stderr, "note: could not remove %s\n", dir);
+    }
+    free(cmd);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_archive_members\n");
+    }
+    return failures;
+}
+
+/*
  * The directory a placed file goes into is reached one component at a time,
  * never through a symlink, and only through directories that are ours or
  * our group's.
@@ -431,6 +551,7 @@ int main(void)
     failures += test_classes();
     failures += test_none_module();
     failures += test_path_rules();
+    failures += test_archive_members();
     failures += test_open_dir_under();
     failures += test_open_temp();
 
