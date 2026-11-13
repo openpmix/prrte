@@ -356,9 +356,11 @@ Runs on the progress thread; consumes `incoming->outputs`:
   finalizes by `type`:
   - `FILE`/`EXE`: register the file's own relative path as the single link
     point, then `send_complete(file, PRTE_SUCCESS)`.
-  - `TAR`/`BZIP`/`GZIP`: `chdir` to `top_session_dir`, run
-    `tar xf`/`tar xjf`/`tar xzf` on the archive's **full path** via
-    `system()`, `chdir` back, then call `link_archive` and ack.
+  - `TAR`/`BZIP`/`GZIP`: list the archive (`list_archive`), refuse it
+    unless `prte_filem_base_archive_members_ok()` accepts the listing,
+    `chdir` to `top_session_dir`, run `tar xf`/`tar xjf`/`tar xzf` on the
+    archive's **full path** via `system()`, `chdir` back, then take the
+    link points from the same listing (`link_archive`) and ack.
 
 **Link points are always relative to `top_session_dir`**, which is why the
 archive is unpacked *there* rather than beside itself: an archive staged as
@@ -369,15 +371,25 @@ directory component — `tar` was run from a directory the relative name no
 longer resolved in, and the link points then pointed at a tree that was one
 level up from where the files actually were.)
 
-### `link_archive` — enumerate archive contents
+### `list_archive` / `link_archive` — the listing, taken before extraction
 
-Runs `tar tf <fullpath>` via `popen`, reads each path, skips directories,
-`.deps` trees, and any member that is absolute or steps up through `..`
-(tar refuses to extract those, so there is nothing there to place), and
-appends every remaining file path to `inbnd->link_pts`. Because different
-apps may share a directory tree but need different files, each individual
-file becomes its own link point. A non-zero `pclose` status means the
-listing failed, which is reported rather than acked as a delivery.
+`list_archive` runs `tar tf <fullpath>` via `popen` and returns every
+member as listed; a non-zero `pclose` status means the listing failed, and
+the archive is then not extracted at all. **The archive is listed before it
+is unpacked, and refused outright** (help topic `preload-archive-refused`)
+if any member has an absolute name, a `..` component, or lies beneath a
+member that is not a directory - the shape of a member written through a
+symbolic link the same archive made. Whether the system's `tar` keeps
+every member inside the directory is otherwise up to that `tar`, which is
+why this does not rely on it. The test is
+`prte_filem_base_archive_members_ok()` in filem base; it needs only the
+trailing `/` tar gives a directory, so it holds for any `tar`, and it
+compares names with empty and `.` components removed.
+
+`link_archive` then walks the same listing, skips directories and `.deps`
+trees, and appends every remaining file path to `inbnd->link_pts`. Because
+different apps may share a directory tree but need different files, each
+individual file becomes its own link point.
 
 **Both archive commands go through a shell** (`system` for the extract,
 `popen` for the listing), so the path is passed through

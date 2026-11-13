@@ -3124,6 +3124,7 @@ test_runtime() {
                 && ok "...and it took only that job's data, not the whole store" \
                 || bad "the purge removed data belonging to a job that is still alive: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         fi
+
         banner "runtime/data_server: the server's URI file is read only when it is sound"
         # The file pmix_server_uri names says which server every publish
         # and lookup goes to, so the master reads it only if it is the file
@@ -9688,6 +9689,50 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$c" = 0 ] && ok "no daemons linger after the archive preload" || bad "$c stray prted after archive preload"
     for n in 1 2 3; do
         EXEC_SH "$n" 'rm -rf /root/pfarc /root/inner "/root/my run.v2.tar.gz"' >/dev/null 2>&1
+    done
+
+    fi   # FS_SHARED
+    _fl="filem: --preload-files refuses an archive that writes through a link"
+    if [ "$FS_SHARED" != 0 ]; then skp "${_fl}: $WORKDIR is shared, so staging cannot be proved"; else
+    banner "filem: --preload-files refuses an archive that writes through a link"
+    # An archive is unpacked by the system's tar, and whether that tar keeps
+    # every member inside the directory is up to it. So the daemon lists the
+    # archive first and refuses it outright if any member would leave: an
+    # absolute name, a "..", or - built here - a member beneath one that is
+    # not a directory. The archive holds a symbolic link "out" to a
+    # directory that exists on the receiving nodes, then "out/x.txt"; a tar
+    # that follows the link would put x.txt in that directory.
+    EXEC_SH 1 'rm -rf /root/pfsym /root/pfsym.tar && mkdir -p /root/pfsym/a /root/pfsym/b/out \
+        && ln -s /root/pfsym-target /root/pfsym/a/out \
+        && echo THROUGH-THE-LINK > /root/pfsym/b/out/x.txt \
+        && tar cf /root/pfsym.tar -C /root/pfsym/a out \
+        && tar rf /root/pfsym.tar -C /root/pfsym/b out/x.txt' >/dev/null 2>&1
+    for n in 2 3; do
+        EXEC_SH "$n" 'rm -rf /root/pfsym-target /root/pfsym.tar && mkdir -p /root/pfsym-target' >/dev/null 2>&1
+    done
+    if RUN 'tar tf /root/pfsym.tar | grep -qx out/x.txt'; then
+        out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                     --preload-files /root/pfsym.tar -- hostname' 2>&1); rc=$?
+        [ "$rc" != 0 ] \
+            && ok "an archive with a member beneath a link was refused" \
+            || bad "an archive with a member beneath a link was accepted (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'out/x.txt' \
+            && ok "the refusal named the member" \
+            || bad "the refusal did not name the member: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        through=0
+        for n in 2 3; do
+            EXEC_SH "$n" 'test -e /root/pfsym-target/x.txt' >/dev/null 2>&1 && through=1
+        done
+        [ "$through" = 0 ] \
+            && ok "nothing was written through the link" \
+            || bad "a member was written through the link on a receiving node"
+    else
+        bad "could not build the link archive on node1"
+    fi
+    c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the refused archive" || bad "$c stray prted after refused archive"
+    for n in 1 2 3; do
+        EXEC_SH "$n" 'rm -rf /root/pfsym /root/pfsym.tar /root/pfsym-target' >/dev/null 2>&1
     done
 
     fi   # FS_SHARED

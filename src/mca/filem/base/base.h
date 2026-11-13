@@ -88,6 +88,16 @@ PRTE_EXPORT bool prte_filem_base_has_dotdot(const char *path);
  */
 PRTE_EXPORT char *prte_filem_base_shell_quote(const char *path);
 
+/* Whether an archive may be extracted, judged from its member names as
+ * "tar tf" lists them (a directory with a trailing '/'). Extraction stays
+ * below the directory it runs in only if no member is absolute, none has
+ * a ".." component, and none lies beneath a member that is not a
+ * directory - which is how a member is written through a symbolic link
+ * the same archive made. Returns true if the archive may be extracted;
+ * otherwise false, with *bad pointing at the first member refused.
+ */
+PRTE_EXPORT bool prte_filem_base_archive_members_ok(char **members, const char **bad);
+
 /* Open the directory `tail` names beneath `root`, creating what is missing,
  * and return a descriptor on it for the caller to close; or -1 with errno
  * set.
