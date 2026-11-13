@@ -111,8 +111,16 @@ is the canonical example of why the parity rule below matters.
 This is the defining feature of the ompi personality and has no
 counterpart in prte.
 
-- **`translate_params()`** (invoked from `detect_proxy` when ompi is
-  chosen) walks, in reverse-precedence order so earlier sources win:
+- **`translate_params()`** runs once per process. On the DVM master it
+  runs at startup, from the module's `init` (which
+  `prte_schizo_base_init_modules()` calls in `prte_init()` before
+  `prte_ess.init()` starts the PMIx server), whether or not any job will
+  ask for this personality. It `setenv`s, and `setenv` may move `environ`
+  while another thread reads it; once the PMIx server's thread is
+  running, that is a race, which is what doing it at the first spawn
+  naming ompi used to be. Elsewhere (a tool) `detect_proxy` still runs it
+  when ompi is chosen, and on the master that call finds it done. It
+  walks, in reverse-precedence order so earlier sources win:
   1. `OMPI_MCA_*` environment variables;
   2. `~/.openmpi/mca-params.conf`;
   3. `$OMPIHOME/etc/openmpi-mca-params.conf`.

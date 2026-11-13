@@ -43,6 +43,12 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_schizo_base_framework;
 /* select all components */
 PRTE_EXPORT int prte_schizo_base_select(void);
 
+/* Run each active module's one-time init. The DVM master calls this from
+ * prte_init(), before the PMIx server starts, so anything a module must do
+ * to the process as a whole - setting environment variables, say - is done
+ * while no other thread can be reading it */
+PRTE_EXPORT int prte_schizo_base_init_modules(void);
+
 /**
  * Struct to hold data global to the schizo framework
  */
