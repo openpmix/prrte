@@ -211,16 +211,11 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
     return slots;
 }
 
-/* Add the nodes named by a -host/--host specification to an allocation
- * being built. Every caller is doing exactly that - selecting nodes for a
- * job from an allocation that already exists goes through
- * prte_util_filter_dash_host_nodes instead.
- */
 /* Is this a name a host, or the user to reach it as, may have? Letters,
  * digits, '.', '-' and '_', not starting with '-'. Anything else - a quote,
  * a '$', a space - is no name, and the launcher puts these on a command
  * line. */
-static bool dash_host_name_ok(const char *s)
+bool prte_util_host_name_ok(const char *s)
 {
     if (NULL == s || '\0' == *s || '-' == *s) {
         return false;
@@ -233,6 +228,11 @@ static bool dash_host_name_ok(const char *s)
     return true;
 }
 
+/* Add the nodes named by a -host/--host specification to an allocation
+ * being built. Every caller is doing exactly that - selecting nodes for a
+ * job from an allocation that already exists goes through
+ * prte_util_filter_dash_host_nodes instead.
+ */
 int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
 {
     pmix_list_item_t *item;
@@ -368,7 +368,8 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
             username = mini_map[i];
             ndname = cptr + 1;
         }
-        if (!dash_host_name_ok(ndname) || (NULL != username && !dash_host_name_ok(username))) {
+        if (!prte_util_host_name_ok(ndname) ||
+            (NULL != username && !prte_util_host_name_ok(username))) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt",
                            "dash-host:invalid-name", true, entry);
             free(entry);

@@ -41,6 +41,12 @@ PRTE_EXPORT int prte_util_get_ordered_dash_host_list(pmix_list_t *nodes, char *h
 
 PRTE_EXPORT int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts);
 
+/* Whether a host's name, or the name of the user to reach it as, is one a
+ * host or a user may have: letters, digits, '.', '-' and '_', and not
+ * beginning with '-'. Every list of hosts a request can carry is checked
+ * against it, since the launch agent puts these names on a command line. */
+PRTE_EXPORT bool prte_util_host_name_ok(const char *s);
+
 END_C_DECLS
 
 #endif

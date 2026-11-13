@@ -79,6 +79,13 @@ when it is selected and its scheduler is out of touch.) It serves:
   because it must accept `slots=+N`/`-N` adjustment syntax). Matches
   existing pool nodes by name/alias and adjusts slots, or appends new
   `PRTE_NODE_STATE_ADDED` nodes. Rejects a new node given negative slots.
+  The file is opened with `prte_textfile_open()` (non-blocking, regular
+  files only, decided on the descriptor) because this runs on the
+  master's progress thread, where a bare `fopen()` of a FIFO never
+  returned. Each name must pass `prte_util_host_name_ok()` - the `--host`
+  rule - and `user@host` is split as `--host` splits it: the node is
+  `host`, and the user becomes `PRTE_NODE_USERNAME` on a node the DVM does
+  not yet hold.
 - `PMIX_ADD_HOST` — comma-list of hosts via
   `prte_util_add_dash_host_nodes`.
 - It also claims `PMIX_ALLOC_NEW`/`EXTEND`/`RELEASE` so the base's
