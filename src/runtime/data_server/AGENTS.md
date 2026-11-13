@@ -100,6 +100,15 @@ server (`init_server()` in `../../prted/pmix/pmix_server_pub.c`) and reissues
 the operation as an ordinary `PMIx_Publish`/`Lookup`/`Unpublish`, which the
 remote DVM's own upcalls deliver to its data server.
 
+When `prte_data_server_uri` is `file:<path>`, that file decides where every
+publish and lookup goes, so `init_server()` reads it only if the descriptor
+it opened (`O_NOFOLLOW`, non-blocking) is a regular file with one link that
+neither group nor others can write, owned by the DVM's user or root - the
+test PMIx applies to a rendezvous file it is given, made in PRRTE because
+PMIx v7.0 does not export its own. A server's `--report-uri` file passes:
+PMIx writes it 0644. Anything else fails the attach, with
+`prun:ompi-server-file-unsound` naming the test it failed.
+
 Three things follow, and each is load-bearing:
 
 - **Only the master attaches.** Every other daemon relays to it over the RML
