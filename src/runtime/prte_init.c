@@ -561,6 +561,18 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         goto error;
     }
 
+    /* The master runs each personality's one-time setup here, before
+     * prte_ess.init() starts the PMIx server: the ompi personality sets
+     * environment variables, which is safe only while no PMIx thread can
+     * be reading the environment. Done at the first spawn that asks for
+     * it, as it used to be, it raced with that thread */
+    if (PRTE_PROC_IS_MASTER) {
+        if (PRTE_SUCCESS != (ret = prte_schizo_base_init_modules())) {
+            error = "prte_schizo_base_init_modules";
+            goto error;
+        }
+    }
+
     /* open the ESS and select the correct module for this environment */
     ret = pmix_mca_base_framework_open(&prte_ess_base_framework,
                                        PMIX_MCA_BASE_OPEN_DEFAULT);

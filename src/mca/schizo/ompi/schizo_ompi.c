@@ -68,6 +68,7 @@
 #include "schizo_ompi.h"
 #include "src/mca/schizo/base/base.h"
 
+static int schizo_ompi_init(void);
 static int parse_cli(char **argv, pmix_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
 static int parse_env(char **srcenv, char ***dstenv, pmix_cli_result_t *cli);
@@ -81,6 +82,7 @@ static int set_default_rto(prte_job_t *jdata,
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
     .name = "ompi",
+    .init = schizo_ompi_init,
     .parse_cli = parse_cli,
     .parse_env = parse_env,
     .setup_fork = prte_schizo_base_setup_fork,
@@ -1918,7 +1920,13 @@ static int translate_params(void)
      * progress thread for every incoming spawn request, while the
      * PMIx library's pmdl/ompi component parses these same files on
      * the PMIx progress thread, and pmix_mca_base_parse_paramfile
-     * passes its target list through unprotected static storage */
+     * passes its target list through unprotected static storage.
+     *
+     * The scan also setenv()s, and setenv() may move environ while the
+     * PMIx progress thread is reading it. So the DVM master does it at
+     * startup, from schizo_ompi_init(), before the PMIx server - and its
+     * thread - exists; a spawn asking for this personality then finds it
+     * already done */
     if (translated) {
         return 100;
     }
@@ -2055,6 +2063,16 @@ static int translate_params(void)
     }
 
     return 100;
+}
+
+/* The DVM master's one-time setup (see prte_schizo_base_init_modules):
+ * translate the Open MPI parameters now, whether or not any job will ask
+ * for this personality, so that nothing writes our environment once the
+ * PMIx server's thread is running */
+static int schizo_ompi_init(void)
+{
+    (void) translate_params();
+    return PRTE_SUCCESS;
 }
 
 static int detect_proxy(char *personalities)
