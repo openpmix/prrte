@@ -1570,23 +1570,24 @@ static void send_complete(char *file, int status)
     }
 }
 
-/* This is a little tricky as the name of the archive doesn't
- * necessarily have anything to do with the paths inside it -
- * so we have to first query the archive to retrieve that info
+/* List an archive's members as "tar tf" prints them, a directory with a
+ * trailing '/'. The listing is taken before the archive is extracted -
+ * extraction is refused unless every member stays below the directory it
+ * is unpacked in - and then supplies the link points as well.
  */
-static int link_archive(prte_filem_raw_incoming_t *inbnd)
+static int list_archive(const char *fullpath, char ***members)
 {
     FILE *fp;
     char *cmd, *quoted;
-    size_t len;
     char *path;
     bool failed = false;
 
+    *members = NULL;
     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                         "%s filem:raw: identifying links for archive %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->fullpath));
+                         "%s filem:raw: listing archive %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fullpath));
 
-    quoted = prte_filem_base_shell_quote(inbnd->fullpath);
+    quoted = prte_filem_base_shell_quote(fullpath);
     if (NULL == quoted) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -1599,63 +1600,63 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
         PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
-    /* because app_contexts might share part or all of a
-     * directory tree, but link to different files, we
-     * have to link to each individual file
-     */
     /* each member on a line of its own, however long */
     while (NULL != (path = pmix_getline(fp, &failed))) {
-        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                             "%s filem:raw: path %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-        len = strlen(path);
-        /* protect against an empty result - a bare newline would otherwise
-         * send the directory test reading in front of the buffer
-         */
-        if (0 == len) {
-            free(path);
-            continue;
+        /* a bare newline names no member */
+        if ('\0' != path[0]) {
+            PMIx_Argv_append_nosize(members, path);
         }
-        /* ignore directories */
-        if ('/' == path[len - 1]) {
-            PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                                 "%s filem:raw: path %s is a directory - ignoring it",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-            free(path);
-            continue;
-        }
-        /* an archive member that steps above the directory it is unpacked
-         * in is not ours to place - tar itself refuses to extract one, so
-         * there is nothing there to link to anyway
-         */
-        if (prte_filem_base_has_dotdot(path) || '/' == path[0]) {
-            PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                                 "%s filem:raw: path %s is not relative - ignoring it",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-            free(path);
-            continue;
-        }
-        /* ignore specific useless directory trees */
-        if (NULL != strstr(path, ".deps")) {
-            PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                                 "%s filem:raw: path %s includes .deps - ignoring it",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-            free(path);
-            continue;
-        }
-        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                             "%s filem:raw: adding path %s to link points",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-        PMIx_Argv_append_nosize(&inbnd->link_pts, path);
         free(path);
     }
-    /* a listing that failed leaves us with no link points and nothing to
-     * place - say so rather than acking a delivery that did not happen
+    /* a listing that failed tells us nothing about what extracting the
+     * archive would write, so it is not extracted
      */
     if (0 != pclose(fp) || failed) {
+        PMIx_Argv_free(*members);
+        *members = NULL;
         PRTE_ERROR_LOG(PRTE_ERR_FILE_READ_FAILURE);
         return PRTE_ERR_FILE_READ_FAILURE;
     }
     return PRTE_SUCCESS;
+}
+
+/* This is a little tricky as the name of the archive doesn't
+ * necessarily have anything to do with the paths inside it -
+ * so the link points come from the archive's listing
+ */
+static void link_archive(prte_filem_raw_incoming_t *inbnd, char **members)
+{
+    size_t len;
+    int n;
+
+    /* because app_contexts might share part or all of a
+     * directory tree, but link to different files, we
+     * have to link to each individual file
+     */
+    for (n = 0; NULL != members && NULL != members[n]; n++) {
+        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                             "%s filem:raw: path %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             members[n]));
+        len = strlen(members[n]);
+        /* ignore directories */
+        if ('/' == members[n][len - 1]) {
+            PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                                 "%s filem:raw: path %s is a directory - ignoring it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), members[n]));
+            continue;
+        }
+        /* ignore specific useless directory trees */
+        if (NULL != strstr(members[n], ".deps")) {
+            PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                                 "%s filem:raw: path %s includes .deps - ignoring it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), members[n]));
+            continue;
+        }
+        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                             "%s filem:raw: adding path %s to link points",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), members[n]));
+        PMIx_Argv_append_nosize(&inbnd->link_pts, members[n]);
+    }
 }
 
 static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -1853,9 +1854,9 @@ static void write_handler(int fd, short event, void *cbdata)
     pmix_list_item_t *item;
     prte_filem_raw_output_t *output;
     int num_written;
-    char *dirname, *cmd, *quoted;
+    char *dirname, *cmd, *quoted, **members;
+    const char *bad;
     char homedir[PRTE_PATH_MAX];
-    int rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PMIX_ACQUIRE_OBJECT(sink);
@@ -1896,10 +1897,27 @@ static void write_handler(int fd, short event, void *cbdata)
                  * paths the archive names them by, not under "sub/". The
                  * archive is therefore named by its full path, since we are
                  * about to chdir away from it.
+                 *
+                 * The archive is listed first, and is not extracted at all
+                 * if any member would land outside that directory: whether
+                 * the system's tar refuses such a member is up to that tar.
                  */
+                if (PRTE_SUCCESS != list_archive(sink->fullpath, &members)) {
+                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    return;
+                }
+                if (!prte_filem_base_archive_members_ok(members, &bad)) {
+                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-filem-raw.txt",
+                                   "preload-archive-refused", true, sink->file, bad,
+                                   prte_process_info.nodename);
+                    PMIx_Argv_free(members);
+                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    return;
+                }
                 quoted = prte_filem_base_shell_quote(sink->fullpath);
                 if (NULL == quoted) {
                     PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    PMIx_Argv_free(members);
                     send_complete(sink->file, PRTE_ERR_OUT_OF_RESOURCE);
                     return;
                 }
@@ -1913,6 +1931,7 @@ static void write_handler(int fd, short event, void *cbdata)
                     PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
                     free(quoted);
+                    PMIx_Argv_free(members);
                     return;
                 }
                 free(quoted);
@@ -1920,6 +1939,7 @@ static void write_handler(int fd, short event, void *cbdata)
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
                     free(cmd);
+                    PMIx_Argv_free(members);
                     return;
                 }
                 dirname = strdup(prte_process_info.top_session_dir);
@@ -1928,6 +1948,7 @@ static void write_handler(int fd, short event, void *cbdata)
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
                     free(cmd);
                     free(dirname);
+                    PMIx_Argv_free(members);
                     return;
                 }
                 PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -1944,6 +1965,7 @@ static void write_handler(int fd, short event, void *cbdata)
                     }
                     free(cmd);
                     free(dirname);
+                    PMIx_Argv_free(members);
                     return;
                 }
                 if (0 != chdir(homedir)) {
@@ -1951,17 +1973,15 @@ static void write_handler(int fd, short event, void *cbdata)
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
                     free(cmd);
                     free(dirname);
+                    PMIx_Argv_free(members);
                     return;
                 }
                 free(dirname);
                 free(cmd);
                 /* setup the link points */
-                if (PRTE_SUCCESS != (rc = link_archive(sink))) {
-                    PRTE_ERROR_LOG(rc);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
-                } else {
-                    send_complete(sink->file, PRTE_SUCCESS);
-                }
+                link_archive(sink, members);
+                PMIx_Argv_free(members);
+                send_complete(sink->file, PRTE_SUCCESS);
             }
             return;
         }

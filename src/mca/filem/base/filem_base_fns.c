@@ -219,6 +219,124 @@ bool prte_filem_base_has_dotdot(const char *path)
 }
 
 
+/* A member's name with its empty and "." components removed, so that
+ * "./a//b/" and "a/b" compare equal. Returns newly allocated storage */
+static char *archive_member_canon(const char *name)
+{
+    char *out, *o;
+    const char *p, *end;
+    size_t len;
+
+    out = malloc(strlen(name) + 1);
+    if (NULL == out) {
+        return NULL;
+    }
+    o = out;
+    for (p = name; '\0' != *p; p = end) {
+        while ('/' == *p) {
+            ++p;
+        }
+        end = strchr(p, '/');
+        if (NULL == end) {
+            end = p + strlen(p);
+        }
+        len = (size_t) (end - p);
+        if (0 == len || (1 == len && '.' == p[0])) {
+            continue;
+        }
+        if (o != out) {
+            *o++ = '/';
+        }
+        memcpy(o, p, len);
+        o += len;
+    }
+    *o = '\0';
+    return out;
+}
+
+static int archive_strcmp(const void *a, const void *b)
+{
+    return strcmp(*(char *const *) a, *(char *const *) b);
+}
+
+/* An archive is extracted by the system's tar, and whether that tar keeps
+ * every member below the directory it extracts into is up to it. So the
+ * archive is judged from its listing first, and refused if any member
+ * would leave that directory: an absolute name, a ".." component, or a
+ * name beneath a member that is not a directory. tar writes such a member
+ * through whatever the earlier one is - and if that is a symbolic link,
+ * it can point anywhere. A directory is listed with a trailing '/'; that
+ * is the only thing told about a member's type, and all that is needed */
+bool prte_filem_base_archive_members_ok(char **members, const char **bad)
+{
+    char **files = NULL, **canon = NULL, *c, *slash, *key;
+    size_t n, nmembers = 0, nfiles = 0, len;
+    bool ok = true;
+
+    *bad = NULL;
+    if (NULL == members) {
+        return true;
+    }
+    for (n = 0; NULL != members[n]; n++) {
+        if ('/' == members[n][0] || prte_filem_base_has_dotdot(members[n])) {
+            *bad = members[n];
+            return false;
+        }
+    }
+    nmembers = n;
+    if (0 == nmembers) {
+        return true;
+    }
+
+    /* the members that are not directories, by canonical name, sorted so
+     * each parent of every member can be looked up among them */
+    canon = calloc(nmembers, sizeof(char *));
+    files = calloc(nmembers, sizeof(char *));
+    if (NULL == canon || NULL == files) {
+        free(canon);
+        free(files);
+        *bad = members[0];
+        return false;
+    }
+    for (n = 0; n < nmembers; n++) {
+        canon[n] = archive_member_canon(members[n]);
+        if (NULL == canon[n]) {
+            *bad = members[n];
+            ok = false;
+            goto done;
+        }
+        len = strlen(members[n]);
+        if (0 < len && '/' != members[n][len - 1] && '\0' != canon[n][0]) {
+            files[nfiles++] = canon[n];
+        }
+    }
+    qsort(files, nfiles, sizeof(char *), archive_strcmp);
+
+    /* each parent is looked up as a copy: the names in files[] are these
+     * same strings, and cutting one short in place would change the array
+     * being searched */
+    for (n = 0; ok && n < nmembers; n++) {
+        c = canon[n];
+        for (slash = strchr(c, '/'); ok && NULL != slash; slash = strchr(slash + 1, '/')) {
+            key = strndup(c, (size_t) (slash - c));
+            if (NULL == key ||
+                NULL != bsearch(&key, files, nfiles, sizeof(char *), archive_strcmp)) {
+                *bad = members[n];
+                ok = false;
+            }
+            free(key);
+        }
+    }
+
+done:
+    for (n = 0; n < nmembers; n++) {
+        free(canon[n]);
+    }
+    free(canon);
+    free(files);
+    return ok;
+}
+
 /* Wrap a path for use in a shell command line. The archive commands and
  * the archive listing both go through a shell, and the path came from the
  * user's --preload-files list - a perfectly ordinary "my data.tar.gz"
