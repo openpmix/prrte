@@ -629,23 +629,28 @@ bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc
 
 bool prte_pmix_server_session_permitted_uid(prte_session_t *session, uid_t uid)
 {
-    uid_t owner;
-
     if (NULL == session) {
         return false;
     }
-    if (prte_pmix_server_privileged(uid)) {
-        return true;
-    }
     /* a session with no recorded owner - the default session among them -
      * is ours */
-    owner = (PRTE_INVALID_UID == session->owner_uid) ? prte_process_info.euid
-                                                      : session->owner_uid;
-    if (owner == uid) {
+    return prte_pmix_server_user_permitted(uid,
+                                           (PRTE_INVALID_UID == session->owner_uid)
+                                               ? prte_process_info.euid
+                                               : session->owner_uid,
+                                           session->owner_gid);
+}
+
+bool prte_pmix_server_user_permitted(uid_t uid, uid_t owner, gid_t group)
+{
+    if (PRTE_INVALID_UID == uid) {
+        return false;
+    }
+    if (prte_pmix_server_privileged(uid) || owner == uid) {
         return true;
     }
     /* or a member of the owner's group */
-    return owner_permitted(uid, owner, session->owner_gid);
+    return owner_permitted(uid, owner, group);
 }
 
 /* ------------------------------------------------------------------ */

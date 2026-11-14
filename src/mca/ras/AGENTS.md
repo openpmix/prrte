@@ -252,6 +252,19 @@ It is judged in two places, with the same rule:
   then builds names the master as its requester, since the job was judged
   already.
 
+**Taking nodes out is judged the same way.** `prte_ras_base_modify()`
+judges every `PMIX_ALLOC_RELEASE` before any module acts on it - the base's
+own release and ras/slurm's alike - unless `ras/pmix`'s scheduler is to
+decide (`ras_base_release_permitted()`). A release naming an allocation is
+for whoever `prte_pmix_server_session_permitted()` admits to it. One naming
+nodes is judged node by node: a node of a reservation by the same rule
+against that reservation, and a node of the general pool - or one we cannot
+find - by `prte_pmix_server_dvm_permitted()`, since every user's jobs run
+on the general pool. A release naming neither (ras/slurm's by-count) lets
+the DVM choose which nodes go, so it is held to
+`prte_pmix_server_dvm_permitted()` as well. A refusal shows
+`ras-base:release-not-permitted`.
+
 `user@host` in a list of hosts (`prte_util_add_dash_host_nodes()`) is split
 the way a hostfile entry is: the node is named for the host, and the user is
 kept as `PRTE_NODE_USERNAME` for the launch agent. A name with any character
