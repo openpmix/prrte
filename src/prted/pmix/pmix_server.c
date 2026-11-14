@@ -3289,8 +3289,9 @@ static void rqcon(prte_pmix_server_req_t *p)
     p->dircopy = false;
     p->local_index = -1;
     p->remote_index = -1;
-    p->uid = 0;
-    p->gid = 0;
+    /* nobody, until the PMIx server says who - not root */
+    p->uid = PRTE_INVALID_UID;
+    p->gid = PRTE_INVALID_GID;
     p->pid = 0;
     p->allocdir = 0;
     p->sessionID = UINT32_MAX;
