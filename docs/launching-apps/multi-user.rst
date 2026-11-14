@@ -39,36 +39,45 @@ that user, with that user's groups:
 
 So a DVM meant to run several users' jobs runs as root.
 
-What the DVM does not do for another user
------------------------------------------
+Files the DVM opens for a job
+-----------------------------
 
 Some directives ask the DVM itself, rather than the job's processes, to
-open a file. The DVM does that as the user it runs as, so they are
-accepted only from root and from the DVM's own user:
+open a file:
 
 * a hostfile, or a hostfile of hosts to add to the DVM;
 * a rankfile or sequential-mapping file;
-* a file for the process table (``--output-proctable``);
-* binaries or files to preload.
+* a file for the process table (``--rtos output-proctable=<file>``).
 
-A job of any other user that asks for one of them is refused, naming the
-directive. Output files a job's ``--output`` directive names are not on
-this list: they are opened as the job's own user.
+The DVM opens each of these as the job's own user, with that user's
+groups, so a job may name only files its user could open itself. A file
+it may not read is reported as one that cannot be opened, and a process
+table is created, or replaced, only where the job's user may write. An
+allocation request that names a hostfile has it read as the requester in
+the same way. Output files a job's ``--output`` directive names are
+opened as the job's own user too.
+
+Preloading binaries or files (``--preload-files``, ``--preload-binary``)
+is the exception: the DVM reads them, and its daemons write the copies on
+every node, as the user the DVM runs as. Preloading is therefore accepted
+only from root and from the DVM's own user, and a job of any other user
+that asks for it is refused, naming the directive.
 
 Who may grow the DVM
 --------------------
 
-Bringing hosts into an elastic DVM - with ``--add-host`` or
-``--activate`` on a job, or with an allocation request
-(``PMIx_Allocation_request``) that names nodes - changes what the DVM
-consists of. It is accepted from root, the DVM's own user, and the users
+Bringing hosts into an elastic DVM - with ``--add-host``,
+``--add-hostfile`` or ``--activate`` on a job, or with an allocation
+request (``PMIx_Allocation_request``) that names nodes or a hostfile -
+changes what the DVM consists of. It is accepted from root, the DVM's own user, and the users
 and groups the DVM was started with (``prte --rtos users=...,groups=...``),
 as creating a session is. When the DVM hands such requests to a PMIx
 scheduler, the scheduler decides instead.
 
 A host may be given as ``user@host`` to name the user the DVM logs in to
-it as. That is accepted only from root and the DVM's own user, and a host
-name may contain only letters, digits, ``.``, ``-`` and ``_``.
+it as, on the command line or in a hostfile of hosts to add. That is
+accepted only from root and the DVM's own user, and a host name may
+contain only letters, digits, ``.``, ``-`` and ``_``.
 
 Whom an allocation is for
 -------------------------

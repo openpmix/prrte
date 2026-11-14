@@ -149,8 +149,10 @@ PRTE_EXPORT void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots)
  * than one that succeeded. */
 PRTE_EXPORT void prte_rmaps_base_restore_resized(void);
 
-PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes,
-                                             bool remove);
+/* A hostfile app names is read as the owner of jdata, the job app belongs
+ * to - passed rather than taken from app->job, which only some paths set. */
+PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_job_t *jdata, prte_app_context_t *app,
+                                             pmix_list_t *nodes, bool remove);
 
 PRTE_EXPORT int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
                                                     prte_rmaps_options_t *options);

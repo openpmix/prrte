@@ -28,6 +28,13 @@ BEGIN_C_DECLS
  * it was (for prte_output_file_remove). NULL with errno set otherwise. */
 PRTE_EXPORT FILE *prte_output_file_open(const char *path, mode_t mode, struct stat *st);
 
+/* The same, done as user uid, group gid - the owner of the job that named
+ * path - so that it is created, checked and emptied as that user: "of our
+ * own" above means of that user's, and the kernel resolves the path with
+ * that user's permissions (prte_pmix_server_open_as). */
+PRTE_EXPORT FILE *prte_output_file_open_as(const char *path, mode_t mode, struct stat *st,
+                                           uid_t uid, gid_t gid);
+
 /* Remove path - but only if it is still the file st recorded. */
 PRTE_EXPORT void prte_output_file_remove(const char *path, const struct stat *st);
 

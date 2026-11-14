@@ -166,7 +166,7 @@ void prte_util_rankfile_clear(pmix_hash_table_t *rankmap)
     pmix_hash_table_remove_all(rankmap);
 }
 
-int prte_util_parse_rankfile(const char *rankfile, pmix_hash_table_t *rankmap,
+int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_hash_table_t *rankmap,
                              int *num_ranks)
 {
     prte_textfile_t tf;
@@ -180,7 +180,7 @@ int prte_util_parse_rankfile(const char *rankfile, pmix_hash_table_t *rankmap,
     cur_rankfile_name = rankfile;
     cur_rankfile_line = 0;
 
-    rc = prte_textfile_open(&tf, rankfile);
+    rc = prte_textfile_open(&tf, rankfile, uid, gid);
     if (PRTE_SUCCESS != rc) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "no-rankfile", true,
                        prte_tool_basename, rankfile, prte_tool_basename);

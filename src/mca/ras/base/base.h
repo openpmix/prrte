@@ -179,12 +179,16 @@ PRTE_EXPORT int prte_ras_base_release_spawn_alloc(prte_job_t *jdata,
  * specification is "--host" syntax, including the "file=<path>" form, and is
  * parsed by the same code that parses "--activate".
  *
+ * A hostfile named, directly or by a "file=" token, is read as uid/gid -
+ * whoever named it (see prte_textfile_open).
+ *
  * This resolves and marks only: activating the grow is the caller's, since
  * only the caller knows whether another request is already about to launch
  * one.  Refusals are reported through show_help and returned as
  * PRTE_ERR_SILENT. */
 PRTE_EXPORT int prte_ras_base_activate_nodes(const char *hosts,
                                              const char *hostfile,
+                                             uid_t uid, gid_t gid,
                                              int *nactivated);
 
 /* Render the node specification carried by a PMIX_ALLOC_NODE_LIST-style info

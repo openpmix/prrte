@@ -46,6 +46,7 @@
 #include "prte_config.h"
 
 #include <stdio.h>
+#include <sys/types.h>
 
 BEGIN_C_DECLS
 
@@ -61,15 +62,19 @@ typedef struct {
 } prte_textfile_t;
 
 /*
- * Open a file for reading.  Returns PRTE_SUCCESS, PRTE_ERR_NOT_FOUND if it
- * cannot be opened, or PRTE_ERR_BAD_PARAM if the path is not a regular
- * file -- which is worth telling apart, because fopen() opens a directory
- * quite happily and every read from the result then fails in a way the
- * caller has no reason to expect.  Saying nothing to the user is
+ * Open a file for reading, as user uid and group gid: the owner of the job
+ * that named it, the requester of an allocation that did, or our own user
+ * (prte_process_info.euid/egid) for the DVM's own configuration.  The open
+ * is made as that user (prte_pmix_server_open_as), so a file it could not
+ * read is not read for it.  Returns PRTE_SUCCESS, PRTE_ERR_NOT_FOUND if it
+ * cannot be opened (by that user), or PRTE_ERR_BAD_PARAM if the path is not
+ * a regular file -- which is worth telling apart, because fopen() opens a
+ * directory quite happily and every read from the result then fails in a
+ * way the caller has no reason to expect.  Saying nothing to the user is
  * deliberate: which of those two deserves which message differs between
  * the callers, so each says its own.
  */
-PRTE_EXPORT int prte_textfile_open(prte_textfile_t *tf, const char *path);
+PRTE_EXPORT int prte_textfile_open(prte_textfile_t *tf, const char *path, uid_t uid, gid_t gid);
 
 /*
  * Return the next line that has anything on it, as a NULL-terminated array

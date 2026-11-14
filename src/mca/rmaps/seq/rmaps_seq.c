@@ -42,6 +42,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
@@ -87,7 +88,7 @@ static void sn_des(seq_node_t *p)
 }
 PMIX_CLASS_INSTANCE(seq_node_t, pmix_list_item_t, sn_con, sn_des);
 
-static int process_file(char *path, pmix_list_t *list);
+static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid);
 
 /*
  * Bind a proc to the cpu list its sequence entry named.
@@ -198,6 +199,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     bool match;
     prte_binding_policy_t savebind;
     char *savecpuset;
+    uid_t fuid;
+    gid_t fgid;
 
     PMIX_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -232,11 +235,15 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
 
     /* convenience def */
     map = jdata->map;
+    /* the files the job names are read as its owner */
+    prte_pmix_server_job_user(jdata, &fuid, &fgid);
 
     /* if there is a default hostfile, go and get its ordered list of nodes */
     PMIX_CONSTRUCT(&default_seq_list, pmix_list_t);
     if (NULL != prte_default_hostfile) {
-        rc = process_file(prte_default_hostfile, &default_seq_list);
+        /* the DVM's own configuration, so read as ourselves */
+        rc = process_file(prte_default_hostfile, &default_seq_list, prte_process_info.euid,
+                          prte_process_info.egid);
         if (PRTE_SUCCESS != rc) {
             PMIX_LIST_DESTRUCT(&default_seq_list);
             return rc;
@@ -278,7 +285,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
-            rc = process_file(hosts, &sq_list);
+            rc = process_file(hosts, &sq_list, fuid, fgid);
             free(hosts);
             hosts = NULL;
             if (PRTE_SUCCESS != rc) {
@@ -331,7 +338,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
-            rc = process_file(hosts, &sq_list);
+            rc = process_file(hosts, &sq_list, fuid, fgid);
             free(hosts);
             hosts = NULL;
             if (PRTE_SUCCESS != rc) {
@@ -559,7 +566,7 @@ error:
     return PRTE_ERR_SILENT;
 }
 
-static int process_file(char *path, pmix_list_t *list)
+static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid)
 {
     prte_textfile_t tf;
     seq_node_t *sq;
@@ -582,7 +589,7 @@ static int process_file(char *path, pmix_list_t *list)
      * The reader splits on any run of whitespace rather than at the first
      * space, so a tab between the host and its cpuset now separates them
      * instead of becoming part of the hostname. */
-    if (PRTE_SUCCESS != prte_textfile_open(&tf, path)) {
+    if (PRTE_SUCCESS != prte_textfile_open(&tf, path, uid, gid)) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }

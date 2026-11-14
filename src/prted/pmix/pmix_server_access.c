@@ -32,6 +32,7 @@
 
 #include "prte_config.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_UNISTD_H
@@ -45,6 +46,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_runas.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_show_help.h"
 #    include "src/server/pmix_server_ops.h"
@@ -201,6 +203,89 @@ int prte_pmix_server_job_run_as(prte_job_t *jdata, uid_t *uid, gid_t *gid, bool 
     }
     *uid = owner;
     return PRTE_SUCCESS;
+}
+
+int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg)
+{
+    pmix_data_array_t *groups = NULL;
+    gid_t *gids = NULL;
+    size_t n, ngids = 0;
+    bool change;
+    int fd, err;
+
+    /* asked of the kernel rather than read from prte_process_info: what
+     * matters is whether this process can become uid, and the record is
+     * not made until the process is set up */
+    if (PRTE_SUCCESS != prte_pmix_server_run_as(geteuid(), uid, &change)) {
+        errno = EPERM;
+        return -1;
+    }
+    if (!change) {
+        return fn(arg);
+    }
+    if (PRTE_INVALID_GID == gid) {
+        /* guessing a group could hand the open one the user does not have */
+        errno = EPERM;
+        return -1;
+    }
+    /* looked up here, since the child may not look anything up */
+    if (PMIX_SUCCESS != prte_pmix_server_owner_groups(uid, &groups)) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (NULL != groups && 0 < groups->size) {
+        gids = (gid_t *) malloc(groups->size * sizeof(gid_t));
+        if (NULL == gids) {
+            PMIX_DATA_ARRAY_FREE(groups);
+            errno = ENOMEM;
+            return -1;
+        }
+        for (n = 0; n < groups->size; n++) {
+            gids[n] = (gid_t) ((uint32_t *) groups->array)[n];
+        }
+        ngids = groups->size;
+    }
+    if (NULL != groups) {
+        PMIX_DATA_ARRAY_FREE(groups);
+    }
+    fd = pmix_util_run_as(uid, gid, gids, ngids, true, fn, arg);
+    err = errno;
+    free(gids);
+    errno = err;
+    return fd;
+}
+
+void prte_pmix_server_job_user(prte_job_t *jdata, uid_t *uid, gid_t *gid)
+{
+    uint32_t id, *idptr = &id;
+
+    *uid = prte_process_info.euid;
+    *gid = prte_process_info.egid;
+    if (NULL == jdata) {
+        return;
+    }
+    *uid = prte_pmix_server_job_owner(jdata);
+    if (*uid == prte_process_info.euid) {
+        return;
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, (void **) &idptr,
+                           PMIX_UINT32)) {
+        *gid = (gid_t) id;
+    } else {
+        *gid = jdata->gid;
+    }
+}
+
+void prte_pmix_server_request_user(const pmix_info_t *info, size_t ninfo, uid_t *uid, gid_t *gid)
+{
+    if (!prte_pmix_server_requester_uid(info, ninfo, uid)) {
+        /* a request we made of ourselves */
+        *uid = prte_process_info.euid;
+        *gid = prte_process_info.egid;
+        return;
+    }
+    *gid = (*uid == prte_process_info.euid) ? prte_process_info.egid
+                                            : prte_pmix_server_requester_gid(info, ninfo);
 }
 
 typedef struct {
@@ -504,11 +589,12 @@ bool prte_pmix_server_dvm_permitted_uid(uid_t uid)
             pmix_server_access_check(user, (pmix_access_t *) prte_pmix_server_globals.dvm_access));
 }
 
-bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool files, bool user)
+bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool user)
 {
-    /* a file the master reads, or a login it uses, is done as the DVM's own
-     * user - so for root and that user only */
-    if (files || user) {
+    /* a login the master uses is the DVM's own user's - so for root and that
+     * user only. A file of hosts is read as whoever named it, and asks for
+     * no more than the hosts it names */
+    if (user) {
         return prte_pmix_server_privileged(uid);
     }
     /* hosts brought into the DVM change what it consists of, and get the
@@ -517,7 +603,7 @@ bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool files, bool user)
 }
 
 bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor, const pmix_info_t *info,
-                                     size_t ninfo, bool files, bool user)
+                                     size_t ninfo, bool user)
 {
     uid_t uid;
 
@@ -533,7 +619,7 @@ bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor, const pmix_in
          * prte_pmix_server_request_permitted */
         return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
     }
-    return prte_pmix_server_grow_permitted_uid(uid, files, user);
+    return prte_pmix_server_grow_permitted_uid(uid, user);
 }
 
 void prte_pmix_server_access_release_dvm(void)

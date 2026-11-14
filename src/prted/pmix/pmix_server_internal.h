@@ -806,15 +806,16 @@ PRTE_EXPORT uid_t prte_pmix_server_job_owner(prte_job_t *jdata);
 PRTE_EXPORT bool prte_pmix_server_dvm_permitted_uid(uid_t uid);
 
 /* May a requester have the DVM bring hosts in, or start daemons on hosts
- * it holds, naming them itself? Naming hosts is for whoever may change the
- * DVM (prte_pmix_server_dvm_permitted_uid). Naming a file the master reads
- * for it (`files`), or a user to reach a host as (`user` - "user@host"), is
- * for root and our own user alone: the master does both as itself. The
- * scheduler, and a request we made of ourselves, may do all three. */
+ * it holds, naming them itself? Naming hosts - directly, or in a file of
+ * them, which is read as the requester (prte_pmix_server_open_as) - is for
+ * whoever may change the DVM (prte_pmix_server_dvm_permitted_uid). Naming a
+ * user to reach a host as (`user` - "user@host") is for root and our own
+ * user alone: the master logs in as itself. The scheduler, and a request
+ * we made of ourselves, may do both. */
 PRTE_EXPORT bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor,
                                                  const pmix_info_t *info, size_t ninfo,
-                                                 bool files, bool user);
-PRTE_EXPORT bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool files, bool user);
+                                                 bool user);
+PRTE_EXPORT bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool user);
 
 /* Who a job owned by `owner` may be started as by a process running as
  * `me`. PRTE_SUCCESS with *change false: as `me`, because it is ours or
@@ -831,6 +832,32 @@ PRTE_EXPORT int prte_pmix_server_run_as(uid_t me, uid_t owner, bool *change);
  * since PMIx refuses a client that connects as anyone else. */
 PRTE_EXPORT int prte_pmix_server_job_run_as(prte_job_t *jdata, uid_t *uid, gid_t *gid,
                                             bool *change);
+
+/* Open whatever fn(arg) opens as uid and group gid, so that the kernel -
+ * not a check of ours racing the filesystem - decides what that user may
+ * reach. For the files a job or a request names that the master reads or
+ * writes on its behalf: a hostfile, a rankfile, the proctable.
+ *
+ * Who may be acted as is prte_pmix_server_run_as's rule. When that comes
+ * out as ourselves - the file is our own user's, or root's on a DVM that
+ * is not root's - fn runs here. When we are root acting for another user
+ * it runs in a child that has become that user, with its groups
+ * (pmix_util_run_as), which passes back the descriptor fn opened.
+ *
+ * Returns that descriptor, or -1 with errno set: EPERM when we may not act
+ * as uid at all, or do not know its group. fn is held to
+ * pmix_util_run_as's rules - no lock, no stdio, no output. Progress thread
+ * only: the groups come from our records of each user. */
+PRTE_EXPORT int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg);
+
+/* Who a file jdata names is opened as: its owner and the owner's group
+ * (PRTE_INVALID_GID when that is not known). Ourselves for a NULL jdata. */
+PRTE_EXPORT void prte_pmix_server_job_user(prte_job_t *jdata, uid_t *uid, gid_t *gid);
+
+/* Who a file an up-call's info names is opened as: the requester it names
+ * (prte_pmix_server_requester_uid), or ourselves for a request we made. */
+PRTE_EXPORT void prte_pmix_server_request_user(const pmix_info_t *info, size_t ninfo, uid_t *uid,
+                                               gid_t *gid);
 
 /* May uid act on jdata? PMIx's rule (pmix_server_access_check) over our
  * copy of the job's owner and access list and our record of the user. A

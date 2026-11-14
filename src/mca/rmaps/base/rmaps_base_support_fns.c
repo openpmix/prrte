@@ -45,6 +45,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/state/state.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
@@ -56,7 +57,8 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
-int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bool remove)
+int prte_rmaps_base_filter_nodes(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *nodes,
+                                 bool remove)
 {
     int rc = PRTE_ERR_TAKE_NEXT_OPTION;
     char *hosts;
@@ -68,7 +70,12 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         /* yes - filter the node list through the file, removing
          * any nodes not found in the file
          */
-        rc = prte_util_filter_hostfile_nodes(nodes, hosts, remove);
+        uid_t uid;
+        gid_t gid;
+
+        /* read as the owner of the job that named it */
+        prte_pmix_server_job_user(jdata, &uid, &gid);
+        rc = prte_util_filter_hostfile_nodes(nodes, hosts, remove, uid, gid);
         if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
             /* the hostfile was empty and filtered nothing - which is no
              * reason to skip a -host given alongside it.  Returning here
@@ -420,7 +427,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output, "%s Filtering thru apps",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    if (PRTE_SUCCESS != (rc = prte_rmaps_base_filter_nodes(app, allocated_nodes, true))
+    if (PRTE_SUCCESS != (rc = prte_rmaps_base_filter_nodes(jdata, app, allocated_nodes, true))
         && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
