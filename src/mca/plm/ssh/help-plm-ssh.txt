@@ -22,16 +22,15 @@
 # This is the US/English general help file for PRTE's prun.
 #
 [agent-unencrypted]
-The remote-launch agent cannot be used to start PRRTE daemons while
-they authenticate one another:
+The remote-launch agent cannot be used to start PRRTE daemons:
 
   node:   %s
   agent:  %s
 
 Each daemon is given the DVM's key on its standard input, which the
 agent carries to the remote node. This agent sends what it forwards
-unencrypted, so the key would cross the network as plain text, and
-anything that read it could then pass as a daemon of this DVM.
+unencrypted, so the key would cross the network as plain text.
+PRRTE therefore does not launch through rsh or remsh.
 
 Use ssh as the agent (the default; select another with the
 "plm_ssh_agent" MCA parameter), or launch through a resource manager.

@@ -359,17 +359,15 @@ int main(int argc, char *argv[])
      * plm/ssh writes it down our stdin, which detaching below replaces.
      * Without it no other daemon will talk to us, so a daemon that cannot
      * get it stops here and says why. */
-    if (prte_oob_authenticate) {
-        if (prte_bootstrap_setup) {
-            ret = prte_ess_base_bootstrap_key();
-        } else if (prte_dvm_key_stdin) {
-            ret = prte_dvm_key_from_fd(STDIN_FILENO, PRTE_DVM_KEY_STDIN_TIMEOUT);
-        } else {
-            ret = prte_dvm_key_from_env();
-        }
-        if (PRTE_SUCCESS != ret) {
-            return 1;
-        }
+    if (prte_bootstrap_setup) {
+        ret = prte_ess_base_bootstrap_key();
+    } else if (prte_dvm_key_stdin) {
+        ret = prte_dvm_key_from_fd(STDIN_FILENO, PRTE_DVM_KEY_STDIN_TIMEOUT);
+    } else {
+        ret = prte_dvm_key_from_env();
+    }
+    if (PRTE_SUCCESS != ret) {
+        return 1;
     }
     /* whatever delivered it, nothing we start may inherit it */
     prte_dvm_key_scrub_env();

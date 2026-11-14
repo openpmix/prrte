@@ -48,7 +48,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_addr_t);
 /* The length of each direction's message key: an HMAC-SHA256 output */
 #define PRTE_OOB_TCP_MSGKEY_LEN 32
 
-/* What a connection's messages are tagged under (prte_oob_authenticate_messages).
+/* What a connection's messages are tagged under.
  *
  * Installed by prte_oob_tcp_peer_recv_connect_ack once the handshake has
  * succeeded and before tcp_peer_connected publishes CONNECTED, so a worker

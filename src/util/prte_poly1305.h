@@ -10,10 +10,9 @@
 /*
  * Poly1305 (RFC 8439, section 2.5): a one-time authenticator.
  *
- * It is here for the OOB's optional per-message tags
- * (prte_oob_authenticate_messages, src/rml/oob): each message a daemon sends
- * on a connection carries a Poly1305 tag under a key used for that message
- * alone.  Poly1305 is what makes tagging every message affordable - it runs
+ * It is here for the OOB's per-message tags (src/rml/oob): each message a
+ * daemon sends on a connection carries a Poly1305 tag under a key used for
+ * that message alone.  Poly1305 is what makes tagging every message affordable - it runs
  * at several times the rate of the HMAC-SHA256 in prte_hmac.[ch], which is
  * kept to deriving the keys.
  *

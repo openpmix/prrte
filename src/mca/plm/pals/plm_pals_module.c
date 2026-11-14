@@ -648,9 +648,7 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
 
         /* the DVM key rides in the daemons' environment, the one channel
          * to them that is private to the DVM's user - unlike the command line */
-        if (prte_oob_authenticate) {
-            prte_dvm_key_setenv(&env);
-        }
+        prte_dvm_key_setenv(&env);
 
         /* get the pals process out of prun's process group so that
            signals sent from the shell (like those resulting from

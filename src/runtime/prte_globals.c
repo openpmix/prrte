@@ -136,11 +136,6 @@ PMIX_CLASS_INSTANCE(prte_grow_campaign_t, pmix_list_item_t,
  * false so that a daemon which somehow learns nothing sizes itself for the
  * job in front of it rather than for the largest case. */
 bool prte_persistent = false;
-/* Whether daemons of this DVM must prove they hold the DVM key before
- * another daemon will talk to them (src/util/prte_dvm_key.h).  On unless an
- * operator turns it off, and the HNP tells each daemon when it has been. */
-bool prte_oob_authenticate = true;
-bool prte_oob_authenticate_messages = false;
 /* A daemon's cue that plm/ssh is writing its DVM key down its stdin */
 bool prte_dvm_key_stdin = false;
 bool prte_allow_run_as_root = false;
