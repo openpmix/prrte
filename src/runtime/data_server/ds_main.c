@@ -307,7 +307,7 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
 {
     prte_job_t *jdata;
     const pmix_info_t *proc = NULL, *ruid = NULL, *rgid = NULL;
-    uint32_t claimed;
+    uint32_t relay, claimed;
     size_t n;
 
     /* The whole claim is read in one pass, and applied after the caller's
@@ -353,20 +353,38 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
     }
     /* Nor is being a tool enough to speak for another user: any user can
      * connect one.  The tool's own uid - which PMIx established, and the
-     * caller has in *uid - has to be one trusted to relay for the user it
-     * names.  Claiming its own user claims nothing it does not have.  A
-     * purge passes no uid and reads no claimed one, so only the process
-     * named is at stake there, as before. */
-    if (NULL != uid && NULL != ruid &&
-        (PMIX_SUCCESS != PMIx_Value_get_number(&ruid->value, &claimed, PMIX_UINT32) ||
-         UINT32_MAX == *uid ||
-         !prte_pmix_server_relay_permitted((uid_t) *uid, (uid_t) claimed))) {
+     * caller has in *uid - has to be one that may relay for the user it
+     * names (prte_pmix_server_relay_permitted).  Naming no user names the
+     * tool's own, which claims nothing it does not have.  A process it
+     * names of a job we hold is held to the same rule against that job's
+     * owner, so a tool cannot pass a request off as one from another
+     * user's job. */
+    relay = (NULL == uid) ? UINT32_MAX : *uid;
+    claimed = relay;
+    if (UINT32_MAX == relay ||
+        (NULL != ruid &&
+         PMIX_SUCCESS != PMIx_Value_get_number(&ruid->value, &claimed, PMIX_UINT32)) ||
+        !prte_pmix_server_relay_permitted((uid_t) relay, (uid_t) claimed)) {
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: %s may not act for another user - "
                             "ignoring its claim",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(owner));
         return;
+    }
+    if (NULL != proc && PMIX_PROC == proc->value.type && NULL != proc->value.data.proc) {
+        jdata = prte_get_job_data_object(proc->value.data.proc->nspace);
+        if (NULL != jdata &&
+            !prte_pmix_server_relay_permitted((uid_t) relay,
+                                              prte_pmix_server_job_owner(jdata))) {
+            pmix_output_verbose(1, prte_data_store.output,
+                                "%s data server: %s may not act for %s - "
+                                "ignoring its claim",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(owner),
+                                PMIX_NAME_PRINT(proc->value.data.proc));
+            return;
+        }
     }
 
     if (NULL != proc && PMIX_PROC == proc->value.type && NULL != proc->value.data.proc) {
@@ -377,10 +395,8 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
                             PMIX_NAME_PRINT(proc->value.data.proc));
         PMIX_XFER_PROCID(owner, proc->value.data.proc);
     }
-    /* A purge asks about the process alone and passes no place to put
-     * these, so a claim it does not need is simply not read. */
-    if (NULL != uid && NULL != ruid && PMIX_UINT32 == ruid->value.type) {
-        *uid = ruid->value.data.uint32;
+    if (NULL != uid) {
+        *uid = claimed;
     }
     if (NULL != gid && NULL != rgid && PMIX_UINT32 == rgid->value.type) {
         *gid = rgid->value.data.uint32;

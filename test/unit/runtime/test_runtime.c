@@ -1747,6 +1747,8 @@ static void ds_purge_msg(const char *nspace, pmix_rank_t rank,
     PMIX_DATA_BUFFER_DESTRUCT(&buf);
 }
 
+static bool ds_stored(prte_data_object_t *data, int index);
+
 static int test_data_server_purge_parked(void)
 {
     int failures = 0;
@@ -1808,6 +1810,60 @@ static int test_data_server_purge_parked(void)
     ds_purge_msg("purge.job2", 0, info, 1);
     PMIX_INFO_DESTRUCT(&info[0]);
     CHECK("purge: an int-typed PROC horizon drops the parked lookup", !ds_parked(c));
+
+    /* A purge a user asks for - PMIx_Unpublish naming no keys - takes only
+     * what that user owns, however the process it names is spelled: the
+     * PMIx server names the requester's user on every request, and that is
+     * the user the purge is held to.  Its own parked lookups go with it,
+     * nobody else's. */
+    {
+        prte_data_object_t *mine, *theirs;
+        prte_data_req_t *pm, *pt;
+        int imine, itheirs;
+        uint32_t me = 501, them = 502, grp = 20;
+
+        mine = ds_store_item("prte.test.purge.mine", "v", me, PMIX_PERSIST_NSPACE);
+        PMIX_LOAD_PROCID(&mine->owner, "purge.shared", 0);
+        theirs = ds_store_item("prte.test.purge.theirs", "v", them, PMIX_PERSIST_NSPACE);
+        PMIX_LOAD_PROCID(&theirs->owner, "purge.shared", 0);
+        imine = mine->index;
+        itheirs = theirs->index;
+        pm = ds_park("purge.shared", 0);
+        pm->uid = me;
+        pt = ds_park("purge.shared", 0);
+        pt->uid = them;
+
+        persist = PMIX_PERSIST_NSPACE;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &me, PMIX_UINT32);
+        PMIX_INFO_LOAD(&info[1], PMIX_GRPID, &grp, PMIX_UINT32);
+        {
+            pmix_info_t uinfo[3];
+
+            PMIX_INFO_XFER(&uinfo[0], &info[0]);
+            PMIX_INFO_XFER(&uinfo[1], &info[1]);
+            PMIX_INFO_LOAD(&uinfo[2], PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
+            ds_purge_msg("purge.shared", PMIX_RANK_WILDCARD, uinfo, 3);
+            PMIX_INFO_DESTRUCT(&uinfo[0]);
+            PMIX_INFO_DESTRUCT(&uinfo[1]);
+            PMIX_INFO_DESTRUCT(&uinfo[2]);
+        }
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_INFO_DESTRUCT(&info[1]);
+        CHECK("purge: a user's purge takes its own item", !ds_stored(mine, imine));
+        CHECK("purge: ...and leaves another user's", ds_stored(theirs, itheirs));
+        CHECK("purge: a user's purge drops its own parked lookup", !ds_parked(pm));
+        CHECK("purge: ...and leaves another user's", ds_parked(pt));
+
+        /* the DVM's own user may take what any user published */
+        me = (uint32_t) prte_process_info.euid;
+        PMIX_INFO_LOAD(&info[0], PMIX_USERID, &me, PMIX_UINT32);
+        PMIX_INFO_LOAD(&info[1], PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
+        ds_purge_msg("purge.shared", PMIX_RANK_WILDCARD, info, 2);
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_INFO_DESTRUCT(&info[1]);
+        CHECK("purge: the DVM's own user takes another user's item", !ds_stored(theirs, itheirs));
+        CHECK("purge: ...and its parked lookup", !ds_parked(pt));
+    }
 
     ds_store_close();
     return failures;
@@ -2351,17 +2407,31 @@ static int test_data_server_requestor(void)
 
     PMIX_LOAD_PROCID(&behalf, "far.away.job", 3);
 
-    /* a tool may act for somebody else */
+    /* a tool may act for a process of its own user. The uid is the one
+     * PMIx established for the tool, which naming no other user keeps */
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = 7; gid = 9;
+    PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
+    CHECK("requestor: a tool's claim is honored", PMIX_CHECK_PROCID(&owner, &behalf));
+    CHECK("requestor: ...as its own user", 7 == uid && 9 == gid);
+    PMIX_INFO_DESTRUCT(&info[0]);
+
+    /* a claim from a request that names no user at all is not one anybody
+     * may make - the PMIx server names the user of every request a tool
+     * sends, so there is nobody to hold it to */
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
     prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
-    CHECK("requestor: a tool's claim is honored", PMIX_CHECK_PROCID(&owner, &behalf));
+    CHECK("requestor: a claim naming no user is refused",
+          PMIX_CHECK_NSPACE(owner.nspace, "relay.tool"));
     PMIX_INFO_DESTRUCT(&info[0]);
 
     /* an application process may not */
     PMIX_LOAD_PROCID(&owner, "some.app", 1);
+    uid = 7; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
     CHECK("requestor: an application's claim is refused",
           PMIX_CHECK_NSPACE(owner.nspace, "some.app") && 1 == owner.rank);
     PMIX_INFO_DESTRUCT(&info[0]);
@@ -2369,19 +2439,54 @@ static int test_data_server_requestor(void)
     /* neither may a namespace we have never heard of - a job object is what
      * says what the caller is, and without one there is nothing to trust */
     PMIX_LOAD_PROCID(&owner, "unknown.job", 4);
+    uid = 7; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
     CHECK("requestor: an unknown namespace's claim is refused",
           PMIX_CHECK_NSPACE(owner.nspace, "unknown.job"));
     PMIX_INFO_DESTRUCT(&info[0]);
 
     /* a directive of the wrong type is ignored rather than dereferenced */
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    uid = 7; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, "not-a-procid", PMIX_STRING);
-    prte_ds_check_requestor(&owner, NULL, NULL, info, 1);
+    prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
     CHECK("requestor: a mistyped directive is ignored",
           PMIX_CHECK_NSPACE(owner.nspace, "relay.tool"));
     PMIX_INFO_DESTRUCT(&info[0]);
+
+    /* a process of a job we hold is the job's owner's to name: a tool of
+     * one user naming a process of another's is refused, even naming no
+     * other uid; one naming a process of its own user's job is not */
+    {
+        prte_job_t *heldj = make_job("held.job");
+        pmix_proc_t held;
+        uint32_t heldowner = 8;
+
+        prte_set_attribute(&heldj->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL,
+                           &heldowner, PMIX_UINT32);
+        CHECK("requestor: held job registered", PRTE_SUCCESS == prte_set_job_data_object(heldj));
+        PMIX_LOAD_PROCID(&held, "held.job", 2);
+        PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+        uid = 7; gid = 9;
+        PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &held, PMIX_PROC);
+        prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
+        CHECK("requestor: a process of a job a different user owns may not be named",
+              PMIX_CHECK_NSPACE(owner.nspace, "relay.tool") && 7 == uid);
+        PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+        uid = 8; gid = 9;
+        prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
+        CHECK("requestor: a process of the tool's own user's job may be named",
+              PMIX_CHECK_PROCID(&owner, &held) && 8 == uid);
+        PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+        uid = (uint32_t) prte_process_info.euid; gid = 9;
+        prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
+        CHECK("requestor: the DVM's own user may name any job's process",
+              PMIX_CHECK_PROCID(&owner, &held));
+        PMIX_INFO_DESTRUCT(&info[0]);
+        pmix_pointer_array_set_item(prte_job_data, heldj->index, NULL);
+        PMIX_RELEASE(heldj);
+    }
 
     /* The identity a relay claims includes the uid and gid, and has to:
      * ownership is decided by the publishing user, and what PMIx appends to
