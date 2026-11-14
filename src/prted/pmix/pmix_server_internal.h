@@ -698,11 +698,6 @@ typedef struct {
     char *scheduler_uids;
     uint32_t *sched_uids;
     size_t nsched_uids;
-    /* the users, besides root and our own, trusted to relay a request for
-     * a process of another user: the MCA list, and what it resolved to */
-    char *relay_uids;
-    uint32_t *rly_uids;
-    size_t nrly_uids;
     /* who may act on the DVM itself - a pmix_access_t, made from the
      * --rtos users=/groups= the DVM was started with */
     void *dvm_access;
@@ -775,15 +770,10 @@ PRTE_EXPORT extern prte_pmix_server_globals_t prte_pmix_server_globals;
  * false when the info names no requester at all. */
 PRTE_EXPORT bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t *uid);
 
-/* May a process running as relay speak for one running as origin? Always
- * when they are the same user - that claims nothing more than the relay
- * has. Otherwise only root, the user this DVM runs as, and the users
- * prte_pmix_relay_uids names. */
+/* May a process running as relay speak for one running as origin? When
+ * they are the same user - that claims nothing more than the relay has -
+ * and when the relay is root or the user this DVM runs as. */
 PRTE_EXPORT bool prte_pmix_server_relay_permitted(uid_t relay, uid_t origin);
-
-/* Look up the users prte_pmix_relay_uids names, once; a name nobody has is
- * reported and refused. */
-PRTE_EXPORT int prte_pmix_server_relay_uids_resolve(void);
 
 /* The most entries prte_pmix_server_relay_copy adds */
 #define PRTE_PMIX_ORIGIN_MAX 5

@@ -2430,18 +2430,6 @@ static int test_data_server_requestor(void)
     PMIX_INFO_DESTRUCT(&info[1]);
     PMIX_INFO_DESTRUCT(&info[2]);
 
-    /* and a user prte_pmix_relay_uids names may claim anyone */
-    prte_pmix_server_globals.rly_uids = &other;
-    prte_pmix_server_globals.nrly_uids = 1;
-    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
-    uid = other; gid = 9;
-    PMIX_INFO_LOAD(&info[0], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
-    prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
-    CHECK("requestor: a listed relay's claim is honored", 4242 == uid);
-    PMIX_INFO_DESTRUCT(&info[0]);
-    prte_pmix_server_globals.rly_uids = NULL;
-    prte_pmix_server_globals.nrly_uids = 0;
-
     /* ...and an application process claiming a uid is refused it, which is
      * the half that matters: a uid it could assert is a uid whose published
      * data it could remove */
