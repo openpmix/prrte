@@ -1496,13 +1496,17 @@ The parts that matter when editing this file:
   (`futex_wait_queue` in `pmix_obj_update`, from `ardes`).
 - **Who a session belongs to** is set once, at instantiation, as a user and
   group together. The scheduler names them with `PMIX_ALLOC_UID`/`_GID`, and
-  only the scheduler (`from_scheduler()`) may - from anyone else they are
-  `PMIX_ERR_NO_PERMISSIONS`, since they would be a request to own a session as
-  someone else. Without them the owner is the requester PMIx identified
-  (`prte_pmix_server_requester_uid()`/`_gid()`), which for the scheduler is
-  the scheduler. `PMIX_USERID` cannot carry the scheduler's choice: PMIx
-  stamps it with the caller's own identity. Nor can `PMIX_REQUESTOR`, which
-  names whom to notify, not whom the session is for.
+  must: an instantiation from the scheduler without them is
+  `PMIX_ERR_BAD_PARAM`. Only the scheduler (`from_scheduler()`) may name
+  them - from anyone else they are `PMIX_ERR_NO_PERMISSIONS`, since they
+  would be a request to own a session as someone else. A session made with
+  no scheduler attached is the requester's, as PMIx identified it
+  (`prte_pmix_server_requester_uid()`/`_gid()`). `PMIX_USERID` cannot carry
+  the scheduler's choice: PMIx stamps it with the caller's own identity. Nor
+  can `PMIX_REQUESTOR`, which names whom to notify, not whom the session is
+  for. The session's apps are the owner's too: `build_session_job()` puts
+  the owner on the job as `PRTE_JOB_OWNER_UID`/`_GID`, which the launch
+  path takes from a job the master built (see `src/mca/plm/base/AGENTS.md`).
 - **A session created here is DETACHED by default**, unlike a reservation. A
   reservation dies with the tool that took it; a session is named and
   addressable and must outlive the request that created it, or its own jobs

@@ -212,6 +212,17 @@ an allocation it requested, or parked in `prte_cache` until the DVM is
 ready, with no map to describe. Reaching `INIT` is what says the job is
 going to be launched.
 
+**A job's owner is decided here.** It is the owner of the job that asked
+for it (the `PRTE_JOB_LAUNCH_PROXY`), with one exception: the apps of a
+session the scheduler instantiated arrive already naming their owner, as
+`PRTE_JOB_OWNER_UID`/`_GID` - the user the scheduler named with
+`PMIX_ALLOC_UID`/`_GID` (`build_session_job()` in
+`src/prted/pmix/pmix_server_session.c`). Those are taken only from a job
+the master built itself (`sender` is the master); on a job from any other
+sender they are removed before the owner is decided. Everything after this
+point - the user the job runs as, the directives it may carry, the
+reservations it may use - is judged by that owner.
+
 Placing a job on a reservation is vetted here, by the job's owner - the
 uid recorded for its requester's job - through `session_usable()`, which
 asks `prte_pmix_server_session_permitted_uid()`. Nothing is granted to the

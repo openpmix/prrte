@@ -24,7 +24,7 @@
  *   roletool <uri> allocids
  *   roletool <uri> instantiate-for <session-id> <hosts> <nspace> <rank>
  *   roletool <uri> instantiate-owned <session-id> <hosts> <uid> <gid>
- *   roletool <uri> sched-instantiate <session-id> <hosts> <uid> <gid>
+ *   roletool <uri> sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]]
  *   roletool <uri> terminate <session-id>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
@@ -48,7 +48,9 @@
  *                <nspace>:<rank> as the requester (PMIX_REQUESTOR)
  *   instantiate-owned  create session <session-id> holding <hosts>, naming
  *                <uid>:<gid> as its owner (PMIX_ALLOC_UID/GID)
- *   sched-instantiate  the same, connected declaring itself the scheduler
+ *   sched-instantiate  the same, connected declaring itself the scheduler -
+ *                naming no owner when <uid> <gid> are left out, and running
+ *                [cmd...] in the session when it is given
  *   terminate    terminate session <session-id>
  *
  * Output lines, all prefixed ROLE so the harness can grep:
@@ -131,7 +133,7 @@ static void usage(const char *name)
             " claim <nspace> <rank> | purge <nspace> <rank> | notify <nspace> |"
             " allocids | instantiate-for <session-id> <hosts> <nspace> <rank> |"
             " instantiate-owned <session-id> <hosts> <uid> <gid> |"
-            " sched-instantiate <session-id> <hosts> <uid> <gid> |"
+            " sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]] |"
             " terminate <session-id>\n",
             name);
 }
@@ -139,7 +141,7 @@ static void usage(const char *name)
 int main(int argc, char **argv)
 {
     pmix_proc_t myproc, parent, member;
-    pmix_info_t iinfo[4], jinfo[1], dirs[4];
+    pmix_info_t iinfo[4], jinfo[1], dirs[5];
     pmix_app_t app;
     pmix_nspace_t child;
     pmix_status_t rc;
@@ -162,7 +164,7 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "notify") && 4 != argc) ||
         (0 == strcmp(op, "instantiate-for") && 7 != argc) ||
         (0 == strcmp(op, "instantiate-owned") && 7 != argc) ||
-        (0 == strcmp(op, "sched-instantiate") && 7 != argc) ||
+        (0 == strcmp(op, "sched-instantiate") && 5 != argc && 7 > argc) ||
         (0 == strcmp(op, "terminate") && 4 != argc)) {
         usage(argv[0]);
         return 1;
@@ -241,13 +243,34 @@ int main(int argc, char **argv)
             PMIX_LOAD_PROCID(&member, argv[5], (pmix_rank_t) strtoul(argv[6], NULL, 10));
             PMIX_INFO_LOAD(&dirs[ndirs], PMIX_REQUESTOR, &member, PMIX_PROC);
             ++ndirs;
-        } else if (0 != strcmp(op, "instantiate")) {
+        } else if (0 != strcmp(op, "instantiate") && 7 <= argc) {
             id = (uint32_t) strtoul(argv[5], NULL, 10);
             PMIX_INFO_LOAD(&dirs[ndirs], PMIX_ALLOC_UID, &id, PMIX_UINT32);
             ++ndirs;
             id = (uint32_t) strtoul(argv[6], NULL, 10);
             PMIX_INFO_LOAD(&dirs[ndirs], PMIX_ALLOC_GID, &id, PMIX_UINT32);
             ++ndirs;
+        }
+        if (0 == strcmp(op, "sched-instantiate") && 8 <= argc) {
+            pmix_data_array_t apps;
+            int i;
+
+            PMIX_APP_CONSTRUCT(&app);
+            app.cmd = strdup(argv[7]);
+            app.argv = (char **) calloc((size_t) (argc - 6), sizeof(char *));
+            for (i = 7; i < argc; i++) {
+                app.argv[i - 7] = strdup(argv[i]);
+            }
+            app.maxprocs = 1;
+            /* somewhere whoever the session is for may be */
+            app.cwd = strdup("/tmp");
+            apps.type = PMIX_APP;
+            apps.size = 1;
+            apps.array = &app;
+            /* the info takes a copy of the array */
+            PMIX_INFO_LOAD(&dirs[ndirs], PMIX_SESSION_APP, &apps, PMIX_DATA_ARRAY);
+            ++ndirs;
+            PMIX_APP_DESTRUCT(&app);
         }
         lock_init(&lock);
         rc = PMIx_Session_control(sid, dirs, ndirs, ctrl_cb, &lock);
