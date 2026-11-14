@@ -814,7 +814,6 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_timer_t *timer = NULL;
     int time, *tp;
-    size_t n;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -873,30 +872,6 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
      * catch-up has gone out) would reach every daemon as a procless copy and
      * launch nowhere but here.  Cleared by prte_plm_base_send_launch_msg. */
     PRTE_FLAG_SET(caddy->jdata, PRTE_JOB_FLAG_LAUNCH_PENDING);
-
-    /* Now - and only now - is the job recorded as an owner of the
-     * reservation(s) it was cleared to run in.  That grant is what lets it
-     * spawn further jobs onto those nodes, and nothing ever removes an
-     * owner, so it waits until the job is known to be launching: a request
-     * rejected in the command processor (a failed add-hosts, a malformed
-     * spawn allocation) must not have made itself an owner on its way out.
-     *
-     * It also has to be a real namespace.  Granting it at request-vetting
-     * time, back when the job was not named until this function ran,
-     * recorded an EMPTY namespace as an owner - and an empty namespace
-     * matches every other one (PMIx_Check_nspace treats it as a wildcard),
-     * so the first job spawned into a reservation quietly opened that
-     * reservation to every namespace in the DVM.  The job is named at the
-     * DVM's door now, and prte_session_add_owner refuses an empty namespace
-     * outright.  Both calls are no-ops for the default session, which
-     * everyone may use. */
-    if (NULL != caddy->jdata->target_sessions) {
-        for (n = 0; n < caddy->jdata->num_target_sessions; n++) {
-            prte_session_add_owner(caddy->jdata->target_sessions[n], caddy->jdata->nspace);
-        }
-    } else if (NULL != caddy->jdata->session) {
-        prte_session_add_owner(caddy->jdata->session, caddy->jdata->nspace);
-    }
 
     /* if the spawn operation has a timeout assigned to it, setup the timer for it */
     tp = &time;

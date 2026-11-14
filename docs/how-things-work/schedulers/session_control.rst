@@ -39,10 +39,10 @@ or group named when the DVM was started (``prte --rtos
 users=<list>,groups=<list>``, each a ``:``-separated list of names or
 numbers). To operate on an
 existing session, it is enough to be the user it was granted to, or a
-member of that user's group. A reservation also records the namespaces
-that own it; either is sufficient — so a second command run by the same
-person reaches an allocation their first command created, even though the
-tool namespace of the first command is long gone.
+member of that user's group. Ownership is by user, not by namespace, so a
+second command run by the same person reaches an allocation their first
+command created, even though the tool namespace of the first command is
+long gone.
 
 Operations
 ----------

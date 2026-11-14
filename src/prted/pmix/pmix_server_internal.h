@@ -877,6 +877,9 @@ PRTE_EXPORT bool prte_pmix_server_scheduler_permitted(uid_t uid);
 PRTE_EXPORT bool prte_pmix_server_session_permitted(prte_session_t *session,
                                                     const pmix_proc_t *requestor,
                                                     const pmix_info_t *info, size_t ninfo);
+/* The same once the requester's uid is known: root, our own user, the
+ * session's owner, or a member of the owner's group */
+PRTE_EXPORT bool prte_pmix_server_session_permitted_uid(prte_session_t *session, uid_t uid);
 
 /* Add to a job's info the further users (or, with group, groups) the
  * --rtos users= / groups= directives name - a ':'-separated list of names

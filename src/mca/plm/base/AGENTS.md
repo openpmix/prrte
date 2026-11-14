@@ -212,13 +212,11 @@ an allocation it requested, or parked in `prte_cache` until the DVM is
 ready, with no map to describe. Reaching `INIT` is what says the job is
 going to be launched.
 
-The reservation-ownership grant stays in `setup_job` for the same reason,
-not for want of a name: a request rejected after `moveon:` — an
-add-hosts failure, a malformed spawn allocation — must not have become an
-owner of a reservation on its way out, and nothing removes an owner.
-
-The requester is still vetted here, before anything is granted:
-`prte_session_is_owned_by(session, requestor)`.
+Placing a job on a reservation is vetted here, by the job's owner - the
+uid recorded for its requester's job - through `session_usable()`, which
+asks `prte_pmix_server_session_permitted_uid()`. Nothing is granted to the
+job's namespace: a reservation belongs to its user (see
+`src/runtime/AGENTS.md`).
 
 ### `TOOL_ATTACHED` — ask the daemon, don't index the pool
 

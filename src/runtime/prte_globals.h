@@ -307,15 +307,10 @@ typedef struct{
     size_t nresults;
     pmix_pointer_array_t *nodes;
     pmix_pointer_array_t *jobs;
-    /* namespaces entitled to spawn onto this session's nodes. Seeded with the
-     * namespace the reservation was created for, then extended with each job
-     * spawned into the session. Empty for the default session (which everyone
-     * may use) and for scheduler-instantiated sessions not owned by a
-     * namespace. Stored as an argv-style array of nspace strings. */
-    char **owners;
     /* The single namespace the reservation was created for (PMIX_ALLOC_TARGET,
-     * else the requester). Empty for the default session. owners[] additionally
-     * accumulates every namespace spawned into the reservation. */
+     * else the requester). Empty for the default session. Says where the
+     * session's notifications go and whose subtree drains it; who may use
+     * or change it is owner_uid's question, not this one's. */
     pmix_nspace_t owner;
     /* Retained reference to the owning namespace's job object, so its children
      * subtree stays walkable for CHILD-flavored drain even after the owning
@@ -325,12 +320,12 @@ typedef struct{
      * relayed PMIX_ALLOC_TIMEOUT_WARNING. Refreshed on EXTEND. */
     pmix_proc_t requestor;
     /* The user the reservation was granted to, taken from the requesting
-     * tool's connection. A namespace owns the reservation, but the USER owns
-     * it too: a tool namespace lasts only as long as the command that made
-     * it, so without this the allocation would be unusable by every later
-     * command the same person ran - including the one that releases it.
-     * PRTE_INVALID_UID when the requester presented no identity, which
-     * matches nothing. */
+     * tool's connection. The USER owns the reservation: spawning onto it and
+     * operating on it are decided by uid
+     * (prte_pmix_server_session_permitted_uid), since a tool namespace lasts
+     * only as long as the command that made it. PRTE_INVALID_UID when the
+     * requester presented no identity, which leaves it to root and our own
+     * user. */
     uid_t owner_uid;
     /* that user's group - its members may operate on the session too.
      * PRTE_INVALID_GID when none is known */
@@ -693,17 +688,6 @@ PRTE_EXPORT int prte_get_proc_runtime_state(const prte_proc_t *proc,
  * both the outgoing and the incoming session.  Every assignment to
  * prte_job_t::session must go through this. */
 PRTE_EXPORT void prte_set_job_session(prte_job_t *jdata, prte_session_t *session);
-
-/* True if nspace is in session->owners, or session is the default session,
- * or nspace is the scheduler. */
-PRTE_EXPORT bool prte_session_is_owned_by(prte_session_t *session,
-                                          const pmix_nspace_t nspace);
-
-/* Add nspace to session->owners if not already present (no-op for the
- * default session). Called when a reservation is created and each time a
- * job is spawned into the session. */
-PRTE_EXPORT void prte_session_add_owner(prte_session_t *session,
-                                        const pmix_nspace_t nspace);
 
 /**
  * Get a job data object

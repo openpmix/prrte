@@ -1350,16 +1350,12 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
     if (NULL != ownerjob) {
         PMIX_RETAIN(ownerjob);
         s->owner_job = ownerjob;
-        /* Record the user as well as the namespace. A tool's namespace lives
-         * only as long as the command that made it, so a reservation
-         * identified by namespace alone becomes unusable - by anyone - the
-         * moment the requester exits. See prte_session_is_owned_by. */
+        /* The user owns the reservation: who may use or change it is
+         * decided by uid (prte_pmix_server_session_permitted_uid), since a
+         * tool's namespace lives only as long as the command that made it */
         s->owner_uid = ownerjob->uid;
         s->owner_gid = ownerjob->gid;
     }
-    /* seed the owner set with the owning namespace */
-    prte_session_add_owner(s, nspace);
-
     rc = prte_set_session_object(s);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
@@ -1477,10 +1473,6 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
 
     /* the reservation no longer withholds nodes */
     session->flags &= ~PRTE_SESSION_FLAG_RESERVED;
-    if (NULL != session->owners) {
-        PMIx_Argv_free(session->owners);
-        session->owners = NULL;
-    }
     /* drop the retained owning-job reference taken in create_reservation */
     if (NULL != session->owner_job) {
         PMIX_RELEASE(session->owner_job);
@@ -2356,7 +2348,7 @@ static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
         req->pstatus = PMIX_ERR_NOT_FOUND;
         return true;
     }
-    if (!prte_session_is_owned_by(rsession, req->tproc.nspace)) {
+    if (!prte_pmix_server_session_permitted(rsession, &req->tproc, req->info, req->ninfo)) {
         req->pstatus = PMIX_ERR_NO_PERMISSIONS;
         return true;
     }
@@ -2814,7 +2806,7 @@ int prte_ras_base_release_spawn_alloc(prte_job_t *jdata, const char *alloc_id)
     }
     req->operation = strdup("SPAWN-ALLOC-RELEASE");
     req->allocdir = PMIX_ALLOC_RELEASE;
-    req->ninfo = 1;
+    req->ninfo = 2;
     PMIX_INFO_CREATE(req->info, req->ninfo);
     if (NULL == req->info) {
         PMIX_RELEASE(req);
@@ -2822,8 +2814,15 @@ int prte_ras_base_release_spawn_alloc(prte_job_t *jdata, const char *alloc_id)
     }
     req->copy = true;
     PMIX_INFO_LOAD(&req->info[0], PMIX_ALLOC_ID, (void *) alloc_id, PMIX_STRING);
-    /* release in the same name it was obtained in, or the ownership check
-     * refuses us our own allocation */
+    {
+        /* released as the user it was obtained for - the job's owner, as
+         * prte_ras_base_spawn_alloc() requested it - or the release check
+         * refuses the owner its own allocation */
+        uint32_t owner = (uint32_t) prte_pmix_server_job_owner(jdata);
+
+        PMIX_INFO_LOAD(&req->info[1], PMIX_USERID, &owner, PMIX_UINT32);
+    }
+    /* and in the same name, which is where the outcome is reported */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
                            (void **) &proxy, PMIX_PROC) &&
         NULL != proxy) {

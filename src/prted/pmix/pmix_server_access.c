@@ -605,7 +605,7 @@ bool prte_pmix_server_scheduler_permitted(uid_t uid)
 bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc_t *requestor,
                                         const pmix_info_t *info, size_t ninfo)
 {
-    uid_t uid, owner;
+    uid_t uid;
 
     if (NULL == session) {
         return false;
@@ -623,6 +623,16 @@ bool prte_pmix_server_session_permitted(prte_session_t *session, const pmix_proc
         /* a request we made of ourselves - see
          * prte_pmix_server_request_permitted */
         return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
+    }
+    return prte_pmix_server_session_permitted_uid(session, uid);
+}
+
+bool prte_pmix_server_session_permitted_uid(prte_session_t *session, uid_t uid)
+{
+    uid_t owner;
+
+    if (NULL == session) {
+        return false;
     }
     if (prte_pmix_server_privileged(uid)) {
         return true;

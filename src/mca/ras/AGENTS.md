@@ -675,9 +675,8 @@ turns it into `PRTE_PROC_STATE_TERMINATED` for a job flagged
 `PRTE_JOB_FLAG_TOOL`, which is what eventually walks the table above.
 Without that the disposition never runs at all, and a grow driven from a
 command line strands its nodes for the life of the DVM: out of the general
-pool, and unreachable through the reservation as well, since
-`prte_session_is_owned_by` will only admit a namespace that no longer
-exists.
+pool, and held by a reservation its owner's later commands can use but
+nothing returns.
 
 Elastic shrink is a two-phase collective: `PMIX_ALLOC_RELEASE` records a
 `prte_shrink_campaign_t`, xcasts the shrink command with a completion

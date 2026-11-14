@@ -156,12 +156,34 @@ int prte_plm_base_pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobda
     return PRTE_SUCCESS;
 }
 
+/* May a job owned by uid, asked for by requester, be placed on session's
+ * nodes? The default session is for everyone and the scheduler may use any;
+ * otherwise it is for whoever may operate on the session - root, our own
+ * user, its owner and the members of the owner's group
+ * (prte_pmix_server_session_permitted_uid). The job's owner is the user
+ * recorded for the requester's job, so this is a question about who asked,
+ * never about which namespace did. */
+static bool session_usable(prte_session_t *session, const pmix_proc_t *requestor, uid_t uid)
+{
+    if (NULL == session || prte_default_session == session) {
+        return true;
+    }
+    /* only if there IS a scheduler: an empty nspace is PMIX_CHECK_NSPACE's
+     * wildcard */
+    if (NULL != requestor &&
+        !PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+        PMIX_CHECK_NSPACE(prte_pmix_server_globals.scheduler.nspace, requestor->nspace)) {
+        return true;
+    }
+    return prte_pmix_server_session_permitted_uid(session, uid);
+}
+
 /* Resolve the PRTE_JOB_SPAWN_TARGET list (a comma-delimited list of
  * PMIX_ALLOC_ID strings, with an empty token denoting the default session)
- * into the job's validated target_sessions set. The requester must own every
- * named reservation. On success the spawned job becomes an owner of each
- * targeted reservation and jdata->session is set to the primary (first)
- * targeted session. Returns a PRTE error code on failure. */
+ * into the job's validated target_sessions set. The job's owner must be
+ * permitted on every named reservation (session_usable). On success
+ * jdata->session is set to the primary (first) targeted session. Returns a
+ * PRTE error code on failure. */
 static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
                                  char *target_str)
 {
@@ -191,8 +213,8 @@ static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
             }
         }
         /* the requester may target only the default session and reservations
-         * its namespace owns (the scheduler excepted) */
-        if (!prte_session_is_owned_by(s, requestor->nspace)) {
+         * its user may use (the scheduler excepted) */
+        if (!session_usable(s, requestor, prte_pmix_server_job_owner(jdata))) {
             free(tlist);
             return PRTE_ERR_PERM;
         }
@@ -666,7 +688,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             jdata = PMIX_NEW(prte_job_t);
             PMIX_LOAD_NSPACE(jdata->nspace, name.nspace);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
-            /* record who is running the tool - see prte_session_is_owned_by */
+            /* record who is running the tool - every job it starts is that
+             * user's (see the job owner set at PRTE_PLM_LAUNCH_JOB_CMD) */
             jdata->uid = tooluid;
             jdata->gid = toolgid;
             rc = prte_set_job_data_object(jdata);
@@ -1003,19 +1026,11 @@ moveon:
          * rejected request that has already been added to session->jobs
          * stays there for the life of the session (that array borrows its
          * entries, so nothing ever removes or releases it), leaving a
-         * phantom job the session teardown will walk.
-         *
-         * The matching GRANT - the spawned job becoming an owner itself, so
-         * it can spawn onto those nodes in turn - happens in
-         * prte_plm_base_setup_job.  The job has a name by now, but nothing
-         * ever removes an owner, so the grant waits until the request is
-         * known to be going ahead: a job rejected below this point (a failed
-         * add-hosts, a malformed spawn allocation) must not leave itself
-         * recorded as an owner of a reservation on its way out. */
+         * phantom job the session teardown will walk. */
         if (NULL == jdata->target_sessions && NULL != session &&
             session != prte_default_session &&
             (PRTE_SESSION_FLAG_RESERVED & session->flags)) {
-            if (!prte_session_is_owned_by(session, nptr->nspace)) {
+            if (!session_usable(session, nptr, prte_pmix_server_job_owner(jdata))) {
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
