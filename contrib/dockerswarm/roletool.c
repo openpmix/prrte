@@ -18,7 +18,11 @@
  *   roletool <uri> parent <nspace> <rank>
  *   roletool <uri> instantiate <session-id> <hosts>
  *   roletool <uri> pset <name> <nspace> <rank>
- *   roletool <uri> claim <nspace> <rank>
+ *   roletool <uri> claim <nspace> <rank> [seconds]
+ *   roletool <uri> purge <nspace> <rank>
+ *   roletool <uri> notify <nspace>
+ *   roletool <uri> allocids
+ *   roletool <uri> instantiate-for <session-id> <hosts> <nspace> <rank>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
  * DVM's rendezvous files are readable by its own user only. A <uri> of "-"
@@ -30,7 +34,15 @@
  *   parent       start /bin/true, naming <nspace>:<rank> as its parent
  *   instantiate  create session <session-id> holding <hosts>
  *   pset         define process set <name> holding <nspace>:<rank>
- *   claim        connect naming itself <nspace>:<rank>, then leave
+ *   claim        connect naming itself <nspace>:<rank>, then leave - after
+ *                [seconds], when given, so its namespace is held meanwhile
+ *   purge        unpublish everything, naming <nspace>:<rank> as the
+ *                process whose data it is (PMIX_REQUESTOR)
+ *   notify       raise PMIX_ERR_PROC_ABORTED across the whole DVM, naming
+ *                rank 0 of <nspace> as the process affected
+ *   allocids     ask which allocations the DVM holds
+ *   instantiate-for  create session <session-id> holding <hosts>, naming
+ *                <nspace>:<rank> as the requester (PMIX_REQUESTOR)
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
@@ -39,6 +51,10 @@
  *   ROLE SPAWN <status>
  *   ROLE SESSION <status>
  *   ROLE PSET <status>
+ *   ROLE PURGE <status>
+ *   ROLE NOTIFY <status>
+ *   ROLE ALLOCID <id>            (one per allocation listed)
+ *   ROLE ALLOCIDS <status>
  *
  * Why this cannot be a unit test: what is being asked is whether the DVM
  * judges the requester by the user PMIx authenticated for its connection,
@@ -104,14 +120,15 @@ static void usage(const char *name)
     fprintf(stderr,
             "usage: %s <uri> scheduler | spawn | parent <nspace> <rank> |"
             " instantiate <session-id> <hosts> | pset <name> <nspace> <rank> |"
-            " claim <nspace> <rank>\n",
+            " claim <nspace> <rank> | purge <nspace> <rank> | notify <nspace> |"
+            " allocids | instantiate-for <session-id> <hosts> <nspace> <rank>\n",
             name);
 }
 
 int main(int argc, char **argv)
 {
     pmix_proc_t myproc, parent, member;
-    pmix_info_t iinfo[4], jinfo[1], dirs[2];
+    pmix_info_t iinfo[4], jinfo[1], dirs[3];
     pmix_app_t app;
     pmix_nspace_t child;
     pmix_status_t rc;
@@ -129,7 +146,10 @@ int main(int argc, char **argv)
     if ((0 == strcmp(op, "parent") && 5 != argc) ||
         (0 == strcmp(op, "instantiate") && 5 != argc) ||
         (0 == strcmp(op, "pset") && 6 != argc) ||
-        (0 == strcmp(op, "claim") && 5 != argc)) {
+        (0 == strcmp(op, "claim") && 5 != argc && 6 != argc) ||
+        (0 == strcmp(op, "purge") && 5 != argc) ||
+        (0 == strcmp(op, "notify") && 4 != argc) ||
+        (0 == strcmp(op, "instantiate-for") && 7 != argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -172,6 +192,10 @@ int main(int argc, char **argv)
     } else if (0 == strcmp(op, "claim")) {
         /* PMIx may have connected it under a fresh name instead */
         printf("ROLE NAME %s %u\n", myproc.nspace, myproc.rank);
+        fflush(stdout);
+        if (6 == argc) {
+            sleep((unsigned) strtoul(argv[5], NULL, 10));
+        }
         rc = PMIX_SUCCESS;
 
     } else if (0 == strcmp(op, "spawn") || 0 == strcmp(op, "parent")) {
@@ -191,12 +215,19 @@ int main(int argc, char **argv)
         printf("ROLE SPAWN %s\n", PMIx_Error_string(rc));
         PMIX_APP_DESTRUCT(&app);
 
-    } else if (0 == strcmp(op, "instantiate")) {
+    } else if (0 == strcmp(op, "instantiate") || 0 == strcmp(op, "instantiate-for")) {
+        size_t ndirs = 2;
+
         sid = (uint32_t) strtoul(argv[3], NULL, 10);
         PMIX_INFO_LOAD(&dirs[0], PMIX_SESSION_INSTANTIATE, &flag, PMIX_BOOL);
         PMIX_INFO_LOAD(&dirs[1], PMIX_ALLOC_NODE_LIST, argv[4], PMIX_STRING);
+        if (0 == strcmp(op, "instantiate-for")) {
+            PMIX_LOAD_PROCID(&member, argv[5], (pmix_rank_t) strtoul(argv[6], NULL, 10));
+            PMIX_INFO_LOAD(&dirs[ndirs], PMIX_REQUESTOR, &member, PMIX_PROC);
+            ++ndirs;
+        }
         lock_init(&lock);
-        rc = PMIx_Session_control(sid, dirs, 2, ctrl_cb, &lock);
+        rc = PMIx_Session_control(sid, dirs, ndirs, ctrl_cb, &lock);
         if (PMIX_SUCCESS != rc) {
             lock_wake(&lock, rc);
         } else {
@@ -204,8 +235,60 @@ int main(int argc, char **argv)
         }
         rc = lock.status;
         printf("ROLE SESSION %s\n", PMIx_Error_string(rc));
+        while (0 < ndirs) {
+            --ndirs;
+            PMIX_INFO_DESTRUCT(&dirs[ndirs]);
+        }
+
+    } else if (0 == strcmp(op, "purge")) {
+        PMIX_LOAD_PROCID(&member, argv[3], (pmix_rank_t) strtoul(argv[4], NULL, 10));
+        PMIX_INFO_LOAD(&dirs[0], PMIX_REQUESTOR, &member, PMIX_PROC);
+        rc = PMIx_Unpublish(NULL, dirs, 1);
+        printf("ROLE PURGE %s\n", PMIx_Error_string(rc));
         PMIX_INFO_DESTRUCT(&dirs[0]);
-        PMIX_INFO_DESTRUCT(&dirs[1]);
+
+    } else if (0 == strcmp(op, "notify")) {
+        PMIX_LOAD_PROCID(&member, argv[3], 0);
+        PMIX_INFO_LOAD(&dirs[0], PMIX_EVENT_AFFECTED_PROC, &member, PMIX_PROC);
+        rc = PMIx_Notify_event(PMIX_ERR_PROC_ABORTED, NULL, PMIX_RANGE_GLOBAL, dirs, 1,
+                               NULL, NULL);
+        printf("ROLE NOTIFY %s\n", PMIx_Error_string(rc));
+        PMIX_INFO_DESTRUCT(&dirs[0]);
+
+    } else if (0 == strcmp(op, "allocids")) {
+#ifdef PMIX_QUERY_ALLOC_IDS
+        pmix_query_t query;
+        pmix_info_t *results = NULL, *ids;
+        size_t nresults = 0, n, k, nids;
+
+        PMIX_QUERY_CONSTRUCT(&query);
+        query.keys = (char **) calloc(2, sizeof(char *));
+        query.keys[0] = strdup(PMIX_QUERY_ALLOC_IDS);
+        rc = PMIx_Query_info(&query, 1, &results, &nresults);
+        for (n = 0; PMIX_SUCCESS == rc && n < nresults; n++) {
+            if (!PMIX_CHECK_KEY(&results[n], PMIX_QUERY_ALLOC_IDS) ||
+                PMIX_DATA_ARRAY != results[n].value.type ||
+                NULL == results[n].value.data.darray ||
+                PMIX_INFO != results[n].value.data.darray->type) {
+                continue;
+            }
+            ids = (pmix_info_t *) results[n].value.data.darray->array;
+            nids = results[n].value.data.darray->size;
+            for (k = 0; k < nids; k++) {
+                if (PMIX_STRING == ids[k].value.type && NULL != ids[k].value.data.string) {
+                    printf("ROLE ALLOCID %s\n", ids[k].value.data.string);
+                }
+            }
+        }
+        printf("ROLE ALLOCIDS %s\n", PMIx_Error_string(rc));
+        if (NULL != results) {
+            PMIX_INFO_FREE(results, nresults);
+        }
+        PMIX_QUERY_DESTRUCT(&query);
+#else
+        rc = PMIX_ERR_NOT_SUPPORTED;
+        printf("ROLE ALLOCIDS %s\n", PMIx_Error_string(rc));
+#endif
 
     } else if (0 == strcmp(op, "pset")) {
         PMIX_LOAD_PROCID(&member, argv[4], (pmix_rank_t) strtoul(argv[5], NULL, 10));

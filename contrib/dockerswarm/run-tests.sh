@@ -4287,7 +4287,7 @@ test_session() {
 ########################################################################
 ROLETOOL=/opt/prte/prte/bin/roletool
 test_requesters() {
-    local out uri pns rq rc
+    local out uri pns rq rc dns ons
 
     banner "requesters: a tool of another user is judged as that user"
     cleanup_swarm
@@ -4320,7 +4320,7 @@ test_requesters() {
     ok "a tool of another user can start a job of its own"
 
     banner "requesters: another user may not name root's job as a parent"
-    ON 1 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec sleep 60\n" > /tmp/rqparent.sh && chmod +x /tmp/rqparent.sh'
+    ON 1 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec sleep 180\n" > /tmp/rqparent.sh && chmod +x /tmp/rqparent.sh'
     PRUN_BG /tmp/rqparent.out '--host node1:1 -n 1 /tmp/rqparent.sh'
     pns=""
     for _ in $(seq 1 20); do
@@ -4362,6 +4362,98 @@ test_requesters() {
             && ok "root defined a process set over its own job" \
             || bad "root could not define a process set over its own job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
+
+    banner "requesters: another user may not join root's tool namespace"
+    # a tool that took a rank of root's namespace would be taken for root's
+    # by everything that asks who a request came from by namespace. A
+    # tool's namespace is the one PRRTE lets a tool add ranks to; an
+    # application's ranks are its processes', which PMIx holds to the
+    # identity each was registered with.
+    EXEC_TOOL_BG 1 "$ROLETOOL '$uri' claim rq-roottool 0 30 > /tmp/rqhold.out 2>&1"
+    for _ in $(seq 1 20); do
+        RUN 'grep -q "ROLE NAME rq-roottool 0" /tmp/rqhold.out 2>/dev/null' && break
+        sleep 1
+    done
+    if ! RUN 'grep -q "ROLE NAME rq-roottool 0" /tmp/rqhold.out 2>/dev/null'; then
+        bad "root's tool did not hold its namespace: $(RUN 'cat /tmp/rqhold.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        out=$(RUN "timeout 60 $rq claim rq-roottool 1" 2>&1 | tr -d '\r')
+        if echo "$out" | grep -q "ROLE NAME rq-roottool 1"; then
+            bad "a tool of another user joined root's tool namespace"
+        else
+            ok "a tool of another user may not take a rank of root's tool namespace"
+        fi
+        # the control: root's own second tool may
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' claim rq-roottool 1" 2>&1 | tr -d '\r')
+        echo "$out" | grep -q "ROLE NAME rq-roottool 1" \
+            && ok "root's own tool may take a rank of root's tool namespace" \
+            || bad "root's tool could not join root's tool namespace: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    RUN 'pkill -f "roletool.*claim rq-roottool"; rm -f /tmp/rqhold.out; true'
+
+    banner "requesters: another user's purge leaves root's published data"
+    # PMIx_Unpublish naming no keys is a purge, and it names the process
+    # whose data it is - here, root's publisher - in PMIX_REQUESTOR
+    ON 2 "printf '#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec $DS publish prte.test.rq.purge kept session 120\n' > /tmp/rqpub.sh && chmod +x /tmp/rqpub.sh"
+    PRUN_BG /tmp/rqpub.out '--host node2:1 -n 1 /tmp/rqpub.sh'
+    dns=""
+    for _ in $(seq 1 20); do
+        out=$(RUN 'cat /tmp/rqpub.out 2>/dev/null' | tr -d '\r')
+        dns=$(echo "$out" | sed -n 's/^NS=//p' | head -1)
+        [ -n "$dns" ] && echo "$out" | grep -q "PUBLISHED" && break
+        dns=""
+        sleep 1
+    done
+    if [ -z "$dns" ]; then
+        bad "root's publisher did not publish: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        out=$(RUN "timeout 60 $rq purge '$dns' 0" 2>&1)
+        echo "$out" | grep -q "ROLE PURGE" \
+            || bad "another user's purge did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "-n 1 $DS lookup prte.test.rq.purge" 2>&1 | tr -d '\r')
+        echo "$out" | grep -q "FOUND prte.test.rq.purge kept" \
+            && ok "another user's purge naming root's job took none of its data" \
+            || bad "root's published data is gone after another user's purge: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        # the control: root's own tool, naming the same process, takes it
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' purge '$dns' 0" 2>&1)
+        echo "$out" | grep -q "ROLE PURGE PMIX_SUCCESS" \
+            || bad "root's purge did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "-n 1 $DS lookup prte.test.rq.purge" 2>&1 | tr -d '\r')
+        echo "$out" | grep -q "FOUND prte.test.rq.purge" \
+            && bad "root's own purge naming its job left the data: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "root's own purge naming its job took the data"
+    fi
+    ON 2 'pkill -f rqpub.sh; pkill -f "dataserver publish prte.test.rq.purge"; rm -f /tmp/rqpub.sh; true'
+    RUN 'rm -f /tmp/rqpub.out'
+
+    banner "requesters: another user's event does not reach root's job"
+    # root's job on node2, and the tool raising the event attached to the
+    # master on node1, so the event can reach root's job only by being
+    # carried there
+    PRUN_BG /tmp/rqflt.out "--host node2:1 -n 1 $FLT clean 40"
+    for _ in $(seq 1 20); do
+        RUN 'grep -q "FLT 0 HOST" /tmp/rqflt.out 2>/dev/null' && break
+        sleep 1
+    done
+    if ! RUN 'grep -q "FLT 0 HOST" /tmp/rqflt.out 2>/dev/null'; then
+        bad "root's event-watching job did not start: $(RUN 'cat /tmp/rqflt.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        out=$(RUN "timeout 60 $rq notify '$pns'" 2>&1)
+        echo "$out" | grep -q "ROLE NOTIFY" \
+            || bad "another user's event was not raised: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 3
+        RUN 'grep -q "EVENT PMIX_ERR_PROC_ABORTED" /tmp/rqflt.out' \
+            && bad "another user's event reached root's job" \
+            || ok "another user's DVM-wide event did not reach root's job"
+        # the control: root's own event does
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' notify '$pns'" 2>&1)
+        sleep 3
+        RUN 'grep -q "EVENT PMIX_ERR_PROC_ABORTED" /tmp/rqflt.out' \
+            && ok "root's own DVM-wide event reached its job" \
+            || bad "root's own event did not reach its job: $(RUN 'cat /tmp/rqflt.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    fi
+    ON 2 'pkill -f "faulty clean"; true'
+    RUN 'rm -f /tmp/rqflt.out'
 
     banner "requesters: another user may not be the scheduler"
     out=$(RUN "timeout 60 $rq scheduler" 2>&1)
@@ -4422,6 +4514,56 @@ test_requesters() {
         out=$(RUN "timeout 60 $SESSCTL terminate 4271" 2>&1)
         echo "$out" | grep -q PMIX_SUCCESS \
             || bad "could not terminate session 4271: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        banner "requesters: allocations are listed to those who may use them"
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate 4272 node2:2" 2>&1)
+        if ! echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+            bad "root could not create session 4272: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        else
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' allocids" 2>&1 | tr -d '\r')
+            echo "$out" | grep -q 'ROLE ALLOCID .*\.4272$' \
+                && ok "root is shown its own reservation" \
+                || bad "root's reservation is not listed to root: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(RUN "timeout 60 $rq allocids" 2>&1 | tr -d '\r')
+            if ! echo "$out" | grep -q "ROLE ALLOCIDS PMIX_SUCCESS"; then
+                bad "another user's allocation query failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            elif echo "$out" | grep -q 'ROLE ALLOCID .*\.4272$'; then
+                bad "another user was shown root's reservation"
+            else
+                ok "another user is not shown root's reservation"
+            fi
+            RUN "timeout 60 $SESSCTL terminate 4272" >/dev/null 2>&1
+        fi
+
+        banner "requesters: a session is its requester's, whatever job it names"
+        ON 1 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec sleep 60\n" > /tmp/rqowner.sh && chmod +x /tmp/rqowner.sh'
+        PRUN_BG /tmp/rqowner.out '--host node1:1 -n 1 /tmp/rqowner.sh'
+        ons=""
+        for _ in $(seq 1 20); do
+            ons=$(RUN 'cat /tmp/rqowner.out 2>/dev/null' | sed -n 's/^NS=//p' | tr -d '\r' | head -1)
+            [ -n "$ons" ] && break
+            sleep 1
+        done
+        if [ -z "$ons" ]; then
+            bad "root's job did not report its namespace"
+        else
+            out=$(RUN "timeout 60 $rq instantiate-for 4273 node2:2 '$ons' 0" 2>&1)
+            if ! echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+                bad "a listed user could not create session 4273: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            else
+                out=$(RUN "timeout 60 $ROLETOOL '$uri' allocids" 2>&1 | tr -d '\r')
+                if echo "$out" | grep -q "ROLE ALLOCID $ons\.4273$"; then
+                    bad "a session another user created was recorded as root's job's"
+                elif echo "$out" | grep -q 'ROLE ALLOCID .*\.4273$'; then
+                    ok "a session naming root's job as requester is its creator's"
+                else
+                    bad "session 4273 is not listed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                fi
+                RUN "timeout 60 $SESSCTL terminate 4273" >/dev/null 2>&1
+            fi
+        fi
+        ON 1 'pkill -f rqowner.sh; rm -f /tmp/rqowner.sh; true'
+        RUN 'rm -f /tmp/rqowner.out'
 
         banner "requesters: a scheduler may run as a user the DVM names"
         out=$(RUN "timeout 60 $rq scheduler" 2>&1)
@@ -4527,6 +4669,26 @@ test_grow_authz() {
     else
         bad "root's PMIX_SPAWN_ALLOC of node5 did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
+    banner "grow: an unlisted user may not take nodes out of the DVM"
+    out=$(RUN "cd /tmp && timeout 60 $u65534 elastic shrink node3" 2>&1)
+    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_NO_PERMISSIONS" \
+        && ok "its release naming a node of the general pool is refused" \
+        || bad "an unlisted user's shrink was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    out=$(RUN "cd /tmp && timeout 60 $u65534 elastic release 1" 2>&1)
+    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_NO_PERMISSIONS" \
+        && ok "its release of a number of nodes is refused" \
+        || bad "an unlisted user's release by count was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    [ "$(prted_count 3)" = 1 ] \
+        && ok "node3's daemon is still there" \
+        || bad "node3's daemon was taken out anyway"
+    out=$(RUN "cd /tmp && timeout 90 $u65533 elastic shrink node3" 2>&1)
+    sleep 3
+    if echo "$out" | grep -q "PMIX_DVM_IS_READY" && [ "$(prted_count 3)" = 0 ]; then
+        ok "a listed user's release takes node3 out"
+    else
+        bad "a listed user's shrink did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+
     out=$(RUN "timeout 60 prun --dvm-uri '$uri' --host node4 -n 1 hostname" 2>&1)
     [ "$(echo "$out" | tr -d '\r' | grep -c '^node4$')" = 1 ] \
         && ok "a job placed on node4 by its own name runs there" \
