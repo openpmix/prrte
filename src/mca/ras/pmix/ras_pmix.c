@@ -22,6 +22,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/prted/pmix/pmix_server_internal.h"
+#include "src/util/prte_show_help.h"
 #include "ras_pmix.h"
 
 /*
@@ -290,6 +291,158 @@ static void merge_answer(prte_pmix_server_req_t *req,
     req->copy = true;
 }
 
+/* Read PMIX_ALLOC_UID/GID from an info array. A value that is not a number
+ * counts as absent: it says nothing we could compare. */
+static void get_owner(const pmix_info_t *info, size_t ninfo,
+                      uint32_t *uid, bool *have_uid, uint32_t *gid, bool *have_gid)
+{
+    size_t n;
+
+    *have_uid = false;
+    *have_gid = false;
+    for (n = 0; NULL != info && n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_ALLOC_UID)) {
+            *have_uid = (PMIX_SUCCESS == PMIx_Value_get_number(&info[n].value, uid, PMIX_UINT32));
+        } else if (PMIx_Check_key(info[n].key, PMIX_ALLOC_GID)) {
+            *have_gid = (PMIX_SUCCESS == PMIx_Value_get_number(&info[n].value, gid, PMIX_UINT32));
+        }
+    }
+}
+
+/* Returning a grant the answer's owner does not let us keep. The request
+ * is ours, and so is its info array, until the scheduler answers. */
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_release_cbfunc_t rel;
+    void *relcbdata;
+} prte_ras_pmix_giveback_t;
+
+static void gbcon(prte_ras_pmix_giveback_t *p)
+{
+    p->info = NULL;
+    p->ninfo = 0;
+    p->rel = NULL;
+    p->relcbdata = NULL;
+}
+static void gbdes(prte_ras_pmix_giveback_t *p)
+{
+    if (NULL != p->info) {
+        PMIX_INFO_FREE(p->info, p->ninfo);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_ras_pmix_giveback_t, pmix_object_t, gbcon, gbdes);
+
+static void giveback_done(int sd, short args, void *cbdata)
+{
+    prte_ras_pmix_giveback_t *gb = (prte_ras_pmix_giveback_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(gb);
+    if (NULL != gb->rel) {
+        gb->rel(gb->relcbdata);
+    }
+    PMIX_RELEASE(gb);
+}
+
+static void giveback_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                        void *cbdata, pmix_release_cbfunc_t rel, void *relcbdata)
+{
+    prte_ras_pmix_giveback_t *gb = (prte_ras_pmix_giveback_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status, info, ninfo);
+
+    /* GOLDEN RULE: on the PMIx progress thread - capture and post */
+    gb->rel = rel;
+    gb->relcbdata = relcbdata;
+    PRTE_PMIX_THREADSHIFT(gb, prte_event_base, giveback_done);
+}
+
+/* Ask the scheduler to take back what an answer granted: the allocation it
+ * named for a PMIX_ALLOC_NEW, and the nodes it added for a
+ * PMIX_ALLOC_EXTEND - releasing the whole allocation there would take back
+ * what was held before the request. */
+static void giveback(pmix_alloc_directive_t dir, const pmix_info_t *ans, size_t nans)
+{
+    prte_ras_pmix_giveback_t *gb;
+    const pmix_info_t *id = NULL, *nodes = NULL;
+    size_t n, k = 0;
+    pmix_status_t rc;
+
+    for (n = 0; NULL != ans && n < nans; n++) {
+        if (PMIx_Check_key(ans[n].key, PMIX_ALLOC_ID)) {
+            id = &ans[n];
+        } else if (PMIx_Check_key(ans[n].key, PMIX_ALLOC_NODE_LIST)) {
+            nodes = &ans[n];
+        }
+    }
+    if (NULL == id || (PMIX_ALLOC_EXTEND == dir && NULL == nodes)) {
+        pmix_output(0, "%s ras:pmix: the scheduler's answer does not name what it "
+                       "granted, so it could not be returned",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        return;
+    }
+    gb = PMIX_NEW(prte_ras_pmix_giveback_t);
+    if (NULL == gb) {
+        return;
+    }
+    gb->ninfo = (PMIX_ALLOC_EXTEND == dir) ? 2 : 1;
+    PMIX_INFO_CREATE(gb->info, gb->ninfo);
+    if (NULL == gb->info) {
+        gb->ninfo = 0;
+        PMIX_RELEASE(gb);
+        return;
+    }
+    PMIX_INFO_XFER(&gb->info[k++], id);
+    if (PMIX_ALLOC_EXTEND == dir) {
+        PMIX_INFO_XFER(&gb->info[k++], nodes);
+    }
+    rc = PMIx_Allocation_request_nb(PMIX_ALLOC_RELEASE, gb->info, gb->ninfo,
+                                    giveback_cb, gb);
+    if (PMIX_SUCCESS != rc) {
+        /* answered without a callback - nothing will consume it */
+        pmix_output(0, "%s ras:pmix: returning a granted allocation failed: %s",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PMIx_Error_string(rc));
+        PMIX_RELEASE(gb);
+    }
+}
+
+/* The scheduler was told whom the allocation is for (PMIX_ALLOC_UID/GID,
+ * settled by prte_ras_base_alloc_owner and sent in req->info), and its
+ * answer must say the same. Anything else is the scheduler's error: the
+ * request fails and the grant is returned. Checked against the answer
+ * alone - merge_answer would fill the keys in from the request. */
+static bool owner_answered(prte_pmix_server_req_t *req, const pmix_info_t *ans, size_t nans)
+{
+    uint32_t suid = 0, sgid = 0, auid = 0, agid = 0;
+    bool shave_uid, shave_gid, ahave_uid, ahave_gid;
+    char answered[64];
+
+    if (PMIX_ALLOC_NEW != req->allocdir && PMIX_ALLOC_EXTEND != req->allocdir) {
+        return true;
+    }
+    get_owner(req->info, req->ninfo, &suid, &shave_uid, &sgid, &shave_gid);
+    if (!shave_uid || !shave_gid) {
+        /* we asked for no one - a --add-host request, which allocates
+         * nothing (prte_ras_base_alloc_owner) */
+        return true;
+    }
+    get_owner(ans, nans, &auid, &ahave_uid, &agid, &ahave_gid);
+    if (ahave_uid && ahave_gid && auid == suid && agid == sgid) {
+        return true;
+    }
+    if (ahave_uid && ahave_gid) {
+        snprintf(answered, sizeof(answered), "uid %u, gid %u", auid, agid);
+    } else {
+        snprintf(answered, sizeof(answered), "no user and group");
+    }
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                   "ras-base:alloc-owner-mismatch", true,
+                   PMIx_Alloc_directive_string(req->allocdir), suid, sgid, answered);
+    return false;
+}
+
 /* Runs on the PRRTE progress thread: record the scheduler's answer on the
  * request, apply it, and relay it to whoever asked. */
 static void passthru(int sd, short args, void *cbdata)
@@ -308,6 +461,12 @@ static void passthru(int sd, short args, void *cbdata)
      * operation was unsupported.) */
     req->status = cd->status;
     req->pstatus = cd->status;
+
+    if (PMIX_SUCCESS == req->pstatus && !owner_answered(req, cd->info, cd->ninfo)) {
+        giveback(req->allocdir, cd->info, cd->ninfo);
+        req->status = PMIX_ERROR;
+        req->pstatus = PMIX_ERROR;
+    }
 
     merge_answer(req, cd->info, cd->ninfo);
 

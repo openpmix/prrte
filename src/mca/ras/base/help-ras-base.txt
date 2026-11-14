@@ -245,3 +245,26 @@ DVM runs as. A node of the DVM's general pool, or a number of nodes the
 DVM is to choose, may be released only by those who may change what the
 DVM consists of: root, the user the DVM runs as, and the users and groups
 the DVM was started with ("--rtos users=..." and "groups=...").
+#
+[ras-base:alloc-owner-missing]
+An allocation request was answered without saying whom the allocation
+belongs to:
+
+  Request:  %s
+
+The component that served the request must return the user and group the
+allocation was granted for, as PMIX_ALLOC_UID and PMIX_ALLOC_GID. Without
+them there is no owner to record for the allocation, so the request was
+treated as failed.
+#
+[ras-base:alloc-owner-mismatch]
+A scheduler answered an allocation request for a different user or group
+than the one it was asked for:
+
+  Request:   %s
+  Asked for: uid %u, gid %u
+  Answered:  %s
+
+The allocation was refused and returned to the scheduler. A scheduler must
+grant an allocation for the user and group named in the request
+(PMIX_ALLOC_UID and PMIX_ALLOC_GID), and say so in its answer.

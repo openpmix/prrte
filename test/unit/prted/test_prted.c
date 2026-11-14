@@ -4327,9 +4327,20 @@ static int test_access(void)
         CHECK("access/record-groups", PMIX_SUCCESS == record_cached(jdata));
         CHECK("access/group-member", prte_pmix_server_job_permitted(pw->pw_uid, jdata));
         CHECK("access/users-kept", prte_pmix_server_job_permitted(ACC_LISTED, jdata));
+        /* a user's groups, as an allocation request may name them */
+        CHECK("access/in-own-group", prte_pmix_server_in_group(pw->pw_uid, pw->pw_gid));
+        CHECK("access/not-in-group", !prte_pmix_server_in_group(pw->pw_uid, 3999999));
     } else {
         pw = NULL;
     }
+    CHECK("access/root-in-any-group", prte_pmix_server_in_group(0, 3999999));
+    CHECK("access/our-user-in-own-group",
+          prte_pmix_server_in_group(prte_process_info.euid, prte_process_info.egid));
+    if (0 != prte_process_info.euid) {
+        CHECK("access/our-user-not-in-group",
+              !prte_pmix_server_in_group(prte_process_info.euid, 3999999));
+    }
+    CHECK("access/no-user-in-no-group", !prte_pmix_server_in_group(PRTE_INVALID_UID, 0));
     PMIX_RELEASE(jdata);
 
     /* a spawn's PMIX_ACCESS_PERMISSIONS travels with the job's info; the

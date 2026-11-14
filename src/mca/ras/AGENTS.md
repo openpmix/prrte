@@ -574,6 +574,7 @@ elastic-DVM or PMIx_Allocation code:
 | Base function | Role |
 |---------------|------|
 | `prte_ras_base_modify()` | The `modify` driver (also a state callback). Cycles modules (keyed by `req->key`) to serve a `prte_pmix_server_req_t`; on `PMIX_SUCCESS` calls `prte_ras_base_complete_request`, then invokes the requester's `infocbfunc`. |
+| `prte_ras_base_alloc_owner()` | Called by `prte_ras_base_modify()` before any module: settle whom a `PMIX_ALLOC_NEW`/`EXTEND` is for (`PMIX_ALLOC_UID`/`GID`). See "Whom an allocation is for" below. |
 | `prte_ras_base_add_hosts()` | Collect `PRTE_APP_ADD_HOSTFILE`/`PRTE_APP_ADD_HOST` directives across apps into a `PMIX_ALLOC_EXTEND` request and hand it to `prte_ras_base_modify`. Sets `prte_dvm_ready = false` until processed. |
 | `prte_ras_base_activate_hosts()` | Collect `PRTE_APP_ACTIVATE_HOSTS` directives across apps, resolve them against the node pool, mark the resolved entries `PRTE_NODE_STATE_ADDED` and activate a grow. Adds nothing to the allocation, so it is permitted under a scheduler; must run after `prte_ras_base_add_hosts()`. Sets `prte_dvm_ready = false` when it activates a grow of its own. |
 | `prte_ras_base_spawn_alloc()` | Serve the allocation request carried by a spawn (`PMIX_SPAWN_ALLOC`), in the name of the spawn's requester. Sets `*posted` when one is in flight - the request then holds the job, and the outcome arrives at `prte_plm_base_spawn_alloc_granted()`/`_failed()`. |
@@ -584,6 +585,53 @@ elastic-DVM or PMIx_Allocation code:
 | `prte_ras_base_shrink_complete()` | Offers a drained `prte_shrink_campaign_t` to every module's `shrink_complete`. |
 | `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, release the registry's reference on it, and — if `return_to_scheduler` — shrink its daemon-carrying nodes out of the DVM. |
 | `prte_ras_base_check_reservations_on_term()` | On namespace termination, fire each reservation's inheritance disposition (`PMIX_ALLOC_INHERIT_NONE`/`CHILD`/`CHILD_DEFAULT`/`DEFAULT`). |
+
+### Whom an allocation is for
+
+Every `PMIX_ALLOC_NEW` or `PMIX_ALLOC_EXTEND` a module is handed carries
+`PMIX_ALLOC_UID` and `PMIX_ALLOC_GID`, the user and group the allocation is
+for. `prte_ras_base_alloc_owner()` puts them there before any module is
+called:
+
+- a requester may name its own uid, and root any uid - no one else may name
+  another user, the DVM's own user included, since none of them could act
+  as one;
+- a requester may name any group it belongs to
+  (`prte_pmix_server_in_group()`, which looks the membership up afresh);
+- anything else is refused with `PMIX_ERR_NO_PERMISSIONS`, and a uid other
+  than the requester's named without a group with `PMIX_ERR_BAD_PARAM`;
+- a requester that names neither gets its own, as PMIx stamped them on the
+  request (`prte_pmix_server_requester_uid`/`_gid`). A spawn's allocation
+  request carries the spawn owner's `PMIX_USERID` and `PMIX_GRPID` for this.
+
+Requests that grow the general pool by `--add-host`/`--add-hostfile` ask
+for no allocation and are left alone.
+
+**The module that serves the request owns the rest**, because only it knows
+what it actually asked its scheduler for. It passes the uid/gid on, checks
+that the scheduler's answer names the same ones - an answer naming another
+user or group, or none, is the scheduler's error: fail the request and hand
+back what was granted - and returns them in its answer. The base does not
+repeat that check. What it does do, in `ras_base_complete_grow_request()`,
+is refuse an answer that carries no `PMIX_ALLOC_UID`/`GID` at all
+(`ras-base:alloc-owner-missing`), and record them as a new reservation's
+`owner_uid`/`owner_gid` - never assumed from the requesting job. An
+EXTEND's reservation keeps the owner it has.
+
+- `ras/hosts` asks no one, so the allocation is for exactly what the
+  request carries, and its answer is the request.
+- `ras/pmix` sends them in the request and compares the scheduler's answer
+  in `owner_answered()`, **before** `merge_answer()` - which would fill the
+  keys in from the request and hide an answer that left them out. On a
+  mismatch it returns the grant with a `PMIX_ALLOC_RELEASE`
+  (`giveback()`): the allocation id for a NEW, the id and granted nodes for
+  an EXTEND, since releasing the id alone would take back what was held
+  before.
+- `ras/slurm` completes its requests itself. It answers with the DVM's
+  own uid and gid, since `salloc` runs as that user and the job Slurm
+  creates is that user's, and records them as the session's owner. Asking
+  Slurm for the requested user and group is not done; the note on
+  `prte_ras_slurm_serve_extend_req()` says what it would take.
 
 ### A request's directives arrive from a client and are typed by a client
 

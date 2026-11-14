@@ -53,6 +53,10 @@
  *      that needs no scheduler to exercise. The modify surface belongs to
  *      the multi-node harness in contrib/dockerswarm, which builds
  *      --with-jansson deliberately.
+ *
+ *   7. prte_ras_base_alloc_owner, which settles whom an allocation request
+ *      is for before any module sees it: what a requester may name as
+ *      PMIX_ALLOC_UID/GID, and the requester's own where it names none.
  */
 
 #include "prte_config.h"
@@ -1378,6 +1382,15 @@ static int test_slurm_allocation(void)
             i++;
         }
         PMIX_LIST_DESTRUCT(&nodes);
+        /* the job is the user salloc/prte ran as, and its session says so */
+        {
+            prte_session_t *ss = prte_get_session_object(20010);
+
+            CHECK("slurm allocate: the job's session is recorded", NULL != ss);
+            CHECK("slurm allocate: ...as our own user's",
+                  NULL != ss && prte_process_info.euid == ss->owner_uid &&
+                  prte_process_info.egid == ss->owner_gid);
+        }
     }
 
     /* The jobid reaches scontrol/sbatch command lines, so it is a taint
@@ -2288,6 +2301,172 @@ static int test_teardown_reservation(void)
     return failures;
 }
 
+/* An allocation request as prte_ras_base_modify receives it: the info
+ * array is the request's own, as one relayed from a peer is. uid/gid of
+ * UINT32_MAX leave PMIX_USERID/PMIX_GRPID out. */
+static prte_pmix_server_req_t *mkalloc_req(pmix_alloc_directive_t dir,
+                                           uint32_t ruid, uint32_t rgid,
+                                           const pmix_info_t *extra, size_t nextra)
+{
+    prte_pmix_server_req_t *req = PMIX_NEW(prte_pmix_server_req_t);
+    size_t n = 0, k;
+
+    req->allocdir = dir;
+    PMIX_INFO_CREATE(req->info, nextra + 2);
+    if (UINT32_MAX != ruid) {
+        PMIX_INFO_LOAD(&req->info[n++], PMIX_USERID, &ruid, PMIX_UINT32);
+    }
+    if (UINT32_MAX != rgid) {
+        PMIX_INFO_LOAD(&req->info[n++], PMIX_GRPID, &rgid, PMIX_UINT32);
+    }
+    for (k = 0; k < nextra; k++) {
+        PMIX_INFO_XFER(&req->info[n++], &extra[k]);
+    }
+    req->ninfo = n;
+    req->copy = true;
+    return req;
+}
+
+/* the PMIX_ALLOC_UID/GID the request now carries, or false if either is
+ * missing */
+static bool req_owner(prte_pmix_server_req_t *req, uint32_t *uid, uint32_t *gid)
+{
+    size_t n;
+    bool hu = false, hg = false;
+
+    for (n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_UID) &&
+            PMIX_UINT32 == req->info[n].value.type) {
+            *uid = req->info[n].value.data.uint32;
+            hu = true;
+        } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_GID) &&
+                   PMIX_UINT32 == req->info[n].value.type) {
+            *gid = req->info[n].value.data.uint32;
+            hg = true;
+        }
+    }
+    return hu && hg;
+}
+
+static int test_alloc_owner(void)
+{
+    int failures = 0;
+    prte_pmix_server_req_t *req;
+    pmix_info_t x[3];
+    uint32_t me = (uint32_t) prte_process_info.euid;
+    uint32_t mygrp = (uint32_t) prte_process_info.egid;
+    uint32_t other = me + 1, root = 0;
+    /* a group no user is in: no system assigns one this high */
+    uint32_t nogrp = 3999999;
+    uint32_t uid, gid;
+    pmix_status_t rc;
+
+    /* naming nothing: the request is for its requester */
+    req = mkalloc_req(PMIX_ALLOC_NEW, me, mygrp, NULL, 0);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: a request naming no owner is accepted", PMIX_SUCCESS == rc);
+    CHECK("alloc_owner: and is for its requester",
+          req_owner(req, &uid, &gid) && me == uid && mygrp == gid);
+    PMIX_RELEASE(req);
+
+    /* naming oneself */
+    PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_UID, &me, PMIX_UINT32);
+    PMIX_INFO_LOAD(&x[1], PMIX_ALLOC_GID, &mygrp, PMIX_UINT32);
+    req = mkalloc_req(PMIX_ALLOC_EXTEND, me, mygrp, x, 2);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: a requester may name itself", PMIX_SUCCESS == rc);
+    CHECK("alloc_owner: and is left as named",
+          req_owner(req, &uid, &gid) && me == uid && mygrp == gid);
+    PMIX_RELEASE(req);
+    PMIX_INFO_DESTRUCT(&x[0]);
+    PMIX_INFO_DESTRUCT(&x[1]);
+
+    /* a group it is not in */
+    PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_GID, &nogrp, PMIX_UINT32);
+    req = mkalloc_req(PMIX_ALLOC_NEW, me, mygrp, x, 1);
+    rc = prte_ras_base_alloc_owner(req);
+    if (0 == me) {
+        CHECK("alloc_owner: root may name any group", PMIX_SUCCESS == rc);
+    } else {
+        CHECK("alloc_owner: a group the requester is not in is refused",
+              PMIX_ERR_NO_PERMISSIONS == rc);
+    }
+    PMIX_RELEASE(req);
+    PMIX_INFO_DESTRUCT(&x[0]);
+
+    /* another user */
+    if (0 != me) {
+        PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_UID, &other, PMIX_UINT32);
+        PMIX_INFO_LOAD(&x[1], PMIX_ALLOC_GID, &mygrp, PMIX_UINT32);
+        req = mkalloc_req(PMIX_ALLOC_NEW, me, mygrp, x, 2);
+        rc = prte_ras_base_alloc_owner(req);
+        CHECK("alloc_owner: anyone but root may not name another user, "
+              "even the DVM's own", PMIX_ERR_NO_PERMISSIONS == rc);
+        PMIX_RELEASE(req);
+        PMIX_INFO_DESTRUCT(&x[0]);
+        PMIX_INFO_DESTRUCT(&x[1]);
+    }
+
+    /* root, on behalf of another user */
+    PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_UID, &other, PMIX_UINT32);
+    PMIX_INFO_LOAD(&x[1], PMIX_ALLOC_GID, &nogrp, PMIX_UINT32);
+    req = mkalloc_req(PMIX_ALLOC_NEW, root, root, x, 2);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: root may name any user and group", PMIX_SUCCESS == rc);
+    CHECK("alloc_owner: and is left as named",
+          req_owner(req, &uid, &gid) && other == uid && nogrp == gid);
+    PMIX_RELEASE(req);
+    PMIX_INFO_DESTRUCT(&x[1]);
+    /* another user without a group would get root's */
+    req = mkalloc_req(PMIX_ALLOC_NEW, root, root, x, 1);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: another user named without a group is refused",
+          PMIX_ERR_BAD_PARAM == rc);
+    PMIX_RELEASE(req);
+    PMIX_INFO_DESTRUCT(&x[0]);
+
+    /* a value that is not a number */
+    PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_UID, "me", PMIX_STRING);
+    req = mkalloc_req(PMIX_ALLOC_NEW, me, mygrp, x, 1);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: a mistyped owner is refused", PMIX_ERR_BAD_PARAM == rc);
+    PMIX_RELEASE(req);
+    PMIX_INFO_DESTRUCT(&x[0]);
+
+    /* a requester whose group is not known, naming none */
+    req = mkalloc_req(PMIX_ALLOC_NEW, me, UINT32_MAX, NULL, 0);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: no group to ask for is refused", PMIX_ERR_BAD_PARAM == rc);
+    PMIX_RELEASE(req);
+
+    /* a request we made ourselves names no requester: it is ours */
+    req = mkalloc_req(PMIX_ALLOC_NEW, UINT32_MAX, UINT32_MAX, NULL, 0);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: our own request is accepted", PMIX_SUCCESS == rc);
+    CHECK("alloc_owner: and is for our own user",
+          req_owner(req, &uid, &gid) && me == uid && mygrp == gid);
+    PMIX_RELEASE(req);
+
+    /* what allocates nothing is left alone */
+    req = mkalloc_req(PMIX_ALLOC_RELEASE, me, mygrp, NULL, 0);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: a release is left alone",
+          PMIX_SUCCESS == rc && !req_owner(req, &uid, &gid));
+    PMIX_RELEASE(req);
+    PMIX_INFO_LOAD(&x[0], PMIX_ADD_HOST, "node01", PMIX_STRING);
+    req = mkalloc_req(PMIX_ALLOC_EXTEND, me, mygrp, x, 1);
+    rc = prte_ras_base_alloc_owner(req);
+    CHECK("alloc_owner: an --add-host request is left alone",
+          PMIX_SUCCESS == rc && !req_owner(req, &uid, &gid));
+    PMIX_RELEASE(req);
+    PMIX_INFO_DESTRUCT(&x[0]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_alloc_owner\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2341,6 +2520,7 @@ int main(void)
     failures += test_activate_hosts();
     failures += test_activate_nodes();
     failures += test_spawn_alloc();
+    failures += test_alloc_owner();
     failures += test_teardown_reservation();
     failures += test_hnp_locality_match();
     /* after test_select(), which opens the framework and latches a

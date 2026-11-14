@@ -26,6 +26,8 @@
  *   roletool <uri> instantiate-owned <session-id> <hosts> <uid> <gid>
  *   roletool <uri> sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]]
  *   roletool <uri> terminate <session-id>
+ *   roletool <uri> alloc [<uid> <gid> [seconds]]
+ *   roletool <uri> alloc-release <alloc-id>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
  * DVM's rendezvous files are readable by its own user only. A <uri> of "-"
@@ -52,6 +54,11 @@
  *                naming no owner when <uid> <gid> are left out, and running
  *                [cmd...] in the session when it is given
  *   terminate    terminate session <session-id>
+ *   alloc        ask for a new allocation of no nodes, naming <uid> and
+ *                <gid> as whom it is for (PMIX_ALLOC_UID/GID) - either may
+ *                be "-" to leave it out - then leave after [seconds], when
+ *                given: a reservation is released when its requester ends
+ *   alloc-release  release allocation <alloc-id>
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
@@ -65,6 +72,9 @@
  *   ROLE NOTIFY <status>
  *   ROLE ALLOCID <id>            (one per allocation listed)
  *   ROLE ALLOCIDS <status>
+ *   ROLE ALLOC <status>
+ *   ROLE ALLOCATED <id>          (alloc: the id the allocation was given)
+ *   ROLE RELEASE <status>
  *
  * Why this cannot be a unit test: what is being asked is whether the DVM
  * judges the requester by the user PMIx authenticated for its connection,
@@ -134,7 +144,8 @@ static void usage(const char *name)
             " allocids | instantiate-for <session-id> <hosts> <nspace> <rank> |"
             " instantiate-owned <session-id> <hosts> <uid> <gid> |"
             " sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]] |"
-            " terminate <session-id>\n",
+            " terminate <session-id> | alloc [<uid> <gid> [seconds]] |"
+            " alloc-release <alloc-id>\n",
             name);
 }
 
@@ -165,7 +176,9 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "instantiate-for") && 7 != argc) ||
         (0 == strcmp(op, "instantiate-owned") && 7 != argc) ||
         (0 == strcmp(op, "sched-instantiate") && 5 != argc && 7 > argc) ||
-        (0 == strcmp(op, "terminate") && 4 != argc)) {
+        (0 == strcmp(op, "terminate") && 4 != argc) ||
+        (0 == strcmp(op, "alloc") && 3 != argc && 5 != argc && 6 != argc) ||
+        (0 == strcmp(op, "alloc-release") && 4 != argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -298,6 +311,52 @@ int main(int argc, char **argv)
         }
         rc = lock.status;
         printf("ROLE TERMINATE %s\n", PMIx_Error_string(rc));
+        PMIX_INFO_DESTRUCT(&dirs[0]);
+
+    } else if (0 == strcmp(op, "alloc")) {
+        pmix_info_t *results = NULL;
+        size_t nresults = 0, ndirs = 0, n;
+        uint32_t id;
+
+        if (5 <= argc && 0 != strcmp(argv[3], "-")) {
+            id = (uint32_t) strtoul(argv[3], NULL, 10);
+            PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_UID, &id, PMIX_UINT32);
+        }
+        if (5 <= argc && 0 != strcmp(argv[4], "-")) {
+            id = (uint32_t) strtoul(argv[4], NULL, 10);
+            PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_GID, &id, PMIX_UINT32);
+        }
+        rc = PMIx_Allocation_request(PMIX_ALLOC_NEW, (0 < ndirs) ? dirs : NULL, ndirs,
+                                     &results, &nresults);
+        for (n = 0; PMIX_SUCCESS == rc && n < nresults; n++) {
+            if (PMIX_CHECK_KEY(&results[n], PMIX_ALLOC_ID) &&
+                PMIX_STRING == results[n].value.type) {
+                printf("ROLE ALLOCATED %s\n", results[n].value.data.string);
+            }
+        }
+        printf("ROLE ALLOC %s\n", PMIx_Error_string(rc));
+        fflush(stdout);
+        if (NULL != results) {
+            PMIX_INFO_FREE(results, nresults);
+        }
+        if (6 == argc) {
+            sleep((unsigned) strtoul(argv[5], NULL, 10));
+        }
+        while (0 < ndirs) {
+            --ndirs;
+            PMIX_INFO_DESTRUCT(&dirs[ndirs]);
+        }
+
+    } else if (0 == strcmp(op, "alloc-release")) {
+        pmix_info_t *results = NULL;
+        size_t nresults = 0;
+
+        PMIX_INFO_LOAD(&dirs[0], PMIX_ALLOC_ID, argv[3], PMIX_STRING);
+        rc = PMIx_Allocation_request(PMIX_ALLOC_RELEASE, dirs, 1, &results, &nresults);
+        printf("ROLE RELEASE %s\n", PMIx_Error_string(rc));
+        if (NULL != results) {
+            PMIX_INFO_FREE(results, nresults);
+        }
         PMIX_INFO_DESTRUCT(&dirs[0]);
 
     } else if (0 == strcmp(op, "purge")) {

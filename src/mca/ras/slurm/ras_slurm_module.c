@@ -57,6 +57,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/proc_info.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
@@ -885,6 +886,10 @@ int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_
  * @param[in] user_refid   Optional user-provided allocation reference ID (may be NULL)
  * @param[in] node_list    List of prte_node_t to attach to the session
  * @param[in] dynamic      Whether the session was created by a modify request
+ *
+ * The session belongs to the DVM's own user and group: that is whose job
+ * Slurm made it, since salloc runs as that user. See the note on
+ * prte_ras_slurm_serve_extend_req for asking Slurm for another.
  */
 int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid,
                                       pmix_list_t *node_list, bool dynamic)
@@ -943,6 +948,8 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     }
 
     session->session_id = slurm_id_uint;
+    session->owner_uid = prte_process_info.euid;
+    session->owner_gid = prte_process_info.egid;
 
     if(NULL != user_refid_dup) {
         session->user_refid = user_refid_dup;

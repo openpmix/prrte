@@ -42,6 +42,18 @@ decision. PRRTE, receiving a relayed request itself, believes it from a
 relay running as the same user it names, as root, or as the user the DVM
 runs as. Any other relay's request is taken as the relay's own.
 
+Every request for new or extended resources (``PMIX_ALLOC_NEW``,
+``PMIX_ALLOC_EXTEND``) also says whom the allocation is for, as
+``PMIX_ALLOC_UID`` and ``PMIX_ALLOC_GID``. A requester may name its own
+user - root may name any user - and any group it belongs to; naming
+anything else is refused with ``PMIX_ERR_NO_PERMISSIONS`` before the
+request goes anywhere. Where the requester names neither, PRRTE adds its
+own user and group. The scheduler is to grant the allocation for exactly
+that user and group and return both in its answer; an answer that names
+another, or none, is an error, and PRRTE hands what was granted back.
+The allocation then belongs to that user and group - they are who may
+later extend or release it.
+
 ``PMIX_ALLOC_ACTIVATE`` is the exception: PRRTE answers it itself,
 without involving any resource manager. It asks for a daemon on nodes
 the requestor **already holds** - an allocated node the DVM is not

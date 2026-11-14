@@ -1507,6 +1507,13 @@ The parts that matter when editing this file:
   for. The session's apps are the owner's too: `build_session_job()` puts
   the owner on the job as `PRTE_JOB_OWNER_UID`/`_GID`, which the launch
   path takes from a job the master built (see `src/mca/plm/base/AGENTS.md`).
+- **An allocation request says whom it is for** with the same two
+  attributes, and there the requester may name them: its own uid (root:
+  any), and any group it is in. The RAS base settles that before a module
+  sees the request (`prte_ras_base_alloc_owner()`, `src/mca/ras/AGENTS.md`).
+  Group membership is `prte_pmix_server_in_group()`, which looks the
+  user's groups up afresh - including our own user's, for which no record
+  is kept.
 - **A session created here is DETACHED by default**, unlike a reservation. A
   reservation dies with the tool that took it; a session is named and
   addressable and must outlive the request that created it, or its own jobs

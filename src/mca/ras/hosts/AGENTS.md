@@ -91,7 +91,10 @@ when it is selected and its scheduler is out of touch.) It serves:
 - It also claims `PMIX_ALLOC_NEW`/`EXTEND`/`RELEASE` so the base's
   `prte_ras_base_complete_request` runs with the original request info
   intact (preserving the node list and allocation ids for reservation
-  routing).
+  routing). That also makes its answer say whom the allocation is for:
+  there is no scheduler to ask, so it is granted for exactly the
+  `PMIX_ALLOC_UID`/`GID` the request carries, which
+  `prte_ras_base_alloc_owner()` checked or filled in first.
 
 New nodes clear `prte_nidmap_communicated` and are inserted via
 `prte_ras_base_node_insert`. Returns `PMIX_OPERATION_SUCCEEDED` when it
