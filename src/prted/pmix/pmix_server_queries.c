@@ -1266,6 +1266,15 @@ static void _query(int sd, short args, void *cbdata)
                         if (NULL == session || NULL == session->alloc_refid) {
                             continue;
                         }
+                        /* the general pool, which everyone uses, and of
+                         * the reservations only those the requester may
+                         * operate on - its own, its group's, or any for
+                         * root, our own user and the scheduler */
+                        if (prte_default_session != session &&
+                            !prte_pmix_server_session_permitted(session, &cd->proct,
+                                                                q->qualifiers, q->nqual)) {
+                            continue;
+                        }
                         PMIX_INFO_LIST_ADD(rc, alloclist, PMIX_ALLOC_ID, session->alloc_refid, PMIX_STRING);
                         if (PMIX_SUCCESS != rc) {
                             PMIX_ERROR_LOG(rc);
