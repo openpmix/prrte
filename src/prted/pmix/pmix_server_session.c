@@ -1165,7 +1165,6 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     session->inheritance = ctl->inheritance;
     PMIX_LOAD_NSPACE(session->owner, ctl->requestor.nspace);
     PMIX_XFER_PROCID(&session->requestor, &ctl->requestor);
-    prte_session_add_owner(session, ctl->requestor.nspace);
     {
         prte_job_t *reqjob = prte_get_job_data_object(ctl->requestor.nspace);
 

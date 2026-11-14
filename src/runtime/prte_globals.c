@@ -1276,7 +1276,6 @@ static void session_con(prte_session_t *s)
     pmix_pointer_array_init(s->jobs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                             PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    s->owners = NULL;
     PMIX_LOAD_NSPACE(s->owner, NULL);
     s->owner_job = NULL;
     PMIX_LOAD_PROCID(&s->requestor, NULL, PMIX_RANK_INVALID);
@@ -1347,10 +1346,6 @@ static void session_des(prte_session_t *s)
     }
     PMIX_RELEASE(s->jobs);
 
-    if (NULL != s->owners) {
-        PMIx_Argv_free(s->owners);
-        s->owners = NULL;
-    }
     /* balance the PMIX_RETAIN taken in create_reservation */
     if (NULL != s->owner_job) {
         PMIX_RELEASE(s->owner_job);
@@ -1380,85 +1375,6 @@ static void session_des(prte_session_t *s)
 PMIX_CLASS_INSTANCE(prte_session_t,
                     pmix_object_t,
                     session_con, session_des);
-
-bool prte_session_is_owned_by(prte_session_t *session,
-                              const pmix_nspace_t nspace)
-{
-    prte_job_t *jdata;
-    int n;
-
-    /* the default session is usable by everyone */
-    if (NULL == session || session == prte_default_session) {
-        return true;
-    }
-    /* The scheduler is an implicit owner of every session - but only if
-     * there IS one. PMIX_CHECK_NSPACE answers "true" when either side is an
-     * empty nspace (that is its wildcard rule), and scheduler.nspace is
-     * empty until a scheduler connects. Testing it unguarded therefore
-     * declared every namespace to be the scheduler on every DVM running
-     * without one, which is the common case - and that turned the whole
-     * reservation ownership check into an unconditional "yes". */
-    if (!PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
-        PMIX_CHECK_NSPACE(prte_pmix_server_globals.scheduler.nspace, nspace)) {
-        return true;
-    }
-    if (NULL != session->owners) {
-        for (n = 0; NULL != session->owners[n]; n++) {
-            if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {
-                return true;
-            }
-        }
-    }
-
-    /* The namespace test above is what keeps other JOBS in this DVM out of
-     * somebody else's allocation, and it is the whole answer for them. It is
-     * not the whole answer for a TOOL: a tool namespace is minted per
-     * invocation, so the reservation a user's first command created could
-     * never be named by their second one - and once that first command
-     * exited, its namespace was gone and the allocation was unreachable by
-     * anybody at all. The user is the other half of the identity here, so a
-     * tool presenting the uid the reservation was granted to may act on it:
-     * spawn into it, extend it, release it. An application job never reaches
-     * this - it is not a tool, and its namespace is its identity. */
-    if (PRTE_INVALID_UID == session->owner_uid) {
-        return false;
-    }
-    jdata = prte_get_job_data_object(nspace);
-    if (NULL == jdata ||
-        !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) ||
-        PRTE_INVALID_UID == jdata->uid) {
-        return false;
-    }
-    return (jdata->uid == session->owner_uid);
-}
-
-void prte_session_add_owner(prte_session_t *session,
-                            const pmix_nspace_t nspace)
-{
-    int n;
-
-    /* the default session is owned by everyone - nothing to record */
-    if (NULL == session || session == prte_default_session) {
-        return;
-    }
-    /* An EMPTY namespace must never enter the owner set. PMIx_Check_nspace
-     * answers "true" whenever either side is empty - that is its wildcard
-     * rule - so an empty entry here makes prte_session_is_owned_by() say yes
-     * to every namespace that ever asks, silently retiring the reservation's
-     * ownership gate. A caller with nothing to record has nothing to grant. */
-    if (PMIX_NSPACE_INVALID(nspace)) {
-        return;
-    }
-    if (NULL != session->owners) {
-        for (n = 0; NULL != session->owners[n]; n++) {
-            if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {
-                /* already present */
-                return;
-            }
-        }
-    }
-    PMIx_Argv_append_nosize(&session->owners, nspace);
-}
 
 #if PRTE_PICKY_COMPILERS
 void prte_hide_unused_params(int x, ...)

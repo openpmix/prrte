@@ -400,62 +400,31 @@ static int test_session_job_backref(void)
 static int test_session_ownership(void)
 {
     int failures = 0;
-    prte_session_t *s, *s2;
-    prte_session_t *saved_default;
+    prte_session_t *s;
+    uid_t owner = 4711, other = 4712;
 
     reset_globals();
-    saved_default = prte_default_session;
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.users, pmix_list_t);
 
     s = PMIX_NEW(prte_session_t);
     s->session_id = 7;
     CHECK("owner: insert succeeds", PRTE_SUCCESS == prte_set_session_object(s));
 
-    /* a fresh reservation has no owners, so nobody may spawn into it */
-    CHECK("owner: an unowned reservation admits nobody", !prte_session_is_owned_by(s, NS("nsA")));
+    /* A reservation is its user's: whether a job may be placed on it, or
+     * the reservation changed, is a question about who asked, never about
+     * which namespace did. One whose requester presented no identity is
+     * root's and our own user's alone. */
+    CHECK("owner: an unowned reservation admits root", prte_pmix_server_session_permitted_uid(s, 0));
+    CHECK("owner: ...and our own user",
+          prte_pmix_server_session_permitted_uid(s, prte_process_info.euid));
+    CHECK("owner: ...and nobody else", !prte_pmix_server_session_permitted_uid(s, other));
+    s->owner_uid = owner;
+    CHECK("owner: its owner is admitted", prte_pmix_server_session_permitted_uid(s, owner));
+    CHECK("owner: another user is not", !prte_pmix_server_session_permitted_uid(s, other));
+    CHECK("owner: root still is", prte_pmix_server_session_permitted_uid(s, 0));
+    CHECK("owner: no session admits nobody", !prte_pmix_server_session_permitted_uid(NULL, 0));
 
-    prte_session_add_owner(s, NS("nsA"));
-    CHECK("owner: the added namespace is admitted", prte_session_is_owned_by(s, NS("nsA")));
-    CHECK("owner: others are still refused", !prte_session_is_owned_by(s, NS("nsB")));
-
-    /* adding twice must not grow the list - owners accumulates one entry per
-     * namespace spawned into the session, and a job can be spawned into the
-     * same session repeatedly */
-    prte_session_add_owner(s, NS("nsA"));
-    CHECK("owner: re-adding is a no-op", 1 == PMIx_Argv_count(s->owners));
-    prte_session_add_owner(s, NS("nsB"));
-    CHECK("owner: a second namespace appends", 2 == PMIx_Argv_count(s->owners));
-    CHECK("owner: and is admitted", prte_session_is_owned_by(s, NS("nsB")));
-
-    /* the default session belongs to everyone and records no owners */
-    prte_default_session = s;
-    CHECK("owner: the default session admits anyone", prte_session_is_owned_by(s, NS("nsZ")));
-    prte_session_add_owner(s, NS("nsZ"));
-    CHECK("owner: the default session records nothing", 2 == PMIx_Argv_count(s->owners));
-    prte_default_session = saved_default;
-
-    /* a NULL session is the default pool */
-    CHECK("owner: NULL session admits anyone", prte_session_is_owned_by(NULL, NS("nsZ")));
-
-    /* An EMPTY namespace must never be recorded as an owner, and the case
-     * that matters is a reservation whose owner list is still empty - with
-     * entries present, the wildcard below makes the empty one look like a
-     * duplicate and it is dropped by accident rather than on purpose.
-     *
-     * This is not hypothetical: a spawn request arrives with no namespace at
-     * all (the HNP names the job later, in prte_plm_base_setup_job), so the
-     * code that granted the spawned job ownership at request-vetting time
-     * handed in exactly this.  An empty entry does not merely fail to
-     * identify anybody - PMIx_Check_nspace treats an empty side as a
-     * wildcard, so it matches EVERY namespace and retires the reservation's
-     * ownership gate for good. */
-    s2 = PMIX_NEW(prte_session_t);
-    s2->session_id = 8;
-    CHECK("owner: second insert succeeds", PRTE_SUCCESS == prte_set_session_object(s2));
-    prte_session_add_owner(s2, NS(""));
-    CHECK("owner: an empty namespace is not recorded", 0 == PMIx_Argv_count(s2->owners));
-    CHECK("owner: an empty owner does not admit everybody",
-          !prte_session_is_owned_by(s2, NS("nsC")));
-
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.users);
     reset_globals();
     return failures;
 }
@@ -1241,7 +1210,6 @@ static int test_object_lifetimes(void)
     {
         prte_session_t *s = PMIX_NEW(prte_session_t);
 
-        CHECK("lifetime: a fresh session has no owners", NULL == s->owners);
         CHECK("lifetime: a fresh session has no index", -1 == s->index);
         CHECK("lifetime: a fresh session has the default inheritance",
               PRTE_INHERIT_DEFAULT_VALUE == s->inheritance);
