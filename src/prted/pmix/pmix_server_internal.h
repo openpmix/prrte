@@ -792,6 +792,11 @@ PRTE_EXPORT bool prte_pmix_server_is_identity_key(const char *key);
 /* root, or the user this DVM runs as */
 PRTE_EXPORT bool prte_pmix_server_privileged(uid_t uid);
 
+/* Does uid belong to group gid - its primary group or one the system lists
+ * it in, looked up afresh? Always true for root, which may act as any
+ * group. */
+PRTE_EXPORT bool prte_pmix_server_in_group(uid_t uid, gid_t gid);
+
 /* the user jdata belongs to - our own user when none is known */
 PRTE_EXPORT uid_t prte_pmix_server_job_owner(prte_job_t *jdata);
 

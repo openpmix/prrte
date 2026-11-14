@@ -101,6 +101,19 @@ deviation* and the framework guide.
   (`prte_ras_slurm_pending_req_permitted()`); the extend path's own
   cleanup calls `prte_ras_slurm_cancel_pending_req()` directly.
 
+### Whom an extend is for: the DVM's own user, for now
+
+Every extend arrives carrying `PMIX_ALLOC_UID`/`GID`, the user and group
+the allocation is for (see "Whom an allocation is for" in the framework
+guide). `salloc` runs as the DVM's own user, so the job Slurm creates is
+that user's whoever asked, and this module says exactly that: its answer
+returns the DVM's uid and gid as `PMIX_ALLOC_UID`/`GID`, and every session
+`prte_ras_slurm_assign_new_session()` makes records them as its owner.
+Asking Slurm for the user and group the request names, and checking the
+job record says so, is not done; what it would take is written up on
+`prte_ras_slurm_serve_extend_req()`, for whoever maintains this component
+to decide.
+
 ### `PMIX_ALLOC_NEW` is a synonym for `PMIX_ALLOC_EXTEND`
 
 Slurm cannot grow an allocation in place, so an extend here is always a second,

@@ -69,3 +69,14 @@ scheduler, the scheduler decides instead.
 A host may be given as ``user@host`` to name the user the DVM logs in to
 it as. That is accepted only from root and the DVM's own user, and a host
 name may contain only letters, digits, ``.``, ``-`` and ``_``.
+
+Whom an allocation is for
+-------------------------
+
+An allocation request (``PMIx_Allocation_request``) for new or extended
+resources is for the user who makes it, and that user's group, unless it
+says otherwise with ``PMIX_ALLOC_UID`` and ``PMIX_ALLOC_GID``. A user may
+name only itself; root may name any user. Any user may name a group it
+belongs to. Anything else is refused with ``PMIX_ERR_NO_PERMISSIONS``.
+The allocation belongs to the user and group it is for, and they are who
+may extend or release it.

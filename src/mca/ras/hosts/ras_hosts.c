@@ -564,7 +564,12 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
      *   - PMIX_ALLOC_RELEASE removes the named nodes (PMIX_ALLOC_NODE_LIST) or
      *     tears down a whole reservation (PMIX_ALLOC_ID).
      * Keeping the original request info intact preserves the node list and the
-     * allocation ids, so a release can target a specific reservation. */
+     * allocation ids, so a release can target a specific reservation.
+     *
+     * It also makes our answer say whom the allocation is for, as every
+     * module's must: there is no scheduler here to ask, so the allocation is
+     * granted for exactly the PMIX_ALLOC_UID/GID the request carries, which
+     * prte_ras_base_alloc_owner checked or filled in before we were called. */
     switch (req->allocdir) {
     case PMIX_ALLOC_NEW:
     case PMIX_ALLOC_EXTEND:

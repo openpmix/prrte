@@ -986,6 +986,128 @@ static bool ras_base_release_permitted(prte_pmix_server_req_t *req, const char *
     return ok;
 }
 
+/* Does this request grow the DVM's general pool from --add-host or
+ * --add-hostfile, rather than ask for an allocation? */
+static bool ras_base_is_add_host(prte_pmix_server_req_t *req)
+{
+    size_t n;
+
+    for (n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST) ||
+            PMIx_Check_key(req->info[n].key, PMIX_ADD_HOSTFILE)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Read a request's PMIX_ALLOC_UID and PMIX_ALLOC_GID. A value that is not
+ * a number is an error; one that is absent leaves its have_ flag false. */
+static pmix_status_t ras_base_get_alloc_owner(const pmix_info_t *info, size_t ninfo,
+                                              uint32_t *uid, bool *have_uid,
+                                              uint32_t *gid, bool *have_gid)
+{
+    size_t n;
+
+    *have_uid = false;
+    *have_gid = false;
+    for (n = 0; NULL != info && n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_ALLOC_UID)) {
+            if (PMIX_SUCCESS != PMIx_Value_get_number(&info[n].value, uid, PMIX_UINT32)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
+            *have_uid = true;
+        } else if (PMIx_Check_key(info[n].key, PMIX_ALLOC_GID)) {
+            if (PMIX_SUCCESS != PMIx_Value_get_number(&info[n].value, gid, PMIX_UINT32)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
+            *have_gid = true;
+        }
+    }
+    return PMIX_SUCCESS;
+}
+
+pmix_status_t prte_ras_base_alloc_owner(prte_pmix_server_req_t *req)
+{
+    uid_t ruid;
+    gid_t rgid;
+    uint32_t uid = 0, gid = 0;
+    bool have_uid, have_gid;
+    pmix_info_t *xfer;
+    size_t n, nadd;
+    pmix_status_t rc;
+
+    if ((PMIX_ALLOC_NEW != req->allocdir && PMIX_ALLOC_EXTEND != req->allocdir) ||
+        ras_base_is_add_host(req)) {
+        return PMIX_SUCCESS;
+    }
+    rc = ras_base_get_alloc_owner(req->info, req->ninfo, &uid, &have_uid, &gid, &have_gid);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* who is asking. PMIx names the requester of every request a client or
+     * tool makes, so a request naming none is one we made ourselves */
+    if (prte_pmix_server_requester_uid(req->info, req->ninfo, &ruid)) {
+        rgid = prte_pmix_server_requester_gid(req->info, req->ninfo);
+    } else {
+        ruid = prte_process_info.euid;
+        rgid = prte_process_info.egid;
+    }
+
+    /* Root may ask on behalf of any user; anyone else only for themselves,
+     * as they could not act as another user in any case. A group may be
+     * any the requester belongs to */
+    if (have_uid && 0 != ruid && (uid_t) uid != ruid) {
+        return PMIX_ERR_NO_PERMISSIONS;
+    }
+    if (have_gid && !prte_pmix_server_in_group(ruid, (gid_t) gid)) {
+        return PMIX_ERR_NO_PERMISSIONS;
+    }
+    /* a user other than the requester comes with its group: the
+     * requester's own would be one that user need not belong to */
+    if (have_uid && !have_gid && (uid_t) uid != ruid) {
+        return PMIX_ERR_BAD_PARAM;
+    }
+
+    /* the component, and any scheduler behind it, is always told whom the
+     * allocation is for - the requester, unless it said otherwise */
+    nadd = (have_uid ? 0 : 1) + (have_gid ? 0 : 1);
+    if (0 == nadd) {
+        return PMIX_SUCCESS;
+    }
+    if (!have_gid && PRTE_INVALID_GID == rgid) {
+        /* nothing says which group to ask for */
+        return PMIX_ERR_BAD_PARAM;
+    }
+    PMIX_INFO_CREATE(xfer, req->ninfo + nadd);
+    if (NULL == xfer) {
+        return PMIX_ERR_NOMEM;
+    }
+    for (n = 0; n < req->ninfo; n++) {
+        PMIX_INFO_XFER(&xfer[n], &req->info[n]);
+    }
+    if (!have_uid) {
+        uid = (uint32_t) ruid;
+        PMIX_INFO_LOAD(&xfer[n], PMIX_ALLOC_UID, &uid, PMIX_UINT32);
+        ++n;
+    }
+    if (!have_gid) {
+        gid = (uint32_t) rgid;
+        PMIX_INFO_LOAD(&xfer[n], PMIX_ALLOC_GID, &gid, PMIX_UINT32);
+        ++n;
+    }
+    /* the original array is the caller's unless the request already owned
+     * it - see ras/pmix's modify */
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+    req->info = xfer;
+    req->ninfo = n;
+    req->copy = true;
+    return PMIX_SUCCESS;
+}
+
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -1094,6 +1216,15 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
             req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }
+    }
+
+    /* Whom an allocation is for: what the requester may name, and the
+     * requester itself where it names nothing. Settled before any module
+     * sees the request, since a module passes it on to its scheduler */
+    rc = prte_ras_base_alloc_owner(req);
+    if (PMIX_SUCCESS != rc) {
+        req->pstatus = rc;
+        goto respond;
     }
 
 #if defined(PMIX_ALLOC_ACTIVATE)
@@ -1385,12 +1516,14 @@ static void shrink_xcast_complete(void *cbdata)
  * the host (rather than a scheduler) must identify on its own. */
 static uint32_t prte_ras_reservation_counter = 0;
 
-/* Create a new reservation owned by the given namespace. Returns NULL on
- * failure. alloc_id (scheduler-assigned PMIX_ALLOC_ID) and req_id
- * (requester PMIX_ALLOC_REQ_ID) are optional. */
+/* Create a new reservation owned by the given namespace, and belonging to
+ * owner_uid/owner_gid - the PMIX_ALLOC_UID/GID the allocation was granted
+ * for. Returns NULL on failure. alloc_id (scheduler-assigned PMIX_ALLOC_ID)
+ * and req_id (requester PMIX_ALLOC_REQ_ID) are optional. */
 static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
                                           pmix_proc_t *requestor,
-                                          const char *alloc_id, const char *req_id)
+                                          const char *alloc_id, const char *req_id,
+                                          uid_t owner_uid, gid_t owner_gid)
 {
     prte_session_t *s;
     prte_job_t *ownerjob;
@@ -1427,12 +1560,12 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
     if (NULL != ownerjob) {
         PMIX_RETAIN(ownerjob);
         s->owner_job = ownerjob;
-        /* The user owns the reservation: who may use or change it is
-         * decided by uid (prte_pmix_server_session_permitted_uid), since a
-         * tool's namespace lives only as long as the command that made it */
-        s->owner_uid = ownerjob->uid;
-        s->owner_gid = ownerjob->gid;
     }
+    /* The user owns the reservation: who may use or change it is decided by
+     * uid (prte_pmix_server_session_permitted_uid), since a tool's namespace
+     * lives only as long as the command that made it */
+    s->owner_uid = owner_uid;
+    s->owner_gid = owner_gid;
     rc = prte_set_session_object(s);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
@@ -1821,6 +1954,7 @@ static bool ras_base_get_string(const pmix_info_t *info, char **value)
 }
 
 static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
+                                           uid_t owner_uid, gid_t owner_gid,
                                            prte_session_t **dest_out,
                                            bool *created)
 {
@@ -1929,7 +2063,7 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
         PMIX_XFER_PROCID(&dest->requestor, &req->tproc);
     } else {                                    /* PMIX_ALLOC_NEW */
         dest = create_reservation(owner_nspace, inherit, &req->tproc,
-                                  alloc_id, req_id);
+                                  alloc_id, req_id, owner_uid, owner_gid);
         if (NULL == dest) {
             return PMIX_ERR_OUT_OF_RESOURCE;
         }
@@ -2071,6 +2205,8 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
     size_t n;
     bool found = false;
     bool created = false;
+    uint32_t auid = 0, agid = 0;
+    bool have_uid, have_gid;
 
     /* an add-host/add-hostfile request (from the --add-host and
      * --add-hostfile cmd line options) grows the DVM's general pool.
@@ -2083,15 +2219,25 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
      * it is the VM_READY re-entry at the end of the (possibly empty)
      * daemon launch that marks the DVM ready again and releases the
      * cached jobs */
-    for (n = 0; n < req->ninfo; n++) {
-        if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST) ||
-            PMIx_Check_key(req->info[n].key, PMIX_ADD_HOSTFILE)) {
-            prte_ras_base_activate_dvm_grow();
-            return;
-        }
+    if (ras_base_is_add_host(req)) {
+        prte_ras_base_activate_dvm_grow();
+        return;
     }
 
-    rc = ras_base_prepare_grow(req, &dest, &created);
+    /* The answer says whom the allocation was granted for - every module
+     * that serves one returns it, having checked it against what it asked
+     * for (prte_ras_base_alloc_owner). Without it there is no owner to
+     * record, and guessing one could be wrong */
+    rc = ras_base_get_alloc_owner(req->info, req->ninfo, &auid, &have_uid, &agid, &have_gid);
+    if (PMIX_SUCCESS != rc || !have_uid || !have_gid) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                       "ras-base:alloc-owner-missing", true,
+                       PMIx_Alloc_directive_string(req->allocdir));
+        req->pstatus = (PMIX_SUCCESS != rc) ? rc : PMIX_ERROR;
+        return;
+    }
+
+    rc = ras_base_prepare_grow(req, (uid_t) auid, (gid_t) agid, &dest, &created);
     if (PMIX_SUCCESS != rc) {
         req->pstatus = rc;
         return;
@@ -2743,11 +2889,11 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
      * what says who asked: the array is the client's own, and the only
      * PMIX_USERID a request may carry is one PMIx or the spawn's admission
      * established, so the job owner's is put in its place below. The array
-     * is sized for the whole thing and filled short by at least the
-     * directive, which leaves room for the owner; the tail stays as
-     * PMIX_INFO_CREATE left it, which destructs to nothing, so the request
-     * may carry the filled count. */
-    PMIX_INFO_CREATE(info, nalloc);
+     * is sized for the whole thing plus one, and filled short by at least
+     * the directive, which leaves room for the owner's user and group; the
+     * tail stays as PMIX_INFO_CREATE left it, which destructs to nothing, so
+     * the request may carry the filled count. */
+    PMIX_INFO_CREATE(info, nalloc + 1);
     if (NULL == info) {
         PMIX_DATA_ARRAY_FREE(darray);
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -2755,7 +2901,7 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
     for (n = 0; n < nalloc; n++) {
         if (PMIx_Check_key(src[n].key, PMIX_ALLOC_REQ_DIRECTIVE)) {
             if (PMIX_ALLOC_DIRECTIVE != src[n].value.type) {
-                PMIX_INFO_FREE(info, nalloc);
+                PMIX_INFO_FREE(info, nalloc + 1);
                 PMIX_DATA_ARRAY_FREE(darray);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -2774,7 +2920,7 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
         /* the one element that cannot be defaulted: a request whose directive
          * we had to guess would ask for something nobody asked for */
         prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt", "ras-base:spawn-alloc-nodirective", true);
-        PMIX_INFO_FREE(info, nalloc);
+        PMIX_INFO_FREE(info, nalloc + 1);
         return PRTE_ERR_BAD_PARAM;
     }
     /* the request is the spawn's, so it is judged as the user the spawn was
@@ -2782,11 +2928,24 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
      * user - as an allocation request is judged and told as its client */
     owner = (uint32_t) prte_pmix_server_job_owner(jdata);
     PMIX_INFO_LOAD(&info[idx++], PMIX_USERID, &owner, PMIX_UINT32);
+    {
+        uint32_t ogid, *ogidptr = &ogid;
+
+        /* and the owner's group, which the allocation is for unless the
+         * request names another (prte_ras_base_alloc_owner) */
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID,
+                               (void **) &ogidptr, PMIX_UINT32)) {
+            PMIX_INFO_LOAD(&info[idx++], PMIX_GRPID, &ogid, PMIX_UINT32);
+        } else if (PRTE_INVALID_GID != jdata->gid) {
+            ogid = (uint32_t) jdata->gid;
+            PMIX_INFO_LOAD(&info[idx++], PMIX_GRPID, &ogid, PMIX_UINT32);
+        }
+    }
     ninfo = idx;
 
     req = PMIX_NEW(prte_pmix_server_req_t);
     if (NULL == req) {
-        PMIX_INFO_FREE(info, nalloc);
+        PMIX_INFO_FREE(info, nalloc + 1);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     pmix_asprintf(&req->operation, "SPAWN-ALLOC: %s",

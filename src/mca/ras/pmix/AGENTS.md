@@ -52,6 +52,19 @@ Files:
   `prte_ras_base_complete_request`, and relays the result to the original
   caller.
 
+- **Whom the allocation is for.** A NEW or EXTEND arrives carrying
+  `PMIX_ALLOC_UID`/`GID` (`prte_ras_base_alloc_owner`), and they go to the
+  scheduler with the rest of the request. Before merging, `passthru` checks
+  with `owner_answered()` that a successful answer carries the same pair.
+  It must look at the answer alone: `merge_answer()` keeps every request
+  key the answer does not mention, so after the merge an answer that left
+  them out looks like one that agreed. An answer naming another user or
+  group, or none, fails the request (`ras-base:alloc-owner-mismatch`) and
+  `giveback()` returns the grant to the scheduler with a
+  `PMIX_ALLOC_RELEASE` - naming the allocation id for a NEW, and the id with
+  the granted nodes for an EXTEND, so as not to release what was held
+  before the request. Its completion is thread-shifted like every other.
+
 - **`init()`** is where the MCA parameters become real. Every
   `ras_pmix_*` connection parameter is the name of a PMIx attach
   attribute:
