@@ -95,7 +95,11 @@ deviation* and the framework guide.
   with `scontrol update job`, removing nodes by count or by name while
   protecting the node the HNP is running on.
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
-  extend by request id, and answers it (see below).
+  extend by request id, and answers it (see below). A pending request
+  records the user the PMIx server named for the extend that made it, and
+  only that user, root and the DVM's own user may cancel it
+  (`prte_ras_slurm_pending_req_permitted()`); the extend path's own
+  cleanup calls `prte_ras_slurm_cancel_pending_req()` directly.
 
 ### `PMIX_ALLOC_NEW` is a synonym for `PMIX_ALLOC_EXTEND`
 

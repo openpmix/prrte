@@ -922,6 +922,70 @@ static bool ras_base_scheduler_decides(void)
             0 == strcmp(mod->component->pmix_mca_component_name, "pmix"));
 }
 
+/* May the requester take what this release names out of the DVM? A release
+ * naming an allocation is its owner's to make (prte_pmix_server_session_permitted).
+ * One naming nodes is, node by node, the owner's of the reservation holding
+ * the node, and for a node of the general pool - which every user's jobs run
+ * on - whoever may change what the DVM consists of
+ * (prte_pmix_server_dvm_permitted), as bringing a node in is. So is a node we
+ * cannot find, since we cannot say whose it is. One naming neither leaves the
+ * DVM to choose which nodes go, which is a change to the DVM. *what is set to
+ * what was refused. */
+static bool ras_base_release_permitted(prte_pmix_server_req_t *req, const char **what)
+{
+    prte_session_t *session;
+    prte_node_t *node;
+    char *ndstring = NULL, **nodes;
+    bool named = false, ok = true;
+    size_t n;
+    int k;
+
+    for (n = 0; ok && n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+            named = true;
+            if (PMIX_STRING != req->info[n].value.type ||
+                NULL == req->info[n].value.data.string) {
+                /* refused as malformed where it is read */
+                continue;
+            }
+            session = prte_get_session_object_from_id(req->info[n].value.data.string);
+            if (NULL == session) {
+                /* nothing to release - answered as such where it is read */
+                continue;
+            }
+            *what = "an allocation";
+            ok = (prte_default_session == session)
+                     ? prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)
+                     : prte_pmix_server_session_permitted(session, &req->tproc, req->info,
+                                                          req->ninfo);
+        } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST)) {
+            named = true;
+            if (PMIX_SUCCESS != prte_ras_base_parse_node_list(&req->info[n], &ndstring)) {
+                /* refused as malformed where it is read */
+                continue;
+            }
+            nodes = PMIx_Argv_split(ndstring, ',');
+            free(ndstring);
+            ndstring = NULL;
+            *what = "nodes";
+            for (k = 0; ok && NULL != nodes && NULL != nodes[k]; k++) {
+                node = prte_node_match(NULL, nodes[k]);
+                session = (NULL == node) ? NULL : node->session;
+                ok = (NULL == session || prte_default_session == session)
+                         ? prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)
+                         : prte_pmix_server_session_permitted(session, &req->tproc, req->info,
+                                                              req->ninfo);
+            }
+            PMIx_Argv_free(nodes);
+        }
+    }
+    if (ok && !named) {
+        *what = "a number of nodes the DVM chooses";
+        ok = prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo);
+    }
+    return ok;
+}
+
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -1014,6 +1078,19 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
                            PMIx_Alloc_directive_string(req->allocdir),
                            files ? "a file of hosts"
                                  : (user ? "a user to reach a host as" : "hosts"));
+            req->pstatus = PMIX_ERR_NO_PERMISSIONS;
+            goto respond;
+        }
+    }
+
+    /* Taking nodes out of the DVM is judged the same way, unless a
+     * scheduler is to decide it */
+    if (PMIX_ALLOC_RELEASE == req->allocdir && !ras_base_scheduler_decides()) {
+        const char *what = "nodes";
+
+        if (!ras_base_release_permitted(req, &what)) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:release-not-permitted", true, what);
             req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }

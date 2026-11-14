@@ -232,3 +232,16 @@ with ("--rtos users=..." and "groups=..."). A file of hosts the DVM is
 to read, or a user to reach a host as ("user@host"), is accepted only
 from root and the user the DVM runs as, since the DVM reads the file,
 and logs in, as that user.
+#
+[ras-base:release-not-permitted]
+A request to take nodes out of the DVM was refused, because the user who
+made it may not release what it named:
+
+  Named:  %s
+
+An allocation, and a node of a reservation, may be released by the
+reservation's owner, members of the owner's group, root and the user the
+DVM runs as. A node of the DVM's general pool, or a number of nodes the
+DVM is to choose, may be released only by those who may change what the
+DVM consists of: root, the user the DVM runs as, and the users and groups
+the DVM was started with ("--rtos users=..." and "groups=...").

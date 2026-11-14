@@ -881,6 +881,12 @@ PRTE_EXPORT bool prte_pmix_server_session_permitted(prte_session_t *session,
  * session's owner, or a member of the owner's group */
 PRTE_EXPORT bool prte_pmix_server_session_permitted_uid(prte_session_t *session, uid_t uid);
 
+/* May uid act on something owned by owner (and, where one is known, owned
+ * by the group group)? Root, our own user, the owner, or a member of the
+ * owner's group - pmix_server_access_check's rule. An unknown uid may
+ * not. */
+PRTE_EXPORT bool prte_pmix_server_user_permitted(uid_t uid, uid_t owner, gid_t group);
+
 /* Add to a job's info the further users (or, with group, groups) the
  * --rtos users= / groups= directives name - a ':'-separated list of names
  * and numbers, resolved here - as a PMIX_ACCESS_PERMISSIONS, which travels
