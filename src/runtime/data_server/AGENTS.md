@@ -115,17 +115,15 @@ Three things follow, and each is load-bearing:
   exactly as it does for a local store, so a DVM holds one connection however
   many daemons it has. At the master itself the RML send is a send to self.
 - **The requesting process is carried in `PMIX_REQUESTOR`, and its uid and
-  gid in `prte.pub.ruid` / `prte.pub.rgid`.** Otherwise the far end
+  gid in `PMIX_ORIGIN_USERID` / `PMIX_ORIGIN_GRPID`.** Otherwise the far end
   attributes the operation to the relaying daemon's *tool* identity, and
   every ownership rule — who may unpublish, what `PMIX_RANGE_NAMESPACE`
   admits, what a job-end purge takes — is answered about the wrong process.
-  The uid half matters for the same reason and is newer: PMIx appends the
-  *relay's* `PMIX_USERID` and `PMIX_GRPID` to the call the relay makes, so
-  without a separate claim the far end would store the item under the
-  relaying daemon's user and test every later removal against it. They are
-  PRRTE-private keys rather than a second `PMIX_USERID` precisely because
-  PMIx adds its own, and two entries under one key make the answer depend on
-  array order. `prte_ds_check_requestor()` reads all three in one pass and
+  The far end's PMIx stamps the *relay's* `PMIX_USERID` and `PMIX_GRPID` on
+  the call the relay makes and passes the `PMIX_ORIGIN_*` pair to its host
+  untouched beside them, so without the pair the far end would store the
+  item under the relaying daemon's user and test every later removal against
+  it. `prte_ds_check_requestor()` reads all three in one pass and
   honors them **only from a tool**; an application process making the claim
   is trying to act under a peer's identity, and it is dropped. Call it
   *after* your own directive scan, or the relay's `PMIX_USERID` lands on top
