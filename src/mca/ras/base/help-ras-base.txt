@@ -228,10 +228,11 @@ who made it may not ask for what it named:
 
 Bringing hosts into a DVM changes what it consists of, and is for root,
 the user the DVM runs as, and the users and groups the DVM was started
-with ("--rtos users=..." and "groups=..."). A file of hosts the DVM is
-to read, or a user to reach a host as ("user@host"), is accepted only
-from root and the user the DVM runs as, since the DVM reads the file,
-and logs in, as that user.
+with ("--rtos users=..." and "groups=..."). A file of hosts is read as
+the user who named it, and its hosts are judged the same way. A user to
+reach a host as ("user@host"), whether in the request or in a file of
+hosts, is accepted only from root and the user the DVM runs as, since
+the DVM logs in as that user.
 #
 [ras-base:release-not-permitted]
 A request to take nodes out of the DVM was refused, because the user who

@@ -28,13 +28,21 @@
 
 #include "prte_config.h"
 
+#include <sys/types.h>
+
 #include "src/class/pmix_list.h"
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile);
+/* Both read the hostfile as user uid, group gid - whoever named it: a
+ * job's owner (prte_pmix_server_job_user), an allocation's requester
+ * (prte_pmix_server_request_user), or our own user for the DVM's own
+ * configuration. See prte_textfile_open. */
+PRTE_EXPORT int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile, uid_t uid,
+                                             gid_t gid);
 
-PRTE_EXPORT int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove);
+PRTE_EXPORT int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove,
+                                                uid_t uid, gid_t gid);
 
 END_C_DECLS
 

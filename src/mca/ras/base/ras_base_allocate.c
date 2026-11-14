@@ -734,6 +734,8 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
     const char *hosts = NULL, *hostfile = NULL, *req_id = NULL;
     int rc, nactivated = 0;
     size_t n;
+    uid_t uid;
+    gid_t gid;
 
     for (n = 0; n < req->ninfo; n++) {
         if (PMIx_Check_key(req->info[n].key, PMIX_HOST)) {
@@ -767,7 +769,9 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
         return;
     }
 
-    rc = prte_ras_base_activate_nodes(hosts, hostfile, &nactivated);
+    /* a hostfile it names is read as whoever asked */
+    prte_pmix_server_request_user(req->info, req->ninfo, &uid, &gid);
+    rc = prte_ras_base_activate_nodes(hosts, hostfile, uid, gid, &nactivated);
     if (PRTE_SUCCESS != rc) {
         /* the resolver reports what it refused, and why, through show_help;
          * a refusal is always the specification's fault (a host this DVM
@@ -866,9 +870,10 @@ static bool ras_base_session_has_daemons(prte_session_t *session)
 }
 
 /* Does this request bring hosts into the DVM, or start daemons on hosts it
- * holds, by naming them - and does it name a file the master reads for
- * that (`files`), or a user to reach a host as (`user`)? A node list is
- * looked at as it will be read, so a user hidden in a regex is seen. */
+ * holds, by naming them - and does it name them in a file (`files`, which
+ * only changes what a refusal says), or name a user to reach a host as
+ * (`user`)? A node list is looked at as it will be read, so a user hidden
+ * in a regex is seen. A user inside a file is found when it is read. */
 static bool ras_base_names_hosts(prte_pmix_server_req_t *req, bool *files, bool *user)
 {
     bool named = false, activate = false;
@@ -1181,8 +1186,9 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     }
 
     /* Naming hosts to bring into the DVM, or to start daemons on, is for
-     * whoever may change the DVM - and naming a file the master reads, or a
-     * user to reach a host as, for root and our own user alone
+     * whoever may change the DVM - whether named directly or in a file of
+     * them, which is read as the requester - and naming a user to reach a
+     * host as, for root and our own user alone
      * (prte_pmix_server_grow_permitted). Activation is served here, so it
      * is always judged here; a grow is judged here unless a scheduler is to
      * decide it. */
@@ -1194,12 +1200,12 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
 #endif
         if (ras_base_names_hosts(req, &files, &user) &&
             (activate || !ras_base_scheduler_decides()) &&
-            !prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, files, user)) {
+            !prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, user)) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
                            "ras-base:grow-not-permitted", true,
                            PMIx_Alloc_directive_string(req->allocdir),
-                           files ? "a file of hosts"
-                                 : (user ? "a user to reach a host as" : "hosts"));
+                           user ? "a user to reach a host as"
+                                : (files ? "a file of hosts" : "hosts"));
             req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }
@@ -3186,7 +3192,8 @@ static int ras_base_activate_select(pmix_pointer_array_t *sel, prte_node_t *node
  * what the file said; what goes into the selection is the pool's own entry
  * for each, which is the only thing a grow can act on.
  */
-static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t *sel)
+static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t *sel, uid_t uid,
+                                      gid_t gid)
 {
     pmix_list_t nodes;
     prte_node_t *nd, *node;
@@ -3200,7 +3207,7 @@ static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     /* the parser reports its own failures - a file it cannot open, a bad
      * line, relative syntax inside a file - through show_help */
-    rc = prte_util_add_hostfile_nodes(&nodes, (char *) hostfile);
+    rc = prte_util_add_hostfile_nodes(&nodes, (char *) hostfile, uid, gid);
     if (PRTE_SUCCESS != rc) {
         PMIX_LIST_DESTRUCT(&nodes);
         return (PRTE_ERR_SILENT == rc) ? rc : PRTE_ERR_SILENT;
@@ -3239,7 +3246,8 @@ static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t
  * A ":<slots>" modifier is refused rather than ignored (see below), and so
  * is "+e" - see there for why it cannot mean anything useful here.
  */
-static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel)
+static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, uid_t uid,
+                                  gid_t gid)
 {
     char **tokens;
     int rc = PRTE_SUCCESS;
@@ -3263,7 +3271,7 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel)
              *
              * The parser is the real one, so ^exclusion, aliases and its
              * refusal of relative syntax inside a file all come along. */
-            rc = ras_base_activate_hostfile(&tokens[k][5], sel);
+            rc = ras_base_activate_hostfile(&tokens[k][5], sel, uid, gid);
             if (PRTE_SUCCESS != rc) {
                 goto done;
             }
@@ -3372,13 +3380,13 @@ done:
  * every other hostfile attribute may.
  */
 static int ras_base_activate_resolve(const char *hosts, const char *hostfile,
-                                     pmix_pointer_array_t *sel)
+                                     pmix_pointer_array_t *sel, uid_t uid, gid_t gid)
 {
     char **files;
     int k, rc = PRTE_SUCCESS;
 
     if (NULL != hosts && '\0' != *hosts) {
-        rc = ras_base_activate_spec(hosts, sel);
+        rc = ras_base_activate_spec(hosts, sel, uid, gid);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -3392,7 +3400,7 @@ static int ras_base_activate_resolve(const char *hosts, const char *hostfile,
         return PRTE_SUCCESS;
     }
     for (k = 0; NULL != files[k]; k++) {
-        rc = ras_base_activate_hostfile(files[k], sel);
+        rc = ras_base_activate_hostfile(files[k], sel, uid, gid);
         if (PRTE_SUCCESS != rc) {
             break;
         }
@@ -3433,7 +3441,7 @@ static int ras_base_activate_commit(pmix_pointer_array_t *sel)
     return nactivated;
 }
 
-int prte_ras_base_activate_nodes(const char *hosts, const char *hostfile,
+int prte_ras_base_activate_nodes(const char *hosts, const char *hostfile, uid_t uid, gid_t gid,
                                  int *nactivated)
 {
     pmix_pointer_array_t sel;
@@ -3450,7 +3458,7 @@ int prte_ras_base_activate_nodes(const char *hosts, const char *hostfile,
     PMIX_CONSTRUCT(&sel, pmix_pointer_array_t);
     pmix_pointer_array_init(&sel, 8, INT_MAX, 8);
 
-    rc = ras_base_activate_resolve(hosts, hostfile, &sel);
+    rc = ras_base_activate_resolve(hosts, hostfile, &sel, uid, gid);
     if (PRTE_SUCCESS == rc) {
         *nactivated = ras_base_activate_commit(&sel);
     }
@@ -3466,7 +3474,11 @@ int prte_ras_base_activate_hosts(prte_job_t *jdata)
     char *spec;
     pmix_pointer_array_t sel;
     bool found = false, adding = false;
+    uid_t uid;
+    gid_t gid;
 
+    /* a "file=" the spec names is read as the job's owner */
+    prte_pmix_server_job_user(jdata, &uid, &gid);
     PMIX_CONSTRUCT(&sel, pmix_pointer_array_t);
     pmix_pointer_array_init(&sel, 8, INT_MAX, 8);
 
@@ -3488,7 +3500,7 @@ int prte_ras_base_activate_hosts(prte_job_t *jdata)
             continue;
         }
         found = true;
-        rc = ras_base_activate_resolve(spec, NULL, &sel);
+        rc = ras_base_activate_resolve(spec, NULL, &sel, uid, gid);
         free(spec);
         if (PRTE_SUCCESS != rc) {
             PMIX_DESTRUCT(&sel);

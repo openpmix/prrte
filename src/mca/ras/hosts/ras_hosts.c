@@ -27,7 +27,9 @@
 
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/state/state.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/proc_info.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/textfile.h"
@@ -66,6 +68,8 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     char *hosts, **hostlist = NULL;
     bool check;
     prte_app_context_t *app;
+    uid_t uid;
+    gid_t gid;
 
     /* We first see if we were given a rank/seqfile - if so, use it
      * as the hosts will be taken from the mapping */
@@ -76,8 +80,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                              "%s ras:hosts:allocate parsing rank/seqfile %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
-        /* a rank/seqfile was provided - parse it */
-        rc = prte_util_add_hostfile_nodes(nodes, hosts);
+        /* a rank/seqfile was provided - parse it, as the job's owner */
+        prte_pmix_server_job_user(jdata, &uid, &gid);
+        rc = prte_util_add_hostfile_nodes(nodes, hosts, uid, gid);
         if (PRTE_SUCCESS != rc) {
             free(hosts);
             return rc;
@@ -179,8 +184,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                 return PRTE_ERR_SILENT;
             }
             free(hosts);
+            /* read as the job's owner, who named them */
+            prte_pmix_server_job_user(jdata, &uid, &gid);
             for (j=0; NULL != hostlist[j]; j++) {
-                if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(nodes, hostlist[j]))) {
+                if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(nodes, hostlist[j], uid, gid))) {
                     PMIx_Argv_free(hostlist);
                     return rc;
                 }
@@ -201,8 +208,11 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                              "%s ras:base:allocate parsing default hostfile %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_default_hostfile));
 
-        /* a default hostfile was provided - parse it */
-        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(nodes, prte_default_hostfile))) {
+        /* a default hostfile was provided - parse it. It is the DVM's own
+         * configuration, so read as ourselves */
+        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(nodes, prte_default_hostfile,
+                                                               prte_process_info.euid,
+                                                               prte_process_info.egid))) {
             return rc;
         }
     }
@@ -295,7 +305,13 @@ static bool parse_slots(const char *value, int *result)
     return true;
 }
 
-static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
+/* Read the hosts a request adds from hostfile, as uid/gid - whoever named
+ * it. A host given as "user@host" is reached by logging in as that user,
+ * which is for root and our own user alone, so with `logins` false such a
+ * line is refused. What is wrong with the file is said to nspace: the job
+ * a spawn's --add-hostfile came with, whose tool is waiting on it. */
+static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_list_t *nodes,
+                                      uid_t uid, gid_t gid, bool logins)
 {
     prte_textfile_t tf;
     FILE *fp;
@@ -309,15 +325,16 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
      * syntax here. The file is still opened the way that code opens
      * one: this runs on the master's progress thread, and a bare fopen()
      * of a FIFO with no writer would block that thread for good, so the
-     * open is non-blocking and only a regular file is read */
-    rc = prte_textfile_open(&tf, hostfile);
+     * open is non-blocking and only a regular file is read - and it is
+     * made as whoever named the file */
+    rc = prte_textfile_open(&tf, hostfile, uid, gid);
     if (PRTE_ERR_BAD_PARAM == rc) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+        prte_show_help(nspace, "help-ras-base.txt",
                        "ras-base:addhost-not-a-file", true, hostfile);
         return PMIX_ERR_SILENT;
     }
     if (PRTE_SUCCESS != rc) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
+        prte_show_help(nspace, "help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
         return PMIX_ERR_SILENT;
     }
     fp = tf.fp;
@@ -381,7 +398,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
             addslots = true;
         }
         if (!parse_slots(ptr, &slots)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:bad-slots", true,
+            prte_show_help(nspace, "help-ras-base.txt", "ras-base:bad-slots", true,
                            cptr, hostfile, ptr);
             prte_textfile_close(&tf);
             free(line);
@@ -407,11 +424,19 @@ process:
             if (NULL != username) {
                 ndname[-1] = '@';
             }
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+            prte_show_help(nspace, "help-ras-base.txt",
                            "ras-base:addhost-bad-name", true, cptr, hostfile);
             prte_textfile_close(&tf);
             free(line);
             return PMIX_ERR_SILENT;
+        }
+        if (NULL != username && !logins) {
+            prte_show_help(nspace, "help-ras-base.txt",
+                           "ras-base:grow-not-permitted", true, "add-hostfile",
+                           "a user to reach a host as");
+            prte_textfile_close(&tf);
+            free(line);
+            return PMIX_ERR_NO_PERMISSIONS;
         }
 
         /* See if we already have this node.
@@ -444,7 +469,7 @@ process:
             } else if (0 > slots && -1 != slots) {
                 // cannot have a new node with negative slots - the -1
                 // is a marker for a node without slots being specified
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "negative-slots", true,
+                prte_show_help(nspace, "help-ras-base.txt", "negative-slots", true,
                                ndname, slots);
                 PMIX_RELEASE(node);
                 free(line);
@@ -463,7 +488,7 @@ process:
     }
     prte_textfile_close(&tf);
     if (failed) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, hostfile);
+        prte_show_help(nspace, "help-prte-util.txt", "file-read-failed", true, hostfile);
         return PMIX_ERR_SILENT;
     }
     return PMIX_SUCCESS;
@@ -475,9 +500,25 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     pmix_list_t nodes;
     size_t n, k;
     char **hostfiles;
-    bool handled = false;
+    bool handled = false, logins;
+    uid_t uid;
+    gid_t gid;
+    const char *nspace = PRTE_PROC_MY_NAME->nspace;
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
+
+    /* A file of hosts is read as whoever named it: the owner of the job a
+     * spawn's add-hostfile came with, or the requester of an allocation. A
+     * login it names is that owner's to ask for only if it is root or our
+     * own user; a requester's as prte_pmix_server_grow_permitted says. */
+    if (NULL != req->jdata) {
+        prte_pmix_server_job_user(req->jdata, &uid, &gid);
+        logins = prte_pmix_server_privileged(uid);
+        nspace = PRTE_JOB_NSPACE(req->jdata);
+    } else {
+        prte_pmix_server_request_user(req->info, req->ninfo, &uid, &gid);
+        logins = prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, true);
+    }
 
     // look for applicable directives
     for (n=0; n < req->ninfo; n++) {
@@ -496,7 +537,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
                 continue;
             }
             for (k=0; NULL != hostfiles[k]; k++) {
-                rc = process_hostfile(hostfiles[k], &nodes);
+                rc = process_hostfile(nspace, hostfiles[k], &nodes, uid, gid, logins);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_LIST_DESTRUCT(&nodes);
                     PMIx_Argv_free(hostfiles);

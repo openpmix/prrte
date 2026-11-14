@@ -1578,8 +1578,13 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
         } else if (0 == strcmp(file, "+")) {
             fp = stderr;
         } else {
-            /* attempt to open the specified file */
-            fp = prte_output_file_open(file, 0666, NULL);
+            /* attempt to open the specified file - as the job's owner,
+             * who named it */
+            uid_t fuid;
+            gid_t fgid;
+
+            prte_pmix_server_job_user(jdata, &fuid, &fgid);
+            fp = prte_output_file_open_as(file, 0666, NULL, fuid, fgid);
             if (NULL == fp) {
                 pmix_output(0, "Unable to open file %s for output of proctable: %s", file,
                             strerror(errno));
@@ -3090,7 +3095,7 @@ static int setup_virtual_machine(prte_job_t *jdata)
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (PRTE_SUCCESS != (rc = prte_rmaps_base_filter_nodes(app, &nodes, false))
+        if (PRTE_SUCCESS != (rc = prte_rmaps_base_filter_nodes(jdata, app, &nodes, false))
             && rc != PRTE_ERR_TAKE_NEXT_OPTION) {
             PRTE_ERROR_LOG(rc);
             PMIX_LIST_DESTRUCT(&nodes);

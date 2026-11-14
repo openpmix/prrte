@@ -1047,7 +1047,7 @@ static int test_hostfile(void)
         return 1;
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     CHECK("a plain hostfile parses", PRTE_SUCCESS == rc);
     CHECK("three hosts were read", 3 == pmix_list_get_size(&nodes));
     nd = find_node(&nodes, "hostA");
@@ -1063,7 +1063,7 @@ static int test_hostfile(void)
 
     /* a hostfile that does not exist is an error, not a silent no-op */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, "prte-no-such-hostfile-anywhere");
+    rc = prte_util_add_hostfile_nodes(&nodes, "prte-no-such-hostfile-anywhere", prte_process_info.euid, prte_process_info.egid);
     CHECK("a missing hostfile is refused", PRTE_SUCCESS != rc);
     PMIX_LIST_DESTRUCT(&nodes);
 
@@ -1076,7 +1076,7 @@ static int test_hostfile(void)
      * the file is opened, which is what this pins.
      */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, ".");
+    rc = prte_util_add_hostfile_nodes(&nodes, ".", prte_process_info.euid, prte_process_info.egid);
     CHECK("a directory is refused, not parsed", PRTE_SUCCESS != rc);
     CHECK("and contributed no nodes", 0 == pmix_list_get_size(&nodes));
     PMIX_LIST_DESTRUCT(&nodes);
@@ -1097,12 +1097,12 @@ static int test_hostfile(void)
         return failures + 1;
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, badpath);
+    rc = prte_util_add_hostfile_nodes(&nodes, badpath, prte_process_info.euid, prte_process_info.egid);
     CHECK("a malformed slot count is refused", PRTE_SUCCESS != rc);
     PMIX_LIST_DESTRUCT(&nodes);
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     CHECK("a good hostfile still parses after a failed one", PRTE_SUCCESS == rc);
     CHECK("and reads the same three hosts", 3 == pmix_list_get_size(&nodes));
     nd = find_node(&nodes, "hostA");
@@ -1129,7 +1129,7 @@ static int test_hostfile(void)
         return failures + 1;
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, badpath);
+    rc = prte_util_add_hostfile_nodes(&nodes, badpath, prte_process_info.euid, prte_process_info.egid);
     CHECK("a user@host entry parses", PRTE_SUCCESS == rc);
     nd = find_node(&nodes, "hostB");
     CHECK("and the host is the part after the @", NULL != nd);
@@ -1155,7 +1155,7 @@ static int test_hostfile(void)
         return failures + 1;
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, badpath);
+    rc = prte_util_add_hostfile_nodes(&nodes, badpath, prte_process_info.euid, prte_process_info.egid);
     CHECK("a second @ in a host entry is refused", PRTE_SUCCESS != rc);
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(badpath);
@@ -1167,7 +1167,7 @@ static int test_hostfile(void)
         return failures + 1;
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, badpath);
+    rc = prte_util_add_hostfile_nodes(&nodes, badpath, prte_process_info.euid, prte_process_info.egid);
     CHECK("a second @ in a rank entry is refused", PRTE_SUCCESS != rc);
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(badpath);
@@ -1183,26 +1183,26 @@ static int test_hostfile(void)
         return failures + 1;
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, badpath);
+    rc = prte_util_add_hostfile_nodes(&nodes, badpath, prte_process_info.euid, prte_process_info.egid);
     CHECK("a rank entry with no host is refused", PRTE_SUCCESS != rc);
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(badpath);
 
     /* and the file the parser gave up on left nothing behind for the next */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     CHECK("a good hostfile still parses after a refused @", PRTE_SUCCESS == rc);
     CHECK("and reads its three hosts", 3 == pmix_list_get_size(&nodes));
     PMIX_LIST_DESTRUCT(&nodes);
 
     /* filtering an allocation down to what a hostfile names */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     if (PRTE_SUCCESS == rc) {
         char filterpath[256];
 
         if (NULL != write_hostfile("hostB\n", filterpath, sizeof(filterpath))) {
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true, prte_process_info.euid, prte_process_info.egid);
             CHECK("filtering succeeds", PRTE_SUCCESS == rc);
             CHECK("only the named host is left", 1 == pmix_list_get_size(&nodes));
             CHECK("and it is the right one", NULL != find_node(&nodes, "hostB"));
@@ -1218,12 +1218,12 @@ static int test_hostfile(void)
      * the excluded ones included, and the excluded nodes were leaked.
      */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     if (PRTE_SUCCESS == rc) {
         char filterpath[256];
 
         if (NULL != write_hostfile("^hostB\n", filterpath, sizeof(filterpath))) {
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true, prte_process_info.euid, prte_process_info.egid);
             CHECK("an exclusion-only hostfile filters", PRTE_SUCCESS == rc);
             CHECK("...leaving every node it did not exclude",
                   2 == pmix_list_get_size(&nodes) && NULL != find_node(&nodes, "hostA")
@@ -1236,12 +1236,12 @@ static int test_hostfile(void)
 
     /* marking for a daemon (remove == false) honors the exclusion too */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     if (PRTE_SUCCESS == rc) {
         char filterpath[256];
 
         if (NULL != write_hostfile("^hostB\n", filterpath, sizeof(filterpath))) {
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, false);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, false, prte_process_info.euid, prte_process_info.egid);
             CHECK("an exclusion-only hostfile marks", PRTE_SUCCESS == rc);
             nd = find_node(&nodes, "hostA");
             CHECK("...the nodes it did not exclude",
@@ -1277,7 +1277,7 @@ static int test_hostfile(void)
             PMIX_CONSTRUCT(&nodes, pmix_list_t);
             PMIX_RETAIN(pool[1]);
             pmix_list_append(&nodes, &pool[1]->super);
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true, prte_process_info.euid, prte_process_info.egid);
             CHECK("a relative node the job does not have is refused", PRTE_ERR_SILENT == rc);
             PMIX_LIST_DESTRUCT(&nodes);
             unlink(filterpath);
@@ -1288,7 +1288,7 @@ static int test_hostfile(void)
             pmix_list_append(&nodes, &pool[1]->super);
             PMIX_RETAIN(pool[2]);
             pmix_list_append(&nodes, &pool[2]->super);
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true, prte_process_info.euid, prte_process_info.egid);
             CHECK("a relative node the job has is selected",
                   PRTE_SUCCESS == rc && 1 == pmix_list_get_size(&nodes)
                       && NULL != find_node(&nodes, "poolX"));
@@ -1313,7 +1313,7 @@ static int test_hostfile(void)
         prte_default_hostfile = "prte-no-such-default-hostfile";
         prte_default_hostfile_given = true;
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
-        rc = prte_util_add_hostfile_nodes(&nodes, prte_default_hostfile);
+        rc = prte_util_add_hostfile_nodes(&nodes, prte_default_hostfile, prte_process_info.euid, prte_process_info.egid);
         CHECK("a missing default hostfile asked for by name is refused silently",
               PRTE_ERR_SILENT == rc);
         PMIX_LIST_DESTRUCT(&nodes);
@@ -1323,12 +1323,12 @@ static int test_hostfile(void)
 
     /* a hostfile naming a host the allocation does not have is refused */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
     if (PRTE_SUCCESS == rc) {
         char filterpath[256];
 
         if (NULL != write_hostfile("hostZ\n", filterpath, sizeof(filterpath))) {
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true, prte_process_info.euid, prte_process_info.egid);
             CHECK("filtering on an unknown host is refused", PRTE_SUCCESS != rc);
             unlink(filterpath);
         }
@@ -1371,7 +1371,7 @@ static int test_hostfile(void)
         pmix_list_append(&nodes, &nd->super);
 
         if (NULL != write_hostfile("10.0.0.5\n", filterpath, sizeof(filterpath))) {
-            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true);
+            rc = prte_util_filter_hostfile_nodes(&nodes, filterpath, true, prte_process_info.euid, prte_process_info.egid);
             CHECK("a hostfile name matches an allocated node's alias", PRTE_SUCCESS == rc);
             CHECK("...and the node is kept under the name its daemon reported",
                   1 == pmix_list_get_size(&nodes) && NULL != find_node(&nodes, "node05"));

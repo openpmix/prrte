@@ -4807,6 +4807,29 @@ test_grow_authz() {
     else
         bad "root's PMIX_SPAWN_ALLOC of node5 did not run: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
+    banner "grow: a hostfile to add is read as its user, and judged like hosts"
+    ON 1 'mkdir -p /tmp/grow-files && chmod 755 /tmp/grow-files'
+    ON 1 'printf "node6\n" > /tmp/grow-files/u65534 && chown 65534:65534 /tmp/grow-files/u65534 && chmod 600 /tmp/grow-files/u65534'
+    out=$(RUN "cd /tmp && timeout 60 setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp prun --dvm-uri '$uri' --add-hostfile /tmp/grow-files/u65534 -n 1 hostname" 2>&1)
+    if echo "$out" | grep -q "PMIX_ERR_NO_PERMISSIONS" && echo "$out" | grep -q "a hostfile to add"; then
+        ok "an unlisted user's spawn adding a hostfile is refused, saying why"
+    else
+        bad "an unlisted user's --add-hostfile was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    ON 1 'printf "node6\n" > /tmp/grow-files/u65533 && chown 65533:65533 /tmp/grow-files/u65533 && chmod 600 /tmp/grow-files/u65533'
+    out=$(RUN "cd /tmp && timeout 90 setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp prun --dvm-uri '$uri' --add-hostfile /tmp/grow-files/u65533 -n 1 hostname" 2>&1)
+    [ "$(prted_count 6)" = 1 ] \
+        && ok "a listed user's own hostfile to add brings node6 in" \
+        || bad "a listed user's --add-hostfile did not bring node6 in: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    ON 1 'printf "root@node7\n" > /tmp/grow-files/u65533 && chown 65533:65533 /tmp/grow-files/u65533 && chmod 600 /tmp/grow-files/u65533'
+    out=$(RUN "cd /tmp && timeout 60 setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp prun --dvm-uri '$uri' --add-hostfile /tmp/grow-files/u65533 -n 1 hostname" 2>&1)
+    if echo "$out" | grep -q "a user to reach a host as" && [ "$(prted_count 7)" != 1 ]; then
+        ok "a user to reach a host as, named in the file, is refused"
+    else
+        bad "a listed user's file naming root@node7 was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    ON 1 'rm -rf /tmp/grow-files'
+
     banner "grow: an unlisted user may not take nodes out of the DVM"
     out=$(RUN "cd /tmp && timeout 60 $u65534 elastic shrink node3" 2>&1)
     echo "$out" | grep -q "PHASE 1.*PMIX_ERR_NO_PERMISSIONS" \
@@ -4909,19 +4932,68 @@ test_run_as() {
     [ "$n" = 2 ] && ok "root's job runs as root" \
                  || bad "root's job did not run as root: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
 
-    banner "run-as: another user may not have the DVM read a hostfile for it"
-    ON 1 'printf "node1 slots=2\nnode2 slots=2\n" > /tmp/runas-hosts && chmod 644 /tmp/runas-hosts'
+    # The files a job names for the master to read or write - a hostfile, a
+    # rankfile, the proctable - are opened as the job's owner: what that user
+    # may read is read for it, and nothing else is
+    banner "run-as: another user's own hostfile is read as that user"
+    ON 1 'mkdir -p /tmp/runas-files && chown 65534:65534 /tmp/runas-files && chmod 755 /tmp/runas-files'
+    ON 1 'printf "node1 slots=2\nnode2 slots=2\n" > /tmp/runas-files/hosts && chown 65534:65534 /tmp/runas-files/hosts && chmod 600 /tmp/runas-files/hosts'
+    out=$(RUN "cd /tmp && timeout 60 $rq --hostfile /tmp/runas-files/hosts -n 2 --map-by node hostname" 2>&1)
+    [ "$(echo "$out" | grep -c '^node[12]$')" = 2 ] \
+        && ok "a hostfile only its user can read is used for that user's job" \
+        || bad "another user's own hostfile was not used: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+    banner "run-as: a hostfile the job's user may not read is not read for it"
+    ON 1 'printf "node1 slots=2\nnode2 slots=2\n" > /tmp/runas-hosts && chmod 600 /tmp/runas-hosts'
     out=$(RUN "cd /tmp && timeout 60 $rq --hostfile /tmp/runas-hosts -n 2 hostname" 2>&1)
-    if echo "$out" | grep -q "Asked for: *a hostfile" &&
-       echo "$out" | grep -q "PMIX_ERR_NO_PERMISSIONS"; then
-        ok "another user's hostfile is refused, saying why"
+    if echo "$out" | grep -q "unable to open the hostfile" &&
+       [ "$(echo "$out" | grep -c '^node[12]$')" = 0 ]; then
+        ok "root's private hostfile is not opened for another user's job"
     else
-        bad "another user's hostfile was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        bad "root's private hostfile was read for another user: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
     out=$(RUN "cd /tmp && timeout 60 prun --dvm-uri '$uri' --hostfile /tmp/runas-hosts -n 2 hostname" 2>&1)
     [ "$(echo "$out" | grep -c '^node')" = 2 ] \
-        && ok "root's hostfile is used as before" \
+        && ok "root's hostfile is used for root's job as before" \
         || bad "root's hostfile was not used: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "run-as: another user's rankfile is read as that user"
+    ON 1 'printf "rank 1=node1 slot=0\nrank 0=node2 slot=0\n" > /tmp/runas-files/ranks && chown 65534:65534 /tmp/runas-files/ranks && chmod 600 /tmp/runas-files/ranks'
+    out=$(RUN "cd /tmp && timeout 60 $rq --map-by rankfile:FILE=/tmp/runas-files/ranks -n 2 sh -c 'echo RANKAT \$PMIX_RANK \$(hostname)'" 2>&1)
+    if echo "$out" | grep -q '^RANKAT 0 node2$' && echo "$out" | grep -q '^RANKAT 1 node1$'; then
+        ok "each rank ran where the user's own rankfile put it"
+    else
+        bad "another user's rankfile was not used: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+
+    banner "run-as: another user's proctable is written as that user"
+    ON 1 'rm -f /tmp/runas-files/ptable /root/runas-ptable'
+    out=$(RUN "cd /tmp && timeout 60 $rq --rtos output-proctable=/tmp/runas-files/ptable -n 2 hostname" 2>&1)
+    n=$(ON 1 "stat -c '%u' /tmp/runas-files/ptable 2>/dev/null" | tr -d '\r')
+    if [ "$n" = 65534 ] && ON 1 'grep -q "rank, host, exe, pid" /tmp/runas-files/ptable'; then
+        ok "the proctable is the job's user's file"
+    else
+        bad "the proctable was not written as the job's user (owner '$n'): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    fi
+    out=$(RUN "cd /tmp && timeout 60 $rq --rtos output-proctable=/root/runas-ptable -n 2 hostname" 2>&1)
+    if ON 1 'test -e /root/runas-ptable'; then
+        bad "a proctable was written where the job's user may not write"
+    elif [ "$(echo "$out" | grep -c '^node')" != 2 ]; then
+        bad "the job did not run, so the proctable case says nothing: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    else
+        ok "a proctable is not written where the job's user may not write, and the job still runs"
+    fi
+
+    banner "run-as: another user may still not have files preloaded"
+    ON 1 'printf "x\n" > /tmp/runas-files/payload && chown 65534:65534 /tmp/runas-files/payload'
+    out=$(RUN "cd /tmp && timeout 60 $rq --preload-files /tmp/runas-files/payload -n 1 hostname" 2>&1)
+    if echo "$out" | grep -q "Asked for: *files to preload" &&
+       echo "$out" | grep -q "PMIX_ERR_NO_PERMISSIONS"; then
+        ok "another user's preload is refused, saying why"
+    else
+        bad "another user's preload was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    ON 1 'rm -rf /tmp/runas-files /tmp/runas-hosts'
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 

@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "constants.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_string_copy.h"
 #include "src/util/textfile.h"
 
@@ -110,7 +111,14 @@ static void split_fields(prte_textfile_t *tf)
     tf->nfields = n;
 }
 
-int prte_textfile_open(prte_textfile_t *tf, const char *path)
+/* the open itself, made as the user the file is read for - in a child that
+ * has become that user, so it may only make the call */
+static int textfile_open_fn(void *arg)
+{
+    return open((const char *) arg, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+}
+
+int prte_textfile_open(prte_textfile_t *tf, const char *path, uid_t uid, gid_t gid)
 {
     struct stat sbuf;
     int fd, flags;
@@ -129,8 +137,12 @@ int prte_textfile_open(prte_textfile_t *tf, const char *path)
      * on the DVM master's progress thread, where a blocking open() of a
      * FIFO would stall it; opening non-blocking avoids that, and fstat() on
      * the descriptor answers for the file we hold. Blocking is turned back on before any read: a regular
-     * file never blocks anyway, and stdio is not written to expect EAGAIN. */
-    fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+     * file never blocks anyway, and stdio is not written to expect EAGAIN.
+     *
+     * The open is made as the user the file is read for
+     * (prte_pmix_server_open_as), so what that user may not read is not
+     * read for it; everything after it is done here, on the descriptor. */
+    fd = prte_pmix_server_open_as(uid, gid, textfile_open_fn, (void *) path);
     if (0 > fd) {
         return PRTE_ERR_NOT_FOUND;
     }

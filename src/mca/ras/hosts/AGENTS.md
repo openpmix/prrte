@@ -82,10 +82,15 @@ when it is selected and its scheduler is out of touch.) It serves:
   The file is opened with `prte_textfile_open()` (non-blocking, regular
   files only, decided on the descriptor) because this runs on the
   master's progress thread, where a bare `fopen()` of a FIFO never
-  returned. Each name must pass `prte_util_host_name_ok()` - the `--host`
-  rule - and `user@host` is split as `--host` splits it: the node is
-  `host`, and the user becomes `PRTE_NODE_USERNAME` on a node the DVM does
-  not yet hold.
+  returned - and it is opened as whoever named it: the owner of the job a
+  spawn's `--add-hostfile` came with (`req->jdata`), or the requester of
+  an allocation. Each name must pass `prte_util_host_name_ok()` - the
+  `--host` rule - and `user@host` is split as `--host` splits it: the node
+  is `host`, and the user becomes `PRTE_NODE_USERNAME` on a node the DVM
+  does not yet hold. A `user@` is refused (`ras-base:grow-not-permitted`,
+  `PMIX_ERR_NO_PERMISSIONS`) unless whoever named the file may name a
+  login - root or the DVM's own user, the scheduler, or the master itself
+  (`prte_pmix_server_grow_permitted()`): the master logs in as itself.
 - `PMIX_ADD_HOST` — comma-list of hosts via
   `prte_util_add_dash_host_nodes`.
 - It also claims `PMIX_ALLOC_NEW`/`EXTEND`/`RELEASE` so the base's

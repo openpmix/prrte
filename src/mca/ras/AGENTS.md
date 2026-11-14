@@ -228,11 +228,15 @@ daemons on hosts it holds - changes what it consists of, and the daemons
 started there are given the DVM's key, so it is held to
 `prte_pmix_server_grow_permitted()` (`src/prted/pmix/pmix_server_access.c`),
 the rule creating a session follows: root, the DVM's own user, and the users
-and groups `--rtos users=`/`groups=` named when it started. Two things the
-master does *as itself* are narrower - reading a file of hosts
-(`PMIX_ADD_HOSTFILE`, an activation's `PMIX_HOSTFILE`) and logging in as a
-named user (`user@host`) - and are for root and the DVM's own user alone.
-It is judged in two places, with the same rule:
+and groups `--rtos users=`/`groups=` named when it started. A file of hosts
+(`PMIX_ADD_HOSTFILE`, an activation's `PMIX_HOSTFILE`) is held to the same
+rule as the hosts it names, since it is read as whoever named it - a job's
+owner (`prte_pmix_server_job_user()`) or the request's requester
+(`prte_pmix_server_request_user()`) - through `prte_textfile_open()`. The
+one thing the master does *as itself* is narrower: logging in as a named
+user (`user@host`) is for root and the DVM's own user alone, and `ras/hosts`
+refuses a `user@` found inside a file it reads for anyone else
+(`process_hostfile()`). It is judged in two places, with the same rule:
 
 - `prte_ras_base_modify()`, for an allocation request: a NEW or EXTEND that
   names nodes (`ras_base_names_hosts()`, which reads a node list through
@@ -246,11 +250,11 @@ It is judged in two places, with the same rule:
   (`prte_pmix_server_is_identity_key()`) and puts in the owner's
   `PMIX_USERID`, since the array is the client's own and only PMIx or the
   spawn's admission may say who asked.
-- spawn admission (`plm_base_receive.c`): `--add-host` and `--activate`
-  (`grow_directive()`), and `--add-hostfile` among the files the master
-  reads (`foreign_directive()`). The request `prte_ras_base_add_hosts()`
-  then builds names the master as its requester, since the job was judged
-  already.
+- spawn admission (`plm_base_receive.c`): `--add-host`, `--add-hostfile`
+  and `--activate` (`grow_directive()`). The request
+  `prte_ras_base_add_hosts()` then builds names the master as its
+  requester, since the job was judged already, and carries the job, so
+  `ras/hosts` reads its hostfile as the job's owner.
 
 **Taking nodes out is judged the same way.** `prte_ras_base_modify()`
 judges every `PMIX_ALLOC_RELEASE` before any module acts on it - the base's

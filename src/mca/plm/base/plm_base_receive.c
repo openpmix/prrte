@@ -454,41 +454,28 @@ int prte_plm_base_comm_stop(void)
  * NOTE: THIS OCCURS INSIDE OF AN EVENT AND IS
  * THEREFORE THREAD-SAFE
  */
-/* The first directive of jdata's that has the master open a file it names
- * - NULL if it has none. The master reads these as itself, whoever asked,
- * so for anybody but root and our own user they are refused
- * (prte_plm_base_recv). Running the job as its owner does not cover them:
- * they are not the job's processes. */
+/* The first directive of jdata's that has the master act on files as
+ * itself - NULL if it has none - which for anybody but root and our own
+ * user is refused (prte_plm_base_recv). Running the job as its owner does
+ * not cover them: they are not the job's processes.
+ *
+ * What is left here is preloading: the master reads the files and the
+ * binary, and the copies are written on every node by its daemons. The
+ * files the master only reads or writes for a job - a hostfile, a hostfile
+ * to add, a rankfile or sequence file, the proctable - are opened as the
+ * job's owner (prte_pmix_server_open_as) and are not refused. */
 static const char *foreign_directive(prte_job_t *jdata)
 {
-    static const struct {
-        prte_attribute_key_t key;
-        const char *name;
-    } app_keys[] = {
-        {PRTE_APP_HOSTFILE, "a hostfile"},
-        {PRTE_APP_ADD_HOSTFILE, "a hostfile to add"},
-        {PRTE_APP_MAP_FILE, "a rankfile or sequential mapping file"},
-        {PRTE_APP_PRELOAD_FILES, "files to preload"},
-    };
     prte_app_context_t *app;
-    size_t k;
     int n;
 
-    if (NULL != prte_fetch_attribute(&jdata->attributes, NULL, PRTE_JOB_FILE)) {
-        return "a rankfile or sequential mapping file";
-    }
-    if (NULL != prte_fetch_attribute(&jdata->attributes, NULL, PRTE_JOB_OUTPUT_PROCTABLE)) {
-        return "a file for the process table";
-    }
     for (n = 0; n < jdata->apps->size; n++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
         if (NULL == app) {
             continue;
         }
-        for (k = 0; k < sizeof(app_keys) / sizeof(app_keys[0]); k++) {
-            if (NULL != prte_fetch_attribute(&app->attributes, NULL, app_keys[k].key)) {
-                return app_keys[k].name;
-            }
+        if (NULL != prte_fetch_attribute(&app->attributes, NULL, PRTE_APP_PRELOAD_FILES)) {
+            return "files to preload";
         }
         /* the master reads the binary to copy it out */
         if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_PRELOAD_BIN)) {
@@ -511,6 +498,7 @@ static const char *grow_directive(prte_job_t *jdata, uid_t owner)
         const char *name;
     } keys[] = {
         {PRTE_APP_ADD_HOST, "hosts to add"},
+        {PRTE_APP_ADD_HOSTFILE, "a hostfile to add"},
         {PRTE_APP_ACTIVATE_HOSTS, "hosts to activate"},
     };
     prte_app_context_t *app;
@@ -530,9 +518,12 @@ static const char *grow_directive(prte_job_t *jdata, uid_t owner)
                                     PMIX_STRING)) {
                 continue;
             }
-            user = (NULL != hosts && NULL != strchr(hosts, '@'));
+            /* a hostfile's value is a path: a login it names is found when
+             * ras/hosts reads it, as the owner, and refused there */
+            user = (PRTE_APP_ADD_HOSTFILE != keys[k].key && NULL != hosts &&
+                    NULL != strchr(hosts, '@'));
             free(hosts);
-            if (!prte_pmix_server_grow_permitted_uid(owner, false, user)) {
+            if (!prte_pmix_server_grow_permitted_uid(owner, user)) {
                 return user ? "a user to reach a host as" : keys[k].name;
             }
         }
