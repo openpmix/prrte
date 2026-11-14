@@ -146,7 +146,8 @@ with the DVM's own privileges:
   Job's user:  %lu
   Asked for:   %s
 
-PRRTE opens the files these directives name as the user the DVM runs
-as - not as the user the job belongs to. They are accepted only from root and from the DVM's own
-user. Start the job without the directive, or have it started by the
-DVM's own user.
+PRRTE reads the files to preload as the user the DVM runs as, and its
+daemons write the copies on every node as that user - not as the user
+the job belongs to. Preloading is accepted only from root and from the
+DVM's own user. Start the job without the directive, or have it started
+by the DVM's own user.

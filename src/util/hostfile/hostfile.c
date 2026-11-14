@@ -484,7 +484,8 @@ refuse:
 /**
  * Parse the specified file into a node list.
  */
-static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_t *exclude)
+static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_t *exclude,
+                          uid_t uid, gid_t gid)
 {
     prte_textfile_t tf;
     char **fields;
@@ -493,7 +494,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
     cur_hostfile_name = hostfile;
     cur_hostfile_line = 0;
 
-    rc = prte_textfile_open(&tf, hostfile);
+    rc = prte_textfile_open(&tf, hostfile, uid, gid);
     if (PRTE_ERR_BAD_PARAM == rc) {
         /* the path exists but is not a regular file -- a directory, most
          * likely, which a user reaches by naming one ("--hostfile /tmp")
@@ -551,7 +552,7 @@ cleanup:
  * Parse the provided hostfile and add the nodes to the list.
  */
 
-int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
+int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile, uid_t uid, gid_t gid)
 {
     pmix_list_t exclude, adds;
     pmix_list_item_t *item;
@@ -567,7 +568,7 @@ int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
     PMIX_CONSTRUCT(&adds, pmix_list_t);
 
     /* parse the hostfile and add any new contents to the list */
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &adds, &exclude))) {
+    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &adds, &exclude, uid, gid))) {
         goto cleanup;
     }
 
@@ -672,7 +673,8 @@ static void hostfile_cap_for_job(prte_node_t *node_from_file, prte_node_t *node_
  * on the input list, removing those that
  * are not found in the hostfile
  */
-int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove)
+int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove, uid_t uid,
+                                    gid_t gid)
 {
     pmix_list_t newnodes, exclude;
     pmix_list_item_t *item1, *item2 = NULL, *next, *item3;
@@ -695,7 +697,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     PMIX_CONSTRUCT(&newnodes, pmix_list_t);
     PMIX_CONSTRUCT(&exclude, pmix_list_t);
     PMIX_CONSTRUCT(&keep, pmix_list_t);
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude))) {
+    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude, uid, gid))) {
         goto cleanup;
     }
 

@@ -19,6 +19,7 @@
 #include "src/class/pmix_list.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/hostfile/hostfile.h"
+#include "src/util/proc_info.h"
 #include "ras_testrm.h"
 
 /*
@@ -41,7 +42,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
-    rc = prte_util_add_hostfile_nodes(nodes, prte_mca_ras_testrm_component.hostfile);
+    /* the component's own configuration, so read as ourselves */
+    rc = prte_util_add_hostfile_nodes(nodes, prte_mca_ras_testrm_component.hostfile,
+                                      prte_process_info.euid, prte_process_info.egid);
     return rc;
 }
 

@@ -59,7 +59,7 @@ static char *read_all(const char *body, size_t bodylen)
     fwrite(body, 1, bodylen, fp);
     fclose(fp);
 
-    if (PRTE_SUCCESS != prte_textfile_open(&tf, path)) {
+    if (PRTE_SUCCESS != prte_textfile_open(&tf, path, geteuid(), getegid())) {
         unlink(path);
         return strdup("<open failed>");
     }
@@ -104,7 +104,7 @@ static char *read_all_status(const char *body, size_t bodylen, bool *failed)
     fwrite(body, 1, bodylen, fp);
     fclose(fp);
 
-    if (PRTE_SUCCESS != prte_textfile_open(&tf, path)) {
+    if (PRTE_SUCCESS != prte_textfile_open(&tf, path, geteuid(), getegid())) {
         unlink(path);
         return strdup("<open failed>");
     }
@@ -257,10 +257,10 @@ int test_textfile(void)
 
     /* --- what open() refuses ---------------------------------------- */
     CHECK("a missing file is not found",
-          PRTE_ERR_NOT_FOUND == prte_textfile_open(&tf, "prte-no-such-file-anywhere"));
+          PRTE_ERR_NOT_FOUND == prte_textfile_open(&tf, "prte-no-such-file-anywhere", geteuid(), getegid()));
     prte_textfile_close(&tf);
     CHECK("a directory is refused as a bad path",
-          PRTE_ERR_BAD_PARAM == prte_textfile_open(&tf, "."));
+          PRTE_ERR_BAD_PARAM == prte_textfile_open(&tf, ".", geteuid(), getegid()));
     prte_textfile_close(&tf);
     /* A FIFO is refused, and refused without waiting for a writer: the open
      * is non-blocking and the type test is made on the descriptor, so a
@@ -273,7 +273,7 @@ int test_textfile(void)
         unlink(fifo);
         if (0 == mkfifo(fifo, 0600)) {
             CHECK("a FIFO is refused as a bad path, without blocking",
-                  PRTE_ERR_BAD_PARAM == prte_textfile_open(&tf, fifo));
+                  PRTE_ERR_BAD_PARAM == prte_textfile_open(&tf, fifo, geteuid(), getegid()));
             CHECK("a refused FIFO leaves no stream behind", NULL == tf.fp);
             prte_textfile_close(&tf);
             unlink(fifo);

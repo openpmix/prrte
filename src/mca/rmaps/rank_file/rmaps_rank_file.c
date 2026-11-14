@@ -53,6 +53,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/rank_file/rmaps_rank_file.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/rankfile/rankfile.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_show_help.h"
@@ -89,6 +90,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     int rc;
     prte_proc_t *proc;
     char *slots = NULL;
+    uid_t fuid;
+    gid_t fgid;
     /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
      * first mapping pass so per-app dispatch (one entry per app) does not
      * re-add nodes a previous app already placed in the job map */
@@ -197,8 +200,11 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         return PRTE_ERROR;
     }
 
-    /* parse the rankfile, storing its results in the rankmap */
-    if (PRTE_SUCCESS != (rc = prte_util_parse_rankfile(rankfile, &rankmap, &num_ranks))) {
+    /* parse the rankfile, storing its results in the rankmap - read as the
+     * job's owner, who named it */
+    prte_pmix_server_job_user(jdata, &fuid, &fgid);
+    if (PRTE_SUCCESS != (rc = prte_util_parse_rankfile(rankfile, fuid, fgid, &rankmap,
+                                                       &num_ranks))) {
         rc = PRTE_ERR_SILENT;
         goto error;
     }
