@@ -2093,6 +2093,11 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         PMIX_ERROR_LOG(prc);
         return;
     }
+    if (!prte_pmix_count_fits(buffer, ninfo)) {
+        prc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(prc);
+        return;
+    }
     if (0 < ninfo) {
         PMIX_INFO_CREATE(info, ninfo);
         cnt = ninfo;
@@ -2461,6 +2466,11 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
             pret = prc;
             psz = 0;
         }
+        if (PMIX_SUCCESS == pret && !prte_pmix_count_fits(buffer, psz)) {
+            PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            pret = PMIX_ERR_BAD_PARAM;
+            psz = 0;
+        }
         if (PMIX_SUCCESS == pret && 0 < psz) {
             d->data = (char *) malloc(psz);
             if (NULL == d->data) {
@@ -2671,6 +2681,11 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
         PMIX_ERROR_LOG(rc);
         goto respond;
     }
+    if (!prte_pmix_count_fits(buffer, req->ninfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        goto respond;
+    }
     if (0 < req->ninfo) {
         req->copy = true;
         PMIX_INFO_CREATE(req->info, req->ninfo);
@@ -2686,6 +2701,11 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &ndirs, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto respond;
+    }
+    if (!prte_pmix_count_fits(buffer, ndirs)) {
+        rc = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(rc);
         goto respond;
     }
@@ -3008,6 +3028,11 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto reply;
+    }
+    if (!prte_pmix_count_fits(buffer, ninfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(rc);
         goto reply;
     }

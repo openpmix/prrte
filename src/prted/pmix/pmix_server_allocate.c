@@ -84,6 +84,13 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
         req->ninfo = 0;
         goto ANSWER;
     }
+    if (!prte_pmix_count_fits(buffer, req->ninfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        ret = rc;
+        req->ninfo = 0;
+        goto ANSWER;
+    }
 
     if (0 < req->ninfo) {
         PMIX_INFO_CREATE(req->info, req->ninfo);

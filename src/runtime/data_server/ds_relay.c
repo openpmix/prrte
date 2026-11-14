@@ -341,6 +341,10 @@ static pmix_status_t unpack_directives(pmix_data_buffer_t *buffer,
     if (0 == *ninfo) {
         return PMIX_SUCCESS;
     }
+    if (!prte_pmix_count_fits(buffer, *ninfo)) {
+        *ninfo = 0;
+        return PMIX_ERR_BAD_PARAM;
+    }
     PMIX_INFO_CREATE(*info, *ninfo);
     count = (int32_t) *ninfo;
     rc = PMIx_Data_unpack(NULL, buffer, *info, &count, PMIX_INFO);

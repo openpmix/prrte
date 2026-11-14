@@ -354,8 +354,9 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         return ret;
     }
 
-    /* if it isn't at least one, then that's an error */
-    if (1 > ninfo) {
+    /* if it isn't at least one, or is more than the message holds, then
+     * that's an error */
+    if (1 > ninfo || !prte_pmix_count_fits(buffer, ninfo)) {
         ret = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(ret);
         PMIX_RELEASE(data);

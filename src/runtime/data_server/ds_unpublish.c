@@ -154,6 +154,12 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
         PMIX_DESTRUCT(&rq);
         return rc;
     }
+    if (!prte_pmix_count_fits(buffer, ninfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        PMIX_DESTRUCT(&rq);
+        return rc;
+    }
     if (0 < ninfo) {
         PMIX_INFO_CREATE(info, ninfo);
         count = ninfo;

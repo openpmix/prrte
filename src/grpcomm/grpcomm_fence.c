@@ -1108,6 +1108,11 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         PMIX_ERROR_LOG(rc);
         return;
     }
+    if (!prte_pmix_count_fits(buffer, ninfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
     if (0 < ninfo) {
         PMIX_INFO_CREATE(info, ninfo);
         cnt = ninfo;
@@ -2121,9 +2126,9 @@ static int fence_sig_unpack(pmix_data_buffer_t *buffer,
         PMIX_RELEASE(s);
         return prte_pmix_convert_status(rc);
     }
-    /* the count the unpack takes is an int32_t, so a size it cannot hold is
-     * a corrupt message rather than a signature */
-    if (INT32_MAX < s->sz) {
+    /* a size the unpack's int32_t count cannot hold, or one larger than the
+     * message could carry, is a corrupt message rather than a signature */
+    if (!prte_pmix_count_fits(buffer, s->sz)) {
         PMIX_RELEASE(s);
         return PRTE_ERR_BAD_PARAM;
     }
