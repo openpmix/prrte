@@ -316,7 +316,11 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
     char *ndstring, *tstr = NULL;
     pmix_data_array_t *darray;
 
-    /* the caller is the requestor unless a relaying daemon named the original */
+    /* The caller is the requestor. The PMIx server named it, and a daemon
+     * that passed the request on to us named it as the request's source,
+     * which is req->tproc either way. Only the scheduler names someone
+     * else: it calls down to carry out a request it took from one of our
+     * processes, and says which in PMIX_REQUESTOR. */
     PMIX_XFER_PROCID(&ctl->requestor, &req->tproc);
 
     for (n = 0; n < req->ninfo; n++) {
@@ -332,7 +336,10 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             if (PMIX_PROC != info->value.type || NULL == info->value.data.proc) {
                 return PMIX_ERR_BAD_PARAM;
             }
-            PMIX_XFER_PROCID(&ctl->requestor, info->value.data.proc);
+            if (!PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+                PMIX_CHECK_PROCID_STRICT(&prte_pmix_server_globals.scheduler, &req->tproc)) {
+                PMIX_XFER_PROCID(&ctl->requestor, info->value.data.proc);
+            }
 
             /***   INSTANTIATION   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_SESSION_INSTANTIATE)) {
@@ -393,10 +400,10 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             ctl->have_uid = true;
 
         } else if (PMIX_CHECK_KEY(info, PMIX_GRPID)) {
-            /* Accepted and ignored. PRRTE never changes credentials - every
-             * process it starts runs as the user running the DVM - so a group
-             * id is not something it can act on. The user id IS recorded,
-             * because reservation ownership is checked against it. */
+            /* Accepted and ignored. The session's group is the one recorded
+             * for the requester's job (see the owner below), which its tool
+             * connected with. The user id IS recorded, because reservation
+             * ownership is checked against it. */
             continue;
 
             /***   RESOURCES NAMED DIRECTLY ON THE REQUEST   ***/
