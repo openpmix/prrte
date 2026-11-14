@@ -240,6 +240,17 @@ query's other-node answers. Do not add them back to either message.
   [`src/runtime/prte_globals.c`](../runtime/prte_globals.c) and used through
   [`src/util/attr.h`](../util/attr.h). That split is historical, not
   principled.
+- **`prte_pmix_count_fits(buf, n)`.** Whether a count just unpacked from
+  `buf` can be the number of elements that follow it: no more than the bytes
+  `buf` has left to unpack (every element takes at least one), and no more
+  than the `int32_t` count `PMIx_Data_unpack()` takes. Every receive that
+  sizes an array from a count off the wire calls it between unpacking the
+  count and allocating, so no such array is larger than the message that
+  described it - and the transport bounds that (`prte_max_msg_size`, in MB).
+  Pass a signed count only after refusing a negative one, or cast it: a
+  negative `int32_t` converts to a `size_t` that never fits. See
+  [`src/prted/pmix/AGENTS.md`](../prted/pmix/AGENTS.md) for why the range
+  screen alone was not enough.
 
 ---
 

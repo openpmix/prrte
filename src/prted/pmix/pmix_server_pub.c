@@ -792,6 +792,13 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
         ret = rc;
         goto release;
     }
+    if (!prte_pmix_count_fits(&pbkt, npdata)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        ret = rc;
+        goto release;
+    }
 
     if (0 < npdata) {
         PMIX_PDATA_CREATE(pdata, npdata);

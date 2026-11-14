@@ -188,7 +188,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
             PMIX_ERROR_LOG(rc);
             goto CLEAN_RETURN;
         }
-        if (0 > numbytes) {
+        if (0 > numbytes || !prte_pmix_count_fits(buffer, (size_t) numbytes)) {
             /* corrupted message */
             PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
             goto CLEAN_RETURN;
@@ -238,6 +238,11 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         /* nothing to do - shouldn't have been sent. A negative
          * count indicates a corrupted message
          */
+        goto CLEAN_RETURN;
+    }
+    if (!prte_pmix_count_fits(buffer, (size_t) numbytes)) {
+        /* corrupted message */
+        PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
         goto CLEAN_RETURN;
     }
     p = PMIX_NEW(prte_iof_deliver_t);
@@ -351,7 +356,7 @@ void prte_iof_hnp_stdin_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
         PMIX_ERROR_LOG(rc);
         return;
     }
-    if (0 > numbytes) {
+    if (0 > numbytes || !prte_pmix_count_fits(buffer, (size_t) numbytes)) {
         /* corrupted message */
         PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
         return;

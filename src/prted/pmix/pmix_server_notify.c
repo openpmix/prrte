@@ -283,6 +283,12 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         PMIX_RELEASE(cd);
         return;
     }
+    if (!prte_pmix_count_fits(buffer, cd->ninfo)) {
+        ret = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(ret);
+        PMIX_RELEASE(cd);
+        return;
+    }
     /* reserve a spot for an additional flag */
     realninfo = cd->ninfo;
     ninfo = cd->ninfo + 1;

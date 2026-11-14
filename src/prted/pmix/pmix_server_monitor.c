@@ -558,6 +558,12 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
         PMIx_Info_free(monitor, 1);
         goto errorout;
     }
+    if (!prte_pmix_count_fits(buffer, ndirs)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        PMIx_Info_free(monitor, 1);
+        goto errorout;
+    }
     // we need two extra locations for our own directives
     PMIX_INFO_CREATE(directives, ndirs+2);
     if (NULL == directives) {
@@ -714,6 +720,12 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            RECORD_ERROR(req, rc);
+            goto complete;
+        }
+        if (!prte_pmix_count_fits(buffer, ninfo)) {
+            rc = PMIX_ERR_BAD_PARAM;
             PMIX_ERROR_LOG(rc);
             RECORD_ERROR(req, rc);
             goto complete;

@@ -133,6 +133,14 @@ static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
          * rmaps yet - carries no placement at all */
         return PRTE_SUCCESS;
     }
+    /* A mapped job names every one of its procs in the maps below and
+     * then unpacks each proc's own fields, so the bytes left must cover at
+     * least one per proc. The proc array and each app's rank list are
+     * sized by this count. */
+    if (!prte_pmix_count_fits(bkt, jptr->num_procs)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     rc = unpack_map(bkt, ',', &nodenames);
     if (PRTE_SUCCESS != rc) {

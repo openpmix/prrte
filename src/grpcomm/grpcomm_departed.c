@@ -338,8 +338,8 @@ void prte_grpcomm_departed_recv(int status, pmix_proc_t *sender,
         return;
     }
     /* a count off the wire sizes two allocations, so it has to be one the
-     * message can actually hold - every rank takes at least a byte */
-    if (0 == nranks || INT32_MAX < nranks || buffer->bytes_used < nranks) {
+     * message can actually hold */
+    if (0 == nranks || !prte_pmix_count_fits(buffer, nranks)) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return;
     }

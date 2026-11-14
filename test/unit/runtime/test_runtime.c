@@ -1925,6 +1925,69 @@ static int test_data_server_wire_count(void)
     return failures;
 }
 
+/* A count unpacked from a buffer is accepted only if the buffer still has at
+ * least that many bytes to unpack, and only if the int32_t count the unpack
+ * takes can hold it. */
+static int test_count_fits(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t buf, empty;
+    pmix_info_t info[3];
+    size_t n = 3, got;
+    int32_t cnt = 1;
+    uint32_t u = 7;
+    int k;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    PMIX_DATA_BUFFER_CONSTRUCT(&empty);
+    for (k = 0; k < 3; k++) {
+        PMIX_INFO_LOAD(&info[k], "prte.test.key", &u, PMIX_UINT32);
+    }
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, &buf, info, 3, PMIX_INFO);
+    for (k = 0; k < 3; k++) {
+        PMIX_INFO_DESTRUCT(&info[k]);
+    }
+
+    CHECK("zero always fits, even in no buffer", prte_pmix_count_fits(NULL, 0));
+    CHECK("zero fits an empty buffer", prte_pmix_count_fits(&empty, 0));
+    CHECK("one does not fit an empty buffer", !prte_pmix_count_fits(&empty, 1));
+    CHECK("no buffer holds anything", !prte_pmix_count_fits(NULL, 1));
+
+    CHECK("unpack the count", PMIX_SUCCESS == PMIx_Data_unpack(NULL, &buf, &got, &cnt, PMIX_SIZE));
+    CHECK("the packed count fits", prte_pmix_count_fits(&buf, got));
+    {
+        size_t left = buf.bytes_used - (size_t) (buf.unpack_ptr - buf.base_ptr);
+        CHECK("as many as the bytes left fits", prte_pmix_count_fits(&buf, left));
+        CHECK("one more than the bytes left does not", !prte_pmix_count_fits(&buf, left + 1));
+    }
+    CHECK("just under INT32_MAX does not fit a small message",
+          !prte_pmix_count_fits(&buf, (size_t) INT32_MAX - 1));
+    CHECK("SIZE_MAX does not fit", !prte_pmix_count_fits(&buf, SIZE_MAX));
+    CHECK("a negative int32_t count does not fit",
+          !prte_pmix_count_fits(&buf, (size_t) (int32_t) -1));
+
+    /* once the elements are unpacked, nothing is left */
+    {
+        pmix_info_t out[3];
+        cnt = 3;
+        CHECK("unpack the elements",
+              PMIX_SUCCESS == PMIx_Data_unpack(NULL, &buf, out, &cnt, PMIX_INFO));
+        for (k = 0; k < 3; k++) {
+            PMIX_INFO_DESTRUCT(&out[k]);
+        }
+    }
+    CHECK("nothing fits a drained buffer", !prte_pmix_count_fits(&buf, 1));
+
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    PMIX_DATA_BUFFER_DESTRUCT(&empty);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_count_fits\n");
+    }
+    return failures;
+}
+
 static int test_data_server_unpublish_reach(void)
 {
     int failures = 0;
@@ -2925,6 +2988,7 @@ int main(void)
     failures += test_data_server_cap();
     failures += test_data_server_purge_parked();
     failures += test_data_server_wire_count();
+    failures += test_count_fits();
     failures += test_data_server_unpublish_reach();
     failures += test_data_server_same_range();
     failures += test_data_server_named_uint8();
