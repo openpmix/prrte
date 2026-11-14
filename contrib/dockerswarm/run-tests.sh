@@ -4287,7 +4287,7 @@ test_session() {
 ########################################################################
 ROLETOOL=/opt/prte/prte/bin/roletool
 test_requesters() {
-    local out uri pns rq rc dns ons
+    local out uri pns rq rq2 rc dns ons
 
     banner "requesters: a tool of another user is judged as that user"
     cleanup_swarm
@@ -4307,6 +4307,7 @@ test_requesters() {
     uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
     # HOME too: root's is not readable by the second user
     rq="setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp $ROLETOOL '$uri'"
+    rq2="setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp $ROLETOOL '$uri'"
 
     # the control: without it, every refusal below could just as well be a
     # tool that cannot reach the DVM at all
@@ -4478,6 +4479,43 @@ test_requesters() {
     echo "$out" | grep -q '^node2$' \
         && ok "node2 is still in the general pool" \
         || bad "node2 is no longer usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "requesters: a session belongs to the user its scheduler names"
+    # PMIX_ALLOC_UID/GID say whom a session is for. Only the scheduler may
+    # say it - from a plain tool, even root's, it is refused
+    out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate-owned 4274 node2:2 65534 65534" 2>&1)
+    if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+        bad "a tool that is not the scheduler named a session's owner"
+        RUN "timeout 60 $SESSCTL terminate 4274" >/dev/null 2>&1
+    elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_NO_PERMISSIONS"; then
+        ok "a tool that is not the scheduler may not name a session's owner"
+    else
+        bad "naming a session's owner failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "timeout 60 $ROLETOOL '$uri' sched-instantiate 4275 node2:2 65534 65534" 2>&1)
+    if ! echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+        bad "the scheduler could not create a session for another user: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        ok "the scheduler created a session for another user"
+        sleep 2
+        # the scheduler has gone by now, and the DVM must know it: these
+        # are decided here, not passed to a scheduler nobody would answer as
+        out=$(RUN "timeout 60 $rq2 terminate 4275" 2>&1)
+        if echo "$out" | grep -q "ROLE TERMINATE PMIX_SUCCESS"; then
+            bad "a user the session is not for terminated it"
+        elif echo "$out" | grep -q "ROLE TERMINATE PMIX_ERR_NO_PERMISSIONS"; then
+            ok "a user the session is not for may not terminate it"
+        else
+            bad "terminating another user's session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        out=$(RUN "timeout 60 $rq terminate 4275" 2>&1)
+        if echo "$out" | grep -q "ROLE TERMINATE PMIX_SUCCESS"; then
+            ok "the user the scheduler named may terminate the session"
+        else
+            bad "the user the scheduler named could not terminate the session: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            RUN "timeout 60 $SESSCTL terminate 4275" >/dev/null 2>&1
+        fi
+    fi
 
     banner "requesters: a scheduler that has gone is forgotten"
     # root's own scheduler is accepted - and once it leaves, the DVM must
