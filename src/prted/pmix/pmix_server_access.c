@@ -325,6 +325,50 @@ pmix_status_t prte_pmix_server_owner_groups(uid_t uid, pmix_data_array_t **out)
     return PMIX_SUCCESS;
 }
 
+bool prte_pmix_server_in_group(uid_t uid, gid_t gid)
+{
+    pmix_user_t *user;
+    bool found = false;
+    uint16_t n;
+
+    if (0 == uid) {
+        return true;
+    }
+    if (PRTE_INVALID_UID == uid || PRTE_INVALID_GID == gid) {
+        return false;
+    }
+    if (prte_process_info.euid == uid) {
+        /* we keep no record of our own user, so look its groups up for
+         * this question alone */
+        if (prte_process_info.egid == gid) {
+            return true;
+        }
+        user = pmix_server_user_create(uid);
+        if (NULL == user) {
+            return false;
+        }
+        (void) pmix_server_user_refresh(user);
+    } else {
+        user = user_get(uid);
+        if (NULL == user) {
+            return false;
+        }
+        /* membership as the system has it now - see
+         * prte_pmix_server_owner_groups */
+        (void) pmix_server_user_refresh(user);
+    }
+    for (n = 0; n < user->ngids; n++) {
+        if (user->gids[n] == gid) {
+            found = true;
+            break;
+        }
+    }
+    if (prte_process_info.euid == uid) {
+        PMIX_RELEASE(user);
+    }
+    return found;
+}
+
 void prte_pmix_server_access_user(uid_t uid)
 {
     if (PRTE_INVALID_UID != uid && !prte_pmix_server_privileged(uid)) {

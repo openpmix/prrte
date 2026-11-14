@@ -1951,17 +1951,24 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     if (PMIX_SUCCESS == req->pstatus) {
         pmix_info_t *result_info = NULL;
 
-        PMIX_INFO_CREATE(result_info, 2);
+        PMIX_INFO_CREATE(result_info, 4);
         if (NULL == result_info) {
             req->pstatus = PMIX_ERR_NOMEM;
         } else {
+            /* whom Slurm granted it for: the user salloc ran as - see the
+             * note on prte_ras_slurm_serve_extend_req */
+            uint32_t owner_uid = (uint32_t) prte_process_info.euid;
+            uint32_t owner_gid = (uint32_t) prte_process_info.egid;
+
             if (req->copy && NULL != req->info) {
                 PMIX_INFO_FREE(req->info, req->ninfo);
             }
             PMIX_INFO_LOAD(&result_info[0], PMIX_ALLOC_ID, job_id, PMIX_STRING);
             PMIX_INFO_LOAD(&result_info[1], PMIX_RM_NAME, "slurm", PMIX_STRING);
+            PMIX_INFO_LOAD(&result_info[2], PMIX_ALLOC_UID, &owner_uid, PMIX_UINT32);
+            PMIX_INFO_LOAD(&result_info[3], PMIX_ALLOC_GID, &owner_gid, PMIX_UINT32);
             req->info = result_info;
-            req->ninfo = 2;
+            req->ninfo = 4;
             req->copy = true;
         }
     }
@@ -2102,6 +2109,30 @@ void prte_ras_slurm_extend_abort_request(const char *request_id)
  * requires specifying PMIX_ALLOC_NUM_NODES as a PMIX_UINT64.
  *
  * @param[in] req PMIx server request describing the resource extension.
+ *
+ * Whom the allocation is for. Every request this is handed carries
+ * PMIX_ALLOC_UID and PMIX_ALLOC_GID, the user and group the allocation is
+ * for: checked against the requester, or filled in with its own, by
+ * prte_ras_base_alloc_owner before any module is called.
+ *
+ * What this module does today: salloc runs as the DVM's own user, so the
+ * job Slurm creates is that user's, whoever asked. The answer says so - it
+ * returns the DVM's uid and gid as PMIX_ALLOC_UID/GID - and the session
+ * prte_ras_slurm_assign_new_session makes records them as its owner.
+ *
+ * What it does not do, for whoever maintains this component to decide:
+ *
+ *  1. Ask Slurm for the allocation as the user and group the request
+ *     names. Run as root, salloc can be told the user and group to submit
+ *     as (--uid/--gid; confirm the installed Slurm still accepts them). Not
+ *     run as root, Slurm can be told only the DVM's own user, so a request
+ *     for anyone else would have to be refused before salloc runs.
+ *
+ *  2. Check that the job Slurm granted is that user's and group's - the
+ *     user_id and group_id members of the job's record, read the same way
+ *     as the rest of it (scontrol show job --json) - cancel it and fail
+ *     the request if not, and return and record those in place of the
+ *     DVM's own.
  */
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 {

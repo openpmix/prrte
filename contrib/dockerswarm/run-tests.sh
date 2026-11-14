@@ -4286,8 +4286,21 @@ test_session() {
 # prte_pmix_scheduler_uids - lets it create a session and be the scheduler.
 ########################################################################
 ROLETOOL=/opt/prte/prte/bin/roletool
+# the id a held "roletool alloc" was given, from /tmp/rqalloc.out on the
+# head node - empty if it was not given one within 20 seconds
+rq_alloc_id() {
+    local id=""
+    for _ in $(seq 1 20); do
+        id=$(RUN 'sed -n "s/^ROLE ALLOCATED //p" /tmp/rqalloc.out 2>/dev/null' | tr -d '\r' | head -1)
+        [ -n "$id" ] && break
+        RUN 'grep -q "^ROLE ALLOC " /tmp/rqalloc.out 2>/dev/null' && break
+        sleep 1
+    done
+    echo "$id"
+}
+
 test_requesters() {
-    local out uri pns rq rq2 rc dns ons n
+    local out uri pns rq rq2 rc dns ons n aid
 
     banner "requesters: a tool of another user is judged as that user"
     cleanup_swarm
@@ -4561,6 +4574,61 @@ test_requesters() {
     echo "$out" | grep -qE '^node[12]$' \
         && ok "tools start jobs again once the scheduler has gone" \
         || bad "a tool could not start a job after the scheduler left: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+    banner "requesters: an allocation is for the user who asked for it"
+    # PMIX_ALLOC_UID/GID say whom an allocation is for. A requester naming
+    # none is asking for itself; it may name its own user and a group it is
+    # in, and root may name anyone. The owner is who may release it. The
+    # requester is held while that is tried, since a reservation is released
+    # when its requester ends.
+    EXEC_TOOL_BG 1 "$rq alloc - - 30 > /tmp/rqalloc.out 2>&1"
+    aid=$(rq_alloc_id)
+    if [ -z "$aid" ]; then
+        bad "a user could not ask for an allocation for itself: $(RUN 'cat /tmp/rqalloc.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        ok "a user naming no owner was given an allocation"
+        out=$(RUN "timeout 60 $rq2 alloc-release '$aid'" 2>&1)
+        if echo "$out" | grep -q "ROLE RELEASE PMIX_SUCCESS"; then
+            bad "a user released an allocation made for another"
+        elif echo "$out" | grep -q "ROLE RELEASE PMIX_ERR_NO_PERMISSIONS"; then
+            ok "an allocation naming no owner belongs to its requester"
+        else
+            bad "releasing another user's allocation failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        # the owner is a user, so another tool of that user may release it
+        out=$(RUN "timeout 60 $rq alloc-release '$aid'" 2>&1)
+        echo "$out" | grep -q "ROLE RELEASE PMIX_SUCCESS" \
+            && ok "the requester's user released the allocation" \
+            || bad "the requester's user could not release the allocation: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
+    out=$(RUN "timeout 60 $rq alloc 65533 65534" 2>&1)
+    if echo "$out" | grep -q "ROLE ALLOC PMIX_ERR_NO_PERMISSIONS"; then
+        ok "a user may not ask for an allocation for another user"
+    else
+        bad "a user's allocation for another user was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "timeout 60 $rq alloc 65534 0" 2>&1)
+    if echo "$out" | grep -q "ROLE ALLOC PMIX_ERR_NO_PERMISSIONS"; then
+        ok "a user may not name a group it is not in"
+    else
+        bad "an allocation for a group the user is not in was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    out=$(RUN "timeout 60 $rq alloc 65534 65534" 2>&1)
+    echo "$out" | grep -q "ROLE ALLOC PMIX_SUCCESS" \
+        && ok "a user may name itself and its own group" \
+        || bad "a user naming itself was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    EXEC_TOOL_BG 1 "$ROLETOOL '$uri' alloc 65533 65533 30 > /tmp/rqalloc.out 2>&1"
+    aid=$(rq_alloc_id)
+    if [ -z "$aid" ]; then
+        bad "root could not ask for an allocation for another user: $(RUN 'cat /tmp/rqalloc.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        out=$(RUN "timeout 60 $rq2 alloc-release '$aid'" 2>&1)
+        echo "$out" | grep -q "ROLE RELEASE PMIX_SUCCESS" \
+            && ok "an allocation root asks for another user belongs to that user" \
+            || bad "the user root asked for could not release the allocation: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
 
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     ON 1 'rm -f /tmp/rqparent.sh /tmp/rqparent.out'

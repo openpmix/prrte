@@ -215,6 +215,17 @@ PRTE_EXPORT void prte_ras_base_abort_dvm_shrink(prte_shrink_campaign_t *campaign
 
 PRTE_EXPORT void prte_ras_base_complete_request(prte_pmix_server_req_t *req);
 
+/* Settle whom a PMIX_ALLOC_NEW or PMIX_ALLOC_EXTEND is for, before any
+ * module sees it. A requester may name its own user (root: any user) and
+ * any group it belongs to as PMIX_ALLOC_UID/GID - PMIX_ERR_NO_PERMISSIONS
+ * otherwise - and where it names none, its own are added to the request.
+ * A module serving the request passes them to its scheduler, checks that
+ * the answer says the same, and returns them in its answer; the base
+ * records them as the reservation's owner (prte_ras_base_complete_request).
+ * Requests that grow the general pool by --add-host/--add-hostfile ask for
+ * no allocation and are left alone. */
+PRTE_EXPORT pmix_status_t prte_ras_base_alloc_owner(prte_pmix_server_req_t *req);
+
 END_C_DECLS
 
 #endif
