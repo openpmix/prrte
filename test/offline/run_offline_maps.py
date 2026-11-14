@@ -971,6 +971,15 @@ def device_cases(topo):
     yield Case("device.%s.gpu-nic" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="device=gpu:nic", rank_by="slot",
                bind_to="core", n=n, expect="map")
+    # more NICs than any GPU's complex holds: refused, naming the most that
+    # can be given, rather than mapped with fewer or padded with Ethernet
+    # ports no library is told about.  Every nameable GPU topology here has
+    # a NIC beside its GPUs; one with none would map instead, with the
+    # no-NIC-near-GPU warning.
+    yield Case("device.%s.gpu-nic-toomany" % topo.name, "device", topo,
+               "single", hostspec, pool, map_by="device=gpu:nic=64",
+               rank_by="slot", bind_to="core", n=n, expect="reject",
+               expect_banner="can provide")
     # nic adds NICs to GPUs: on a map by NICs there is nothing to add to
     yield Case("device.%s.nic-nic" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="device=nic:nic", rank_by="slot",

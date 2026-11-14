@@ -83,8 +83,9 @@ typedef struct {
     size_t per;                 /* devices per group */
     /* With "nic": the node's NICs, and for each group the NICs chosen for
      * it from its GPUs' root complexes - gnicn[g] of them, at
-     * gnic[g * nicper ...], as indices into nics.  A group may get fewer
-     * than nicper, or none, when its complexes have fewer. */
+     * gnic[g * nicper ...], as indices into nics.  That is nicper of them,
+     * or none when its complexes have no NIC at all; a group that could be
+     * given some but not nicper refuses the map instead. */
     pmix_hwloc_device_t *nics;
     size_t nnics;
     size_t nicper;
@@ -508,32 +509,43 @@ static hwloc_obj_t io_common_ancestor(hwloc_obj_t a, hwloc_obj_t b)
  * so each library is told about its own device.
  *
  * The candidates for a group are the NICs under the host bridge of any of
- * its GPUs.  They are ranked:
+ * its GPUs - and where any of those carries an OpenFabrics device, only the
+ * ones that do.  A plain Ethernet port beside an RDMA NIC is named to no
+ * communication library (pnet names OpenFabrics devices), so handing it out
+ * fills the count with a NIC the process cannot use: on an AWS p5 the ENA
+ * ports share each complex with the EFA devices, and "nic=8" padded every
+ * GPU's four EFAs with four ENA ports.  Only a complex with no OpenFabrics
+ * device at all offers its other NICs - a Slingshot NIC is not one, and
+ * neither is anything on a node whose fabric is plain TCP.  The candidates
+ * are ranked:
  *
- *   1. a PCI function carrying an OpenFabrics device ahead of plain
- *      Ethernet - on a RoCE-only node the Ethernet function IS the answer,
- *      but a management port should only be picked when nothing better
- *      shares the complex;
- *   2. the deeper the common ancestor with the nearest of the group's GPUs,
+ *   1. the deeper the common ancestor with the nearest of the group's GPUs,
  *      the better - a NIC behind the GPU's own PCIe switch ahead of one that
  *      only shares the host bridge;
- *   3. the faster PCIe link.  A node's management port is not an
- *      OpenFabrics device and often shares a host bridge with a GPU, as the
- *      1 GbE port beside a Slingshot NIC does on an HPE Cray EX235n: with
- *      neither carrying an OpenFabrics device and both one root port below
- *      the host bridge, nothing above tells them apart, and bus order alone
- *      would hand the GPU whichever came first;
- *   4. the fewer groups already given it, so that groups sharing a complex
+ *   2. the faster PCIe link.  A node's management port often shares a host
+ *      bridge with a GPU, as the 1 GbE port beside a Slingshot NIC does on
+ *      an HPE Cray EX235n: with neither carrying an OpenFabrics device and
+ *      both one root port below the host bridge, nothing above tells them
+ *      apart, and bus order alone would hand the GPU whichever came first;
+ *   3. the fewer groups already given it, so that groups sharing a complex
  *      get distinct NICs while there are enough and share once there are
  *      not;
- *   5. bus order, which makes the choice the same on every run.
+ *   4. bus order, which makes the choice the same on every run.
  *
- * A group whose complexes carry no NIC gets none, and the job is told -
- * once per node, under the job's nspace, so that PMIx's duplicate
- * suppression folds a homogeneous cluster's thousand identical reports into
- * one and a count.  No NIC from another complex is substituted: naming a far
- * NIC to the libraries overrides a choice of theirs that is likely to be at
- * least as good.  Processes sharing a GPU ("shared") share its NICs. */
+ * A group with fewer candidates than were asked for cannot be given what
+ * the user requested, so the map is refused, naming the most this node can
+ * give every group - the job is not run with a NIC count it did not ask
+ * for.  Decided here, before any proc is placed, as the other refusals in
+ * devices_begin() are.
+ *
+ * A group whose complexes carry no NIC at all is a different case - a
+ * statement about where the NICs are, not about how many were asked for -
+ * and keeps its GPU with no NIC; the job is told once per node, under the
+ * job's nspace, so that PMIx's duplicate suppression folds a homogeneous
+ * cluster's thousand identical reports into one and a count.  No NIC from
+ * another complex is substituted in either case: naming a far NIC to the
+ * libraries overrides a choice of theirs that is likely to be at least as
+ * good.  Processes sharing a GPU ("shared") share its NICs. */
 static int assign_nics(prte_job_t *jdata, prte_node_t *node,
                        prte_rmaps_options_t *opts, prte_rmaps_device_map_t *dc)
 {
@@ -542,8 +554,9 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
     hwloc_obj_t *nicbr = NULL, gpubr, anc;
     unsigned *depth = NULL;
     size_t *used = NULL;
-    bool *chosen = NULL, warned = false;
+    bool *chosen = NULL, warned = false, shortfall = false;
     size_t g, m, k, best, ngpu = dc->ngroups * dc->per;
+    size_t nofa, nany, avail, most = 0, mostg = 0;
     bool havebest;
     unsigned d;
 
@@ -600,7 +613,8 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
         /* score every NIC against this group: zero depth means "not under
          * any of its GPUs' complexes", and a NIC with no host bridge never
          * qualifies, since sharing nothing is not sharing a complex */
-        bool any = false;
+        nofa = 0;
+        nany = 0;
         for (k = 0; k < dc->nnics; k++) {
             depth[k] = 0;
             chosen[k] = false;
@@ -619,10 +633,13 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
                 }
             }
             if (0 < depth[k]) {
-                any = true;
+                ++nany;
+                if (0 != (dc->nics[k].dev.type & PMIX_DEVTYPE_OPENFABRICS)) {
+                    ++nofa;
+                }
             }
         }
-        if (!any) {
+        if (0 == nany) {
             if (!warned) {
                 prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-nic-near-gpu",
                                true, node->name,
@@ -632,25 +649,37 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
             }
             continue;
         }
+        /* with an OpenFabrics device on the complex, the plain Ethernet
+         * ports beside it are not candidates at all */
+        avail = nany;
+        if (0 < nofa) {
+            for (k = 0; k < dc->nnics; k++) {
+                if (0 == (dc->nics[k].dev.type & PMIX_DEVTYPE_OPENFABRICS)) {
+                    depth[k] = 0;
+                }
+            }
+            avail = nofa;
+        }
+        if (avail < dc->nicper) {
+            /* keep going, so the refusal can name the most that every
+             * group on the node could be given */
+            if (!shortfall || avail < most) {
+                most = avail;
+                mostg = g;
+            }
+            shortfall = true;
+            continue;
+        }
         while (dc->gnicn[g] < dc->nicper) {
             havebest = false;
             best = 0;
             for (k = 0; k < dc->nnics; k++) {
-                bool kofa, bofa;
                 if (0 == depth[k] || chosen[k]) {
                     continue;
                 }
                 if (!havebest) {
                     best = k;
                     havebest = true;
-                    continue;
-                }
-                kofa = (0 != (dc->nics[k].dev.type & PMIX_DEVTYPE_OPENFABRICS));
-                bofa = (0 != (dc->nics[best].dev.type & PMIX_DEVTYPE_OPENFABRICS));
-                if (kofa != bofa) {
-                    if (kofa) {
-                        best = k;
-                    }
                     continue;
                 }
                 if (depth[k] != depth[best]) {
@@ -671,8 +700,7 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
                 /* otherwise the earlier one in bus order stands */
             }
             if (!havebest) {
-                /* the complex has fewer NICs than were asked for: the group
-                 * gets what is there, never one from elsewhere */
+                /* cannot happen - there were at least nicper candidates */
                 break;
             }
             chosen[best] = true;
@@ -686,6 +714,15 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
     free(depth);
     free(used);
     free(chosen);
+
+    if (shortfall) {
+        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:too-few-nics-near-gpu",
+                       true, (int) dc->nicper, (int) most, node->name,
+                       (NULL == dc->devs[mostg * dc->per].dev.osname) ? "(unnamed)"
+                           : dc->devs[mostg * dc->per].dev.osname,
+                       (int) most);
+        return PRTE_ERR_SILENT;
+    }
     return PRTE_SUCCESS;
 }
 
