@@ -860,11 +860,33 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
          * tree from the tool that started it, so an allocation an application
          * requests is recorded against the user who launched that application
          * - not left anonymous because the job itself never presented
-         * credentials. */
-        parent = prte_get_job_data_object(nptr->nspace);
-        if (NULL != parent) {
-            jdata->uid = parent->uid;
-            jdata->gid = parent->gid;
+         * credentials.
+         *
+         * The one job that arrives already naming its owner is one built
+         * here in the master: the apps of a session the scheduler created
+         * for a user, which are that user's. An owner on a job from any
+         * other sender is not ours to take, and is dropped. */
+        {
+            uint32_t oid, *oidptr = &oid;
+
+            if (PMIX_CHECK_PROCID_STRICT(sender, PRTE_PROC_MY_NAME) &&
+                prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID,
+                                   (void **) &oidptr, PMIX_UINT32)) {
+                jdata->uid = (uid_t) oid;
+                jdata->gid = PRTE_INVALID_GID;
+                if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID,
+                                       (void **) &oidptr, PMIX_UINT32)) {
+                    jdata->gid = (gid_t) oid;
+                }
+            } else {
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID);
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID);
+                parent = prte_get_job_data_object(nptr->nspace);
+                if (NULL != parent) {
+                    jdata->uid = parent->uid;
+                    jdata->gid = parent->gid;
+                }
+            }
         }
         /* a job we launch ourselves - prterun's own - is our user's, and
          * our daemon job records no identity to inherit */
