@@ -300,7 +300,7 @@ PRTE_EXPORT pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
 
 /* Build the directive array prte_ds_relay() hands to PMIx: the requester's
  * own directives, less any identity claim, plus exactly one claim of our
- * own - PMIX_REQUESTOR, PRTE_PUBLISH_REQ_UID and PRTE_PUBLISH_REQ_GID -
+ * own - PMIX_REQUESTOR, PMIX_ORIGIN_USERID and PMIX_ORIGIN_GRPID -
  * naming the process the far end must attribute the operation to.  A
  * requester that is itself a relay (a tool, under the rule
  * prte_ds_check_requestor() applies) has its claim passed on; anybody else
@@ -311,8 +311,8 @@ PRTE_EXPORT pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size
                                                    pmix_info_t **out, size_t *nout);
 
 /* Honor the identity a RELAYED request claims: PMIX_REQUESTOR names the
- * process it is being made on behalf of, and PRTE_PUBLISH_REQ_UID /
- * PRTE_PUBLISH_REQ_GID that process's effective uid and gid.  Only a TOOL
+ * process it is being made on behalf of, and PMIX_ORIGIN_USERID /
+ * PMIX_ORIGIN_GRPID that process's effective uid and gid.  Only a TOOL
  * may claim any of them: a daemon of another DVM attaches to us as a tool
  * and reissues what its own client asked for, whereas an application
  * process has no such standing and allowing it would let any process

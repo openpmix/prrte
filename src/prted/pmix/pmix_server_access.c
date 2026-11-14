@@ -64,13 +64,11 @@ bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t
                 return false;
             }
             have_id = true;
-#if PRTE_PMIX_HAVE_ORIGIN_ID
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_ORIGIN_USERID)) {
             /* a claim we cannot read is no claim - the request stays the
              * relay's own */
             have_origin = (PMIX_SUCCESS ==
                            PMIx_Value_get_number(&info[n].value, &origin, PMIX_UINT32));
-#endif
         }
     }
     if (!have_id) {
@@ -110,17 +108,11 @@ bool prte_pmix_server_relay_permitted(uid_t relay, uid_t origin)
 
 bool prte_pmix_server_is_identity_key(const char *key)
 {
-    if (PMIx_Check_key(key, PMIX_USERID) || PMIx_Check_key(key, PMIX_GRPID)) {
-        return true;
-    }
-#if PRTE_PMIX_HAVE_ORIGIN_ID
-    return (PMIx_Check_key(key, PMIX_REQUESTOR_PID) ||
+    return (PMIx_Check_key(key, PMIX_USERID) || PMIx_Check_key(key, PMIX_GRPID) ||
+            PMIx_Check_key(key, PMIX_REQUESTOR_PID) ||
             PMIx_Check_key(key, PMIX_ORIGIN_USERID) || PMIx_Check_key(key, PMIX_ORIGIN_GRPID) ||
             PMIx_Check_key(key, PMIX_ORIGIN_PID) || PMIx_Check_key(key, PMIX_ORIGIN_IS_TOOL) ||
             PMIx_Check_key(key, PMIX_ORIGIN_IS_CLIENT));
-#else
-    return false;
-#endif
 }
 
 bool prte_pmix_server_privileged(uid_t uid)
@@ -817,7 +809,6 @@ void prte_pmix_server_access_job_done(const pmix_nspace_t nspace)
 size_t prte_pmix_server_relay_copy(pmix_info_t *dst, const pmix_info_t *src, size_t nsrc)
 {
     size_t n, m = 0;
-#if PRTE_PMIX_HAVE_ORIGIN_ID
     /* the process we heard from, as PMIx established it, and what it
      * claims about whoever first asked */
     const pmix_info_t *uid = NULL, *gid = NULL, *pid = NULL, *tool = NULL, *client = NULL;
@@ -892,11 +883,5 @@ size_t prte_pmix_server_relay_copy(pmix_info_t *dst, const pmix_info_t *src, siz
         PMIX_LOAD_KEY(dst[m].key, PMIX_ORIGIN_IS_CLIENT);
         ++m;
     }
-#else
-    for (n = 0; NULL != src && n < nsrc; n++) {
-        PMIX_INFO_XFER(&dst[m], (pmix_info_t *) &src[n]);
-        ++m;
-    }
-#endif
     return m;
 }

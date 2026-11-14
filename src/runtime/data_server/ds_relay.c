@@ -246,12 +246,11 @@ static void lkcb(pmix_status_t status, pmix_pdata_t data[], size_t ndata,
     PRTE_PMIX_THREADSHIFT(cd, prte_event_base, relay_complete);
 }
 
-/* Is this one of the keys a relay uses to say whom it acts for? */
+/* Is this one of the keys that say who made a request - the identity PMIx
+ * stamped on it, or a relay's claim about whom it acts for? */
 static bool is_claim(const char *key)
 {
-    return (PMIx_Check_key(key, PMIX_REQUESTOR) ||
-            PMIx_Check_key(key, PRTE_PUBLISH_REQ_UID) ||
-            PMIx_Check_key(key, PRTE_PUBLISH_REQ_GID));
+    return (PMIx_Check_key(key, PMIX_REQUESTOR) || prte_pmix_server_is_identity_key(key));
 }
 
 /* see ds.h */
@@ -263,18 +262,21 @@ pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
     uint32_t uid = UINT32_MAX, gid = UINT32_MAX;
 
     /* The requester's own uid and gid are in the array we were handed -
-     * its PMIx server appended them.  Carry them across under our own keys
-     * as well, because PMIx will append the RELAY's identity to the call we
-     * are about to make and the far end has no way to tell the two apart
-     * otherwise.  Ownership over there is decided by the publishing user,
-     * so getting this wrong stores an item under the relaying daemon and
+     * its PMIx server stamped them.  The far end's PMIx stamps OUR identity
+     * on the call we are about to make, so the requester's goes across as
+     * PMIX_ORIGIN_USERID/_GRPID, which that PMIx passes to its host beside
+     * ours.  Ownership over there is decided by the publishing user, so
+     * getting this wrong stores an item under the relaying daemon and
      * answers every later removal about it. */
     for (n = 0; n < ninfo; n++) {
         if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
             uid = info[n].value.data.uint32;
         } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
             gid = info[n].value.data.uint32;
-        } else if (is_claim(info[n].key)) {
+        }
+        /* every key that says who asked is dropped below - the stamped
+         * identity among them - so each is counted out of the copy */
+        if (is_claim(info[n].key)) {
             nclaims++;
         }
     }
@@ -293,34 +295,24 @@ pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
      * lose only because check_requestor keeps the last it sees, which is
      * no way to decide an identity.  The identity PMIx stamped on the
      * up-call is not copied either: the far end's PMIx stamps ours. */
-    for (n = 0; n < ninfo; n++) {
-        if (!is_claim(info[n].key) && prte_pmix_server_is_identity_key(info[n].key)) {
-            nclaims++;
-        }
-    }
-    *nout = ninfo - nclaims + 3 + ((PRTE_PMIX_HAVE_ORIGIN_ID) ? 2 : 0);
+    *nout = ninfo - nclaims + 3;
     PMIX_INFO_CREATE(*out, *nout);
     if (NULL == *out) {
         *nout = 0;
         return PMIX_ERR_NOMEM;
     }
     for (n = 0, m = 0; n < ninfo; n++) {
-        if (is_claim(info[n].key) || prte_pmix_server_is_identity_key(info[n].key)) {
+        if (is_claim(info[n].key)) {
             continue;
         }
         PMIX_INFO_XFER(&(*out)[m], (pmix_info_t *) &info[n]);
         m++;
     }
-    /* whom we act for: in the attributes a PMIx that knows them passes to
-     * the far end's host as our claim, and in our own keys for a far end
-     * built against one that does not */
+    /* whom we act for, which the far end's PMIx passes to its host as our
+     * claim */
     PMIX_INFO_LOAD(&(*out)[m], PMIX_REQUESTOR, requestor, PMIX_PROC);
-    PMIX_INFO_LOAD(&(*out)[m + 1], PRTE_PUBLISH_REQ_UID, &uid, PMIX_UINT32);
-    PMIX_INFO_LOAD(&(*out)[m + 2], PRTE_PUBLISH_REQ_GID, &gid, PMIX_UINT32);
-#if PRTE_PMIX_HAVE_ORIGIN_ID
-    PMIX_INFO_LOAD(&(*out)[m + 3], PMIX_ORIGIN_USERID, &uid, PMIX_UINT32);
-    PMIX_INFO_LOAD(&(*out)[m + 4], PMIX_ORIGIN_GRPID, &gid, PMIX_UINT32);
-#endif
+    PMIX_INFO_LOAD(&(*out)[m + 1], PMIX_ORIGIN_USERID, &uid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&(*out)[m + 2], PMIX_ORIGIN_GRPID, &gid, PMIX_UINT32);
     return PMIX_SUCCESS;
 }
 
