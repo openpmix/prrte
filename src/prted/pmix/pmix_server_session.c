@@ -85,8 +85,13 @@ typedef struct {
     char **nodelists;           /* rendered PMIX_ALLOC_NODE_LIST strings */
     char *alloc_refid;          /* PMIX_ALLOC_ID */
     char *user_refid;           /* PMIX_ALLOC_REQ_ID */
-    uid_t uid;
+    uid_t uid;                  /* the requester's user and group */
+    gid_t gid;
     bool have_uid;
+    uid_t alloc_uid;            /* PMIX_ALLOC_UID/GID - the scheduler's word */
+    gid_t alloc_gid;            /* on whom the session belongs to */
+    bool have_alloc_uid;
+    bool have_alloc_gid;
     uint8_t inheritance;        /* PMIX_ALLOC_INHERITANCE disposition */
     bool have_inheritance;
     long timelimit;             /* seconds; -1 if not specified */
@@ -101,6 +106,9 @@ static void sessctrl_construct(prte_sessctrl_t *ctl)
     PMIX_LOAD_PROCID(&ctl->requestor, NULL, PMIX_RANK_INVALID);
     ctl->timelimit = -1;
     ctl->uid = PRTE_INVALID_UID;
+    ctl->gid = PRTE_INVALID_GID;
+    ctl->alloc_uid = PRTE_INVALID_UID;
+    ctl->alloc_gid = PRTE_INVALID_GID;
     ctl->inheritance = PRTE_INHERIT_DEFAULT_VALUE;
 }
 
@@ -304,6 +312,15 @@ static pmix_status_t scan_resources(prte_sessctrl_t *ctl,
     return PMIX_SUCCESS;
 }
 
+/* True if the request came from the scheduler attached to us. The
+ * scheduler's name is empty until one attaches, and an empty nspace
+ * matches anything, so that is checked first. */
+static bool from_scheduler(const prte_pmix_server_req_t *req)
+{
+    return (!PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+            PMIX_CHECK_PROCID_STRICT(&prte_pmix_server_globals.scheduler, &req->tproc));
+}
+
 /* Walk the request once, recording everything. Nothing is acted on here: an
  * info array has no defined order, and the operations below depend on values
  * that may appear after them (the whole reason the previous single-pass
@@ -315,6 +332,7 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
     pmix_status_t rc;
     char *ndstring, *tstr = NULL;
     pmix_data_array_t *darray;
+    uint32_t id;
 
     /* The caller is the requestor. The PMIx server named it, and a daemon
      * that passed the request on to us named it as the request's source,
@@ -336,8 +354,7 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             if (PMIX_PROC != info->value.type || NULL == info->value.data.proc) {
                 return PMIX_ERR_BAD_PARAM;
             }
-            if (!PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
-                PMIX_CHECK_PROCID_STRICT(&prte_pmix_server_globals.scheduler, &req->tproc)) {
+            if (from_scheduler(req)) {
                 PMIX_XFER_PROCID(&ctl->requestor, info->value.data.proc);
             }
 
@@ -397,14 +414,32 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             if (!prte_pmix_server_requester_uid(req->info, req->ninfo, &ctl->uid)) {
                 return PMIX_ERR_BAD_PARAM;
             }
+            ctl->gid = prte_pmix_server_requester_gid(req->info, req->ninfo);
             ctl->have_uid = true;
 
         } else if (PMIX_CHECK_KEY(info, PMIX_GRPID)) {
-            /* Accepted and ignored. The session's group is the one recorded
-             * for the requester's job (see the owner below), which its tool
-             * connected with. The user id IS recorded, because reservation
-             * ownership is checked against it. */
+            /* read with PMIX_USERID above, so the two describe one process */
             continue;
+
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_UID) ||
+                   PMIX_CHECK_KEY(info, PMIX_ALLOC_GID)) {
+            /* Whom the session belongs to. Only the scheduler says so: it
+             * instantiates sessions on users' behalf, and PMIX_USERID names
+             * the scheduler. From anyone else it would be a request to own
+             * a session as another user, which is not theirs to make. */
+            if (!from_scheduler(req)) {
+                return PMIX_ERR_NO_PERMISSIONS;
+            }
+            if (PMIX_SUCCESS != PMIx_Value_get_number(&info->value, &id, PMIX_UINT32)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
+            if (PMIX_CHECK_KEY(info, PMIX_ALLOC_UID)) {
+                ctl->alloc_uid = (uid_t) id;
+                ctl->have_alloc_uid = true;
+            } else {
+                ctl->alloc_gid = (gid_t) id;
+                ctl->have_alloc_gid = true;
+            }
 
             /***   RESOURCES NAMED DIRECTLY ON THE REQUEST   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_NODE_LIST)) {
@@ -549,6 +584,13 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
         PRTE_SESSCTRL_INSTANTIATE != ctl->op) {
         /* apps are only launched as part of instantiating the session that is
          * to hold them */
+        return PMIX_ERR_BAD_PARAM;
+    }
+    /* An owner is named when a session is made, and as a user and group
+     * together - the user from one source and the group from another would
+     * describe nobody */
+    if (ctl->have_alloc_uid != ctl->have_alloc_gid ||
+        (ctl->have_alloc_uid && PRTE_SESSCTRL_INSTANTIATE != ctl->op)) {
         return PMIX_ERR_BAD_PARAM;
     }
     return PMIX_SUCCESS;
@@ -1168,15 +1210,18 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     {
         prte_job_t *reqjob = prte_get_job_data_object(ctl->requestor.nspace);
 
-        if (ctl->have_uid) {
+        /* The owner the scheduler named; else whoever asked, as PMIx
+         * identified it - which, for a session the scheduler makes without
+         * naming one, is the scheduler. User and group come from the same
+         * source either way. */
+        if (ctl->have_alloc_uid) {
+            session->owner_uid = ctl->alloc_uid;
+            session->owner_gid = ctl->alloc_gid;
+        } else if (ctl->have_uid) {
             session->owner_uid = ctl->uid;
+            session->owner_gid = ctl->gid;
         } else if (NULL != reqjob) {
             session->owner_uid = reqjob->uid;
-        }
-        /* the group recorded for the requester's job - the one its tool
-         * connected with. Not the up-call's PMIX_GRPID, which is whatever
-         * group the requester chose to name */
-        if (NULL != reqjob) {
             session->owner_gid = reqjob->gid;
         }
     }

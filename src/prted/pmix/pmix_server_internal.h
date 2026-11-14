@@ -771,6 +771,12 @@ PRTE_EXPORT extern prte_pmix_server_globals_t prte_pmix_server_globals;
  * false when the info names no requester at all. */
 PRTE_EXPORT bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t *uid);
 
+/* prte_pmix_server_requester_gid: the group of the process
+ * prte_pmix_server_requester_uid attributes the up-call to - PMIX_GRPID,
+ * or PMIX_ORIGIN_GRPID where the relay's claim is taken. PRTE_INVALID_GID
+ * when that process's group is not given. */
+PRTE_EXPORT gid_t prte_pmix_server_requester_gid(const pmix_info_t *info, size_t ninfo);
+
 /* May a process running as relay speak for one running as origin? When
  * they are the same user - that claims nothing more than the relay has -
  * and when the relay is root or the user this DVM runs as. */

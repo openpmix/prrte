@@ -1494,6 +1494,15 @@ The parts that matter when editing this file:
   branch takes. Without it the last release runs the destructor while the
   object lock is held and the master deadlocks against itself
   (`futex_wait_queue` in `pmix_obj_update`, from `ardes`).
+- **Who a session belongs to** is set once, at instantiation, as a user and
+  group together. The scheduler names them with `PMIX_ALLOC_UID`/`_GID`, and
+  only the scheduler (`from_scheduler()`) may - from anyone else they are
+  `PMIX_ERR_NO_PERMISSIONS`, since they would be a request to own a session as
+  someone else. Without them the owner is the requester PMIx identified
+  (`prte_pmix_server_requester_uid()`/`_gid()`), which for the scheduler is
+  the scheduler. `PMIX_USERID` cannot carry the scheduler's choice: PMIx
+  stamps it with the caller's own identity. Nor can `PMIX_REQUESTOR`, which
+  names whom to notify, not whom the session is for.
 - **A session created here is DETACHED by default**, unlike a reservation. A
   reservation dies with the tool that took it; a session is named and
   addressable and must outlive the request that created it, or its own jobs
@@ -1588,7 +1597,7 @@ Every up-call, and what it is judged by:
 |---|---|---|
 | `spawn` | a parent outside the requester's job; placing the job on a reservation, for its owner; directives naming hosts or files | `interim()` (`prte_pmix_server_parent_permitted`); `plm_base_receive.c` (`session_usable`, `grow_directive`, `foreign_directive`) |
 | `allocate` | naming hosts to grow onto or activate; a release, by allocation, node or count; extending a reservation; cancelling a pending request | `prte_ras_base_modify()`, `ras_base_prepare_grow()`, `prte_ras_slurm_pending_req_permitted()` |
-| `session_control` | instantiation (`prte_pmix_server_dvm_permitted`); every other directive (`prte_pmix_server_session_permitted`) | `pmix_server_session.c` |
+| `session_control` | instantiation (`prte_pmix_server_dvm_permitted`); naming a session's owner, which only the scheduler may do; every other directive (`prte_pmix_server_session_permitted`) | `pmix_server_session.c` |
 | `job_control` | each target, by its job's rule; untargeted signal and kill reach only permitted jobs; a DVM halt is root's and our user's | `pmix_server_job_ctrl.c` |
 | `query` | a job it names; job listings, resolve and allocation ids leave out what the requester may not access | `pmix_server_queries.c` |
 | `iof_pull`, `push_stdin` | the job whose output or input it is | `pmix_server_gen.c` |
@@ -1668,8 +1677,9 @@ no thread-shift, and no pointer from one side into the other.
   (`prte_pmix_server_session_permitted`): the scheduler (which identified
   itself when it connected - matched against the requester PMIx names,
   `req->tproc`, never a `PMIX_REQUESTOR` in the request's info), root, our
-  own user, the session's owner, or a member of the owner's group (`session->owner_gid`, from the requester job's recorded
-  gid). Placing a job on a session's nodes is answered by the same rule,
+  own user, the session's owner, or a member of the owner's group
+  (`session->owner_uid`/`owner_gid` - see "Session control" below for
+  where they come from). Placing a job on a session's nodes is answered by the same rule,
   for the job's owner (`prte_pmix_server_session_permitted_uid`).
 - **Creating a session** (`PMIX_SESSION_INSTANTIATE`) is a different kind of
   request: there is no session yet to be the owner of, and the new one takes
