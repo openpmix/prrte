@@ -93,17 +93,7 @@ bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t
 
 bool prte_pmix_server_relay_permitted(uid_t relay, uid_t origin)
 {
-    size_t n;
-
-    if (relay == origin || prte_pmix_server_privileged(relay)) {
-        return true;
-    }
-    for (n = 0; n < prte_pmix_server_globals.nrly_uids; n++) {
-        if ((uint32_t) relay == prte_pmix_server_globals.rly_uids[n]) {
-            return true;
-        }
-    }
-    return false;
+    return (relay == origin || prte_pmix_server_privileged(relay));
 }
 
 bool prte_pmix_server_is_identity_key(const char *key)
@@ -591,24 +581,6 @@ int prte_pmix_server_scheduler_uids_resolve(void)
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
                        "scheduler-uid-unknown", true, (NULL == bad) ? "" : bad,
                        prte_pmix_server_globals.scheduler_uids);
-        rc = PRTE_ERR_SILENT;
-    }
-    free(bad);
-    return rc;
-}
-
-int prte_pmix_server_relay_uids_resolve(void)
-{
-    char *bad = NULL;
-    int rc;
-
-    rc = resolve_uid_list(prte_pmix_server_globals.relay_uids,
-                          &prte_pmix_server_globals.rly_uids,
-                          &prte_pmix_server_globals.nrly_uids, &bad);
-    if (PRTE_ERR_NOT_FOUND == rc) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
-                       "relay-uid-unknown", true, (NULL == bad) ? "" : bad,
-                       prte_pmix_server_globals.relay_uids);
         rc = PRTE_ERR_SILENT;
     }
     free(bad);

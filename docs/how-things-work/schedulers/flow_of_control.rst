@@ -39,11 +39,8 @@ PRRTE says whom it asks for in ``PMIX_ORIGIN_USERID``,
 ``PMIX_ORIGIN_GRPID`` and the other ``PMIX_ORIGIN_*`` attributes, beside
 ``PMIX_REQUESTOR``. Whether to believe that is the receiving host's
 decision. PRRTE, receiving a relayed request itself, believes it from a
-relay running as the same user it names, as root, as the user the DVM
-runs as, or as a user named by the ``prte_pmix_relay_uids`` MCA
-parameter (a comma-separated list of user names or numeric ids, for a
-privileged DVM that relays for its users under a service account of its
-own). Any other relay's request is taken as the relay's own.
+relay running as the same user it names, as root, or as the user the DVM
+runs as. Any other relay's request is taken as the relay's own.
 
 ``PMIX_ALLOC_ACTIVATE`` is the exception: PRRTE answers it itself,
 without involving any resource manager. It asks for a daemon on nodes

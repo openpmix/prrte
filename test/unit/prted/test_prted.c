@@ -4587,11 +4587,6 @@ static int test_access(void)
         CHECK("relay/own-user-permitted",
               prte_pmix_server_relay_permitted(prte_process_info.euid, 4242));
         CHECK("relay/other-user-refused", !prte_pmix_server_relay_permitted(ACC_LISTED, 4242));
-        prte_pmix_server_globals.rly_uids = &ruid;
-        prte_pmix_server_globals.nrly_uids = 1;
-        CHECK("relay/listed-user-permitted", prte_pmix_server_relay_permitted(ACC_LISTED, 4242));
-        prte_pmix_server_globals.rly_uids = NULL;
-        prte_pmix_server_globals.nrly_uids = 0;
 
         /* a claim from a relay that may not make it is not believed */
         PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);
