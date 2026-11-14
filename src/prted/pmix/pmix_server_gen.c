@@ -644,6 +644,16 @@ static void _toolconn(int sd, short args, void *cbdata)
         }
     }
 
+    /* The PMIx server names the user it established for every connection.
+     * A tool it named no user for is one we cannot judge anything it asks
+     * by, so it is not accepted. */
+    if (PMIX_SUCCESS == xrc && !uid_given) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s refusing a tool connection that names no user",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        xrc = PMIX_ERR_NO_PERMISSIONS;
+    }
+
     if (prte_pmix_server_globals.no_foreign_tools) {
         // the PMIx "uid" is the effective uid of the tool,
         // so compare it to our effective  uid
@@ -684,8 +694,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             /* the scheduler decides every session and receives every
              * allocation request, so it has to run as root, as the user
              * this DVM runs as, or as one prte_pmix_scheduler_uids names.
-             * (cd->uid is the one PMIx authenticated for the connection,
-             * but defaults to root, so it counts only if PMIx gave it.) */
+             * (cd->uid is the one PMIx authenticated for the connection.) */
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
                            "scheduler-refused", true, cd->target.nspace,
                            uid_given ? (unsigned) cd->uid : 0, uid_given ? "" : " (not given)");

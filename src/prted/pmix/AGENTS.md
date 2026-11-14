@@ -1741,6 +1741,20 @@ with the sentinel-rank screen, and both the master's own registration
 (`prte_pmix_server_register_tool()`) and its relay for a tool attached
 elsewhere call it, so both refuse the same attaches.
 
+**A tool joins a namespace we hold only as a user permitted on its job.**
+Whatever later asks who a request came from by namespace - the owner a
+spawn inherits from its requester's job, the process a data-server request
+names - takes a tool that joined a job for that job. So
+`prte_pmix_server_tool_may_join()` also takes the uid the tool's PMIx
+server established for its connection, and refuses one that
+`prte_pmix_server_job_permitted()` does not admit to the job, with
+`PMIX_ERR_EXISTS` as for a rank it may not add: a tool that took the name
+from its environment is then connected again under a namespace of its own.
+The relay on the master reads the tool's uid from the reporting daemon's
+message before deciding. A tool connection the PMIx server named no user
+for is refused outright, and `prte_pmix_server_req_t` starts with no user
+(`PRTE_INVALID_UID`) rather than root.
+
 **A tool's rank is a subscript, so it is bounded.** The proc is filed in
 `jdata->procs` at the tool's rank. That array is indexed by `int`, so a rank
 above `INT_MAX` is refused outright: `pmix_pointer_array_set_item()` would

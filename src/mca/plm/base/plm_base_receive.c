@@ -608,14 +608,35 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
              * tool that named itself may have taken the next in line */
             rc = prte_plm_base_next_jobid(name.nspace);
         }
+        /* what the reporting daemon says of the tool: its command line,
+         * pid, and the user and group its PMIx server established for its
+         * connection - which decide whether it may join a job we hold */
+        tmp = NULL;
+        count = 1;
+        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &tmp, &count, PMIX_STRING) ||
+            (count = 1, PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &pid, &count, PMIX_PID)) ||
+            (count = 1, PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &ui32, &count, PMIX_UINT32))) {
+            PMIX_ERROR_LOG(PMIX_ERR_UNPACK_FAILURE);
+            free(tmp);
+            goto CLEANUP;
+        }
+        tooluid = (uid_t) ui32;
+        count = 1;
+        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &ui32, &count, PMIX_UINT32)) {
+            PMIX_ERROR_LOG(PMIX_ERR_UNPACK_FAILURE);
+            free(tmp);
+            goto CLEANUP;
+        }
+        toolgid = (gid_t) ui32;
         // see if we already have this job - a name we could not find
         // the tool is refused below, as one it may not join is
         jdata = NULL;
         if (PRTE_SUCCESS == rc) {
             jdata = prte_get_job_data_object(name.nspace);
-            rc = prte_pmix_server_tool_may_join(jdata, name.rank);
+            rc = prte_pmix_server_tool_may_join(jdata, name.rank, tooluid);
         }
         if (PRTE_SUCCESS != rc) {
+            free(tmp);
             PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
                                  "%s refusing tool %s: %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&name),
@@ -623,6 +644,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             ret = prte_pmix_convert_rc(rc);
 
         } else if (NULL != jdata) {
+            free(tmp);
             // we do - check if we already have this proc
             proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, name.rank);
             if (NULL == proc) {
@@ -640,39 +662,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             ret = PMIX_SUCCESS;
 
         } else {
-            // unpack the cmd line
-            count = 1;
-            rc = PMIx_Data_unpack(NULL, buffer, &tmp, &count, PMIX_STRING);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                goto CLEANUP;
-            }
-            // and the pid
-            count = 1;
-            rc = PMIx_Data_unpack(NULL, buffer, &pid, &count, PMIX_PID);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                free(tmp);
-                goto CLEANUP;
-            }
-            // and who is running it
-            count = 1;
-            rc = PMIx_Data_unpack(NULL, buffer, &ui32, &count, PMIX_UINT32);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                free(tmp);
-                goto CLEANUP;
-            }
-            tooluid = (uid_t) ui32;
-            count = 1;
-            rc = PMIx_Data_unpack(NULL, buffer, &ui32, &count, PMIX_UINT32);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                free(tmp);
-                goto CLEANUP;
-            }
-            toolgid = (gid_t) ui32;
-
             // need to add the tool job
             jdata = PMIX_NEW(prte_job_t);
             PMIX_LOAD_NSPACE(jdata->nspace, name.nspace);

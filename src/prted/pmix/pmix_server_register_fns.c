@@ -1123,11 +1123,23 @@ errout:
  * the proc was never found and the tool's job never retired. In a tool's
  * own namespace the rank is also the size the array grows to, so it is
  * held below prte_pmix_tool_rank_limit; in an application job it has to
- * be a rank the job already has, which bounds it already. */
-int prte_pmix_server_tool_may_join(prte_job_t *jdata, pmix_rank_t rank)
+ * be a rank the job already has, which bounds it already.
+ *
+ * A namespace we hold is also the job's owner's: whatever later asks who a
+ * request came from by its namespace - the job a spawn belongs to, the
+ * process a data-server request names - takes the joining tool for that
+ * job. So uid, the user the tool's PMIx server established for its
+ * connection, must be one permitted on the job
+ * (prte_pmix_server_job_permitted). A tool refused for that is told the
+ * name exists, as for a rank it may not add, so one that took the name
+ * from its environment is connected again under a namespace of its own. */
+int prte_pmix_server_tool_may_join(prte_job_t *jdata, pmix_rank_t rank, uid_t uid)
 {
     if (PMIX_RANK_VALID <= rank || (pmix_rank_t) INT_MAX < rank) {
         return PRTE_ERR_BAD_PARAM;
+    }
+    if (NULL != jdata && !prte_pmix_server_job_permitted(uid, jdata)) {
+        return PRTE_EXISTS;
     }
     if (NULL == jdata || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         if (prte_pmix_server_globals.tool_rank_limit <= rank) {
@@ -1161,7 +1173,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd)
 
     // see if we already did this
     jdata = prte_get_job_data_object(cd->target.nspace);
-    rc = prte_pmix_server_tool_may_join(jdata, cd->target.rank);
+    rc = prte_pmix_server_tool_may_join(jdata, cd->target.rank, cd->uid);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
