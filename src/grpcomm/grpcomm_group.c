@@ -1182,6 +1182,12 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
             PMIX_RELEASE(sig);
             return;
         }
+        if (!prte_pmix_count_fits(buffer, ngrpinfo)) {
+            rc = PMIX_ERR_BAD_PARAM;
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(sig);
+            return;
+        }
         if (0 < ngrpinfo) {
             PMIX_INFO_CREATE(grpinfo, ngrpinfo);
             cnt = ngrpinfo;
@@ -1205,6 +1211,15 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, buffer, &nendpts, &cnt, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            if (NULL != grpinfo) {
+                PMIX_INFO_FREE(grpinfo, ngrpinfo);
+            }
+            PMIX_RELEASE(sig);
+            return;
+        }
+        if (!prte_pmix_count_fits(buffer, nendpts)) {
+            rc = PMIX_ERR_BAD_PARAM;
             PMIX_ERROR_LOG(rc);
             if (NULL != grpinfo) {
                 PMIX_INFO_FREE(grpinfo, ngrpinfo);
@@ -2197,6 +2212,14 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
         PMIX_INFO_LIST_RELEASE(ilist);
         goto notify;
     }
+    if (!prte_pmix_count_fits(buffer, cd->nfinal)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        cd->st = rc;
+        cd->nfinal = 0;
+        PMIX_INFO_LIST_RELEASE(ilist);
+        goto notify;
+    }
     if (0 < cd->nfinal) {
         PMIX_PROC_CREATE(cd->finalmembership, cd->nfinal);
         if (NULL == cd->finalmembership) {
@@ -2240,6 +2263,14 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
         PMIX_INFO_LIST_RELEASE(ilist);
         goto notify;
     }
+    if (!prte_pmix_count_fits(buffer, cd->ndeparted)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        cd->st = rc;
+        cd->ndeparted = 0;
+        PMIX_INFO_LIST_RELEASE(ilist);
+        goto notify;
+    }
     if (0 < cd->ndeparted) {
         PMIX_PROC_CREATE(cd->departed, cd->ndeparted);
         cnt = cd->ndeparted;
@@ -2256,6 +2287,14 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &cd->ngrpinfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        cd->st = rc;
+        cd->ngrpinfo = 0;
+        PMIX_INFO_LIST_RELEASE(ilist);
+        goto notify;
+    }
+    if (!prte_pmix_count_fits(buffer, cd->ngrpinfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(rc);
         cd->st = rc;
         cd->ngrpinfo = 0;
@@ -2297,6 +2336,14 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &cd->nendpts, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        cd->st = rc;
+        cd->nendpts = 0;
+        PMIX_INFO_LIST_RELEASE(ilist);
+        goto notify;
+    }
+    if (!prte_pmix_count_fits(buffer, cd->nendpts)) {
+        rc = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(rc);
         cd->st = rc;
         cd->nendpts = 0;
@@ -3183,6 +3230,12 @@ static int unpack_signature(pmix_data_buffer_t *buffer,
         PMIX_RELEASE(s);
         return prte_pmix_convert_status(rc);
     }
+    if (!prte_pmix_count_fits(buffer, s->nmembers)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
     if (0 < s->nmembers) {
         PMIX_PROC_CREATE(s->members, s->nmembers);
         cnt = s->nmembers;
@@ -3216,6 +3269,12 @@ static int unpack_signature(pmix_data_buffer_t *buffer,
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &s->naddmembers, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+    if (!prte_pmix_count_fits(buffer, s->naddmembers)) {
+        rc = PMIX_ERR_BAD_PARAM;
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(s);
         return prte_pmix_convert_status(rc);

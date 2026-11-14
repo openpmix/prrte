@@ -599,6 +599,10 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             PRTE_ERROR_LOG(ret);
             goto CLEANUP;
         }
+        if (0 > num_procs || !prte_pmix_count_fits(buffer, (size_t) num_procs)) {
+            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            goto CLEANUP;
+        }
         // create space for them
         ranks = (pmix_rank_t*)malloc(num_procs * sizeof(pmix_rank_t));
         if (NULL == ranks) {

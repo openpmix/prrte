@@ -142,6 +142,11 @@ static void deliver_relayed_output(prte_iof_tag_t stream,
         }
         return;
     }
+    if (!prte_pmix_count_fits(buffer, (size_t) numbytes)) {
+        /* corrupted message */
+        PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
+        return;
+    }
 
     p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &source);
@@ -261,7 +266,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
         PMIX_ERROR_LOG(rc);
         return;
     }
-    if (0 > numbytes) {
+    if (0 > numbytes || !prte_pmix_count_fits(buffer, (size_t) numbytes)) {
         /* corrupted message */
         PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
         return;

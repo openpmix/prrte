@@ -1101,6 +1101,13 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
             rc = PRTE_ERROR;
             goto REPORT_ERROR;
         }
+        if (!prte_pmix_count_fits(&pbuf, ninfo)) {
+            ret = PMIX_ERR_BAD_PARAM;
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+            rc = PRTE_ERROR;
+            goto REPORT_ERROR;
+        }
         PMIX_INFO_CREATE(info, ninfo);
         cnt = ninfo;
         ret = PMIx_Data_unpack(NULL, &pbuf, info, &cnt, PMIX_INFO);

@@ -237,6 +237,38 @@ PRTE_EXPORT int prte_pmix_convert_status(pmix_status_t status);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
 
+/* Whether a count just unpacked from buf can be the number of elements
+ * that follow it in buf.
+ *
+ * Every element of every type takes at least one byte of a packed buffer,
+ * so a count larger than the bytes buf has left to unpack cannot describe
+ * what follows, and an array sized from it would be larger than the
+ * message could ever fill. Checking the count against what is left before
+ * allocating keeps every such array no larger than the message itself,
+ * which the transport has already bounded. The unpack that follows takes
+ * its count as an int32_t, so a count it cannot hold is refused as well.
+ *
+ * Call it with the buffer the elements are about to be unpacked from,
+ * before the allocation. A negative signed count converts to a size_t
+ * larger than any buffer, so it is refused too. */
+static inline bool prte_pmix_count_fits(const pmix_data_buffer_t *buf, size_t count)
+{
+    size_t used;
+
+    if (0 == count) {
+        return true;
+    }
+    if (NULL == buf || NULL == buf->base_ptr || NULL == buf->unpack_ptr ||
+        buf->unpack_ptr < buf->base_ptr) {
+        return false;
+    }
+    used = (size_t) (buf->unpack_ptr - buf->base_ptr);
+    if (buf->bytes_used < used) {
+        return false;
+    }
+    return count <= (size_t) INT32_MAX && count <= buf->bytes_used - used;
+}
+
 /* Reach the interface version a framework's own header states.
  *
  * The PRRTE counterpart of PMIX_MCA_FW_VER() in PMIx's mca.h, and the

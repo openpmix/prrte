@@ -342,6 +342,11 @@ void prte_ds_purge(pmix_proc_t *sender,
         PMIX_ERROR_LOG(rc);
         goto done;
     }
+    if (!prte_pmix_count_fits(buffer, ninfo)) {
+        rc = PMIX_ERR_BAD_PARAM;
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
     if (0 < ninfo) {
         PMIX_INFO_CREATE(info, ninfo);
         count = (int32_t) ninfo;

@@ -347,19 +347,21 @@ not been checked. `pmix_pointer_array_get_item()` bounds-checks and
 returns NULL, so check for NULL — but do not then `return` without
 completing the request, because the requester is still waiting.
 
-**And a *count* arriving on the wire sizes an allocation before anything
-has checked it.** The `PMIX_*_CREATE` macros allocate the count's worth of
-elements and construct every one of them, ahead of the unpack that would
-refuse a buffer too short to hold them. What they do *not* do is wrap: in
-every PMIx PRRTE supports (7.0.0 on) they allocate with `calloc(n, size)`,
-which refuses a product that overflows and returns NULL - so a count chosen
-to wrap gets no array, and the unpack into NULL fails with
-`PMIX_ERR_BAD_PARAM`. Two things follow. NULL-check the allocation, or at
-least let the unpack that follows see the NULL; and do not mistake a screen
-on the count's *range* - the round trip through `int32_t` in
-`pmix_server_query_request()`, say - for a bound on memory: a count just
-under `INT32_MAX` still asks for a terabyte of `pmix_info_t`, which `calloc`
-refuses for want of memory, not of arithmetic.
+**And a *count* arriving on the wire sizes an allocation, so check it with
+`prte_pmix_count_fits()` first.** The `PMIX_*_CREATE` macros allocate the
+count's worth of elements and construct every one of them, ahead of the
+unpack that would refuse a buffer too short to hold them. They do not wrap:
+in every PMIx PRRTE supports (7.0.0 on) they allocate with
+`calloc(n, size)`, which refuses a product that overflows. But a count that
+does not wrap can still be far larger than the message - one just under
+`INT32_MAX` asks for a terabyte of `pmix_info_t` - and a screen on the
+count's *range* says nothing about that. `prte_pmix_count_fits(buf, n)`
+(in `src/pmix/pmix-internal.h`) refuses a count larger than the bytes `buf`
+has left to unpack, since every element takes at least one, and one the
+unpack's `int32_t` count cannot hold. Call it with the buffer the elements
+come from, after unpacking the count and before the allocation; every
+receive in this directory that sizes an array from the wire does. It also
+makes `n + 1` and `n + 2` safe for the handlers that reserve extra slots.
 
 **A relay must answer even a request it cannot parse.** Every `goto reply`
 in `pmix_server_sched()` happens after the requestor's index has been
