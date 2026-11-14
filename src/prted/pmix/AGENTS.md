@@ -1567,6 +1567,44 @@ here that can fail once and be skipped forever needs the same treatment.
 
 ## Who may act on a job, or a session
 
+**The rule in one place.** A request's identity is the `PMIX_USERID` and
+`PMIX_GRPID` - and `PMIX_REQUESTOR_PID`, where the kernel reported one -
+that the PMIx server's psec layer established for the requester's
+connection and stamped into the up-call's info, replacing anything the
+requester supplied. PRRTE takes that as given and judges with it; nothing
+the requester writes (`PMIX_REQUESTOR`, a uid of its own) is identity. A
+daemon that passes a request to the master packs the info array as PMIx
+gave it, so the master reads the same values, and the RML header already
+says which daemon sent it. A request naming no user is one the DVM made of
+itself. `PMIX_ORIGIN_*` exists only for the hops where PRRTE is itself a
+tool of another PMIx server (the scheduler, an external data server): there
+the far server stamps the DVM's identity, so the requester's travels as the
+origin, and it is believed only from a relay that is the same user, root,
+or the receiving DVM's own user (`prte_pmix_server_relay_permitted()`).
+
+Every up-call, and what it is judged by:
+
+| Up-call | What is judged | Where |
+|---|---|---|
+| `spawn` | a parent outside the requester's job; placing the job on a reservation, for its owner; directives naming hosts or files | `interim()` (`prte_pmix_server_parent_permitted`); `plm_base_receive.c` (`session_usable`, `grow_directive`, `foreign_directive`) |
+| `allocate` | naming hosts to grow onto or activate; a release, by allocation, node or count; extending a reservation; cancelling a pending request | `prte_ras_base_modify()`, `ras_base_prepare_grow()`, `prte_ras_slurm_pending_req_permitted()` |
+| `session_control` | instantiation (`prte_pmix_server_dvm_permitted`); every other directive (`prte_pmix_server_session_permitted`) | `pmix_server_session.c` |
+| `job_control` | each target, by its job's rule; untargeted signal and kill reach only permitted jobs; a DVM halt is root's and our user's | `pmix_server_job_ctrl.c` |
+| `query` | a job it names; job listings, resolve and allocation ids leave out what the requester may not access | `pmix_server_queries.c` |
+| `iof_pull`, `push_stdin` | the job whose output or input it is | `pmix_server_gen.c` |
+| `abort` | processes outside the caller's own job, by the owner of the caller's job | `_client_abort()` |
+| `notify_event` | the jobs an event is carried on to; a debugger release must reach only jobs the raiser may access | `pmix_server_notify.c` (`narrow_event`, `release_permitted`) |
+| `publish`, `lookup`, `unpublish` | the item's recorded publisher, its access list, and any relay's claim; an unpublish of everything takes only the requester's own items | `src/runtime/data_server/` (`prte_data_server_owns`, `prte_ds_check_requestor`) |
+| `tool_connected2` | that a user is named at all; foreign tools; the scheduler role; joining a namespace held here | `_toolconn()`, `prte_pmix_server_tool_may_join()` |
+| `direct_modex`, `monitor` | judged by PMIx where the data or the process is, with the requester's info relayed | "Who may have a job's data", below |
+| `fence_nb`, `connect`, `disconnect`, `group` | collectives each participant joins itself | - |
+| `log`, `register_events`, `deregister_events`, `client_connected2`, `client_finalized` | concern only the caller | - |
+
+The judgements themselves are PMIx's access rule - root, the DVM's own
+user, the owner, or a member of the owner's group or access list - applied
+on our side by the functions below. An up-call added to the module needs a
+row here.
+
 A job belongs to its owner, who may allow further users and groups; root and
 the user this DVM runs as may act on any job. That rule is PMIx's
 (`docs/security-plan.rst` in PMIx), and PRRTE applies exactly it: PMIx's
@@ -1664,8 +1702,9 @@ no thread-shift, and no pointer from one side into the other.
   comma-separated list of names or numbers, looked up once when the master's
   server starts (a lookup can block, which accepting a connection on the
   progress thread must not), and a name nobody has stops the DVM starting
-  (`scheduler-uid-unknown`). The caddy's `uid` defaults to 0, so the check
-  also requires that PMIx supplied one. A scheduler that departs is forgotten
+  (`scheduler-uid-unknown`). A tool connection whose info names no user is
+  refused before this, and the caddy's `uid` starts as `PRTE_INVALID_UID`,
+  never root. A scheduler that departs is forgotten
   (`prte_pmix_server_tool_departed`), so the DVM stops deferring session
   requests to it and tools may spawn into the default session again.
 
