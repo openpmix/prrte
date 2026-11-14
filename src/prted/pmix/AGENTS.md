@@ -1431,7 +1431,8 @@ The parts that matter when editing this file:
 - **Who decides.** A request from the scheduler is a directive *to* this DVM
   and is executed here. One from anybody else is forwarded to the scheduler —
   **unless there is no scheduler**, in which case the DVM master is the
-  authority and answers for itself, gated on `prte_session_is_owned_by`. That
+  authority and answers for itself, gated on
+  `prte_pmix_server_session_permitted`. That
   decision is made in **two** places, `pass_request()` here and
   `pmix_server_sched()` in `pmix_server.c` (the relay from a peer daemon), and
   they must agree: otherwise the same request is served or refused depending
@@ -1630,8 +1631,8 @@ no thread-shift, and no pointer from one side into the other.
   itself when it connected - matched against the requester PMIx names,
   `req->tproc`, never a `PMIX_REQUESTOR` in the request's info), root, our
   own user, the session's owner, or a member of the owner's group (`session->owner_gid`, from the requester job's recorded
-  gid). Which jobs use a session's *resources* - spawning onto it - is a
-  separate question, still answered by `prte_session_is_owned_by`.
+  gid). Placing a job on a session's nodes is answered by the same rule,
+  for the job's owner (`prte_pmix_server_session_permitted_uid`).
 - **Creating a session** (`PMIX_SESSION_INSTANTIATE`) is a different kind of
   request: there is no session yet to be the owner of, and the new one takes
   nodes - out of the pool, or new ones the DVM grows onto - so it changes

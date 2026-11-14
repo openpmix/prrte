@@ -4382,7 +4382,7 @@ static int test_access(void)
     CHECK("session/stranger", !prte_pmix_server_session_permitted(session, &other, info, 1));
     /* naming the owner's namespace changes nothing - only who is asking */
     PMIX_LOAD_PROCID(&other, "unit-test-access-owner-ns", 0);
-    prte_session_add_owner(session, other.nspace);
+    PMIX_LOAD_NSPACE(session->owner, other.nspace);
     CHECK("session/namespace-irrelevant",
           !prte_pmix_server_session_permitted(session, &other, info, 1));
     PMIX_INFO_DESTRUCT(&info[0]);
