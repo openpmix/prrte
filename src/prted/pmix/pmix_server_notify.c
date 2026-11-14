@@ -431,11 +431,172 @@ static bool release_permitted(prte_pmix_server_op_caddy_t *cd)
     }
 }
 
+/* add a target to a custom range being built */
+static int add_target(pmix_proc_t **procs, size_t *n, size_t *room, const char *nspace,
+                      pmix_rank_t rank)
+{
+    pmix_proc_t *p;
+
+    if (*n == *room) {
+        p = (pmix_proc_t *) realloc(*procs, (*room + 8) * sizeof(pmix_proc_t));
+        if (NULL == p) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        *procs = p;
+        *room += 8;
+    }
+    PMIX_LOAD_PROCID(&(*procs)[*n], nspace, rank);
+    ++(*n);
+    return PRTE_SUCCESS;
+}
+
+/* every job uid is permitted on, each as a whole - the daemons excepted */
+static int add_permitted_jobs(uid_t uid, pmix_proc_t **procs, size_t *n, size_t *room)
+{
+    prte_job_t *jdata;
+    int i, rc;
+
+    for (i = 0; i < prte_job_data->size; i++) {
+        jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
+        if (NULL == jdata || PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace) ||
+            !prte_pmix_server_job_permitted(uid, jdata)) {
+            continue;
+        }
+        rc = add_target(procs, n, room, jdata->nspace, PMIX_RANK_WILDCARD);
+        if (PRTE_SUCCESS != rc) {
+            return rc;
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
+/* Which of the jobs a client's event reaches may it be carried on to?
+ * PMIx has delivered it to the clients of our own server; carrying it to
+ * every other daemon is ours to judge, and it is judged as the user the PMIx
+ * server named for the raiser. Root, our own user, an event we raised
+ * ourselves, and one whose every job the raiser is permitted on keep the
+ * range they gave. Anybody else's is carried on to the jobs it is
+ * permitted on and no others: a custom range loses the processes of the
+ * rest (a wildcard namespace standing for every job it is permitted on),
+ * and a wider range becomes a custom range naming those jobs. A range of
+ * this node goes no further, since only this node's processes were ever
+ * meant. On return *relay says whether it goes on at all, and *info and
+ * *ninfo, when set, are the directives to carry in place of the raiser's,
+ * with *range the range they name; the caller frees them. */
+static int narrow_event(prte_pmix_server_op_caddy_t *cd, bool *relay,
+                        pmix_data_range_t *range, pmix_info_t **info, size_t *ninfo)
+{
+    pmix_proc_t *given = NULL, *keep = NULL;
+    size_t n, k, ngiven = 0, nkeep = 0, room = 0;
+    pmix_data_array_t *darray;
+    prte_job_t *jdata;
+    uid_t uid;
+    int rc = PRTE_SUCCESS;
+
+    *relay = true;
+    *range = cd->range;
+    *info = NULL;
+    *ninfo = 0;
+    if (!prte_pmix_server_requester_uid(cd->info, cd->ninfo, &uid) ||
+        prte_pmix_server_privileged(uid)) {
+        return PRTE_SUCCESS;
+    }
+    switch (cd->range) {
+        case PMIX_RANGE_PROC_LOCAL:
+        case PMIX_RANGE_RM:
+            /* the raiser itself, or the host - no other job */
+            return PRTE_SUCCESS;
+        case PMIX_RANGE_NAMESPACE:
+            jdata = prte_get_job_data_object(cd->proc.nspace);
+            *relay = (NULL == jdata || prte_pmix_server_job_permitted(uid, jdata));
+            return PRTE_SUCCESS;
+        case PMIX_RANGE_LOCAL:
+            *relay = every_job_permitted(uid);
+            return PRTE_SUCCESS;
+        case PMIX_RANGE_CUSTOM:
+            for (n = 0; n < cd->ninfo; n++) {
+                if (!PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_CUSTOM_RANGE)) {
+                    continue;
+                }
+                if (PMIX_PROC == cd->info[n].value.type &&
+                    NULL != cd->info[n].value.data.proc) {
+                    given = cd->info[n].value.data.proc;
+                    ngiven = 1;
+                } else if (PMIX_DATA_ARRAY == cd->info[n].value.type &&
+                           NULL != cd->info[n].value.data.darray &&
+                           PMIX_PROC == cd->info[n].value.data.darray->type) {
+                    given = (pmix_proc_t *) cd->info[n].value.data.darray->array;
+                    ngiven = cd->info[n].value.data.darray->size;
+                } else {
+                    /* a range we cannot read is not one we can narrow */
+                    *relay = false;
+                    return PRTE_SUCCESS;
+                }
+                break;
+            }
+            for (n = 0; PRTE_SUCCESS == rc && n < ngiven; n++) {
+                if (PMIX_NSPACE_INVALID(given[n].nspace)) {
+                    rc = add_permitted_jobs(uid, &keep, &nkeep, &room);
+                } else if (one_job_permitted(uid, given[n].nspace)) {
+                    rc = add_target(&keep, &nkeep, &room, given[n].nspace, given[n].rank);
+                }
+            }
+            break;
+        default:
+            if (every_job_permitted(uid)) {
+                return PRTE_SUCCESS;
+            }
+            rc = add_permitted_jobs(uid, &keep, &nkeep, &room);
+            break;
+    }
+    if (PRTE_SUCCESS != rc || 0 == nkeep) {
+        free(keep);
+        *relay = false;
+        return rc;
+    }
+
+    /* the raiser's directives, with the narrowed range in place of any it
+     * named */
+    for (n = 0, k = 0; n < cd->ninfo; n++) {
+        if (!PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_CUSTOM_RANGE)) {
+            ++k;
+        }
+    }
+    PMIX_INFO_CREATE(*info, k + 1);
+    darray = PMIx_Data_array_create(nkeep, PMIX_PROC);
+    if (NULL == *info || NULL == darray) {
+        if (NULL != *info) {
+            PMIX_INFO_FREE(*info, k + 1);
+            *info = NULL;
+        }
+        free(keep);
+        *relay = false;
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    memcpy(darray->array, keep, nkeep * sizeof(pmix_proc_t));
+    free(keep);
+    for (n = 0, k = 0; n < cd->ninfo; n++) {
+        if (!PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_CUSTOM_RANGE)) {
+            PMIX_INFO_XFER(&(*info)[k], &cd->info[n]);
+            ++k;
+        }
+    }
+    PMIX_INFO_LOAD(&(*info)[k], PMIX_EVENT_CUSTOM_RANGE, darray, PMIX_DATA_ARRAY);
+    PMIx_Data_array_free(darray);
+    *ninfo = k + 1;
+    *range = PMIX_RANGE_CUSTOM;
+    return PRTE_SUCCESS;
+}
+
 static void _notify_event(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     pmix_data_buffer_t pbkt;
     pmix_status_t ret = PMIX_SUCCESS;
+    pmix_data_range_t range;
+    pmix_info_t *rinfo = NULL;
+    size_t nrinfo = 0;
+    bool relay;
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -461,7 +622,24 @@ static void _notify_event(int sd, short args, void *cbdata)
 
     /* a local process has generated an event - we need to xcast it
      * to all the daemons so it can be passed down to their local
-     * procs */
+     * procs, as far as its raiser may reach */
+    rc = narrow_event(cd, &relay, &range, &rinfo, &nrinfo);
+    if (PRTE_SUCCESS != rc) {
+        ret = prte_pmix_convert_rc(rc);
+        goto done;
+    }
+    if (!relay) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s event %s from %s goes to no other daemon: its user may "
+                            "not access the jobs it names",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIx_Error_string(cd->status), PRTE_NAME_PRINT(&cd->proc));
+        goto done;
+    }
+    if (NULL == rinfo) {
+        rinfo = cd->info;
+        nrinfo = cd->ninfo;
+    }
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
 
     /* we need to add a flag indicating this came from us as we are going to get it echoed
@@ -486,19 +664,19 @@ static void _notify_event(int sd, short args, void *cbdata)
         goto done;
     }
     /* pack the range */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &cd->range, 1, PMIX_DATA_RANGE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         goto done;
     }
     /* pack the number of infos */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &cd->ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &nrinfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         goto done;
     }
-    if (0 < cd->ninfo) {
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, cd->info, cd->ninfo, PMIX_INFO))) {
+    if (0 < nrinfo) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, rinfo, nrinfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             goto done;
@@ -515,6 +693,9 @@ static void _notify_event(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
 done:
+    if (NULL != rinfo && rinfo != cd->info) {
+        PMIX_INFO_FREE(rinfo, nrinfo);
+    }
     if (NULL != cd->cbfunc) {
         cd->cbfunc(ret, cd->cbdata);
     }
