@@ -2856,12 +2856,13 @@ static int test_tool_registration(void)
      * In a tool's own namespace the rank is also how far the array grows,
      * so it is held below prte_pmix_tool_rank_limit. */
     CHECK("a rank above INT_MAX is refused",
-          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, (pmix_rank_t) INT_MAX + 1));
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, (pmix_rank_t) INT_MAX + 1,
+                                                                 prte_process_info.euid));
     prte_pmix_server_globals.tool_rank_limit = 16;
     CHECK("a tool rank at the limit is refused",
-          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, 16));
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, 16, prte_process_info.euid));
     CHECK("...and one below it accepted",
-          PRTE_SUCCESS == prte_pmix_server_tool_may_join(NULL, 15));
+          PRTE_SUCCESS == prte_pmix_server_tool_may_join(NULL, 15, prte_process_info.euid));
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_PROCID(&req->target, "unit-test-tool@9", (pmix_rank_t) INT_MAX - 1);
     rc = prte_pmix_server_register_tool(req);
@@ -2910,12 +2911,34 @@ static int test_tool_registration(void)
     }
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
+    req->uid = prte_process_info.euid;
     rc = prte_pmix_server_register_tool(req);
     CHECK("a namespace already known is accepted without rebuilding it",
           PRTE_SUCCESS == rc);
     CHECK("...and the job object we had is the one still there",
           jdata == prte_get_job_data_object(req->target.nspace));
     PMIX_RELEASE(req);
+
+    /* ...but only from a user permitted on the job that holds it: a tool
+     * taking a namespace is taken for that job by whatever later asks by
+     * namespace. A tool the PMIx server named no user for, and one of a
+     * user the job does not admit, are told the name exists */
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.users, pmix_list_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
+    CHECK("a tool naming no user may not join a namespace we hold",
+          PRTE_EXISTS == prte_pmix_server_register_tool(req));
+    req->uid = (uid_t) 4343;
+    CHECK("a tool of a user the job does not admit may not join it",
+          PRTE_EXISTS == prte_pmix_server_register_tool(req));
+    CHECK("...and the relay on the master asks the same question",
+          PRTE_EXISTS == prte_pmix_server_tool_may_join(jdata, 0, (uid_t) 4343));
+    jdata->uid = (uid_t) 4343;
+    CHECK("a tool of the job's own user may join it",
+          PRTE_SUCCESS == prte_pmix_server_register_tool(req));
+    jdata->uid = PRTE_INVALID_UID;
+    PMIX_RELEASE(req);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.users);
 
     /* An application job: a tool may take a rank the job has, as one started
      * from a job script does, but may not add one - the rank would never
@@ -2924,6 +2947,7 @@ static int test_tool_registration(void)
     PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_TOOL);
     req = PMIX_NEW(prte_pmix_server_req_t);
     PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
+    req->uid = prte_process_info.euid;
     CHECK("a tool may not add a rank to an application job",
           PRTE_EXISTS == prte_pmix_server_register_tool(req));
     proc = PMIX_NEW(prte_proc_t);
@@ -2935,7 +2959,8 @@ static int test_tool_registration(void)
     CHECK("...and a sentinel rank is refused for a known namespace too",
           PRTE_ERR_BAD_PARAM == prte_pmix_server_register_tool(req));
     CHECK("the may-join check refuses the same sentinel on the relay's behalf",
-          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, PMIX_RANK_WILDCARD));
+          PRTE_ERR_BAD_PARAM == prte_pmix_server_tool_may_join(NULL, PMIX_RANK_WILDCARD,
+                                                                 prte_process_info.euid));
     PMIX_RELEASE(req);
 
     pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
