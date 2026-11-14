@@ -593,6 +593,13 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
         (ctl->have_alloc_uid && PRTE_SESSCTRL_INSTANTIATE != ctl->op)) {
         return PMIX_ERR_BAD_PARAM;
     }
+    /* and the scheduler must name one. It makes sessions for users, and
+     * its own identity is the only other one in the request - a session
+     * recorded as the scheduler's would be usable by nobody it was for */
+    if (PRTE_SESSCTRL_INSTANTIATE == ctl->op && !ctl->have_alloc_uid &&
+        from_scheduler(req)) {
+        return PMIX_ERR_BAD_PARAM;
+    }
     return PMIX_SUCCESS;
 }
 
@@ -966,6 +973,17 @@ static prte_job_t *build_session_job(prte_sessctrl_t *ctl, prte_session_t *sessi
     /* identifies the proc whose ownership and bookmark the launch path uses */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL,
                        &jdata->originator, PMIX_PROC);
+    /* The session's apps are its owner's: they run as the user the
+     * scheduler named, not as whoever passed the request along. The launch
+     * path takes an owner already on a job only from a job built here. */
+    if (ctl->have_alloc_uid) {
+        uint32_t id = (uint32_t) ctl->alloc_uid;
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL,
+                           &id, PMIX_UINT32);
+        id = (uint32_t) ctl->alloc_gid;
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, PRTE_ATTR_GLOBAL,
+                           &id, PMIX_UINT32);
+    }
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT);
 
     return jdata;
@@ -1210,10 +1228,10 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     {
         prte_job_t *reqjob = prte_get_job_data_object(ctl->requestor.nspace);
 
-        /* The owner the scheduler named; else whoever asked, as PMIx
-         * identified it - which, for a session the scheduler makes without
-         * naming one, is the scheduler. User and group come from the same
-         * source either way. */
+        /* The owner the scheduler named (it must name one); else whoever
+         * asked, as PMIx identified it - a request made of a DVM with no
+         * scheduler attached. User and group come from the same source
+         * either way. */
         if (ctl->have_alloc_uid) {
             session->owner_uid = ctl->alloc_uid;
             session->owner_gid = ctl->alloc_gid;

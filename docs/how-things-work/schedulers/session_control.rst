@@ -219,15 +219,20 @@ What PRRTE does not support
 
 * **Who a session belongs to.** A session belongs to a user and that
   user's group, and they are who may later act on it. A scheduler
-  instantiating a session on a user's behalf names them with
-  ``PMIX_ALLOC_UID`` and ``PMIX_ALLOC_GID``, given together. Only the
-  attached scheduler may name them; from anyone else the request is refused
-  with ``PMIX_ERR_NO_PERMISSIONS``. A session the scheduler creates without
-  naming an owner is the scheduler's own. One created by anyone else, when
-  no scheduler is attached, belongs to the user and group PMIx identified
-  for the request. ``PMIX_USERID`` and ``PMIX_GRPID`` cannot say whom a
-  session is for: PMIx sets them to the identity of the process that made
-  the request.
+  instantiating a session on a user's behalf must name them with
+  ``PMIX_ALLOC_UID`` and ``PMIX_ALLOC_GID``, given together; an
+  instantiation from the scheduler without them is refused with
+  ``PMIX_ERR_BAD_PARAM``. Only the attached scheduler may name them; from
+  anyone else the request is refused with ``PMIX_ERR_NO_PERMISSIONS``. A
+  session created by anyone else, when no scheduler is attached, belongs to
+  the user and group PMIx identified for the request. ``PMIX_USERID`` and
+  ``PMIX_GRPID`` cannot say whom a session is for: PMIx sets them to the
+  identity of the process that made the request.
+
+  The applications a session is created to run (``PMIX_SESSION_APP``) are
+  its owner's, and run as that user. A DVM not run as root cannot start
+  processes as another user, and refuses to start a session's applications
+  whose owner it cannot run them as.
 
 An unrecognized directive is not an error. A request may be addressed at more
 than one kind of RTE, and refusing on a key PRRTE simply has no opinion about

@@ -4287,7 +4287,7 @@ test_session() {
 ########################################################################
 ROLETOOL=/opt/prte/prte/bin/roletool
 test_requesters() {
-    local out uri pns rq rq2 rc dns ons
+    local out uri pns rq rq2 rc dns ons n
 
     banner "requesters: a tool of another user is judged as that user"
     cleanup_swarm
@@ -4516,6 +4516,38 @@ test_requesters() {
             RUN "timeout 60 $SESSCTL terminate 4275" >/dev/null 2>&1
         fi
     fi
+
+    banner "requesters: the scheduler must say whom a session is for"
+    out=$(RUN "timeout 60 $ROLETOOL '$uri' sched-instantiate 4276 node2:2" 2>&1)
+    if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+        bad "the scheduler created a session naming nobody it is for"
+        RUN "timeout 60 $SESSCTL terminate 4276" >/dev/null 2>&1
+    elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_BAD_PARAM"; then
+        ok "a session the scheduler does not say the owner of is refused"
+    else
+        bad "a session naming no owner failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+
+    banner "requesters: a session's apps run as the user it is for"
+    ON 2 'rm -f /tmp/sessapp.uid; printf "#!/bin/sh\nid -u > /tmp/sessapp.uid\n" > /tmp/sessapp.sh && chmod 755 /tmp/sessapp.sh'
+    out=$(RUN "timeout 60 $ROLETOOL '$uri' sched-instantiate 4277 node2:2 65534 65534 /tmp/sessapp.sh" 2>&1)
+    if ! echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+        bad "the scheduler could not start a session's app for another user: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        n=""
+        for _ in $(seq 1 20); do
+            n=$(ON 2 'cat /tmp/sessapp.uid 2>/dev/null' | tr -d '\r\n')
+            [ -n "$n" ] && break
+            sleep 1
+        done
+        [ "$n" = 65534 ] \
+            && ok "the session's app ran as the user the scheduler named" \
+            || bad "the session's app ran as uid '${n:-nothing}', not 65534"
+    fi
+    # it ends with its app; make sure, and give node2 back to the pool
+    sleep 2
+    RUN "timeout 60 $SESSCTL terminate 4277" >/dev/null 2>&1
+    ON 2 'rm -f /tmp/sessapp.uid /tmp/sessapp.sh; true'
 
     banner "requesters: a scheduler that has gone is forgotten"
     # root's own scheduler is accepted - and once it leaves, the DVM must
