@@ -300,8 +300,8 @@ while ``--mapby device=gpu,ndev=2`` names a device called
   one GPU from each socket.
 
 * ``NIC[=<n>]`` only applies to the ``DEVICE`` directive, and only when the
-  devices are GPUs. In addition to its GPUs, each process is assigned up to
-  *n* NICs (one when *n* is not given) from the PCI root complexes of those
+  devices are GPUs. In addition to its GPUs, each process is assigned *n*
+  NICs (one when *n* is not given) from the PCI root complexes of those
   GPUs. A process told which GPU it has is otherwise left to guess which NIC
   goes with it, and every communication library guesses differently; PRRTE
   placed the GPU, so it can say. For example::
@@ -309,17 +309,25 @@ while ``--mapby device=gpu,ndev=2`` names a device called
      --mapby device=gpu:nic           each GPU with the NIC beside it
      --mapby device=gpu:ndev=2:nic=2  two GPUs and their two NICs
 
-  Among the NICs under a GPU's root complex, one carrying an OpenFabrics
-  (RDMA) device is preferred to plain Ethernet, then one behind the same
-  PCIe switch as the GPU, then one with the faster PCIe link (which keeps a
+  Where a GPU's root complex carries NICs with an OpenFabrics (RDMA)
+  device, only those are candidates: a plain Ethernet port beside them is
+  named to no communication library, so it is never used to make up the
+  count. Among the candidates, one behind the same PCIe switch as the GPU
+  is preferred, then one with the faster PCIe link (which keeps a
   management port beside the GPU from being chosen over the fabric NIC
-  next to it), then one fewer processes have been given, so that
-  GPUs sharing a complex get different NICs while there are enough of them.
-  Processes sharing a GPU (``SHARED``) share its NICs. A GPU whose root
-  complex has no NIC is still assigned, and its process gets no NIC rather
-  than one from elsewhere, since naming a distant NIC to the libraries
-  would override their own choice; the job is told so, once. Placement and
-  binding are decided by the GPUs alone.
+  next to it), then one fewer processes have been given, so that GPUs
+  sharing a complex get different NICs while there are enough of them.
+  Processes sharing a GPU (``SHARED``) share its NICs.
+
+  If a GPU's root complexes hold fewer candidates than *n*, the job is not
+  mapped, and the error gives the most that every process on the node can
+  be given. On an AWS p5.48xlarge, for example, each H100 shares its
+  complex with four EFA devices and four ENA Ethernet ports, so ``nic=4``
+  gives each process its four EFA devices and ``nic=8`` is refused. A GPU
+  whose root complex has no NIC at all is still assigned, and its process
+  gets no NIC rather than one from elsewhere, since naming a distant NIC to
+  the libraries would override their own choice; the job is told so, once.
+  Placement and binding are decided by the GPUs alone.
 
   The NICs are reported with the GPUs, in the ``PMIX_DEVICE_ID`` key of the
   process's job data, and are named to the libraries that will use them

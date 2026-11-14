@@ -689,6 +689,27 @@ override their own choice, which is likely to be at least as good. The
 same may hold for other GPUs and other nodes in this job; any further
 occurrences are counted below rather than shown.
 #
+[rmaps:too-few-nics-near-gpu]
+More NICs were requested for each process than the PCI root complexes of
+its GPUs can provide:
+
+  Requested:  %d
+  Available:  %d
+  Node:       %s
+  GPU:        %s
+
+A process is given only NICs that share a PCI root complex with its
+GPUs. Where a complex carries OpenFabrics (RDMA) devices, only those
+count: a plain Ethernet port beside them is named to no communication
+library, so adding it would make up the number with a NIC the process
+cannot use. The GPU shown is the one on this node whose complexes have
+the fewest NICs that count, so "Available" is the most that every
+process on the node can be given.
+
+The job was not mapped, rather than run with fewer NICs than were asked
+for. To map it, ask for no more than are available: "nic=%d" in place of
+the count given.
+#
 [must-map-by-obj]
 When ranking by FILL or by SPAN, you must map by an object
 type (e.g., HWTHREAD, CORE, a cache level, PACKAGE or NUMA):
