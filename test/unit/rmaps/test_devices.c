@@ -614,15 +614,12 @@ static void check_nic_link_speed(void)
     }
     free(order);
 
-    /* asked for two, it gets the faster one first and the port second -
-     * what the complex has, in rank order */
+    /* asked for two, the other three complexes have one NIC each, so the
+     * map is refused rather than giving those GPUs one */
     opts.map_nic = 2;
+    fprintf(stderr, "--- expected error output follows (nic=2 on one nic per gpu) ---\n");
     order = device_order(node, &opts);
-    CHECK("nic=2 lists the fabric nic first", NULL != order
-          && 0 == strcmp(order, "cuda0+hsn3,cuda1+hsn2,cuda2+hsn1,cuda3+hsn0+nmn0"));
-    if (NULL != order && 0 != strcmp(order, "cuda0+hsn3,cuda1+hsn2,cuda2+hsn1,cuda3+hsn0+nmn0")) {
-        fprintf(stderr, "  slingshot gpu nic=2: %s\n", order);
-    }
+    CHECK("nic=2 with one nic on most complexes is refused", NULL == order);
     free(order);
     PMIX_RELEASE(node);
     PMIX_RELEASE(t);
@@ -686,13 +683,100 @@ static void check_mi350_gpu_nic(void)
     PMIX_RELEASE(t);
 }
 
+/* An AWS node: only the RDMA NICs on a GPU's complex count.
+ *
+ * aws-p6-b200.xml is a real p6-b200.48xlarge.  Each pair of B200s shares a
+ * PCI root complex with two EFA devices (rdmapNs0, OpenFabrics) and two ENA
+ * ports (enpNs0, plain Ethernet); one pair's complex also holds the two
+ * ConnectX-7 InfiniBand ports.  The ENA ports are named to no communication
+ * library, so they must never make up a NIC count: nic=2 gives each GPU the
+ * two EFA devices on its complex, and nic=4 - which used to come back as
+ * two EFA devices and two ENA ports - is refused.
+ *
+ * That hwloc had no GPU backend, so the B200s carry no OS device; each is
+ * given the nvml device an hwloc with one would have, or the map would be
+ * refused for want of a GPU identity before the NICs were looked at. */
+#define B200_SLOT(slot, n)                                                                 \
+    "<info name=\"PCISlot\" value=\"" slot "\"/>\n"                                        \
+    "                <object type=\"OSDev\" gp_index=\"9100" n "\" name=\"nvml" n "\""     \
+    " subtype=\"NVML\" osdev_type=\"1\">\n"                                                \
+    "                  <info name=\"Backend\" value=\"NVML\"/>\n"                          \
+    "                  <info name=\"NVIDIAUUID\""                                          \
+    " value=\"GPU-00000000-0000-0000-0000-00000000000" n "\"/>\n"                          \
+    "                </object>"
+static void check_aws_efa_nic(void)
+{
+    static const char *from[] = {
+        "<info name=\"PCISlot\" value=\"79-1\"/>",  "<info name=\"PCISlot\" value=\"80-1\"/>",
+        "<info name=\"PCISlot\" value=\"93-1\"/>",  "<info name=\"PCISlot\" value=\"94-1\"/>",
+        "<info name=\"PCISlot\" value=\"109-1\"/>", "<info name=\"PCISlot\" value=\"110-1\"/>",
+        "<info name=\"PCISlot\" value=\"123-1\"/>", "<info name=\"PCISlot\" value=\"124-1\"/>",
+        NULL};
+    static const char *to[] = {
+        B200_SLOT("79-1", "0"),  B200_SLOT("80-1", "1"),  B200_SLOT("93-1", "2"),
+        B200_SLOT("94-1", "3"),  B200_SLOT("109-1", "4"), B200_SLOT("110-1", "5"),
+        B200_SLOT("123-1", "6"), B200_SLOT("124-1", "7"), NULL};
+    static const char *one =
+        "nvml0+rdmap79s0,nvml1+rdmap80s0,nvml2+rdmap96s0,nvml3+rdmap97s0,"
+        "nvml4+rdmap113s0,nvml5+rdmap114s0,nvml6+rdmap132s0,nvml7+rdmap133s0";
+    static const char *two =
+        "nvml0+rdmap79s0+rdmap80s0,nvml1+rdmap79s0+rdmap80s0,"
+        "nvml2+rdmap96s0+rdmap97s0,nvml3+rdmap96s0+rdmap97s0,"
+        "nvml4+rdmap113s0+rdmap114s0,nvml5+rdmap113s0+rdmap114s0,"
+        "nvml6+rdmap132s0+rdmap133s0,nvml7+rdmap132s0+rdmap133s0";
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    void *ctx = NULL;
+    char *order;
+
+    t = load_topo_edited("aws-p6-b200.xml", from, to);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices aws efa nic (could not load aws-p6-b200.xml)\n");
+        failures++;
+        return;
+    }
+    node = build_node("node-nu", t);
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.map_nic = 1;
+    opts.bind = PRTE_BIND_TO_NONE;
+    order = device_order(node, &opts);
+    CHECK("aws: each gpu gets an efa device of its own", NULL != order && 0 == strcmp(order, one));
+    if (NULL != order && 0 != strcmp(order, one)) {
+        fprintf(stderr, "  aws gpu nic: %s\n", order);
+    }
+    free(order);
+
+    opts.map_nic = 2;
+    order = device_order(node, &opts);
+    CHECK("aws: nic=2 gets the complex's two efa devices", NULL != order && 0 == strcmp(order, two));
+    if (NULL != order && 0 != strcmp(order, two)) {
+        fprintf(stderr, "  aws gpu nic=2: %s\n", order);
+    }
+    free(order);
+
+    /* four is more than three of the four complexes have, counting only
+     * EFA and InfiniBand - the ENA ports beside them do not make it up */
+    opts.map_nic = 4;
+    fprintf(stderr, "--- expected error output follows (nic=4 on two efa per complex) ---\n");
+    CHECK("aws: nic=4 is refused rather than padded with ena ports",
+          PRTE_SUCCESS != prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx));
+    CHECK("aws: nic=4 leaves no context", NULL == ctx);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
 /* "nic" gives each GPU the NICs under its own root complex.
  *
  * On this machine every GPU shares a host bridge with exactly one HCA, so
  * the answer is a pairing nobody has to guess at: cuda0 with mlx5_0, cuda1
  * with mlx5_3, cuda2 with mlx5_4, cuda3 with mlx5_5.  Asking for more NICs
- * than a complex has gets what is there and never one from elsewhere, and
- * a GPU whose complex has no NIC keeps its GPU and gets no NIC. */
+ * than a complex has refuses the map rather than taking one from elsewhere
+ * or quietly giving fewer, and a GPU whose complex has no NIC keeps its GPU
+ * and gets no NIC. */
 static void check_gpu_nic(void)
 {
     static const char *from[] = {"name=\"ib0\" osdev_type=\"2\"",
@@ -725,12 +809,12 @@ static void check_gpu_nic(void)
     }
     free(order);
 
-    /* more than the complex has: what is there, nothing from elsewhere */
+    /* more than the complex has: refused, and nothing is left behind */
     opts.map_nic = 3;
-    order = device_order(node, &opts);
-    CHECK("nic=3 takes only the complex's own", NULL != order
-          && 0 == strcmp(order, "cuda0+mlx5_0,cuda1+mlx5_3,cuda2+mlx5_4,cuda3+mlx5_5"));
-    free(order);
+    fprintf(stderr, "--- expected error output follows (nic=3 on one hca per gpu) ---\n");
+    CHECK("nic=3: more than the complex has is refused",
+          PRTE_SUCCESS != prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx));
+    CHECK("nic=3: no context", NULL == ctx);
 
     /* two GPUs per proc: the NICs of both complexes */
     opts.map_ndev = 2;
@@ -900,6 +984,7 @@ int test_devices(bool pmix_up)
     check_gpu_nic();
     check_nic_link_speed();
     check_mi350_gpu_nic();
+    check_aws_efa_nic();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");

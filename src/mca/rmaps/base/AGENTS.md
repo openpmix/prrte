@@ -264,17 +264,24 @@ and PMIx's bus order, cut from the top, ignored where one complex ends.
 
 ### `nic`: the NICs under a GPU's root complex
 
-`--map-by device=gpu:nic[=N]` adds up to N NICs to each GPU group's
+`--map-by device=gpu:nic[=N]` adds N NICs to each GPU group's
 `PRTE_PROC_DEVICE_ID`, chosen by `assign_nics()` at the end of
 `devices_begin()`. It changes nothing about placement or binding; the group
 is placed and bound against its GPUs exactly as without it.
 
 - **Candidates share a host bridge with one of the group's GPUs** - the
-  same `prte_hwloc_base_host_bridge()` key the `ndev` grouping uses. They
-  are ranked OpenFabrics before plain Ethernet, then by the depth of the
-  deepest common I/O ancestor with the group's GPUs (same PCIe switch
-  first), then by PCIe link speed, then by how many groups already have the
-  NIC, then bus order. The link speed is what keeps a management port off a
+  same `prte_hwloc_base_host_bridge()` key the `ndev` grouping uses - **and,
+  where any of those carries an OpenFabrics device, are only the ones that
+  do.** A plain Ethernet port is named to no library by pnet, so counting it
+  padded an assignment with NICs the process could not use: every GPU of an
+  AWS p5 given `nic=8` got four EFA devices and four ENA ports. A complex
+  with no OpenFabrics device at all still offers its other NICs, because a
+  Slingshot NIC is not one either. (A RoCE port is: its PCI function is
+  named by its OpenFabrics device, so the enumerated device carries that
+  type.) The candidates are ranked by the depth of the deepest common I/O
+  ancestor with the group's GPUs (same PCIe switch first), then by PCIe
+  link speed, then by how many groups already have the NIC, then bus
+  order. The link speed is what keeps a management port off a
   GPU: on the Slingshot node (`test/topologies/slingshot.xml`) a 1 GbE port
   and the Slingshot NIC share a host bridge with an A100, neither is an
   OpenFabrics device and both are one root port down, so nothing earlier
@@ -282,9 +289,18 @@ is placed and bound against its GPUs exactly as without it.
   Depth is counted by hand (`obj_depth()`, `io_common_ancestor()`): every
   I/O object has the same special depth for its type, so
   `hwloc_get_common_ancestor_obj()` cannot compare them.
+- **Fewer candidates than N refuses the map** (`rmaps:too-few-nics-near-gpu`),
+  shown under the job's nspace so it aggregates. Every group on the node
+  is scored before the refusal, so it names the smallest candidate count
+  any group has - the largest N this node can map. It used to hand the
+  group what the complex had, which ran the job with a count the user did
+  not ask for. `check_aws_efa_nic` in `test/unit/rmaps/test_devices.c` and
+  the offline `gpu-nic-toomany` case cover it.
 - **No NIC on the complex means no NIC**, never one from elsewhere, and
   `rmaps:no-nic-near-gpu` is shown once per node under the job's nspace so
-  PMIx folds a homogeneous cluster's reports into one plus a count.
+  PMIx folds a homogeneous cluster's reports into one plus a count. That
+  is about where the NICs are rather than how many were asked for, so it
+  stays a warning rather than the refusal above.
 - **The devices must be GPUs, decided by type** (`rmaps:nic-needs-gpu`), as
   the identity refusal is: a GPU may be named rather than classed. The
   parsers only check that the policy is a device map

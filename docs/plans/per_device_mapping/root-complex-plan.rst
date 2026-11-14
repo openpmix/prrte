@@ -337,29 +337,41 @@ Settled before any code was written:
    The topic's text names the first node and says the same may hold for
    other nodes, since the summary line counts calls rather than naming
    nodes.
-4. **Ethernet is a candidate, ranked last.**  On a RoCE-only node it is the
-   right answer; on a node with a management port it is chosen only when
-   nothing RDMA-capable shares the complex.
+4. **Ethernet is a candidate only where nothing RDMA-capable shares the
+   complex.**  As first written it was a candidate ranked last, which
+   made ``nic=N`` beyond the complex's RDMA NICs pad the assignment with
+   Ethernet ports: every GPU of an AWS p5 given ``nic=8`` got its four EFA
+   devices and four ENA ports, and pnet names no ENA port to any library.
+   Where a complex carries an OpenFabrics device, only those are
+   candidates.  A complex with none still offers its other NICs, since a
+   Slingshot NIC is not an OpenFabrics device either and that is where
+   the link-speed rule below does its work.  (On a RoCE node the Ethernet
+   view of a port is the same PCI function as its OpenFabrics device, so
+   it is a candidate as an OpenFabrics NIC.)
+5. **Fewer candidates than ``N`` refuses the map.**  It used to give the
+   group what the complex had.  A count the user chose and did not get is
+   a different job from the one asked for, so ``devices_begin()`` refuses
+   the node with ``rmaps:too-few-nics-near-gpu``, naming the smallest
+   count any group on it could be given - the largest ``N`` that would
+   map.  A group with no NIC at all stays under decision 3.
 
 Ranking within a complex
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The candidates for a GPU are ordered by:
+The candidates for a GPU (decision 4) are ordered by:
 
-1. whether the NIC's PCI function carries an OpenFabrics device (decision
-   4);
-2. the depth of the deepest common ancestor of the NIC and the GPU in the
+1. the depth of the deepest common ancestor of the NIC and the GPU in the
    I/O tree, deepest first — a NIC behind the same PCIe switch as the GPU
    ahead of one that only shares the host bridge.  This comes from the
    review of the OMPI PR, which named it as the next step for nodes such
    as ``p5en`` where GPUs and NICs share switches below the root complex;
-3. the faster PCIe link.  Added after the user's HPE Cray EX235n topology
+2. the faster PCIe link.  Added after the user's HPE Cray EX235n topology
    (``test/topologies/slingshot.xml``) showed a 1 GbE management port and
    the Slingshot NIC under the same host bridge as an A100, neither an
    OpenFabrics device and both one root port down: without it, only bus
    order kept the management port off the GPU;
-4. how many groups already hold the NIC, fewest first;
-5. bus order.
+3. how many groups already hold the NIC, fewest first;
+4. bus order.
 
 With ``ndev`` greater than one, a group's candidates are the union over its
 GPUs' complexes, and depth is measured against the nearest of the group's
