@@ -145,14 +145,13 @@ starts; ``plm/slurm``, ``plm/lsf`` and ``plm/pals`` put it in the launcher's
 environment, which the resource manager hands to every daemon; and a
 bootstrapped DVM reads it from the file ``DVMKeyFile`` names in ``prte.conf``.
 A daemon removes it from its environment as soon as it has it, so nothing the
-daemon starts inherits it.  ``prte_oob_authenticate`` (default ``true``) turns
-the check off for a launch agent that cannot forward stdin; daemons then
-cannot tell their own peers from any other process that connects to their
-ports.
+daemon starts inherits it.  The check is always made; nothing turns it off.
+For the same reason ``plm/ssh`` refuses ``rsh`` and ``remsh`` as launch
+agents: they would carry the key across the network as plain text.
 
 Authentication establishes who is at the other end of a connection.  On its
 own it says nothing about the messages that follow; that is what message
-tagging adds, when it is turned on (see `Message tagging`_).
+tagging adds (see `Message tagging`_).
 
 Then the ``IDENT`` exchange that has always opened a connection: the daemon
 that initiated it names itself (and must name the rank it proved); the
@@ -226,14 +225,12 @@ tree can be repaired (see :ref:`rml-label`).
 Message tagging
 ---------------
 
-``prte_oob_authenticate_messages`` (default ``false``) tags every message on
-a daemon connection, so that the receiving daemon acts on a message only once
-it has checked that it is the next message the far end sent on that
-connection, unchanged.  It needs ``prte_oob_authenticate``, whose handshake
-the keys come from: ``prte`` refuses to start with tagging on and
-authentication off.  It is off by default for what it costs: every hop
-computes a tag on each message it sends and checks one on each message it
-receives.
+Every message on a daemon connection is tagged, so that the receiving daemon
+acts on a message only once it has checked that it is the next message the
+far end sent on that connection, unchanged.  The keys come from the
+handshake above.  Tagging is always on: every hop computes a tag on each
+message it sends and checks one on each message it receives, which costs a
+few percent of a large launch and nothing measurable in a collective.
 
 * **Keys.**  When a connection's handshake succeeds, both ends derive a
   connection key - an HMAC-SHA256, under the DVM key, of the same namespace,
@@ -260,19 +257,11 @@ receives.
   on its own connection to the next hop, so every hop tags and checks under
   the keys of the connection the message is on.
 
-* **Every daemon needs the same setting.**  The two settings put different
-  bytes on the wire after the handshake, so the setting is bound into each
-  end's proof: two daemons that disagree fail their handshake rather than
-  misread each other's messages.  ``prte`` passes its own setting to every
-  daemon it launches.  A bootstrapped DVM has no launcher to do that, so put
-  the setting in an MCA parameter file every node reads (see
-  :doc:`/configuration`).
-
 Confidentiality
 ^^^^^^^^^^^^^^^
 
-PRRTE authenticates its daemons' connections and, with tagging, their
-messages; it does not encrypt them.  Where the traffic between nodes has to
+PRRTE authenticates its daemons' connections and their messages; it does
+not encrypt them.  Where the traffic between nodes has to
 be kept private, provide that at the network layer: an isolated fabric, or
 IPsec or WireGuard between the nodes.
 
@@ -330,11 +319,6 @@ information:
   daemon to the next ancestor and returns a ``COMM_FAILED`` recovery, instead of
   raising a fatal ``FAILED_TO_CONNECT``.  The HNP is the exception — it is
   retried forever and never allowed to time out.
-
-* **No launcher passes on the tagging setting.**  Every daemon must share
-  ``prte_oob_authenticate_messages`` (see `Message tagging`_), and with no
-  ``prte`` to hand it down, each node has to read it from an MCA parameter
-  file of its own.
 
 Where to look
 -------------

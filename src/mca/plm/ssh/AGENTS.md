@@ -141,8 +141,7 @@ This is the intricate part. It assembles the argv passed to the agent:
 Drains `launch_list` up to `num_concurrent` (default **128**) at a time.
 For each caddy it registers a `prte_wait_cb` (SIGCHLD → `ssh_wait_daemon`)
 on the daemon proc, then `fork()`s. The child calls **`ssh_child`**:
-make stdin the read end of a pipe (or `/dev/null` with
-`prte_oob_authenticate` off), close inherited fds, reset signal
+make stdin the read end of a pipe, close inherited fds, reset signal
 handlers to default and unblock signals, then `execve` the agent. The
 parent writes the **DVM key** down that pipe and closes it: ssh carries
 it, over its encrypted channel, to the remote prted's stdin, which the
@@ -151,16 +150,16 @@ prted reads before it daemonizes (`setup_launch` adds
 the remote daemon that stays private to the DVM's user - the remote
 command is the ssh process's argv here and the shell's there, both
 visible to `ps` - so do not move the key onto the command line, and an
-agent that cannot forward stdin cannot launch an authenticated DVM.
+agent that cannot forward stdin cannot launch a DVM.
 Nor can one whose channel is unencrypted: the key would cross the network
 as plain text. `launch_agent_setup` marks `rsh` and `remsh`
-(`agent_unencrypted`), and `setup_launch` refuses them with
-`agent-unencrypted` while `prte_oob_authenticate` is on - there, and not
-when the agent is chosen, so a DVM that never launches a remote daemon is
-unaffected. That is also why `rsh` is no longer in the default agent list.
-Under Grid Engine the agent is `qrsh -inherit`, which is given `-nostdin`
-only when there is no key to send: with it, no daemon ever received its
-key, and Grid Engine sites could start a DVM only with authentication off.
+(`agent_unencrypted`), and `setup_launch` always refuses them with
+`agent-unencrypted` - there, and not when the agent is chosen, so a DVM
+that never launches a remote daemon is unaffected. Authentication cannot be
+turned off, so there is no configuration in which PRRTE launches through
+rsh, and `rsh` is not in the default agent list. Under Grid Engine the
+agent is `qrsh -inherit`, which is never given `-nostdin`: with it, no
+daemon would receive its key.
 How private qrsh's channel is depends on the site's Grid Engine
 configuration (`qrsh_command`/`rsh_command`, or the builtin transport), which
 PRRTE cannot see. See

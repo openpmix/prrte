@@ -826,7 +826,6 @@ static bool read_message(int fd, prte_oob_tcp_hdr_t *hdr, uint8_t *payload, size
 #define ANSWER_HONEST  0
 #define ANSWER_WRONG   1   // a proof made with the wrong key
 #define ANSWER_REFLECT 2   // the listener's own proof, sent back to it
-#define ANSWER_OTHER_MODE 3 // an honest dialer with the other message-tagging setting
 
 /* Act as a dialer claiming `rank` against the listener reading sv[0]:
  * HELLO, take the CHALLENGE, check the listener's proof, and answer as told.
@@ -855,11 +854,6 @@ static int authenticate(int sv[2], prte_oob_tcp_handshake_t *hs, pmix_rank_t ran
         || MCA_OOB_TCP_AUTH_CHALLENGE != hdr.type || 2 * PRTE_OOB_TCP_AUTH_LEN != hdr.nbytes) {
         return PRTE_ERROR;
     }
-    if (ANSWER_OTHER_MODE == how) {
-        /* the dialer's own setting governs both what it expects of the
-         * listener and the proof it gives */
-        prte_oob_authenticate_messages = !prte_oob_authenticate_messages;
-    }
     prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, rank, PRTE_PROC_MY_NAME->rank, dnonce,
                           payload, expect);
     *listener_proved = (0 == memcmp(expect, payload + PRTE_OOB_TCP_AUTH_LEN, sizeof(expect)));
@@ -872,9 +866,6 @@ static int authenticate(int sv[2], prte_oob_tcp_handshake_t *hs, pmix_rank_t ran
         if (ANSWER_WRONG == how) {
             proof[0] ^= 0x01;
         }
-    }
-    if (ANSWER_OTHER_MODE == how) {
-        prte_oob_authenticate_messages = !prte_oob_authenticate_messages;
     }
     len = build_auth(wire, MCA_OOB_TCP_AUTH_RESPONSE, rank, PRTE_PROC_MY_NAME->rank, proof, NULL);
     if ((ssize_t) len != write(sv[1], wire, len)) {
@@ -1288,8 +1279,7 @@ static int test_msg_key_derivation(void)
 
 /* A handshake that succeeds with message tagging on leaves the peer holding
  * the keys for its end - its own direction to send with, the far end's to
- * check with - and both sequence numbers at 0.  With tagging off it leaves
- * none.  Two daemons that disagree about the setting fail the handshake. */
+ * check with - and both sequence numbers at 0. */
 static int test_msg_keys_installed(void)
 {
     int failures = 0, sv[2], rc;
@@ -1302,15 +1292,12 @@ static int test_msg_keys_installed(void)
     prte_oob_tcp_hdr_t hdr;
     pmix_proc_t who;
     size_t len;
-    ssize_t n;
     bool proved;
-    char byte;
 
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, "prte-test-dvm");
     PRTE_PROC_MY_NAME->rank = 0;
     memset(&hs, 0, sizeof(hs));
     memset(lnonce, 0x77, sizeof(lnonce));
-    prte_oob_authenticate_messages = true;
 
     /* we are the listener: rank 3 dials us */
     CHECK("socketpair", make_pair(sv));
@@ -1374,60 +1361,6 @@ static int test_msg_keys_installed(void)
     CHECK("both counts at the start", 0 == peer->msgauth.send_seq && 0 == peer->msgauth.recv_seq);
     peer->sd = -1;
     PMIX_RELEASE(peer);
-    close(sv[0]);
-    close(sv[1]);
-
-    /* a dialer that does not tag, against a listener that does */
-    CHECK("socketpair", make_pair(sv));
-    rc = authenticate(sv, &hs, 3, ANSWER_OTHER_MODE, &proved);
-    CHECK("the dialer does not take the listener's proof", !proved);
-    CHECK("and the listener refuses the dialer's", PRTE_ERR_AUTHENTICATION_FAILED == rc);
-    CHECK("and closes the connection", !fd_is_open(sv[0]));
-    CHECK("with no peer recorded", !peer_recorded(3));
-    prte_oob_tcp_handshake_clear(&hs);
-    close(sv[1]);
-
-    /* a listener that does not tag, against a dialer that does */
-    CHECK("socketpair", make_pair(sv));
-    peer = PMIX_NEW(prte_oob_tcp_peer_t);
-    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 6);
-    peer->sd = sv[0];
-    peer->state = MCA_OOB_TCP_CONNECT_ACK;
-    peer->established = true;
-    peer->hshake.auth.phase = PRTE_OOB_TCP_AUTH_HELLO_SENT;
-    peer->hshake.auth.rank = 6;
-    memset(peer->hshake.auth.dialer_nonce, 0x44, PRTE_OOB_TCP_AUTH_LEN);
-    prte_oob_authenticate_messages = false;
-    prte_oob_tcp_auth_mac('L', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank, 6,
-                          peer->hshake.auth.dialer_nonce, lnonce, proof);
-    prte_oob_authenticate_messages = true;
-    len = build_auth(wire, MCA_OOB_TCP_AUTH_CHALLENGE, 6, PRTE_PROC_MY_NAME->rank, lnonce, proof);
-    CHECK("wrote the challenge", (ssize_t) len == write(sv[1], wire, len));
-    rc = prte_oob_tcp_peer_recv_connect_ack(peer, sv[0], &peer->hshake, NULL);
-    CHECK("its proof is refused", PRTE_ERR_AUTHENTICATION_FAILED == rc);
-    CHECK("and the connection closed", 0 > peer->sd && !fd_is_open(sv[0]));
-    n = read(sv[1], &byte, 1);
-    CHECK("having sent it nothing", 0 == n);
-    PMIX_RELEASE(peer);
-    close(sv[1]);
-
-    /* with tagging off, a handshake leaves no keys */
-    prte_oob_authenticate_messages = false;
-    CHECK("socketpair", make_pair(sv));
-    rc = authenticate(sv, &hs, 3, ANSWER_HONEST, &proved);
-    CHECK("both ends proved themselves", PRTE_ERR_WOULD_BLOCK == rc && proved);
-    len = build_ident(wire, PRTE_PROC_MY_NAME->nspace, 0);
-    CHECK("wrote the ident", (ssize_t) len == write(sv[1], wire, len));
-    rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
-    CHECK("the ident was accepted", PRTE_SUCCESS == rc);
-    peer = prte_oob_tcp_peer_lookup(&who);
-    CHECK("a peer was recorded", NULL != peer);
-    if (NULL != peer) {
-        CHECK("holding no keys", !peer->msgauth.on);
-        pmix_list_remove_item(&prte_oob_base.peers, &peer->super);
-        PMIX_RELEASE(peer);
-    }
-    prte_oob_tcp_handshake_clear(&hs);
     close(sv[0]);
     close(sv[1]);
 
@@ -1665,7 +1598,6 @@ static int test_adopted_connection_retags(void)
     PRTE_PROC_MY_NAME->rank = 0;
     memset(&hs, 0, sizeof(hs));
     memset(payload, 0x5c, sizeof(payload));
-    prte_oob_authenticate_messages = true;
 
     /* we are dialing rank 3, a message part sent on our attempt */
     peer = PMIX_NEW(prte_oob_tcp_peer_t);
@@ -1708,7 +1640,6 @@ static int test_adopted_connection_retags(void)
     peer->sd = -1;
     PMIX_RELEASE(peer);
     prte_oob_tcp_handshake_clear(&hs);
-    prte_oob_authenticate_messages = false;
     close(sv[0]);
     close(sv[1]);
 
@@ -2380,38 +2311,6 @@ static int test_listeners_bound_to_selection(void)
     return failures;
 }
 
-/* Message tagging opens the transport only alongside authentication, whose
- * handshake its keys come from - refused without it, before anything is
- * opened, and taken with it like any other setting. */
-static int test_open_msg_auth(void)
-{
-    int failures = 0, rc;
-    bool save_auth = prte_oob_authenticate;
-
-    prte_oob_authenticate_messages = true;
-    prte_oob_authenticate = false;
-    fprintf(stdout, "-- the next case is refused; the message it prints is expected --\n");
-    rc = prte_oob_open();
-    CHECK("tagging without authentication is refused", PRTE_ERR_SILENT == rc);
-    CHECK("with nothing opened", NULL == prte_oob_base.ipv4conns);
-    /* refused before anything was built, so there is nothing to close */
-
-    prte_oob_authenticate = true;
-    rc = prte_oob_open();
-    CHECK("tagging with authentication opens", PRTE_SUCCESS == rc);
-    if (PRTE_SUCCESS == rc) {
-        failures += check_listeners("tagging");
-    }
-    prte_oob_close();
-
-    prte_oob_authenticate = save_auth;
-    prte_oob_authenticate_messages = false;
-    if (0 == failures) {
-        fprintf(stdout, "PASSED test_open_msg_auth\n");
-    }
-    return failures;
-}
-
 /* is there a non-loopback IPv4 interface, and the names of every
  * non-loopback interface as an exclude list */
 static bool have_other_ipv4_interface(void)
@@ -2542,7 +2441,6 @@ int main(void)
     failures += test_bad_subnets_dropped();
     failures += test_subnet_resolves_and_dedupes();
     failures += test_listeners_bound_to_selection();
-    failures += test_open_msg_auth();
     failures += test_loopback_include_honored();
     /* reports refusals with pmix_net_get_hostname(), so it too has to run
      * before PMIx is finalized below */

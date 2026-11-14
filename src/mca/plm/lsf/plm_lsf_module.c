@@ -397,9 +397,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* The DVM key rides in the daemons' environment, the one channel to
      * them that is private to the DVM's user - unlike the command line above. */
-    if (prte_oob_authenticate) {
-        prte_dvm_key_setenv(&env);
-    }
+    prte_dvm_key_setenv(&env);
 
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.

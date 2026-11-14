@@ -899,7 +899,7 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 /* The label every proof starts with.  Changing what goes into a proof means
  * changing this too, so that two builds which disagree about it fail the
  * handshake visibly rather than by coincidence. */
-#define PRTE_OOB_TCP_AUTH_LABEL "prte-oob-auth-2"
+#define PRTE_OOB_TCP_AUTH_LABEL "prte-oob-auth-3"
 
 /* The label the connection key's input starts with - the same endpoints as
  * a proof, under a label of its own, so a connection key is never a proof
@@ -963,19 +963,13 @@ static size_t put_endpoints(uint8_t *buf, const char *nspace, pmix_rank_t dialer
 void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer, pmix_rank_t listener,
                            const uint8_t *dialer_nonce, const uint8_t *listener_nonce, uint8_t *mac)
 {
-    uint8_t buf[2 + sizeof(PRTE_OOB_TCP_AUTH_LABEL) + PRTE_OOB_TCP_ENDPOINTS_MAX];
+    uint8_t buf[1 + sizeof(PRTE_OOB_TCP_AUTH_LABEL) + PRTE_OOB_TCP_ENDPOINTS_MAX];
     size_t n = 0, len;
 
     /* Which end made the proof comes first.  The two ends' proofs are
      * otherwise over identical inputs, and without it the listener's proof
      * could simply be sent back to it as the dialer's. */
     buf[n++] = (uint8_t) role;
-    /* Whether this end tags its messages.  The two settings put different
-     * bytes on the wire after the handshake - a tag behind every payload, or
-     * none - so two daemons that disagree must not get as far as reading
-     * each other's stream: binding the setting into the proof makes them
-     * fail the handshake instead. */
-    buf[n++] = prte_oob_authenticate_messages ? 'T' : 'U';
     len = sizeof(PRTE_OOB_TCP_AUTH_LABEL) - 1;
     memcpy(buf + n, PRTE_OOB_TCP_AUTH_LABEL, len);
     n += len;
@@ -1091,20 +1085,15 @@ static int tcp_peer_send_auth(int sd, prte_oob_tcp_msg_type_t type, pmix_rank_t 
     return tcp_peer_send_blocking(sd, msg, hdrsize + plen);
 }
 
-/* Open the handshake on a connection we dialed.  With authentication off
- * this is the IDENT the handshake has always started with; otherwise it is
- * a HELLO carrying our nonce, and the IDENT follows once the peer has
- * proved itself (tcp_peer_auth_step). */
+/* Open the handshake on a connection we dialed: a HELLO carrying our
+ * nonce. The IDENT follows once the peer has proved itself
+ * (tcp_peer_auth_step). */
 static int tcp_peer_send_hello(prte_oob_tcp_peer_t *peer)
 {
     prte_oob_tcp_auth_t *au = &peer->hshake.auth;
     int rc;
 
     au->rank = peer->name.rank;
-    if (!prte_oob_authenticate) {
-        au->phase = PRTE_OOB_TCP_AUTH_DONE;
-        return tcp_peer_send_connect_ack(peer);
-    }
     if (!prte_dvm_key_ready) {
         /* every path that starts a daemon establishes the key first, so
          * this is a defect - but fail closed rather than prove nothing */
@@ -1247,9 +1236,7 @@ static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_ha
             memcpy(theirs, msg, sizeof(theirs));
             free(msg);
             if (!prte_secure_equal(mine, theirs, sizeof(mine))) {
-                return auth_refuse(NULL, sd,
-                                   "it does not hold this DVM's key, or does not share this "
-                                   "daemon's prte_oob_authenticate_messages setting");
+                return auth_refuse(NULL, sd, "it does not hold this DVM's key");
             }
             au->phase = PRTE_OOB_TCP_AUTH_DONE;
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
@@ -1276,9 +1263,7 @@ static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_ha
         /* Whatever answered at this daemon's address is not one of ours.
          * Nothing of the key has been given away: our proof is sent only
          * after theirs checks out. */
-        return auth_refuse(peer, sd,
-                           "whatever answered does not hold this DVM's key, or does not share "
-                           "this daemon's prte_oob_authenticate_messages setting");
+        return auth_refuse(peer, sd, "whatever answered does not hold this DVM's key");
     }
     prte_oob_tcp_auth_mac('D', PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank,
                           peer->name.rank, au->dialer_nonce, au->listener_nonce, mine);
@@ -1613,10 +1598,6 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
                         (NULL == pr) ? "UNKNOWN" : PRTE_NAME_PRINT(&pr->name), sd);
 
     peer = pr;
-    /* with authentication off, every connection starts out as proven */
-    if (!prte_oob_authenticate) {
-        hs->auth.phase = PRTE_OOB_TCP_AUTH_DONE;
-    }
     /* a reply is only expected on a connection we dialed and are waiting on */
     if (NULL != peer && MCA_OOB_TCP_CONNECT_ACK != peer->state) {
         /* handshake broke down - abort this connection */
@@ -1666,7 +1647,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
         free(msg);
         return auth_refuse(peer, sd, "its handshake is out of order");
     }
-    if (prte_oob_authenticate && hs->auth.rank != hdr.origin) {
+    if (hs->auth.rank != hdr.origin) {
         free(msg);
         return auth_refuse(peer, sd, "it named a rank other than the one it proved");
     }
@@ -1837,12 +1818,9 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
      * tcp_peer_connected below publishes CONNECTED, after which a worker
      * may be sending.  We are the listener when the connection came in.
      *
-     * The keys come from the nonces, so there are none to make without
-     * authentication (prte_oob_open refuses tagging without it).  A peer
-     * that is already CONNECTED keeps its keys: its socket is in use, and
-     * the inbound caller turns this connection away. */
-    if (prte_oob_authenticate && prte_oob_authenticate_messages
-        && MCA_OOB_TCP_CONNECTED != peer->state) {
+     * A peer that is already CONNECTED keeps its keys: its socket is in
+     * use, and the inbound caller turns this connection away. */
+    if (MCA_OOB_TCP_CONNECTED != peer->state) {
         tcp_peer_install_msg_keys(peer, &hs->auth, is_new);
     }
 

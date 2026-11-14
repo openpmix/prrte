@@ -942,9 +942,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
          * environment to every daemon it starts, and an environment is
          * private to its own user and root - unlike the command line we
          * put everything else on */
-        if (prte_oob_authenticate) {
-            prte_dvm_key_setenv(&environ);
-        }
+        prte_dvm_key_setenv(&environ);
 
         /* Figure out the basenames for the libdir and bindir.  There
            is a lengthy comment about this in plm_rsh_module.c

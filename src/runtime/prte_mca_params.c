@@ -663,41 +663,6 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_persistent);
 
-    /* A daemon's OOB port accepts a connection from anything that can reach
-     * it, and a connected daemon is trusted with launch commands - so every
-     * connection begins with each end proving it holds the DVM key.  Turning
-     * that off is for a launch agent that cannot deliver the key (one that
-     * does not forward stdin to the command it runs), and hands control of
-     * leaves daemons unable to tell their own peers from any other process
-     * that connects to their ports.  The HNP passes an "off"
-     * down to its daemons explicitly, so it has to be set only where prte
-     * runs. */
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_authenticate",
-                                      "Require every daemon to prove it holds the DVM's key before "
-                                      "other daemons will talk to it (default: true). Turning this "
-                                      "off leaves daemons unable to tell their own peers from any "
-                                      "other process that connects to their ports",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_oob_authenticate);
-
-    /* The handshake proves who is at each end of a connection; this goes on
-     * to tag every message after it with a MAC under a key that connection
-     * alone holds, so that nothing in between can change, add, drop or
-     * reorder what was said.  Off by default for what it costs - every hop
-     * computes a tag for what it sends and checks one on what it receives.
-     * Needs prte_oob_authenticate, whose handshake the key comes from.  The
-     * HNP passes an "on" down to its daemons explicitly; in a bootstrapped
-     * DVM every daemon has to be given the same setting, and two daemons
-     * that differ fail their handshake.  See src/rml/oob/AGENTS.md. */
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_authenticate_messages",
-                                      "Tag every message between daemons with a MAC under a key "
-                                      "held only by the two ends of its connection, and refuse "
-                                      "one whose tag does not check (default: false). Requires "
-                                      "prte_oob_authenticate, and the same setting on every "
-                                      "daemon of the DVM",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_oob_authenticate_messages);
-
     /* how a daemon launched by plm/ssh learns to read its key from stdin */
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "dvm_key_stdin",
                                       "Read the DVM key from standard input at startup "

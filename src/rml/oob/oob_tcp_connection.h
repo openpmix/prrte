@@ -143,8 +143,8 @@ PRTE_EXPORT void prte_oob_tcp_handshake_clear(prte_oob_tcp_handshake_t *hs);
 PRTE_EXPORT void prte_oob_tcp_auth_mac(char role, const char *nspace, pmix_rank_t dialer,
                                        pmix_rank_t listener, const uint8_t *dialer_nonce,
                                        const uint8_t *listener_nonce, uint8_t *mac);
-/* The two keys a connection's messages are tagged under
- * (prte_oob_authenticate_messages), from the same endpoints as the proofs:
+/* The two keys a connection's messages are tagged under, from the same
+ * endpoints as the proofs:
  * `dialer_key` for what the dialer sends, `listener_key` for what the
  * listener sends.  Each is PRTE_OOB_TCP_MSGKEY_LEN bytes.  Exported for the
  * unit tests. */
