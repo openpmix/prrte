@@ -35,6 +35,8 @@
 #include "ras_slurm.h"
 #include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/ras/base/base.h"
+#include "src/prted/pmix/pmix_server_internal.h"
+#include "src/util/proc_info.h"
 
 /* Slurm states a job's time limit in minutes */
 #define PRTE_SLURM_SECS_PER_MINUTE 60
@@ -2281,7 +2283,16 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         request_id = job_id;
     }
 
-    err = prte_ras_slurm_add_pending_req(request_id, job_id);
+    {
+        uid_t owner;
+
+        /* the user the PMIx server named for the request, or - where it
+         * named none, a request we made ourselves - our own */
+        if (!prte_pmix_server_requester_uid(req->info, req->ninfo, &owner)) {
+            owner = prte_process_info.euid;
+        }
+        err = prte_ras_slurm_add_pending_req(request_id, job_id, owner);
+    }
 
     if(PRTE_SUCCESS != err) {
         prte_ras_slurm_kill_job(job_id, NULL, 0);

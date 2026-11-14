@@ -68,7 +68,12 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid, time_t *start_time,
 int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time);
 
 /* Features to serve cancel requests */
-int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id);
+/* owner: the user who made the request, who may cancel it */
+int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id,
+                                   uid_t owner);
+/* PRTE_SUCCESS if uid may cancel the pending request, PRTE_ERR_PERM if not,
+ * PRTE_ERR_NOT_FOUND if there is none */
+int prte_ras_slurm_pending_req_permitted(const char *request_id, uid_t uid);
 int prte_ras_slurm_remove_pending_req(const char *request_id);
 int prte_ras_slurm_cancel_pending_req(const char *request_id);
 int prte_ras_slurm_modify_cancel_init(void);

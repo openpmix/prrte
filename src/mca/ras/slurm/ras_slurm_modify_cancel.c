@@ -19,6 +19,7 @@
 
 #include "ras_slurm.h"
 #include "src/mca/ras/base/base.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 static pmix_pointer_array_t pending_reqs;
 static bool initialized = false;
@@ -26,6 +27,8 @@ static bool initialized = false;
 typedef struct {
     char *request_id;
     char *slurm_job_id;
+    /* the user who made the request - who may cancel it */
+    uid_t owner;
 } prte_ras_slurm_pending_req_t;
 
 /* Local functions */
@@ -49,6 +52,7 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 
     int err = PRTE_SUCCESS;
     const char *request_id = NULL;
+    uid_t uid;
 
     for (size_t i = 0; i < req->ninfo; i++) {
         if (0 != strcmp(req->info[i].key, PMIX_ALLOC_REQ_ID)) {
@@ -68,6 +72,18 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
         pmix_output(0, "ras:slurm:modify: cancel request invalid or unsupported.\n"
                        "Supported options: PMIX_ALLOC_REQ_ID");
         err = PRTE_ERR_REQUEST;
+        goto cleanup;
+    }
+
+    /* a pending request is its maker's to cancel - its user, root, or the
+     * user the DVM runs as. The PMIx server names the user of every
+     * request, so one naming none is refused. */
+    if (!prte_pmix_server_requester_uid(req->info, req->ninfo, &uid)) {
+        err = PRTE_ERR_PERM;
+        goto cleanup;
+    }
+    err = prte_ras_slurm_pending_req_permitted(request_id, uid);
+    if (PRTE_SUCCESS != err) {
         goto cleanup;
     }
 
@@ -95,7 +111,8 @@ cleanup:
  * @param[in] request_id PMIx request identifier.
  * @param[in] slurm_job_id Slurm job ID backing the request.
  */
-int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id)
+int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id,
+                                   uid_t owner)
 {
     if (!initialized) {
         return PRTE_ERR_NOT_AVAILABLE;
@@ -134,6 +151,7 @@ int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job
 
     pending_req->request_id = strdup(request_id);
     pending_req->slurm_job_id = strdup(slurm_job_id);
+    pending_req->owner = owner;
 
     if (NULL == pending_req->request_id || NULL == pending_req->slurm_job_id) {
         prte_ras_slurm_pending_req_free(pending_req);
@@ -189,6 +207,26 @@ int prte_ras_slurm_remove_pending_req(const char *request_id)
  *
  * @param[in] request_id PMIx request identifier.
  */
+int prte_ras_slurm_pending_req_permitted(const char *request_id, uid_t uid)
+{
+    prte_ras_slurm_pending_req_t *pending_req;
+    int idx, err;
+
+    if (!initialized) {
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
+    err = prte_ras_slurm_find_pending_req(request_id, &idx);
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+    pending_req = (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, idx);
+    if (NULL == pending_req ||
+        !prte_pmix_server_user_permitted(uid, pending_req->owner, PRTE_INVALID_GID)) {
+        return PRTE_ERR_PERM;
+    }
+    return PRTE_SUCCESS;
+}
+
 int prte_ras_slurm_cancel_pending_req(const char *request_id)
 {
     if (!initialized) {
