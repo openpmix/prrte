@@ -4573,7 +4573,6 @@ static int test_access(void)
         PMIX_RELEASE(prte_job_data);
         prte_job_data = NULL;
     }
-#if PRTE_PMIX_HAVE_ORIGIN_ID
     /* relaying a request: whom a relay may speak for, whom we attribute
      * its request to, and whom we say we act for when we pass it on */
     {
@@ -4654,7 +4653,6 @@ static int test_access(void)
             PMIX_INFO_DESTRUCT(&rel[k]);
         }
     }
-#endif
     PMIX_RELEASE(jdata);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.users);
     /* PMIx is finalized in main(), after the frameworks are closed: in an

@@ -909,9 +909,7 @@ PRTE_EXPORT void prte_pmix_server_access_release_job(prte_job_t *jdata);
  * otherwise the identity PMIx gave us for the process we heard from.
  * Everything else, a PMIX_REQUESTED_GRPID among it, is copied as is. dst
  * must have room for nsrc + PRTE_PMIX_ORIGIN_MAX entries; returns how
- * many were written. Against a PMIx without PMIX_CAP_ORIGIN_ID, which puts
- * the relay's identity in place of whatever we send, it copies all of
- * src. */
+ * many were written. */
 PRTE_EXPORT size_t prte_pmix_server_relay_copy(pmix_info_t *dst, const pmix_info_t *src,
                                                size_t nsrc);
 

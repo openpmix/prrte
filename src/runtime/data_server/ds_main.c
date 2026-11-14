@@ -307,7 +307,6 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
 {
     prte_job_t *jdata;
     const pmix_info_t *proc = NULL, *ruid = NULL, *rgid = NULL;
-    const pmix_info_t *ouid = NULL, *ogid = NULL;
     uint32_t claimed;
     size_t n;
 
@@ -319,29 +318,15 @@ void prte_ds_check_requestor(pmix_proc_t *owner, uint32_t *uid, uint32_t *gid,
      * order, which is no way to decide an identity.
      *
      * A relay says whom it acts for in PMIX_ORIGIN_USERID/_GRPID, which
-     * PMIx passes us untouched beside the relay's own identity, and - for
-     * a data server built against a PMIx that does not know those - in our
-     * own keys.  The first is used when both are there. */
+     * PMIx passes us untouched beside the relay's own identity. */
     for (n = 0; n < ninfo; n++) {
         if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
             proc = &info[n];
-        } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_UID)) {
-            ruid = &info[n];
-        } else if (PMIx_Check_key(info[n].key, PRTE_PUBLISH_REQ_GID)) {
-            rgid = &info[n];
-#if PRTE_PMIX_HAVE_ORIGIN_ID
         } else if (PMIx_Check_key(info[n].key, PMIX_ORIGIN_USERID)) {
-            ouid = &info[n];
+            ruid = &info[n];
         } else if (PMIx_Check_key(info[n].key, PMIX_ORIGIN_GRPID)) {
-            ogid = &info[n];
-#endif
+            rgid = &info[n];
         }
-    }
-    if (NULL != ouid) {
-        ruid = ouid;
-    }
-    if (NULL != ogid) {
-        rgid = ogid;
     }
     if (NULL == proc && NULL == ruid && NULL == rgid) {
         return;

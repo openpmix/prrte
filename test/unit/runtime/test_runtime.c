@@ -2392,8 +2392,8 @@ static int test_data_server_requestor(void)
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
     uid = (uint32_t) prte_process_info.euid; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
-    PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PMIX_ORIGIN_GRPID, &claim, PMIX_UINT32);
     prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
     CHECK("requestor: a privileged tool's claimed uid is honored", 4242 == uid);
     CHECK("requestor: a privileged tool's claimed gid is honored", 4242 == gid);
@@ -2408,8 +2408,8 @@ static int test_data_server_requestor(void)
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
     uid = other; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
-    PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PMIX_ORIGIN_GRPID, &claim, PMIX_UINT32);
     prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
     CHECK("requestor: another user's tool may not claim a third user", other == uid && 9 == gid);
     CHECK("requestor: ...nor the process it names", PMIX_CHECK_NSPACE(owner.nspace, "relay.tool"));
@@ -2421,8 +2421,8 @@ static int test_data_server_requestor(void)
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
     uid = other; gid = 9;
     PMIX_INFO_LOAD(&info[0], PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &other, PMIX_UINT32);
-    PMIX_INFO_LOAD(&info[2], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PMIX_ORIGIN_USERID, &other, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[2], PMIX_ORIGIN_GRPID, &claim, PMIX_UINT32);
     prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
     CHECK("requestor: a tool may act for a process of its own user",
           other == uid && 4242 == gid && PMIX_CHECK_PROCID(&owner, &behalf));
@@ -2435,34 +2435,20 @@ static int test_data_server_requestor(void)
     prte_pmix_server_globals.nrly_uids = 1;
     PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
     uid = other; gid = 9;
-    PMIX_INFO_LOAD(&info[0], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[0], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
     prte_ds_check_requestor(&owner, &uid, &gid, info, 1);
     CHECK("requestor: a listed relay's claim is honored", 4242 == uid);
     PMIX_INFO_DESTRUCT(&info[0]);
     prte_pmix_server_globals.rly_uids = NULL;
     prte_pmix_server_globals.nrly_uids = 0;
 
-#if PRTE_PMIX_HAVE_ORIGIN_ID
-    /* the claim a relay makes through PMIx, which wins over our own keys */
-    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
-    uid = (uint32_t) prte_process_info.euid; gid = 9;
-    PMIX_INFO_LOAD(&info[0], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
-    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_UID, &other, PMIX_UINT32);
-    PMIX_INFO_LOAD(&info[2], PMIX_ORIGIN_GRPID, &claim, PMIX_UINT32);
-    prte_ds_check_requestor(&owner, &uid, &gid, info, 3);
-    CHECK("requestor: PMIX_ORIGIN_* is the claim read first", 4242 == uid && 4242 == gid);
-    PMIX_INFO_DESTRUCT(&info[0]);
-    PMIX_INFO_DESTRUCT(&info[1]);
-    PMIX_INFO_DESTRUCT(&info[2]);
-#endif
-
     /* ...and an application process claiming a uid is refused it, which is
      * the half that matters: a uid it could assert is a uid whose published
      * data it could remove */
     PMIX_LOAD_PROCID(&owner, "some.app", 1);
     uid = 7; gid = 9;
-    PMIX_INFO_LOAD(&info[0], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
-    PMIX_INFO_LOAD(&info[1], PRTE_PUBLISH_REQ_GID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[0], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&info[1], PMIX_ORIGIN_GRPID, &claim, PMIX_UINT32);
     prte_ds_check_requestor(&owner, &uid, &gid, info, 2);
     CHECK("requestor: an application's claimed uid is refused", 7 == uid);
     CHECK("requestor: an application's claimed gid is refused", 9 == gid);
@@ -2520,7 +2506,7 @@ static int test_data_server_relay_directives(void)
      * own PMIx server appended after the claim */
     PMIX_INFO_LOAD(&in[0], "prte.test.relay.key", "v", PMIX_STRING);
     PMIX_INFO_LOAD(&in[1], PMIX_REQUESTOR, &behalf, PMIX_PROC);
-    PMIX_INFO_LOAD(&in[2], PRTE_PUBLISH_REQ_UID, &claim, PMIX_UINT32);
+    PMIX_INFO_LOAD(&in[2], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
     PMIX_INFO_LOAD(&in[3], PMIX_USERID, &reluid, PMIX_UINT32);
     PMIX_INFO_LOAD(&in[4], PMIX_GRPID, &relgid, PMIX_UINT32);
     PMIX_LOAD_PROCID(&requestor, "relay.tool", 0);
@@ -2532,21 +2518,22 @@ static int test_data_server_relay_directives(void)
     CHECK("relay: ...naming the process the tool acted for",
           NULL != hit && PMIX_PROC == hit->value.type &&
           PMIX_CHECK_PROCID(hit->value.data.proc, &behalf));
-    hit = relay_find(out, nout, PRTE_PUBLISH_REQ_UID, &count);
+    hit = relay_find(out, nout, PMIX_ORIGIN_USERID, &count);
     CHECK("relay: one claimed uid goes out, the tool's claim",
           1 == count && NULL != hit && claim == hit->value.data.uint32);
-    hit = relay_find(out, nout, PRTE_PUBLISH_REQ_GID, &count);
+    hit = relay_find(out, nout, PMIX_ORIGIN_GRPID, &count);
     CHECK("relay: absent a claimed gid, the requester's own goes out",
           1 == count && NULL != hit && relgid == hit->value.data.uint32);
     hit = relay_find(out, nout, "prte.test.relay.key", &count);
     CHECK("relay: the published data goes out", 1 == count);
     hit = relay_find(out, nout, PMIX_USERID, &count);
     CHECK("relay: the identity PMIx stamped on the request does not go out", 0 == count);
-#if PRTE_PMIX_HAVE_ORIGIN_ID
-    hit = relay_find(out, nout, PMIX_ORIGIN_USERID, &count);
-    CHECK("relay: one PMIX_ORIGIN_USERID goes out, the tool's claim",
-          1 == count && NULL != hit && claim == hit->value.data.uint32);
-#endif
+    /* and every entry that goes out is one that was filled: the raiser's
+     * data and the three claims, nothing left blank */
+    CHECK("relay: exactly the data and one claim go out", 4 == nout);
+    for (size_t e = 0; e < nout; e++) {
+        CHECK("relay: no entry goes out without a key", '\0' != out[e].key[0]);
+    }
     PMIX_INFO_FREE(out, nout);
 
     /* an application process claiming to act for somebody is named as
@@ -2559,7 +2546,7 @@ static int test_data_server_relay_directives(void)
           1 == count && NULL != hit && PMIX_PROC == hit->value.type &&
           PMIX_CHECK_NSPACE(hit->value.data.proc->nspace, "some.app") &&
           1 == hit->value.data.proc->rank);
-    hit = relay_find(out, nout, PRTE_PUBLISH_REQ_UID, &count);
+    hit = relay_find(out, nout, PMIX_ORIGIN_USERID, &count);
     CHECK("relay: ...under the uid its server gave",
           1 == count && NULL != hit && reluid == hit->value.data.uint32);
     PMIX_INFO_FREE(out, nout);
