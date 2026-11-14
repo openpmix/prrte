@@ -204,15 +204,9 @@ static int ssh_init(void)
          * swallowing a long command.
          *
          * The daemon's key comes down the agent's stdin (process_launch_list),
-         * so qrsh must forward it: with "-nostdin" every daemon found its
-         * stdin empty and refused to start, and the only way to run under
-         * Grid Engine at all was to turn authentication off.  The flag was
-         * there to keep qrsh from reading our own stdin, which ssh_child
-         * replaces with the key pipe anyway - so it is wanted only when there
-         * is no key to send, and stdin is /dev/null. */
-        if (!prte_oob_authenticate) {
-            PMIx_Argv_append_nosize(&ssh_agent_argv, "-nostdin");
-        }
+         * so qrsh must forward it: no "-nostdin". That flag only kept qrsh
+         * from reading our own stdin, which ssh_child replaces with the key
+         * pipe anyway. */
         PMIx_Argv_append_nosize(&ssh_agent_argv, "-V");
         if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             PMIx_Argv_append_nosize(&ssh_agent_argv, "-verbose");
@@ -418,7 +412,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
      * holds the key every daemon proves itself with.  Refuse here, once
      * there is a daemon to launch, rather than when the agent is chosen - a
      * DVM confined to this node never hands the agent anything. */
-    if (prte_oob_authenticate && agent_unencrypted) {
+    if (agent_unencrypted) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "agent-unencrypted", true,
                        prte_process_info.nodename, ssh_agent_path);
         return PRTE_ERR_SILENT;
@@ -786,11 +780,9 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 
     /* the daemon's key comes down its stdin (see process_launch_list) - the
      * one channel to it that is private to the DVM's user */
-    if (prte_oob_authenticate) {
-        pmix_argv_append(&argc, &argv, "--prtemca");
-        pmix_argv_append(&argc, &argv, "prte_dvm_key_stdin");
-        pmix_argv_append(&argc, &argv, "1");
-    }
+    pmix_argv_append(&argc, &argv, "--prtemca");
+    pmix_argv_append(&argc, &argv, "prte_dvm_key_stdin");
+    pmix_argv_append(&argc, &argv, "1");
 
     /* if we are tree-spawning, tell our child daemons the
      * uri of their parent (me) */
@@ -1101,19 +1093,17 @@ static void process_launch_list(int fd, short args, void *cbdata)
         /* The daemon's key travels down the stdin of the ssh we start,
          * which ssh delivers to the daemon's stdin - so the pipe is made
          * before the fork, and the key written once the child has it. */
+        /* close-on-exec, so no other child this process starts meanwhile
+         * can hold either end - dup2() onto the ssh's stdin clears it */
         keypipe[0] = keypipe[1] = -1;
-        if (prte_oob_authenticate) {
-            /* close-on-exec, so no other child this process starts meanwhile
-             * can hold either end - dup2() onto the ssh's stdin clears it */
-            if (0 != pipe(keypipe)) {
-                PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-                prte_wait_cb_cancel(caddy->daemon);
-                PMIX_RELEASE(caddy);
-                continue;
-            }
-            (void) pmix_fd_set_cloexec(keypipe[0]);
-            (void) pmix_fd_set_cloexec(keypipe[1]);
+        if (0 != pipe(keypipe)) {
+            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+            prte_wait_cb_cancel(caddy->daemon);
+            PMIX_RELEASE(caddy);
+            continue;
         }
+        (void) pmix_fd_set_cloexec(keypipe[0]);
+        (void) pmix_fd_set_cloexec(keypipe[1]);
 
         /* fork a child to exec the ssh/ssh session */
         pid = fork();

@@ -42,7 +42,7 @@ considered the definitive list of what options are provided.
 Several notable options are:
 
 * ``--hostfile``: Specify a hostfile for launchers (such as the
-  ``rsh`` launcher) that need to be told on which hosts to start
+  ``ssh`` launcher) that need to be told on which hosts to start
   parallel applications.  Note that for compatibility with other
   launchers, *--machinefile* is a synonym for ``--hostfile``.
 * ``--host``: Specify a host or list of hosts to run on, including

@@ -13,8 +13,7 @@
  * These exist for the OOB's use of the DVM's key, which never crosses the
  * wire (see src/util/prte_dvm_key.h and the connect handshake in
  * src/rml/oob): daemons of a DVM prove to each other that they hold it, and
- * - when prte_oob_authenticate_messages is on - derive from it the keys each
- * connection's messages are tagged under.  The tags themselves are Poly1305
+ * derive from it the keys each connection's messages are tagged under.  The tags themselves are Poly1305
  * (prte_poly1305.[ch]); HMAC-SHA256 is kept to the proofs and the key
  * derivation.  PRRTE has no cryptographic library dependency and is built on
  * systems where none is available, so the primitives are carried here rather

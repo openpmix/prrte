@@ -141,17 +141,15 @@ The exchange, ahead of the IDENT exchange it leaves untouched
 
 Rules that are easy to break:
 
-- **A proof covers both nonces, both ranks, the namespace, a role byte and
-  a mode byte** (`prte_oob_tcp_auth_mac()`). Drop the role byte and a
-  listener's proof can be sent back to it as a dialer's; drop the ranks and a
-  daemon's own proof, carried between two of its connections, could pass for
-  another's. The mode byte is `prte_oob_authenticate_messages` (`'T'` or
-  `'U'`): the two settings put different bytes on the wire after the
-  handshake, so two daemons that disagree must fail the handshake rather than
-  misread each other's stream. If what goes into a proof changes, change
-  `PRTE_OOB_TCP_AUTH_LABEL` too.
+- **A proof covers both nonces, both ranks, the namespace and a role byte**
+  (`prte_oob_tcp_auth_mac()`). Drop the role byte and a listener's proof can
+  be sent back to it as a dialer's; drop the ranks and a daemon's own proof,
+  carried between two of its connections, could pass for another's. If what
+  goes into a proof changes, change `PRTE_OOB_TCP_AUTH_LABEL` too (it went to
+  `prte-oob-auth-3` when the mode byte left the proof along with the
+  setting it recorded).
 - **A successful handshake leaves the keys its messages are tagged under**
-  when `prte_oob_authenticate_messages` is on (`peer->msgauth`). The
+  (`peer->msgauth`). The
   connection key is an HMAC under the DVM key of the same endpoints a proof
   covers, under its own label (`PRTE_OOB_TCP_MSG_LABEL`); each direction's
   key is an HMAC of it with `"D"` or `"L"`, so a message cannot be reflected
@@ -200,18 +198,19 @@ Rules that are easy to break:
   `pmix_output(0, ...)`. Anything quoted from the connection - a namespace,
   a version string - goes through `printable_copy()` first, which shows each
   byte outside printable ASCII as `?`.
-- `prte_oob_authenticate=0` makes every connection start out proven and sends
-  the bare IDENT, as before. It exists for launch agents that cannot forward
-  stdin; the HNP passes it to its daemons explicitly
-  (`prte_plm_base_prted_append_basic_args`).
+- **There is no setting for either.** Every connection is authenticated and
+  every message after the handshake is tagged; the parameters that once
+  turned them off (`prte_oob_authenticate`) or on
+  (`prte_oob_authenticate_messages`) are gone. Measured in
+  `contrib/dockerswarm` (20 nodes, radix 2, optimized build), tagging cost
+  about 5% of a launch carrying a 400 KB environment and nothing outside the
+  noise in a fence collecting 15 MB per daemon; a tag is about 2.3 us per
+  message plus ~1.4 GB/s of payload. Do not add a switch back for cost
+  without numbers that say otherwise.
 
-This authenticates endpoints and, with `prte_oob_authenticate_messages` on,
-every message after the handshake (the bullets above on `msgauth`, tagging
-and checking). Nothing is encrypted, and every daemon of the DVM holds the
-key. Every daemon must also share the tagging setting - the mode byte makes
-two that differ fail the handshake - which `prte_plm_base_prted_append_basic_args`
-passes on to daemons the HNP launches and a bootstrapped DVM has to put in
-an MCA parameter file every node reads (`docs/configuration.rst`).
+This authenticates endpoints and every message after the handshake (the
+bullets above on `msgauth`, tagging and checking). Nothing is encrypted, and
+every daemon of the DVM holds the key.
 
 ## A connection may hold a descriptor only so long, and only so many inbound ones may
 
