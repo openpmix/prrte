@@ -4625,6 +4625,27 @@ static int test_access(void)
         PMIX_INFO_DESTRUCT(&rel[0]);
         PMIX_INFO_DESTRUCT(&rel[1]);
 
+        /* the group is always that of the process the request is
+         * attributed to - never one process's user with another's group */
+        PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);
+        PMIX_INFO_LOAD(&rel[1], PMIX_GRPID, &rgid, PMIX_UINT32);
+        PMIX_INFO_LOAD(&rel[2], PMIX_ORIGIN_USERID, &claim, PMIX_UINT32);
+        PMIX_INFO_LOAD(&rel[3], PMIX_ORIGIN_GRPID, &reqg, PMIX_UINT32);
+        CHECK("relay/unpermitted-claim-group-is-the-relays",
+              (gid_t) ACC_OWNGRP == prte_pmix_server_requester_gid(rel, 4));
+        PMIX_INFO_DESTRUCT(&rel[0]);
+        PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &myuid, PMIX_UINT32);
+        CHECK("relay/trusted-claim-group-believed",
+              (gid_t) 77 == prte_pmix_server_requester_gid(rel, 4));
+        CHECK("relay/trusted-claim-without-group-has-none",
+              PRTE_INVALID_GID == prte_pmix_server_requester_gid(rel, 3));
+        CHECK("relay/no-group-given",
+              PRTE_INVALID_GID == prte_pmix_server_requester_gid(rel, 1));
+        PMIX_INFO_DESTRUCT(&rel[0]);
+        PMIX_INFO_DESTRUCT(&rel[1]);
+        PMIX_INFO_DESTRUCT(&rel[2]);
+        PMIX_INFO_DESTRUCT(&rel[3]);
+
         /* passing one on: our own stamped identity does not travel, the
          * process we heard from goes as the origin, the rest as it was */
         PMIX_INFO_LOAD(&rel[0], PMIX_USERID, &ruid, PMIX_UINT32);

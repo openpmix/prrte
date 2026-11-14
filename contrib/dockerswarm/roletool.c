@@ -23,6 +23,9 @@
  *   roletool <uri> notify <nspace>
  *   roletool <uri> allocids
  *   roletool <uri> instantiate-for <session-id> <hosts> <nspace> <rank>
+ *   roletool <uri> instantiate-owned <session-id> <hosts> <uid> <gid>
+ *   roletool <uri> sched-instantiate <session-id> <hosts> <uid> <gid>
+ *   roletool <uri> terminate <session-id>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
  * DVM's rendezvous files are readable by its own user only. A <uri> of "-"
@@ -43,6 +46,10 @@
  *   allocids     ask which allocations the DVM holds
  *   instantiate-for  create session <session-id> holding <hosts>, naming
  *                <nspace>:<rank> as the requester (PMIX_REQUESTOR)
+ *   instantiate-owned  create session <session-id> holding <hosts>, naming
+ *                <uid>:<gid> as its owner (PMIX_ALLOC_UID/GID)
+ *   sched-instantiate  the same, connected declaring itself the scheduler
+ *   terminate    terminate session <session-id>
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
@@ -50,6 +57,7 @@
  *   ROLE NAME <nspace> <rank>    (claim: the name it connected under)
  *   ROLE SPAWN <status>
  *   ROLE SESSION <status>
+ *   ROLE TERMINATE <status>
  *   ROLE PSET <status>
  *   ROLE PURGE <status>
  *   ROLE NOTIFY <status>
@@ -121,14 +129,17 @@ static void usage(const char *name)
             "usage: %s <uri> scheduler | spawn | parent <nspace> <rank> |"
             " instantiate <session-id> <hosts> | pset <name> <nspace> <rank> |"
             " claim <nspace> <rank> | purge <nspace> <rank> | notify <nspace> |"
-            " allocids | instantiate-for <session-id> <hosts> <nspace> <rank>\n",
+            " allocids | instantiate-for <session-id> <hosts> <nspace> <rank> |"
+            " instantiate-owned <session-id> <hosts> <uid> <gid> |"
+            " sched-instantiate <session-id> <hosts> <uid> <gid> |"
+            " terminate <session-id>\n",
             name);
 }
 
 int main(int argc, char **argv)
 {
     pmix_proc_t myproc, parent, member;
-    pmix_info_t iinfo[4], jinfo[1], dirs[3];
+    pmix_info_t iinfo[4], jinfo[1], dirs[4];
     pmix_app_t app;
     pmix_nspace_t child;
     pmix_status_t rc;
@@ -149,7 +160,10 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "claim") && 5 != argc && 6 != argc) ||
         (0 == strcmp(op, "purge") && 5 != argc) ||
         (0 == strcmp(op, "notify") && 4 != argc) ||
-        (0 == strcmp(op, "instantiate-for") && 7 != argc)) {
+        (0 == strcmp(op, "instantiate-for") && 7 != argc) ||
+        (0 == strcmp(op, "instantiate-owned") && 7 != argc) ||
+        (0 == strcmp(op, "sched-instantiate") && 7 != argc) ||
+        (0 == strcmp(op, "terminate") && 4 != argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -172,7 +186,7 @@ int main(int argc, char **argv)
         rank = (pmix_rank_t) ul;
         PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_TOOL_NSPACE, argv[3], PMIX_STRING);
         PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
-    } else if (0 == strcmp(op, "scheduler")) {
+    } else if (0 == strcmp(op, "scheduler") || 0 == strcmp(op, "sched-instantiate")) {
         /* a scheduler names itself */
         pmix_rank_t rank = 0;
         PMIX_INFO_LOAD(&iinfo[ninit++], PMIX_SERVER_SCHEDULER, &flag, PMIX_BOOL);
@@ -215,8 +229,10 @@ int main(int argc, char **argv)
         printf("ROLE SPAWN %s\n", PMIx_Error_string(rc));
         PMIX_APP_DESTRUCT(&app);
 
-    } else if (0 == strcmp(op, "instantiate") || 0 == strcmp(op, "instantiate-for")) {
+    } else if (0 == strcmp(op, "instantiate") || 0 == strcmp(op, "instantiate-for") ||
+               0 == strcmp(op, "instantiate-owned") || 0 == strcmp(op, "sched-instantiate")) {
         size_t ndirs = 2;
+        uint32_t id;
 
         sid = (uint32_t) strtoul(argv[3], NULL, 10);
         PMIX_INFO_LOAD(&dirs[0], PMIX_SESSION_INSTANTIATE, &flag, PMIX_BOOL);
@@ -224,6 +240,13 @@ int main(int argc, char **argv)
         if (0 == strcmp(op, "instantiate-for")) {
             PMIX_LOAD_PROCID(&member, argv[5], (pmix_rank_t) strtoul(argv[6], NULL, 10));
             PMIX_INFO_LOAD(&dirs[ndirs], PMIX_REQUESTOR, &member, PMIX_PROC);
+            ++ndirs;
+        } else if (0 != strcmp(op, "instantiate")) {
+            id = (uint32_t) strtoul(argv[5], NULL, 10);
+            PMIX_INFO_LOAD(&dirs[ndirs], PMIX_ALLOC_UID, &id, PMIX_UINT32);
+            ++ndirs;
+            id = (uint32_t) strtoul(argv[6], NULL, 10);
+            PMIX_INFO_LOAD(&dirs[ndirs], PMIX_ALLOC_GID, &id, PMIX_UINT32);
             ++ndirs;
         }
         lock_init(&lock);
@@ -239,6 +262,20 @@ int main(int argc, char **argv)
             --ndirs;
             PMIX_INFO_DESTRUCT(&dirs[ndirs]);
         }
+
+    } else if (0 == strcmp(op, "terminate")) {
+        sid = (uint32_t) strtoul(argv[3], NULL, 10);
+        PMIX_INFO_LOAD(&dirs[0], PMIX_SESSION_TERMINATE, &flag, PMIX_BOOL);
+        lock_init(&lock);
+        rc = PMIx_Session_control(sid, dirs, 1, ctrl_cb, &lock);
+        if (PMIX_SUCCESS != rc) {
+            lock_wake(&lock, rc);
+        } else {
+            lock_wait(&lock);
+        }
+        rc = lock.status;
+        printf("ROLE TERMINATE %s\n", PMIx_Error_string(rc));
+        PMIX_INFO_DESTRUCT(&dirs[0]);
 
     } else if (0 == strcmp(op, "purge")) {
         PMIX_LOAD_PROCID(&member, argv[3], (pmix_rank_t) strtoul(argv[4], NULL, 10));

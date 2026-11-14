@@ -91,6 +91,33 @@ bool prte_pmix_server_requester_uid(const pmix_info_t *info, size_t ninfo, uid_t
     return true;
 }
 
+gid_t prte_pmix_server_requester_gid(const pmix_info_t *info, size_t ninfo)
+{
+    uint32_t id = 0, origin = 0, gid = 0, ogid = 0;
+    bool have_id = false, have_origin = false, have_gid = false, have_ogid = false;
+    size_t n;
+
+    for (n = 0; NULL != info && n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_USERID)) {
+            have_id = (PMIX_SUCCESS == PMIx_Value_get_number(&info[n].value, &id, PMIX_UINT32));
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_GRPID)) {
+            have_gid = (PMIX_SUCCESS == PMIx_Value_get_number(&info[n].value, &gid, PMIX_UINT32));
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_ORIGIN_USERID)) {
+            have_origin = (PMIX_SUCCESS ==
+                           PMIx_Value_get_number(&info[n].value, &origin, PMIX_UINT32));
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_ORIGIN_GRPID)) {
+            have_ogid = (PMIX_SUCCESS ==
+                         PMIx_Value_get_number(&info[n].value, &ogid, PMIX_UINT32));
+        }
+    }
+    /* the group of whichever process prte_pmix_server_requester_uid
+     * attributes the request to - so the two always describe one process */
+    if (have_id && have_origin && prte_pmix_server_relay_permitted((uid_t) id, (uid_t) origin)) {
+        return have_ogid ? (gid_t) ogid : PRTE_INVALID_GID;
+    }
+    return have_gid ? (gid_t) gid : PRTE_INVALID_GID;
+}
+
 bool prte_pmix_server_relay_permitted(uid_t relay, uid_t origin)
 {
     return (relay == origin || prte_pmix_server_privileged(relay));

@@ -217,11 +217,17 @@ What PRRTE does not support
   PRRTE is the thing being scheduled; naming the nodes is the scheduler's
   job. Node lists (plain, regex, or regex2) are what PRRTE acts on.
 
-* **Credentials.** ``PMIX_USERID`` on an instantiation is recorded as the
-  user the reservation is granted to, and is honored when deciding who may
-  later act on it. ``PMIX_GRPID`` is accepted and ignored: PRRTE never
-  changes credentials, so every process it starts runs as the user running
-  the DVM.
+* **Who a session belongs to.** A session belongs to a user and that
+  user's group, and they are who may later act on it. A scheduler
+  instantiating a session on a user's behalf names them with
+  ``PMIX_ALLOC_UID`` and ``PMIX_ALLOC_GID``, given together. Only the
+  attached scheduler may name them; from anyone else the request is refused
+  with ``PMIX_ERR_NO_PERMISSIONS``. A session the scheduler creates without
+  naming an owner is the scheduler's own. One created by anyone else, when
+  no scheduler is attached, belongs to the user and group PMIx identified
+  for the request. ``PMIX_USERID`` and ``PMIX_GRPID`` cannot say whom a
+  session is for: PMIx sets them to the identity of the process that made
+  the request.
 
 An unrecognized directive is not an error. A request may be addressed at more
 than one kind of RTE, and refusing on a key PRRTE simply has no opinion about
