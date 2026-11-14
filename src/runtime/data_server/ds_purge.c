@@ -38,6 +38,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
@@ -220,7 +221,7 @@ static bool purge_takes(prte_data_object_t *data, const pmix_proc_t *target,
  * anybody at all.  An explicit PMIx_Unpublish(NULL, ...) ends nothing: it
  * comes from a live process that is taking its data back, and cancelling
  * the lookups it is waiting on is no part of that. */
-static void drop_parked(const pmix_proc_t *target, pmix_persistence_t horizon)
+static void drop_parked(const pmix_proc_t *target, pmix_persistence_t horizon, uint32_t uid)
 {
     prte_data_req_t *req, *rqnext;
 
@@ -235,6 +236,10 @@ static void drop_parked(const pmix_proc_t *target, pmix_persistence_t horizon)
         if (PMIX_RANK_WILDCARD != target->rank && target->rank != req->requestor.rank) {
             continue;
         }
+        /* a purge a user asked for reaches only that user's requests */
+        if (UINT32_MAX != uid && uid != req->uid) {
+            continue;
+        }
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: dropping pending request from %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -247,9 +252,15 @@ static void drop_parked(const pmix_proc_t *target, pmix_persistence_t horizon)
 
 /* Remove everything the ended lifetime takes.  Shared by the message form
  * and the direct one - what differs between them is who gets told, not what
- * goes. */
+ * goes.
+ *
+ * uid and gid are the user who asked, when a user did: then only what that
+ * user owns goes (prte_data_server_owns), and only its own parked lookups.
+ * UINT32_MAX is a purge the DVM makes of its own store as a lifetime ends,
+ * or one root or the DVM's own user asked for, and takes whatever the
+ * target owns. */
 static void purge_store(const pmix_proc_t *target, pmix_persistence_t horizon,
-                        uint32_t qualifier)
+                        uint32_t qualifier, uint32_t uid, uint32_t gid)
 {
     prte_data_object_t *data;
     int k;
@@ -262,12 +273,15 @@ static void purge_store(const pmix_proc_t *target, pmix_persistence_t horizon,
         if (!purge_takes(data, target, horizon, qualifier)) {
             continue;
         }
+        if (UINT32_MAX != uid && !prte_data_server_owns(uid, gid, data)) {
+            continue;
+        }
         prte_ds_drop(data);
     }
     /* The parked lookups go with the lifetime too.  This used to happen
      * only in the message form, and once the state machine's purges became
      * calls into purge_local, nothing dropped them at all. */
-    drop_parked(target, horizon);
+    drop_parked(target, horizon, uid);
 }
 
 void prte_data_server_purge_local(const pmix_proc_t *target,
@@ -291,7 +305,7 @@ void prte_data_server_purge_local(const pmix_proc_t *target,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIx_Persistence_string(horizon),
                         PMIX_NAME_PRINT(&t));
-    purge_store(&t, horizon, qualifier);
+    purge_store(&t, horizon, qualifier, UINT32_MAX, UINT32_MAX);
 }
 
 void prte_ds_purge(pmix_proc_t *sender,
@@ -309,6 +323,8 @@ void prte_ds_purge(pmix_proc_t *sender,
     pmix_persistence_t horizon = PMIX_PERSIST_INVALID;
     /* the app index or session id the horizon needs, where it needs one */
     uint32_t qualifier = UINT32_MAX, appidx = UINT32_MAX, sessionid = UINT32_MAX;
+    /* who asked - none for a purge the DVM makes as a lifetime ends */
+    uint32_t uid = UINT32_MAX, gid = UINT32_MAX;
 
     /* unpack the process whose data is to be purged - PMIX_RANK_WILDCARD
      * for any rank of its namespace */
@@ -341,7 +357,17 @@ void prte_ds_purge(pmix_proc_t *sender,
          * it - and an int holding PMIX_PERSIST_PROC read as a persist is
          * PMIX_PERSIST_INDEF on a big-endian host. */
         for (n = 0; n < ninfo; n++) {
-            if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
+            if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
+                rc = PMIx_Value_get_number(&info[n].value, &uid, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    break;
+                }
+            } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
+                rc = PMIx_Value_get_number(&info[n].value, &gid, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    break;
+                }
+            } else if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
                 /* a lifetime ended, and this is which one */
                 rc = prte_ds_get_named_uint8(&info[n].value, PMIX_PERSIST, &u8);
                 if (PMIX_SUCCESS != rc) {
@@ -370,11 +396,19 @@ void prte_ds_purge(pmix_proc_t *sender,
         }
         /* A relay purging on behalf of a process in its own DVM.  Without
          * this the purge would take everything the relay itself owns -
-         * which is everything it ever published.  This one asks about the
-         * process alone: a purge names whose data goes, and no uid enters
-         * into it. */
-        prte_ds_check_requestor(&requestor, NULL, NULL, info, ninfo);
+         * which is everything it ever published.  The uid it acts for comes
+         * with the process, under the same rule. */
+        prte_ds_check_requestor(&requestor, &uid, &gid, info, ninfo);
         PMIX_INFO_FREE(info, ninfo);
+    }
+    /* The PMIx server names the user of every client and tool request, so
+     * a purge one of them asked for takes only that user's data: the
+     * process it names says which lifetime ended, not whose data it may
+     * remove.  Root and the DVM's own user may remove anyone's, as may the
+     * DVM itself, whose purges name no user. */
+    if (UINT32_MAX != uid && prte_pmix_server_privileged((uid_t) uid)) {
+        uid = UINT32_MAX;
+        gid = UINT32_MAX;
     }
 
     /* Which of the two qualifiers counts is the horizon's to say, and a
@@ -433,7 +467,7 @@ void prte_ds_purge(pmix_proc_t *sender,
      * published to last only as long as its application sat in the store
      * until the DVM itself went away, and PMIX_PERSIST_APP and
      * PMIX_PERSIST_PROC both behaved as PMIX_PERSIST_INDEF. */
-    purge_store(&requestor, horizon, qualifier);
+    purge_store(&requestor, horizon, qualifier, uid, gid);
     rc = PMIX_SUCCESS;
 
 done:

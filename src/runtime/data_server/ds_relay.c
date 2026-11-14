@@ -290,6 +290,12 @@ pmix_status_t prte_ds_relay_directives(const pmix_info_t *info, size_t ninfo,
      * jobs, and the first job-end purge took everything any of them had
      * published. */
     prte_ds_check_requestor(requestor, &uid, &gid, info, ninfo);
+    /* A request naming nobody is one we make ourselves - a purge as a
+     * lifetime ends - so over there it is ours */
+    if (UINT32_MAX == uid) {
+        uid = (uint32_t) prte_process_info.euid;
+        gid = (uint32_t) prte_process_info.egid;
+    }
 
     /* ...and exactly one claim goes on.  A copied claim ahead of ours would
      * lose only because check_requestor keeps the last it sees, which is

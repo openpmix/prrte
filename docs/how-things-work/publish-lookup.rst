@@ -174,7 +174,9 @@ published**, regardless of persistence.  That form is scoped to the process
 even though removal by key is scoped to the user: it is a blunt sweep whose
 scope is implicit, and a job tidying up after itself at teardown must not
 take out its own user's other running jobs.  Reaching across a namespace
-boundary requires naming the key.
+boundary requires naming the key.  It is held to the caller's user as well:
+of what the named process published, it removes only the items that user
+owns.  Root and the user the DVM runs as may remove any user's.
 
 
 Data that names no lifetime, and the store that holds it
