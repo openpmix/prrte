@@ -3325,6 +3325,7 @@ static void rqcon(prte_pmix_server_req_t *p)
     p->dvm_held = false;
     p->moncopy = false;
     p->dircopy = false;
+    p->alloc_gid_named = false;
     p->local_index = -1;
     p->remote_index = -1;
     /* nobody, until the PMIx server says who - not root */

@@ -88,6 +88,11 @@ typedef struct {
     bool dvm_held;
     bool moncopy;  // monitor was allocated and must be released
     bool dircopy;   // directives array has been copied and must be released
+    /* the request itself named the group its allocation is for
+     * (PMIX_ALLOC_GID), rather than having the requester's own filled in
+     * (prte_ras_base_alloc_owner) - which decides whether that group's
+     * members may use the reservation (PRTE_SESSION_FLAG_GROUP_ACCESS) */
+    bool alloc_gid_named;
     uid_t uid;
     gid_t gid;
     pid_t pid;

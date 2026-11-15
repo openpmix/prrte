@@ -2394,6 +2394,9 @@ static int test_alloc_owner(void)
     CHECK("alloc_owner: a request naming no owner is accepted", PMIX_SUCCESS == rc);
     CHECK("alloc_owner: and is for its requester",
           req_owner(req, &uid, &gid) && me == uid && mygrp == gid);
+    /* the group was filled in, not asked for, so it is not shared with -
+     * see PRTE_SESSION_FLAG_GROUP_ACCESS */
+    CHECK("alloc_owner: a group filled in is not one named", !req->alloc_gid_named);
     PMIX_RELEASE(req);
 
     /* naming oneself */
@@ -2404,6 +2407,7 @@ static int test_alloc_owner(void)
     CHECK("alloc_owner: a requester may name itself", PMIX_SUCCESS == rc);
     CHECK("alloc_owner: and is left as named",
           req_owner(req, &uid, &gid) && me == uid && mygrp == gid);
+    CHECK("alloc_owner: a group asked for is one named", req->alloc_gid_named);
     PMIX_RELEASE(req);
     PMIX_INFO_DESTRUCT(&x[0]);
     PMIX_INFO_DESTRUCT(&x[1]);

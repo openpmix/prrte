@@ -1051,6 +1051,9 @@ pmix_status_t prte_ras_base_alloc_owner(prte_pmix_server_req_t *req)
     if (PMIX_SUCCESS != rc) {
         return rc;
     }
+    /* whether a reservation made for it is shared with its group - only if
+     * the group was asked for (PRTE_SESSION_FLAG_GROUP_ACCESS) */
+    req->alloc_gid_named = have_gid;
 
     /* who is asking. PMIx names the requester of every request a client or
      * tool makes, so a request naming none is one we made ourselves */
@@ -1534,12 +1537,13 @@ static uint32_t prte_ras_reservation_counter = 0;
 
 /* Create a new reservation owned by the given namespace, and belonging to
  * owner_uid/owner_gid - the PMIX_ALLOC_UID/GID the allocation was granted
- * for. Returns NULL on failure. alloc_id (scheduler-assigned PMIX_ALLOC_ID)
- * and req_id (requester PMIX_ALLOC_REQ_ID) are optional. */
+ * for. The group's members may use it only if the request named the group
+ * (group_named). Returns NULL on failure. alloc_id (scheduler-assigned
+ * PMIX_ALLOC_ID) and req_id (requester PMIX_ALLOC_REQ_ID) are optional. */
 static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
                                           pmix_proc_t *requestor,
                                           const char *alloc_id, const char *req_id,
-                                          uid_t owner_uid, gid_t owner_gid)
+                                          uid_t owner_uid, gid_t owner_gid, bool group_named)
 {
     prte_session_t *s;
     prte_job_t *ownerjob;
@@ -1582,6 +1586,9 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
      * lives only as long as the command that made it */
     s->owner_uid = owner_uid;
     s->owner_gid = owner_gid;
+    if (group_named) {
+        PRTE_FLAG_SET(s, PRTE_SESSION_FLAG_GROUP_ACCESS);
+    }
     rc = prte_set_session_object(s);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
@@ -2149,7 +2156,7 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
         PMIX_XFER_PROCID(&dest->requestor, &req->tproc);
     } else {                                    /* PMIX_ALLOC_NEW */
         dest = create_reservation(owner_nspace, inherit, &req->tproc,
-                                  alloc_id, req_id, owner_uid, owner_gid);
+                                  alloc_id, req_id, owner_uid, owner_gid, req->alloc_gid_named);
         if (NULL == dest) {
             return PMIX_ERR_OUT_OF_RESOURCE;
         }

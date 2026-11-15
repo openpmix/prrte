@@ -66,7 +66,9 @@ users=<list>,groups=<list>``, each a ``:``-separated list of names or
 numbers), and that holds for the user a session is for as well. A user
 asks for more for its own session with ``PMIx_Allocation_request``. To
 pause, resume, signal or terminate an existing session, it is enough to be
-the user it was granted to, or a member of that user's group. Ownership is by user, not by namespace, so a
+the user it was granted to - or a member of its group, when the scheduler
+named that group with ``PMIX_ALLOC_GID``; a group taken from whoever asked
+is recorded but shared with no one. Ownership is by user, not by namespace, so a
 second command run by the same person reaches an allocation their first
 command created, even though the tool namespace of the first command is
 long gone.
