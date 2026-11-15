@@ -1610,7 +1610,7 @@ Every up-call, and what it is judged by:
 |---|---|---|
 | `spawn` | a parent outside the requester's job; placing the job on a reservation, for its owner; directives naming hosts, and preloading; files it names are opened as its owner (`prte_pmix_server_open_as`) | `interim()` (`prte_pmix_server_parent_permitted`); `plm_base_receive.c` (`session_usable`, `grow_directive`, `foreign_directive`) |
 | `allocate` | naming hosts to grow onto or activate; a release, by allocation, node or count; extending a reservation; cancelling a pending request | `prte_ras_base_modify()`, `ras_base_prepare_grow()`, `prte_ras_slurm_pending_req_permitted()` |
-| `session_control` | instantiation (`prte_pmix_server_dvm_permitted`); naming a session's owner, which only the scheduler may do; every other directive (`prte_pmix_server_session_permitted`) | `pmix_server_session.c` |
+| `session_control` | instantiation and extension (`prte_pmix_server_dvm_permitted`, and `prte_pmix_server_grow_permitted` for a `user@host`); naming a session's owner, which only the scheduler may do; every other directive (`prte_pmix_server_session_permitted`) | `pmix_server_session.c` (`grant_permitted`) |
 | `job_control` | each target, by its job's rule; untargeted signal and kill reach only permitted jobs; a DVM halt is root's and our user's | `pmix_server_job_ctrl.c` |
 | `query` | a job it names; job listings, resolve and allocation ids leave out what the requester may not access | `pmix_server_queries.c` |
 | `iof_pull`, `push_stdin` | the job whose output or input it is | `pmix_server_gen.c` |
@@ -1684,7 +1684,7 @@ no thread-shift, and no pointer from one side into the other.
   listings and resolve leave out jobs the requester may not access).
   Monitoring needs nothing here: the relayed directives carry the
   requester's `PMIX_USERID`, and each node's PMIx applies the rule to it.
-- **Session operations** - grow, shrink, release, terminate
+- **Session operations** - pause, signal, shrink, release, terminate
   (`pmix_server_session.c`, and extending a reservation in
   `ras_base_allocate.c`) - are decided by who is asking and nothing else
   (`prte_pmix_server_session_permitted`): the scheduler (which identified
@@ -1708,6 +1708,25 @@ no thread-shift, and no pointer from one side into the other.
   who may signal or kill its daemons. With a scheduler attached, anyone
   else's request goes up to the scheduler and never reaches this check; the
   scheduler's answer comes back down as its own request.
+- **Extending a session** (`PMIX_SESSION_EXTEND`) is held to the same rule
+  as creating one, and that includes the session's owner. The two APIs do
+  different jobs: `PMIx_Allocation_request` is how a user *asks* for
+  resources - including more nodes or time for its own session - and the
+  scheduler decides; `PMIx_Session_control` instantiate and extend are how
+  the scheduler *tells* the DVM what it decided. They exist separately
+  because the DVM may never see an allocation request's answer (it goes to
+  the requester, which may be a tool the DVM knows nothing of), and because
+  a scheduler may change a session for reasons no request asked for. So an
+  extend is the scheduler's directive, or - with no scheduler - that of
+  whoever may change the DVM. The owner's own directives (pause, resume,
+  signal, terminate) are judged by `prte_pmix_server_session_permitted`.
+  Both are judged in `grant_permitted()`, before the session is looked up.
+- **A `user@host`** in a session's node list (`PMIX_ALLOC_NODE_LIST`, on the
+  request or in `PMIX_SESSION_RESOURCES`) names a login the master would use,
+  so on instantiate and extend alike it is for root and our own user alone
+  (`prte_pmix_server_grow_permitted(..., true)`), the rule an allocation
+  request follows. It is seen in the list as it will be read, after
+  `prte_ras_base_parse_node_list()`, so one inside a regex counts.
 - **A spawn's `PMIX_PARENT_ID`** makes the new job the parent's: it decides
   the session the job lands in, whose allocation it draws on, and the job it
   is connected to. Naming a parent is therefore acting for the parent's job,

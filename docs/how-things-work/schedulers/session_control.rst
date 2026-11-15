@@ -9,6 +9,31 @@ scheduler creates, operates on, and reclaims one. This section describes
 what PRRTE does with each directive of that API, and — where PRRTE cannot
 do exactly what the directive describes — what it does instead and why.
 
+Allocation requests and session control
+---------------------------------------
+
+Two PMIx APIs touch sessions, and they do different jobs:
+
+* ``PMIx_Allocation_request`` is how a user *asks* for resources to be
+  assigned to it: a new allocation, or more nodes or more time for one it
+  already holds (``PMIX_ALLOC_EXTEND``). The scheduler decides, and answers
+  the requester.
+
+* ``PMIx_Session_control`` issues directives to a session. Its
+  ``PMIX_SESSION_INSTANTIATE`` and ``PMIX_SESSION_EXTEND`` directives are not
+  requests for resources: they are how the scheduler tells the DVM what it
+  has decided — start a session over these nodes for this user, or give this
+  session more nodes or more time.
+
+The answer to an allocation request may carry much the same information, but
+it goes to the requester, not to the DVM, and the DVM cannot count on seeing
+it: the requester may have been a tool rather than one of the DVM's own
+processes, so the DVM may not know the request was made at all. And a
+scheduler sometimes changes a session for reasons no request asked for. So
+the scheduler tells the DVM directly, with session control.
+
+Both produce the same PRRTE object, a session; they differ in who may ask.
+
 Who answers a request
 ---------------------
 
@@ -34,12 +59,14 @@ Where it is decided depends on who asked:
   session control usable on a standalone ``prte`` DVM.
 
 In the last case the requestor must be entitled to act on the session. A
-session may be created by root, by the user the DVM runs as, or by a user
-or group named when the DVM was started (``prte --rtos
+session may be created or extended - the directives a scheduler would
+otherwise give - by root, by the user the DVM runs as, or by a user or
+group named when the DVM was started (``prte --rtos
 users=<list>,groups=<list>``, each a ``:``-separated list of names or
-numbers). To operate on an
-existing session, it is enough to be the user it was granted to, or a
-member of that user's group. Ownership is by user, not by namespace, so a
+numbers), and that holds for the user a session is for as well. A user
+asks for more for its own session with ``PMIx_Allocation_request``. To
+pause, resume, signal or terminate an existing session, it is enough to be
+the user it was granted to, or a member of that user's group. Ownership is by user, not by namespace, so a
 second command run by the same person reaches an allocation their first
 command created, even though the tool namespace of the first command is
 long gone.
@@ -148,7 +175,11 @@ Extend
 which also extends the DVM across them), revises its time limit
 (``PMIX_ALLOC_TIME`` or ``PMIX_TIMEOUT``), or revises what becomes of its
 nodes at the end (``PMIX_ALLOC_INHERITANCE``). An extend that extends nothing
-is an error.
+is an error. Like instantiation, it is the scheduler's directive (see
+`Allocation requests and session control`_), so with no scheduler attached
+it is accepted only from those who may create a session. A host given as
+``user@host``, here or on instantiation, names the user the DVM logs in to
+it as, and is accepted only from root and the user the DVM runs as.
 
 Separation
 ^^^^^^^^^^
