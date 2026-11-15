@@ -11185,58 +11185,56 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     cleanup_swarm
 
     banner "elastic DVM: a reservation released with no scheduler keeps its nodes"
-    # Releasing a reservation returns its nodes to the scheduler - a shrink.
-    # With no scheduler there is nobody to return them to: they go back to
-    # the DVM's general pool with their daemons, whether the release names
-    # the allocation or the nodes. Taking a node out of the DVM is a release
-    # of a node of the general pool, by whoever may change the DVM.
+    # Releasing a reservation's nodes returns them to the scheduler - a
+    # shrink. With no scheduler there is nobody to return them to: they go
+    # back to the DVM's general pool with their daemons, whether one is
+    # released by name or the reservation ends with a disposition that would
+    # hand its nodes back. Taking a node out of the DVM is a release of a
+    # node of the general pool, by whoever may change the DVM.
+    #
+    # The reservation is a standing session, which persists until it is
+    # terminated: one an elastic grow makes ends when that tool does, and
+    # the tool leaves as soon as any job ends.
     cleanup_swarm
     RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     if ! RUN 'pgrep -x prte >/dev/null'; then
         bad "could not start an elastic DVM for the release cases"
     else
-        RUN 'rm -f /tmp/rel-own.out' >/dev/null 2>&1
-        # the grow holds its reservation for as long as its job runs
-        RUN_BG /tmp/rel-own.out "timeout 120 elastic grow node2:2,node3:2 -- sleep 60"
-        for _ in $(seq 1 40); do
-            RUN 'grep -q "^>>> SPAWNED" /tmp/rel-own.out' >/dev/null 2>&1 && break
-            sleep 2
-        done
-        aid=$(RUN 'sed -n "s/^>>> ALLOC_ID //p" /tmp/rel-own.out' | tr -d '\r')
-        if [ -z "$aid" ]; then
-            bad "no allocation id from the background grow: $(RUN 'tr "\n" " " < /tmp/rel-own.out' | tail -c 200)"
+        RUN 'timeout 90 elastic grow node2:2,node3:2' >/dev/null 2>&1; sleep 3
+        out=$(RUN "timeout 60 $SESSCTL instantiate 4296 --hosts node2:2,node3:2 --inherit none" 2>&1)
+        if ! echo "$out" | grep -q PMIX_SUCCESS; then
+            bad "could not instantiate the session to release from: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         else
-            # by node list: node3 leaves the reservation, not the DVM. No
-            # daemon goes, so no grow/shrink completion follows the answer -
-            # the answer is the whole of it (--no-wait)
+            # by node list: node3 leaves the session, not the DVM. No daemon
+            # goes, so no grow/shrink completion follows the answer - the
+            # answer is the whole of it (--no-wait)
             out=$(RUN 'timeout 90 elastic shrink node3 --no-wait' 2>&1); sleep 3
-            echo "$out" | grep -q SUCCESS \
+            echo "$out" | grep -q "PHASE 1.*PMIX_SUCCESS" \
                 || bad "releasing a reserved node failed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
             [ "$(prted_count 3)" = 1 ] \
                 && ok "a node released from a reservation kept its daemon" \
-                || bad "releasing a reserved node shrank it out of the DVM: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+                || bad "releasing a reserved node shrank it out of the DVM"
             out=$(RUN 'timeout 60 prun --host node3:2 -np 2 hostname' 2>&1)
             [ "$(echo "$out" | grep -c '^node3$')" = 2 ] \
                 && ok "...and it is back in the general pool" \
                 || bad "a node released from a reservation is not usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
-            # by allocation id: the rest of the reservation goes back too
-            out=$(RUN "timeout 90 elastic release-id '$aid' --no-wait" 2>&1); sleep 3
-            echo "$out" | grep -q SUCCESS \
-                || bad "releasing allocation $aid failed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            # ending the session, whose disposition would hand node2 back
+            out=$(RUN "timeout 60 $SESSCTL terminate 4296" 2>&1); sleep 3
+            echo "$out" | grep -q PMIX_SUCCESS \
+                || bad "could not terminate session 4296: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
             [ "$(prted_count 2)" = 1 ] \
-                && ok "a reservation released by id kept its nodes' daemons" \
-                || bad "releasing a reservation by id shrank its nodes out of the DVM"
+                && ok "a session ended with no scheduler kept its nodes' daemons" \
+                || bad "ending a session with no scheduler shrank its nodes out of the DVM"
             out=$(RUN 'timeout 60 prun --host node2:2 -np 2 hostname' 2>&1)
             [ "$(echo "$out" | grep -c '^node2$')" = 2 ] \
                 && ok "...and its nodes are back in the general pool" \
-                || bad "a node of a released reservation is not usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+                || bad "a node of an ended session is not usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
             # a node of the general pool is still released from the DVM
             out=$(RUN 'timeout 90 elastic shrink node2' 2>&1); sleep 3
             [ "$(prted_count 2)" = 0 ] \
                 && ok "a node of the general pool is still shrunk out" \
                 || bad "releasing a general-pool node did not shrink it: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         fi
-        RUN 'pkill -x elastic' >/dev/null 2>&1
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm
