@@ -1259,10 +1259,13 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
         /* The owner the scheduler named (it must name one); else whoever
          * asked, as PMIx identified it - a request made of a DVM with no
          * scheduler attached. User and group come from the same source
-         * either way. */
+         * either way. Only a group the scheduler named is shared with
+         * (PRTE_SESSION_FLAG_GROUP_ACCESS): the requester's own primary
+         * group is recorded but grants its members nothing. */
         if (ctl->have_alloc_uid) {
             session->owner_uid = ctl->alloc_uid;
             session->owner_gid = ctl->alloc_gid;
+            PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_GROUP_ACCESS);
         } else if (ctl->have_uid) {
             session->owner_uid = ctl->uid;
             session->owner_gid = ctl->gid;

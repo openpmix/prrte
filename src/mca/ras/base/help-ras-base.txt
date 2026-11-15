@@ -271,8 +271,8 @@ made it may not release what it named:
   Named:  %s
 
 An allocation, and a node of a reservation, may be released by the
-reservation's owner, members of the owner's group, root and the user the
-DVM runs as. A node of the DVM's general pool, or a number of nodes the
+reservation's owner, root and the user the DVM runs as - and by members of
+its group, when that group was named for it. A node of the DVM's general pool, or a number of nodes the
 DVM is to choose, may be released only by those who may change what the
 DVM consists of: root, the user the DVM runs as, and the users and groups
 the DVM was started with ("--rtos users=..." and "groups=...").

@@ -624,6 +624,10 @@ called:
 - a requester that names neither gets its own, as PMIx stamped them on the
   request (`prte_pmix_server_requester_uid`/`_gid`). A spawn's allocation
   request carries the spawn owner's `PMIX_USERID` and `PMIX_GRPID` for this.
+  A group filled in this way is still the group charged, but the
+  reservation does not share with it: only a group the request named
+  (`req->alloc_gid_named`, which `create_reservation()` turns into
+  `PRTE_SESSION_FLAG_GROUP_ACCESS`) lets its members use the reservation.
 
 Requests that grow the general pool by `--add-host`/`--add-hostfile` ask
 for no allocation and are left alone.

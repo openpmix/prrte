@@ -212,7 +212,15 @@ unreserved pool; it is special-cased everywhere:
 placed on its nodes, may it be extended, released or terminated - is
 answered by `prte_pmix_server_session_permitted_uid()`: root, the DVM's own
 user, the owner, or a member of the owner's group (the scheduler, when one
-is attached, may use any). `prte_job_t.uid` is recorded when a tool
+is attached, may use any). The group counts only when it was **named** for
+the session - `PMIX_ALLOC_GID` on the allocation request, or the
+scheduler's on an instantiate - which `PRTE_SESSION_FLAG_GROUP_ACCESS`
+records. One filled in from the requester's own primary group
+(`prte_ras_base_alloc_owner()`, which notes it in
+`prte_pmix_server_req_t.alloc_gid_named`) is kept as `owner_gid` and sent
+to any scheduler as the group charged, but grants its members nothing: that
+group is often one every user on the system is in, and saying nothing about
+groups is not asking to share. `prte_job_t.uid` is recorded when a tool
 connects, from the `PMIX_USERID` its PMIx server established, and descends
 the job tree from there, so a job's owner is always the user who asked for
 it - which is what is compared. `session->owner` (a namespace) says where

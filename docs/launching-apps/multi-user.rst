@@ -99,8 +99,11 @@ resources is for the user who makes it, and that user's group, unless it
 says otherwise with ``PMIX_ALLOC_UID`` and ``PMIX_ALLOC_GID``. A user may
 name only itself; root may name any user. Any user may name a group it
 belongs to. Anything else is refused with ``PMIX_ERR_NO_PERMISSIONS``.
-The allocation belongs to the user and group it is for, and they are who
-may extend or release it.
+The allocation belongs to the user it is for, who may use, extend or
+release it. Members of its group may too, but only when the request named
+the group with ``PMIX_ALLOC_GID``: a group filled in from the requester's
+own is recorded and passed to any scheduler, and grants its members
+nothing. A user who wants to share an allocation with a group names it.
 
 With no scheduler attached, the DVM applies the time an allocation request
 asks for (``PMIX_ALLOC_TIME``): the allocation ends that long after the
