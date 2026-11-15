@@ -4359,6 +4359,29 @@ test_requesters() {
             || bad "root's job did not survive the refused spawn"
     fi
 
+    banner "requesters: a job asked for by a tool that leaves at once is still its user's"
+    # A job belongs to the user whose tool asked for it. A tool that sends
+    # its request and goes without waiting races its own departure to the
+    # master; whichever wins, the job must never run as anyone but that
+    # user - it is run as the tool's user, or refused.
+    # the jobs may land on either node, so each keeps its own record
+    for n in 1 2; do
+        ON $n 'rm -f /tmp/rqleave.uids; touch /tmp/rqleave.uids; chmod 666 /tmp/rqleave.uids'
+    done
+    for n in $(seq 0 9); do
+        RUN "timeout 30 $rq spawn-leave $((n * 1000)) /bin/sh -c 'id -u >> /tmp/rqleave.uids'" >/dev/null 2>&1
+    done
+    sleep 5
+    out=$( (ON 1 'cat /tmp/rqleave.uids'; ON 2 'cat /tmp/rqleave.uids') 2>&1 | tr -d '\r' | sort | uniq -c)
+    if echo "$out" | grep -qv ' 65534$'; then
+        bad "a job asked for by a departing tool ran as another user: $(echo "$out" | tr '\n' ' ')"
+    elif echo "$out" | grep -q ' 65534$'; then
+        ok "every job a departing tool asked for ran as its user"
+    else
+        bad "no job a departing tool asked for ran at all"
+    fi
+    for n in 1 2; do ON $n 'rm -f /tmp/rqleave.uids'; done
+
     banner "requesters: another user may not define a process set over root's job"
     if [ -z "$pns" ]; then
         skp "no job of root's to name in a process set"

@@ -124,6 +124,14 @@ static void lock_wait(lock_t *l)
     pthread_mutex_unlock(&l->mutex);
 }
 
+/* a spawn whose requester does not wait for the answer */
+static void leave_cb(pmix_status_t status, pmix_nspace_t nspace, void *cbdata)
+{
+    (void) status;
+    (void) nspace;
+    (void) cbdata;
+}
+
 static void ctrl_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
                     pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
@@ -146,7 +154,8 @@ static void usage(const char *name)
             " sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]] |"
             " terminate <session-id> | extend <session-id> <hosts|-> [<time>] |"
             " alloc [<uid> <gid> [<seconds> [<time>]]] |"
-            " alloc-release <alloc-id> | alloc-extend <alloc-id> <time>\n",
+            " alloc-release <alloc-id> | alloc-extend <alloc-id> <time> |"
+            " spawn-leave <usec> <cmd> [args...]\n",
             name);
 }
 
@@ -181,7 +190,8 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "extend") && 5 != argc && 6 != argc) ||
         (0 == strcmp(op, "alloc") && 3 != argc && 5 != argc && 6 != argc && 7 != argc) ||
         (0 == strcmp(op, "alloc-release") && 4 != argc) ||
-        (0 == strcmp(op, "alloc-extend") && 5 != argc)) {
+        (0 == strcmp(op, "alloc-extend") && 5 != argc) ||
+        (0 == strcmp(op, "spawn-leave") && 5 > argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -229,6 +239,25 @@ int main(int argc, char **argv)
             sleep((unsigned) strtoul(argv[5], NULL, 10));
         }
         rc = PMIX_SUCCESS;
+
+    } else if (0 == strcmp(op, "spawn-leave")) {
+        /* ask for a job and go, without waiting for the answer or saying
+         * goodbye: the request and the departure then race to the master */
+        int i;
+
+        PMIX_APP_CONSTRUCT(&app);
+        app.cmd = strdup(argv[4]);
+        app.argv = (char **) calloc((size_t) (argc - 3), sizeof(char *));
+        for (i = 4; i < argc; i++) {
+            app.argv[i - 4] = strdup(argv[i]);
+        }
+        app.maxprocs = 1;
+        app.cwd = strdup("/tmp");
+        rc = PMIx_Spawn_nb(NULL, 0, &app, 1, leave_cb, NULL);
+        printf("ROLE SPAWN-LEAVE %s\n", PMIx_Error_string(rc));
+        fflush(stdout);
+        usleep((useconds_t) strtoul(argv[3], NULL, 10));
+        _exit(0);
 
     } else if (0 == strcmp(op, "spawn") || 0 == strcmp(op, "parent")) {
         PMIX_APP_CONSTRUCT(&app);

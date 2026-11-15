@@ -84,6 +84,12 @@ PRTE_EXPORT void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
                                                 prte_rml_tag_t tag, void *cbdata);
 
 PRTE_EXPORT int prte_plm_base_create_jobid(prte_job_t *jdata);
+/* Decide whom a job arriving in a launch request belongs to, from the
+ * request's sender and the process that asked for it (proxy). Returns
+ * PRTE_ERR_NOT_FOUND - and leaves the job ownerless - when that process's
+ * job is not one the master holds: there is then no user to run it as. */
+PRTE_EXPORT int prte_plm_base_job_owner(prte_job_t *jdata, const pmix_proc_t *sender,
+                                        const pmix_proc_t *proxy);
 /* Load nspace with the next "base@N" no job or tool of ours holds */
 PRTE_EXPORT int prte_plm_base_next_jobid(pmix_nspace_t nspace);
 PRTE_EXPORT int prte_plm_base_set_hnp_name(void);
