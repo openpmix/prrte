@@ -4334,6 +4334,21 @@ test_requesters() {
     fi
     ok "a tool of another user can start a job of its own"
 
+    banner "requesters: another user's tool may attach to any daemon"
+    # A tool attaches to the daemon on its own node - a prun in a job
+    # script, the one its environment names - so every daemon of a DVM that
+    # takes other users' tools must take them, not just the master. Its
+    # contact is in its rendezvous file, which only root may read.
+    d2uri=$(ON 2 'f=$(ls -t /tmp/pmix-user.$(id -u)/pmix.*.tool.* 2>/dev/null | head -1); [ -n "$f" ] && head -1 "$f"' 2>/dev/null | tr -d '\r\n')
+    if [ -z "$d2uri" ]; then
+        bad "could not find node2's daemon contact"
+    else
+        out=$(ONT 2 "timeout 60 setpriv --reuid=65534 --regid=65534 --clear-groups env HOME=/tmp $ROLETOOL '$d2uri' spawn" 2>&1)
+        echo "$out" | grep -q "ROLE SPAWN PMIX_SUCCESS" \
+            && ok "a tool of another user attached to a daemon that is not the master" \
+            || bad "a tool of another user could not attach to node2's daemon: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+
     banner "requesters: another user may not name root's job as a parent"
     ON 1 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec sleep 180\n" > /tmp/rqparent.sh && chmod +x /tmp/rqparent.sh'
     PRUN_BG /tmp/rqparent.out '--host node1:1 -n 1 /tmp/rqparent.sh'
