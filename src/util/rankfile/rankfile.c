@@ -299,8 +299,10 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
         (*num_ranks)++;
     }
     if (tf.failed) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "read-error", true,
-                       prte_tool_basename, rankfile, tf.lineno);
+        if (!prte_textfile_report_limit(&tf, PRTE_PROC_MY_NAME->nspace, rankfile)) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "read-error",
+                           true, prte_tool_basename, rankfile, tf.lineno);
+        }
         rc = PRTE_ERR_FILE_READ_FAILURE;
         goto cleanup;
     }

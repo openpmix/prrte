@@ -35,6 +35,11 @@ including a designated number of "slots":
 
 Blank lines and lines beginning with a ``#`` are ignored.
 
+A hostfile may hold at most 64 MiB, and no line in it may be longer
+than 1 MiB; a larger file is refused with a message saying which limit
+it met. The same limits apply to a rankfile and to a sequence file
+(``--map-by seq``).
+
 A node name may carry the account PRRTE is to use when reaching that
 node, written in front of it and separated by a single ``@``:
 

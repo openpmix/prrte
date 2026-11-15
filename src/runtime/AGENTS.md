@@ -143,6 +143,23 @@ you were handed can be handed to somebody else later.
 The lookups are linear scans over the whole array. That is fine at DVM
 scale, but do not put one inside a per-proc loop on a launch path.
 
+The same goes for finding a node by name. `prte_node_match()` and
+`prte_nptr_match()` walk a list or the pool, which is right for one lookup
+and quadratic for one lookup per line of input - a hostfile of 40000 lines
+took 27 s to read when each line was looked up against the lines before
+it. A pass that looks up many names builds a **`prte_node_index_t`**
+(`prte_node_index.[ch]`) instead: a hash from every name and alias to the
+nodes carrying it, with each node's position (its place on the list, or its
+pool index), so `prte_node_index_match_name()` and
+`prte_node_index_match_node()` return exactly the node the walks would
+have reached first. The index borrows its nodes and is built for one pass;
+a caller that appends, renames or removes a node while it holds one says so
+(`_append`, `_add_alias`, `_remove`), and nothing keeps a global index in
+step with the pool. The hostfile parser and filter, `ras/hosts`'
+add-hostfile reader and `prte_ras_base_node_insert()` use one.
+`test_runtime`'s `test_node_index` checks it against the walks over
+randomized lists and pools, aliases, our own nodename and `localhost`.
+
 ### What a registry holds is not what it is authoritative for
 
 A `prted` has all three registries, and parts of all three are stale on it
