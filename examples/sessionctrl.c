@@ -18,13 +18,13 @@
  * makes this usable as a test client.
  *
  *   sessionctrl instantiate <id> [--hosts LIST] [--time SPEC] [--sep]
- *                                [-- <cmd> [args...]]
+ *                                [--inherit DISP] [-- <cmd> [args...]]
  *   sessionctrl pause      <id>
  *   sessionctrl resume     <id>
  *   sessionctrl preempt    <id> [--nspace NS]
  *   sessionctrl restore    <id> [--nspace NS]
  *   sessionctrl signal     <id> <signum>
- *   sessionctrl extend     <id> [--hosts LIST] [--time SPEC]
+ *   sessionctrl extend     <id> [--hosts LIST] [--time SPEC] [--inherit DISP]
  *   sessionctrl terminate  <id>
  *
  * <id> may be given as "all" to address every session under our control.
@@ -110,7 +110,9 @@ static void usage(const char *me)
             "              --np N         procs to start (default 1)\n"
             "              --mapby POLICY mapping policy for those procs (e.g. node)\n"
             "              --nspace NS    limit preempt/restore to one job\n"
-            "              --sep          session terminates independently of its parent\n",
+            "              --sep          session terminates independently of its parent\n"
+            "              --inherit DISP what becomes of the nodes at the end: none, child,\n"
+            "                             default or child-default (PMIX_ALLOC_INHERITANCE)\n",
             me);
 }
 
@@ -128,6 +130,7 @@ int main(int argc, char **argv)
     const char *mapby = NULL;
     int signum = 0, i, cmdstart = 0, np = 1;
     bool sep = false, all = false;
+    const char *inherit = NULL;
     lock_t lock;
     char *end;
 
@@ -169,6 +172,8 @@ int main(int argc, char **argv)
             nspace = argv[++i];
         } else if (0 == strcmp(argv[i], "--sep")) {
             sep = true;
+        } else if (0 == strcmp(argv[i], "--inherit") && i + 1 < argc) {
+            inherit = argv[++i];
         } else if (0 == strcmp(op, "signal") && 0 == signum) {
             signum = (int) strtol(argv[i], &end, 10);
             if ('\0' != *end) {
@@ -193,6 +198,9 @@ int main(int argc, char **argv)
         ndirs++;
     }
     if (sep) {
+        ndirs++;
+    }
+    if (NULL != inherit) {
         ndirs++;
     }
     if (0 < cmdstart) {
@@ -235,6 +243,30 @@ int main(int argc, char **argv)
     }
     if (NULL != nspace) {
         PMIX_INFO_LOAD(&dirs[n++], PMIX_NSPACE, nspace, PMIX_STRING);
+    }
+    if (NULL != inherit) {
+#if defined(PMIX_ALLOC_INHERITANCE)
+        pmix_alloc_inheritance_t disp;
+
+        if (0 == strcmp(inherit, "none")) {
+            disp = PMIX_ALLOC_INHERIT_NONE;
+        } else if (0 == strcmp(inherit, "child")) {
+            disp = PMIX_ALLOC_INHERIT_CHILD;
+        } else if (0 == strcmp(inherit, "default")) {
+            disp = PMIX_ALLOC_INHERIT_DEFAULT;
+        } else if (0 == strcmp(inherit, "child-default")) {
+            disp = PMIX_ALLOC_INHERIT_CHILD_DEFAULT;
+        } else {
+            fprintf(stderr, "%s: bad disposition \"%s\"\n", argv[0], inherit);
+            PMIX_INFO_FREE(dirs, ndirs);
+            return 1;
+        }
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_ALLOC_INHERITANCE, &disp, PMIX_ALLOC_INHERIT);
+#else
+        fprintf(stderr, "%s: this PMIx has no PMIX_ALLOC_INHERITANCE\n", argv[0]);
+        PMIX_INFO_FREE(dirs, ndirs);
+        return 1;
+#endif
     }
     if (sep) {
         PMIX_INFO_LOAD(&dirs[n++], PMIX_SESSION_SEP, NULL, PMIX_BOOL);

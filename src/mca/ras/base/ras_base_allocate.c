@@ -1637,6 +1637,24 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
         return;
     }
 
+    /* Returning the nodes means shrinking their daemons out of the DVM, so
+     * that whoever holds the allocation - the scheduler, or the resource
+     * manager - has them back. That needs both someone to return them to
+     * and a DVM that can change size. Without a scheduler the nodes are the
+     * DVM's own and there is nobody to hand them to, and a DVM that is not
+     * elastic cannot shed a daemon: either way the nodes go back to the
+     * DVM's general pool, as any other teardown sends them. Taking nodes out
+     * of a DVM with no scheduler is for whoever may change the DVM, by
+     * releasing them from the general pool (ras_base_release_permitted). */
+    if (return_to_scheduler && !(prte_ras_base.scheduler_owned && prte_elastic_mode)) {
+        pmix_output_verbose(2, prte_ras_base_framework.framework_output,
+                            "%s ras:base: session %u returns its nodes to the general pool: %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), session->session_id,
+                            prte_ras_base.scheduler_owned ? "the DVM is not elastic"
+                                                          : "there is no scheduler");
+        return_to_scheduler = false;
+    }
+
     /* The session is over: drop what the jobs that ran in it published to
      * last exactly this long.  It has to happen here rather than at any
      * job's end, because that is the whole meaning of PMIX_PERSIST_SESSION
@@ -2371,6 +2389,35 @@ unwind:
     }
 }
 
+/* Take a node out of the reservation holding it, back into the general
+ * pool. */
+static void ras_base_unreserve_node(prte_node_t *node)
+{
+    prte_session_t *session = node->session;
+    prte_node_t *nd;
+    int k;
+
+    if (NULL == session || prte_default_session == session) {
+        return;
+    }
+    for (k = 0; k < session->nodes->size; k++) {
+        nd = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, k);
+        if (nd == node) {
+            pmix_pointer_array_set_item(session->nodes, k, NULL);
+            PMIX_RELEASE(nd);
+            break;
+        }
+    }
+    node->session = NULL;
+}
+
+/* The daemons to shrink out for a release naming these nodes. With no
+ * scheduler a node a reservation holds is not shrunk: there is nobody to
+ * return it to, so it goes back to the general pool, as it would when the
+ * reservation ended (prte_ras_base_teardown_reservation) - and a node of the
+ * general pool is shrunk, which is for whoever may change the DVM
+ * (ras_base_release_permitted). Every node is found before any is acted on,
+ * so a name we do not know changes nothing. */
 static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
                                         int32_t *nranks_out)
 {
@@ -2382,6 +2429,11 @@ static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
     if (0 == cnt) {
         return PRTE_ERR_NOT_FOUND;
     }
+    for (int32_t n = 0; NULL != nodes[n]; n++) {
+        if (NULL == prte_node_match(NULL, nodes[n])) {
+            return PRTE_ERR_NOT_FOUND;
+        }
+    }
 
     ranks = (pmix_rank_t *) malloc(cnt * sizeof(pmix_rank_t));
     if (NULL == ranks) {
@@ -2392,9 +2444,10 @@ static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
     for (int32_t n = 0; NULL != nodes[n]; n++) {
         /* find this node in our global resource pool */
         node = prte_node_match(NULL, nodes[n]);
-        if (NULL == node) {
-            free(ranks);
-            return PRTE_ERR_NOT_FOUND;
+        if (!prte_ras_base.scheduler_owned && NULL != node->session &&
+            prte_default_session != node->session) {
+            ras_base_unreserve_node(node);
+            continue;
         }
         if (NULL == node->daemon) {
             /* node doesn't have a daemon yet */
@@ -2641,8 +2694,8 @@ static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
 
     /* a release naming an allocation id tears down that whole reservation:
      * any owner may release it, the scheduler may release any. The nodes
-     * are returned to the scheduler (the legacy disposition for an explicit
-     * release). */
+     * are returned to the scheduler, where there is one, and otherwise go
+     * back to the DVM's general pool (prte_ras_base_teardown_reservation). */
     rsession = prte_get_session_object_from_id(rel_alloc_id);
     if (NULL == rsession || rsession == prte_default_session) {
         req->pstatus = PMIX_ERR_NOT_FOUND;
@@ -2652,8 +2705,9 @@ static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
         req->pstatus = PMIX_ERR_NO_PERMISSIONS;
         return true;
     }
-    /* returning the nodes shrinks their daemons out of the DVM */
-    if (ras_base_session_has_daemons(rsession) &&
+    /* returning the nodes to a scheduler shrinks their daemons out of the
+     * DVM; with none, nothing shrinks */
+    if (prte_ras_base.scheduler_owned && ras_base_session_has_daemons(rsession) &&
         !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
         req->pstatus = PMIX_ERR_NOT_SUPPORTED;
         return true;
