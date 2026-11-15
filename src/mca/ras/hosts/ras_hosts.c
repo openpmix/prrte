@@ -307,15 +307,13 @@ static bool parse_slots(const char *value, int *result)
 }
 
 /* Read the hosts a request adds from hostfile, as uid/gid - whoever named
- * it. A host given as "user@host" is reached by logging in as that user,
- * which is for root and our own user alone, so with `logins` false such a
- * line is refused. What is wrong with the file is said to nspace: the job
- * a spawn's --add-hostfile came with, whose tool is waiting on it. */
+ * it. What is wrong with the file is said to nspace: the job a spawn's
+ * --add-hostfile came with, whose tool is waiting on it. */
 static pmix_status_t read_hostfile(const char *nspace, char *hostfile, pmix_list_t *nodes,
-                                   uid_t uid, gid_t gid, bool logins, prte_node_index_t *pidx)
+                                   uid_t uid, gid_t gid, prte_node_index_t *pidx)
 {
     prte_textfile_t tf;
-    char *line, *cptr, *ptr, *ndname, *username;
+    char *line, *cptr, *ptr, *ndname;
     bool addslots, failed = false;
     int slots, rc;
     prte_node_t *nptr, *node;
@@ -406,37 +404,27 @@ static pmix_status_t read_hostfile(const char *nspace, char *hostfile, pmix_list
         }
 
 process:
-        /* "user@host" names the user to reach the host as, as it does in
-         * a --host list, and the user is kept apart from the host's name:
-         * left in it, the name is one no daemon reports, and the launch
-         * agent reads the part before the '@' as a login. Both halves must
-         * be names a host or user can have, since the launch agent puts
-         * them on a command line */
+        /* "user@host" used to name an account to reach the host as, and
+         * the launcher logged in to it as that account. The DVM reaches
+         * every node as its own user and runs no daemon as another, so such
+         * an entry is refused, as it is in a --host list - not reached as
+         * our own user instead, which is not what the file asked for. The
+         * name goes on the launch agent's command line, so it must be one
+         * a host can have. */
         ndname = cptr;
-        username = NULL;
-        if (NULL != (ptr = strchr(cptr, '@'))) {
-            *ptr = '\0';
-            username = cptr;
-            ndname = ptr + 1;
+        if (NULL != strchr(ndname, '@')) {
+            prte_show_help(nspace, "help-ras-base.txt",
+                           "ras-base:addhost-user-host", true, cptr, hostfile);
+            prte_textfile_close(&tf);
+            free(line);
+            return PMIX_ERR_BAD_PARAM;
         }
-        if (!prte_util_host_name_ok(ndname) ||
-            (NULL != username && !prte_util_host_name_ok(username))) {
-            if (NULL != username) {
-                ndname[-1] = '@';
-            }
+        if (!prte_util_host_name_ok(ndname)) {
             prte_show_help(nspace, "help-ras-base.txt",
                            "ras-base:addhost-bad-name", true, cptr, hostfile);
             prte_textfile_close(&tf);
             free(line);
             return PMIX_ERR_SILENT;
-        }
-        if (NULL != username && !logins) {
-            prte_show_help(nspace, "help-ras-base.txt",
-                           "ras-base:grow-not-permitted", true, "add-hostfile",
-                           "a user to reach a host as");
-            prte_textfile_close(&tf);
-            free(line);
-            return PMIX_ERR_NO_PERMISSIONS;
         }
 
         /* See if we already have this node.
@@ -476,12 +464,6 @@ process:
                 prte_textfile_close(&tf);
                 return PMIX_ERR_BAD_PARAM;
             }
-            /* the user matters only to a host the DVM has yet to reach:
-             * one it already holds has its daemon */
-            if (NULL != username) {
-                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
-                                   username, PMIX_STRING);
-            }
             pmix_list_append(nodes, &node->super);
         }
         free(line);
@@ -502,7 +484,7 @@ process:
  * which made a long file quadratic. Nothing here changes the pool: new
  * nodes go on the caller's list, for prte_ras_base_node_insert(). */
 static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_list_t *nodes,
-                                      uid_t uid, gid_t gid, bool logins)
+                                      uid_t uid, gid_t gid)
 {
     prte_node_index_t pidx;
     pmix_status_t rc;
@@ -512,7 +494,7 @@ static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_l
         prte_node_index_destruct(&pidx);
         return PMIX_ERR_OUT_OF_RESOURCE;
     }
-    rc = read_hostfile(nspace, hostfile, nodes, uid, gid, logins, &pidx);
+    rc = read_hostfile(nspace, hostfile, nodes, uid, gid, &pidx);
     prte_node_index_destruct(&pidx);
     return rc;
 }
@@ -523,7 +505,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     pmix_list_t nodes;
     size_t n, k;
     char **hostfiles;
-    bool handled = false, logins;
+    bool handled = false;
     uid_t uid;
     gid_t gid;
     const char *nspace = PRTE_PROC_MY_NAME->nspace;
@@ -531,16 +513,12 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
     /* A file of hosts is read as whoever named it: the owner of the job a
-     * spawn's add-hostfile came with, or the requester of an allocation. A
-     * login it names is that owner's to ask for only if it is root or our
-     * own user; a requester's as prte_pmix_server_grow_permitted says. */
+     * spawn's add-hostfile came with, or the requester of an allocation. */
     if (NULL != req->jdata) {
         prte_pmix_server_job_user(req->jdata, &uid, &gid);
-        logins = prte_pmix_server_privileged(uid);
         nspace = PRTE_JOB_NSPACE(req->jdata);
     } else {
         prte_pmix_server_request_user(req->info, req->ninfo, &uid, &gid);
-        logins = prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, true);
     }
 
     // look for applicable directives
@@ -560,7 +538,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
                 continue;
             }
             for (k=0; NULL != hostfiles[k]; k++) {
-                rc = process_hostfile(nspace, hostfiles[k], &nodes, uid, gid, logins);
+                rc = process_hostfile(nspace, hostfiles[k], &nodes, uid, gid);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_LIST_DESTRUCT(&nodes);
                     PMIx_Argv_free(hostfiles);

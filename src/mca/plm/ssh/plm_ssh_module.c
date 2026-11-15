@@ -1219,7 +1219,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_plm_ssh_caddy_t *caddy;
-    char *username, *nname;
+    char *nname;
     int port, *portptr;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -1310,8 +1310,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
         pmix_prefix = NULL;
     }
 
-    /* every host - and any user name given with it - goes on the launch
-     * agent's command line, so check them all before launching any */
+    /* every host goes on the launch agent's command line, so check them all
+     * before launching any. No account goes with it: the DVM reaches every
+     * node as its own user, and the parsers refuse a host that names one */
     for (nnode = 0; nnode < map->nodes->size; nnode++) {
         if (NULL == (nd = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
             continue;
@@ -1320,16 +1321,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
             (NULL != nd->rawname && !host_arg_ok(nd->rawname))) {
             rc = PRTE_ERR_SILENT;
             goto cleanup;
-        }
-        username = NULL;
-        if (prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, (void **) &username,
-                               PMIX_STRING)) {
-            if (!host_arg_ok(username)) {
-                free(username);
-                rc = PRTE_ERR_SILENT;
-                goto cleanup;
-            }
-            free(username);
         }
     }
 
@@ -1418,14 +1409,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         } else {
             nname = node->rawname;
         }
-        username = NULL;
-        if (prte_get_attribute(&node->attributes, PRTE_NODE_USERNAME, (void **) &username,
-                               PMIX_STRING)) {
-            pmix_asprintf(&argv[node_name_index1], "%s@%s", username, nname);
-            free(username);
-        } else {
-            argv[node_name_index1] = strdup(nname);
-        }
+        argv[node_name_index1] = strdup(nname);
 
         /* pass the vpid */
         rc = prte_util_convert_vpid_to_string(&var, node->daemon->name.rank);

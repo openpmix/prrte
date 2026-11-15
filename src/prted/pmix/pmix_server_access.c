@@ -589,21 +589,17 @@ bool prte_pmix_server_dvm_permitted_uid(uid_t uid)
             pmix_server_access_check(user, (pmix_access_t *) prte_pmix_server_globals.dvm_access));
 }
 
-bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool user)
+bool prte_pmix_server_grow_permitted_uid(uid_t uid)
 {
-    /* a login the master uses is the DVM's own user's - so for root and that
-     * user only. A file of hosts is read as whoever named it, and asks for
-     * no more than the hosts it names */
-    if (user) {
-        return prte_pmix_server_privileged(uid);
-    }
     /* hosts brought into the DVM change what it consists of, and get the
-     * DVM's key: for whoever may change the DVM, as creating a session is */
+     * DVM's key: for whoever may change the DVM, as creating a session is.
+     * A file of hosts is read as whoever named it, and asks for no more
+     * than the hosts it names */
     return prte_pmix_server_dvm_permitted_uid(uid);
 }
 
 bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor, const pmix_info_t *info,
-                                     size_t ninfo, bool user)
+                                     size_t ninfo)
 {
     uid_t uid;
 
@@ -619,7 +615,7 @@ bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor, const pmix_in
          * prte_pmix_server_request_permitted */
         return (NULL != requestor && PMIX_CHECK_PROCID(requestor, PRTE_PROC_MY_NAME));
     }
-    return prte_pmix_server_grow_permitted_uid(uid, user);
+    return prte_pmix_server_grow_permitted_uid(uid);
 }
 
 void prte_pmix_server_access_release_dvm(void)

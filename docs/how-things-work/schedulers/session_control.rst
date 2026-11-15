@@ -178,8 +178,8 @@ nodes at the end (``PMIX_ALLOC_INHERITANCE``). An extend that extends nothing
 is an error. Like instantiation, it is the scheduler's directive (see
 `Allocation requests and session control`_), so with no scheduler attached
 it is accepted only from those who may create a session. A host given as
-``user@host``, here or on instantiation, names the user the DVM logs in to
-it as, and is accepted only from root and the user the DVM runs as.
+``user@host``, here or on instantiation, names an account to reach it as,
+which is refused from anyone: the DVM reaches every node as its own user.
 
 Separation
 ^^^^^^^^^^

@@ -390,8 +390,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
         case PRTE_APP_LAST_MAPPER:
             return "PRTE_APP_LAST_MAPPER";
 
-        case PRTE_NODE_USERNAME:
-            return "NODE-USERNAME";
         case PRTE_NODE_PORT:
             return "NODE-PORT";
         case PRTE_NODE_HOSTID:

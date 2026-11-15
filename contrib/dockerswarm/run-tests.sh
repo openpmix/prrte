@@ -4772,25 +4772,27 @@ test_requesters() {
         echo "$out" | grep -q PMIX_SUCCESS \
             || bad "could not terminate session 4271: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
 
-        banner "requesters: only root and the DVM's user may name a login for a session"
-        # the master logs in as a user named in user@host, so naming one is
-        # narrower than changing the DVM, here as on an allocation request
+        banner "requesters: no one may name an account to reach a session's host as"
+        # user@host names an account to reach the host as. The DVM reaches
+        # every node as its own user and runs no daemon as another, so the
+        # request is refused from anyone - root included
         out=$(RUN "timeout 60 $rq instantiate 4278 nobody@node2:2" 2>&1)
         if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
-            bad "a user named by --rtos users= named a login for a session"
+            bad "a user named by --rtos users= named an account for a session"
             RUN "timeout 60 $SESSCTL terminate 4278" >/dev/null 2>&1
-        elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_NO_PERMISSIONS"; then
-            ok "a user named by --rtos users= may not name a login for a session"
+        elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_BAD_PARAM"; then
+            ok "a user named by --rtos users= may not name an account for a session"
         else
-            bad "naming a login for a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            bad "naming an account for a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         fi
-        # the control: root may
         out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate 4278 nobody@node2:2" 2>&1)
         if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
-            ok "root named a login for a session"
+            bad "root named an account for a session"
             RUN "timeout 60 $SESSCTL terminate 4278" >/dev/null 2>&1
+        elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_BAD_PARAM"; then
+            ok "...nor may root"
         else
-            bad "root could not name a login for a session: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            bad "root naming an account for a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         fi
 
         banner "requesters: allocations are listed to those who may use them"
@@ -4873,9 +4875,9 @@ test_requesters() {
 
 # Who may bring hosts into an elastic DVM (P02's fix). Naming hosts is for
 # whoever may change the DVM - root, its own user, and the users it was
-# started with - on the allocation route and the spawn route alike. A user
-# to reach a host as ("user@host") is for root and its own user alone, and
-# is kept apart from the host's name. See src/mca/ras/AGENTS.md.
+# started with - on the allocation route and the spawn route alike. An
+# account to reach a host as ("user@host") is refused from anyone: the DVM
+# reaches every node as its own user. See src/mca/ras/AGENTS.md.
 test_grow_authz() {
     local out uri
     local u65534 u65533
@@ -4919,7 +4921,7 @@ test_grow_authz() {
         && bad "a daemon was started on node3 anyway" \
         || ok "no daemon was started on node3"
 
-    banner "grow: a user the DVM was started with may - but not with a user@"
+    banner "grow: a user the DVM was started with may - but not naming an account"
     out=$(RUN "cd /tmp && timeout 90 $u65533 elastic grow node3:1" 2>&1)
     if echo "$out" | grep -q "PMIX_DVM_IS_READY" && [ "$(prted_count 3)" = 1 ]; then
         ok "a listed user's grow brings node3 in"
@@ -4927,20 +4929,21 @@ test_grow_authz() {
         bad "a listed user's grow did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
     out=$(RUN "cd /tmp && timeout 60 $u65533 elastic grow root@node4:1" 2>&1)
-    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_NO_PERMISSIONS" \
-        && ok "a listed user may not name a user to reach a host as" \
+    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_BAD_PARAM" \
+        && ok "a listed user may not name an account to reach a host as" \
         || bad "a listed user's user@host was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     [ "$(prted_count 4)" = 1 ] \
         && bad "a daemon was started on node4 anyway" \
         || ok "no daemon was started on node4"
 
-    banner "grow: root may name a user, and the node is named for the host"
+    banner "grow: nor may root name an account to reach a host as"
     out=$(RUN "timeout 90 env PRTE_DVM_URI='$uri' elastic grow root@node4:1" 2>&1)
-    if echo "$out" | grep -q "PMIX_DVM_IS_READY" && [ "$(prted_count 4)" = 1 ]; then
-        ok "root's grow onto root@node4 brings node4 in"
-    else
-        bad "root's grow onto root@node4 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
-    fi
+    echo "$out" | grep -q "PHASE 1.*PMIX_ERR_BAD_PARAM" \
+        && ok "root's grow onto root@node4 is refused" \
+        || bad "root's user@host was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    [ "$(prted_count 4)" = 1 ] \
+        && bad "a daemon was started on node4 for root's user@host" \
+        || ok "...and no daemon was started on node4"
     out=$(RUN "timeout 90 env PRTE_DVM_URI='$uri' elastic spawnalloc node5:1 -- hostname" 2>&1)
     if echo "$out" | tr -d '\r' | grep -q '^node5$' && [ "$(prted_count 5)" = 1 ]; then
         ok "root's spawn carrying an allocation of node5 runs there"
@@ -4963,8 +4966,8 @@ test_grow_authz() {
         || bad "a listed user's --add-hostfile did not bring node6 in: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     ON 1 'printf "root@node7\n" > /tmp/grow-files/u65533 && chown 65533:65533 /tmp/grow-files/u65533 && chmod 600 /tmp/grow-files/u65533'
     out=$(RUN "cd /tmp && timeout 60 setpriv --reuid=65533 --regid=65533 --clear-groups env HOME=/tmp prun --dvm-uri '$uri' --add-hostfile /tmp/grow-files/u65533 -n 1 hostname" 2>&1)
-    if echo "$out" | grep -q "a user to reach a host as" && [ "$(prted_count 7)" != 1 ]; then
-        ok "a user to reach a host as, named in the file, is refused"
+    if echo "$out" | grep -q "names an account" && [ "$(prted_count 7)" != 1 ]; then
+        ok "an account to reach a host as, named in the file, is refused"
     else
         bad "a listed user's file naming root@node7 was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
@@ -4990,10 +4993,6 @@ test_grow_authz() {
         bad "a listed user's shrink did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     fi
 
-    out=$(RUN "timeout 60 prun --dvm-uri '$uri' --host node4 -n 1 hostname" 2>&1)
-    [ "$(echo "$out" | tr -d '\r' | grep -c '^node4$')" = 1 ] \
-        && ok "a job placed on node4 by its own name runs there" \
-        || bad "node4 is not known by its own name: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 }
