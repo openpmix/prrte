@@ -4398,9 +4398,17 @@ static int test_access(void)
           !prte_pmix_server_session_permitted(session, &other, info, 1));
     PMIX_INFO_DESTRUCT(&info[0]);
     if (NULL != pw) {
+        /* a member of the owner's group is admitted only when the group was
+         * named for the session (PRTE_SESSION_FLAG_GROUP_ACCESS) - not when
+         * it was filled in from the requester's own primary group */
         id = (uint32_t) pw->pw_uid;
         PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
-        CHECK("session/owner-group", prte_pmix_server_session_permitted(session, &other, info, 1));
+        CHECK("session/owner-group-not-named",
+              !prte_pmix_server_session_permitted(session, &other, info, 1));
+        PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_GROUP_ACCESS);
+        CHECK("session/owner-group-named",
+              prte_pmix_server_session_permitted(session, &other, info, 1));
+        PRTE_FLAG_UNSET(session, PRTE_SESSION_FLAG_GROUP_ACCESS);
         PMIX_INFO_DESTRUCT(&info[0]);
     }
     CHECK("session/ourselves",

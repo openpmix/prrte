@@ -1690,7 +1690,9 @@ no thread-shift, and no pointer from one side into the other.
   (`prte_pmix_server_session_permitted`): the scheduler (which identified
   itself when it connected - matched against the requester PMIx names,
   `req->tproc`, never a `PMIX_REQUESTOR` in the request's info), root, our
-  own user, the session's owner, or a member of the owner's group
+  own user, the session's owner, or a member of the owner's group when that
+  group was named for it (`PRTE_SESSION_FLAG_GROUP_ACCESS`; a group filled
+  in from the requester's own grants nothing - see `src/runtime/AGENTS.md`)
   (`session->owner_uid`/`owner_gid` - see "Session control" below for
   where they come from). Placing a job on a session's nodes is answered by the same rule,
   for the job's owner (`prte_pmix_server_session_permitted_uid`).

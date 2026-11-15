@@ -786,12 +786,17 @@ bool prte_pmix_server_session_permitted_uid(prte_session_t *session, uid_t uid)
         return false;
     }
     /* a session with no recorded owner - the default session among them -
-     * is ours */
+     * is ours. Its group's members may act on it only when the group was
+     * named for it: the requester's own primary group, filled in when it
+     * named none, is often one every user on the system is in, and saying
+     * nothing about groups is not asking to share */
     return prte_pmix_server_user_permitted(uid,
                                            (PRTE_INVALID_UID == session->owner_uid)
                                                ? prte_process_info.euid
                                                : session->owner_uid,
-                                           session->owner_gid);
+                                           PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_GROUP_ACCESS)
+                                               ? session->owner_gid
+                                               : PRTE_INVALID_GID);
 }
 
 bool prte_pmix_server_user_permitted(uid_t uid, uid_t owner, gid_t group)

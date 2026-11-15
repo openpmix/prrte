@@ -419,6 +419,9 @@ typedef uint16_t prte_session_flags_t;
                                                // instantiated with, so it is reclaimed when the
                                                // last of them retires rather than persisting
                                                // until an explicit terminate
+#define PRTE_SESSION_FLAG_GROUP_ACCESS  0x0100 // the members of owner_gid may use and change the
+                                               // session: its group was named for it, not filled
+                                               // in from the requester's own
 #define PRTE_SESSION_FLAG_LIMIT_HELD    0x0080 // the session's time limit was set by the scheduler
                                                // or by a user who may change the DVM, so only they
                                                // may change it (prte_pmix_server_session_set_limit)
