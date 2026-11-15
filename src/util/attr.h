@@ -124,7 +124,7 @@ typedef uint8_t prte_node_flags_t;
 /*** NODE ATTRIBUTE KEYS - never sent anywhere ***/
 #define PRTE_NODE_START_KEY PRTE_APP_MAX_KEY
 
-#define PRTE_NODE_USERNAME      (PRTE_NODE_START_KEY + 1)
+// PRTE_NODE_START_KEY + 1 RETIRED (was PRTE_NODE_USERNAME - the DVM reaches every node as its own user) - do not reuse
 // PRTE_NODE_START_KEY + 2 RETIRED (was PRTE_NODE_LAUNCH_ID) - do not reuse
 #define PRTE_NODE_HOSTID        (PRTE_NODE_START_KEY + 3) // pmix_rank_t - if this "node" is a coprocessor being hosted on a different node, then
                                                           // we need to know the id of our "host" to help any procs on us to determine locality

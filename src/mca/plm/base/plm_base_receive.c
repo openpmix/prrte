@@ -487,10 +487,8 @@ static const char *foreign_directive(prte_job_t *jdata)
 
 /* The first of jdata's directives that names hosts to bring into the DVM, or
  * to start daemons on, which its owner may not ask for - NULL if none. That
- * is for whoever may change the DVM, and a user to reach a host as
- * ("user@host") for root and our own user alone
- * (prte_pmix_server_grow_permitted_uid) - the same rule an allocation
- * request naming hosts is held to. */
+ * is for whoever may change the DVM (prte_pmix_server_grow_permitted_uid) -
+ * the same rule an allocation request naming hosts is held to. */
 static const char *grow_directive(prte_job_t *jdata, uid_t owner)
 {
     static const struct {
@@ -502,8 +500,6 @@ static const char *grow_directive(prte_job_t *jdata, uid_t owner)
         {PRTE_APP_ACTIVATE_HOSTS, "hosts to activate"},
     };
     prte_app_context_t *app;
-    char *hosts;
-    bool user;
     size_t k;
     int n;
 
@@ -513,18 +509,11 @@ static const char *grow_directive(prte_job_t *jdata, uid_t owner)
             continue;
         }
         for (k = 0; k < sizeof(keys) / sizeof(keys[0]); k++) {
-            hosts = NULL;
-            if (!prte_get_attribute(&app->attributes, keys[k].key, (void **) &hosts,
-                                    PMIX_STRING)) {
+            if (!prte_get_attribute(&app->attributes, keys[k].key, NULL, PMIX_STRING)) {
                 continue;
             }
-            /* a hostfile's value is a path: a login it names is found when
-             * ras/hosts reads it, as the owner, and refused there */
-            user = (PRTE_APP_ADD_HOSTFILE != keys[k].key && NULL != hosts &&
-                    NULL != strchr(hosts, '@'));
-            free(hosts);
-            if (!prte_pmix_server_grow_permitted_uid(owner, user)) {
-                return user ? "a user to reach a host as" : keys[k].name;
+            if (!prte_pmix_server_grow_permitted_uid(owner)) {
+                return keys[k].name;
             }
         }
     }

@@ -68,7 +68,7 @@ Every line is exactly that, and the file's documentation
 ([`docs/prrte-rst-content/detail-placement-rankfiles.rst`](../../../docs/prrte-rst-content/detail-placement-rankfiles.rst))
 says so: *"Each line of a rankfile specifies the location of one process."*
 Spaces around the `=` are optional on both sides, `slots` is accepted for
-`slot`, the hostname may carry a `user@` prefix, and `+n<K>` names a node by
+`slot`, the hostname may not carry a `user@` prefix, and `+n<K>` names a node by
 its position in the allocation. Comments are `#`, `//` and `/* */`.
 
 Reading is done by [`src/util/textfile.h`](../textfile.h), which hands back
@@ -113,12 +113,16 @@ went to the first node without a word. `rmaps_rank_file.c` now reads the
 digits after the two-character prefix with `strtol()` and range-checks them.
 If you change what the parser accepts here, look at that consumer too.
 
-## `user@host` takes exactly one `@`, with something on both sides
+## A host may not name an account
 
-`node_from_entry()` finds the `@` itself. `PMIx_Argv_split()` drops empty
-fields, so the version that used it took `someone@` as a node named
-`someone`, and `@nodeA` and `someone@@nodeA` as `nodeA`. The same trap was in
-the hostfile parser; see [`../hostfile/AGENTS.md`](../hostfile/AGENTS.md).
+A field with an `@` in it names an account to reach the host as
+(`user@host`). The DVM reaches every node as its own user and runs no daemon
+as another, so the record is refused (`not-supported-rankfile`), as
+`username=` is. It used to be parsed off and dropped, which reached the host
+as some other user than the one the file named - and the version that split
+it with `PMIx_Argv_split()`, which drops empty fields, took `someone@` as a
+node named `someone`. The hostfile parser refuses the same entries; see
+[`../hostfile/AGENTS.md`](../hostfile/AGENTS.md).
 
 ## A read that fails is not the end of the file
 
@@ -126,15 +130,6 @@ the hostfile parser; see [`../hostfile/AGENTS.md`](../hostfile/AGENTS.md).
 `tf.failed` once the loop ends. Taking an early NULL for the end of the file
 accepted a partly-read rankfile as the whole of it, and an app that gave no
 `-n` took its process count from however many lines had arrived.
-
-## The username is dropped, and `username=` is refused
-
-Those are two different answers to the same question, and it is worth
-knowing before you change one of them. The hostfile parser keeps a `user@`
-prefix as a `PRTE_NODE_USERNAME` attribute on the node; a rankfile record
-has nowhere to put one, so the prefix is parsed off and discarded — while
-the explicit `username=` spelling is refused as unsupported. Making these
-agree means giving the record somewhere to keep it.
 
 ---
 

@@ -199,7 +199,7 @@ Three rules the copies have to obey, all of which were being broken:
 1. **A copy is only useful if it carries identity.** A node answers to its
    `name`, its `rawname`, and every entry in `aliases`; it belongs to a
    `session`; and its `attributes` carry the per-node settings that decide
-   how it is launched (`PRTE_NODE_USERNAME`, `PRTE_NODE_PORT`). A copy
+   how it is launched (`PRTE_NODE_PORT`). A copy
    missing any of those is a node that cannot be found by the names the
    allocation used, or cannot be launched the same way.
 2. **Attributes are `prte_attribute_t`.** `prte_app_copy` walked

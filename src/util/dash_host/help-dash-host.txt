@@ -62,8 +62,8 @@ In the absence of the slot extension, one slot will be assigned to the
 node. Duplicate entries are aggregated and the number of slots
 assigned to that node are summed together.
 
-An entry may begin with "user@" to name the user to reach that node as.
-That is accepted only from root and the user the DVM runs as.
+An entry is a node's name alone: it may not name an account to reach the
+node as ("user@node"). The DVM reaches every node as the user it runs as.
 
 Note:
 
@@ -226,10 +226,19 @@ A host given in a list of hosts is not a name a host can have:
    Host:   %s
 
 A host's name is made of letters, digits, ".", "-" and "_", and does
-not begin with "-". It may be preceded by "user@" to name the user to
-reach the host as, which follows the same rule.
+not begin with "-".
 
 Re-run this command with "--help hosts" for further information.
+#
+[dash-host:user-host]
+
+A host given in a list of hosts names an account to reach it as:
+
+   Host:   %s
+
+The DVM reaches every node as the user it runs as, and runs no daemon as
+any other user, so a host may not be given as "user@host". Remove the
+account and try again.
 #
 [dash-host:invalid-slots]
 

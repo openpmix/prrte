@@ -83,11 +83,13 @@ directives are accepted only from the same users who may grow the DVM, and
 that includes the user the session is for. The user a session is for may
 still pause, resume, signal and terminate it.
 
-A host may be given as ``user@host`` to name the user the DVM logs in to
-it as, on the command line, in a hostfile of hosts to add, or in the node
-list of a session being created or extended. That is
-accepted only from root and the DVM's own user, and a host name may
-contain only letters, digits, ``.``, ``-`` and ``_``.
+The DVM reaches every node as the user it runs as, and does not start a
+daemon as any other user. A host may therefore not name an account to
+reach it as - ``user@host``, or ``username=`` in a hostfile - on the
+command line, in a hostfile, a rankfile, a hostfile of hosts to add, or
+the node list of an allocation or session; such a request is refused,
+whoever makes it. A host name may contain only letters, digits, ``.``,
+``-`` and ``_``.
 
 Whom an allocation is for
 -------------------------

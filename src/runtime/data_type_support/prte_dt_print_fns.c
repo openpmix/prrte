@@ -273,15 +273,6 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     free(tmp);
     tmp = tmp2;
 
-    tmp3 = NULL;
-    if (prte_get_attribute(&src->attributes, PRTE_NODE_USERNAME, (void **) &tmp3, PMIX_STRING) &&
-        NULL != tmp3) {
-        pmix_asprintf(&tmp2, "%s\n            Username on node: %s", tmp, tmp3);
-        free(tmp3);
-        free(tmp);
-        tmp = tmp2;
-    }
-
 PRINT_PROCS:
     /* we want to print these procs in their job-rank'd order, but they
      * will be in the node array based on the order in which they were

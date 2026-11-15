@@ -83,7 +83,7 @@ typedef struct {
     size_t napps;
     pmix_info_t *personality;
     char **nodelists;           /* rendered PMIX_ALLOC_NODE_LIST strings */
-    bool names_login;           /* one of them names a user@host */
+    bool names_login;           /* one of them names an account (user@host) */
     char *alloc_refid;          /* PMIX_ALLOC_ID */
     char *user_refid;           /* PMIX_ALLOC_REQ_ID */
     uid_t uid;                  /* the requester's user and group */
@@ -240,9 +240,10 @@ static void set_op(prte_sessctrl_t *ctl, prte_sessctrl_op_t op, bool flag)
     ctl->nops++;
 }
 
-/* Record one rendered node list, and whether it names a user to reach a
- * host as. The list is looked at as it will be read, so a user written
- * inside a regex is seen. Takes ownership of the string. */
+/* Record one rendered node list, and whether it names an account to reach a
+ * host as ("user@host"), which is refused (parse_directives). The list is
+ * looked at as it will be read, so one written inside a regex is seen.
+ * Takes ownership of the string. */
 static void add_nodelist(prte_sessctrl_t *ctl, char *ndstring)
 {
     if (NULL != strchr(ndstring, '@')) {
@@ -574,6 +575,14 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
          * have no opinion about would break a caller we otherwise serve */
     }
 
+    if (ctl->names_login) {
+        /* A host naming an account to reach it as: the DVM reaches every
+         * node as its own user and runs no daemon as another, so this is
+         * refused from anyone, as it is in every other list of hosts */
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:user-host",
+                       true, "SESSION CONTROL");
+        return PMIX_ERR_BAD_PARAM;
+    }
     if (1 < ctl->nops) {
         /* the operations are alternatives, not a program - "pause and
          * terminate" has no meaning and no safe interpretation */
@@ -1493,25 +1502,18 @@ static pmix_status_t apply_to_all(prte_pmix_server_req_t *req,
  * they are for the scheduler, or - with no scheduler - for whoever may change
  * the DVM itself (prte_pmix_server_dvm_permitted), the session's owner
  * included. The owner's own directives to its session - pause, resume,
- * signal, terminate - are judged in apply_to_session(). Naming a user to
- * reach a host as is narrower still: the master logs in as that user, so
- * that is for root and our own user alone (prte_pmix_server_grow_permitted),
- * as it is on an allocation request. */
+ * signal, terminate - are judged in apply_to_session(). */
 static bool grant_permitted(prte_pmix_server_req_t *req, prte_sessctrl_t *ctl)
 {
-    bool ok, login = false;
+    bool ok;
 
     ok = prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo);
-    if (ok && ctl->names_login) {
-        ok = prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, true);
-        login = !ok;
-    }
     if (!ok && NULL != ctl->nodelists) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
                        "ras-base:grow-not-permitted", true,
                        (PRTE_SESSCTRL_INSTANTIATE == ctl->op) ? "SESSION INSTANTIATE"
                                                          : "SESSION EXTEND",
-                       login ? "a user to reach a host as" : "hosts");
+                       "hosts");
     }
     return ok;
 }

@@ -95,8 +95,8 @@ on `PRTE_JOB_STATE_LAUNCH_DAEMONS`:
    enqueue nodes whose daemon is one of *my* routing children
    (`prte_rml_base.children`); otherwise enqueue all. Skip nodes that
    already have a daemon (`PRTE_NODE_FLAG_DAEMON_LAUNCHED`). For each
-   node: substitute the node name (with optional `user@host` and `-p
-   <port>` from node attributes) and the real vpid into the template
+   node: substitute the node name (and `-p <port>` from node attributes)
+   and the real vpid into the template
    argv, wrap it in a `prte_plm_ssh_caddy_t`, and append to
    `launch_list`.
 6. Set the job to `DAEMONS_LAUNCHED`, force `no_tree_spawn = true` (so
