@@ -73,6 +73,7 @@
 #include "src/rml/oob/oob.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_node_index.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/runtime/prte_worker_pool.h"
 #include "src/runtime/runtime.h"
@@ -653,6 +654,161 @@ static int test_node_matching(void)
     prte_node_pool = saved_pool;
 
     reset_globals();
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
+/* the node index                                                     */
+/* ------------------------------------------------------------------ */
+
+/* prte_node_index_t answers what the walks over a list or the pool answer,
+ * so it is checked against them: nodes are drawn from a handful of names,
+ * so that names and aliases collide and more than one node can match,
+ * including our own nodename and "localhost" (which prte_node_match()
+ * resolves to our nodename for node names but not for aliases). Every
+ * index answer must be the node the walk would have reached first, before
+ * and after nodes are taken out. */
+static const char *ni_names[] = {"n0", "n1", "n2", "n3", "n4", "n5", "localhost", NULL, NULL};
+
+static prte_node_t *ni_walk_node(pmix_list_t *list, prte_node_t *q)
+{
+    prte_node_t *nd;
+    int i;
+
+    if (NULL != list) {
+        PMIX_LIST_FOREACH(nd, list, prte_node_t) {
+            if (prte_nptr_match(q, nd)) {
+                return nd;
+            }
+        }
+        return NULL;
+    }
+    for (i = 0; i < prte_node_pool->size; i++) {
+        nd = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+        if (NULL != nd && NULL != nd->name && prte_nptr_match(q, nd)) {
+            return nd;
+        }
+    }
+    return NULL;
+}
+
+static prte_node_t *ni_make(unsigned *seed)
+{
+    prte_node_t *nd;
+    int k, nal;
+
+    nd = make_node(ni_names[rand_r(seed) % 8]);
+    nal = rand_r(seed) % 3;
+    for (k = 0; k < nal; k++) {
+        PMIx_Argv_append_unique_nosize(&nd->aliases, ni_names[rand_r(seed) % 8]);
+    }
+    return nd;
+}
+
+static int ni_compare(prte_node_index_t *idx, pmix_list_t *list, unsigned *seed, const char *what)
+{
+    int failures = 0, q;
+    prte_node_t *probe;
+    char label[128];
+
+    for (q = 0; q < 8; q++) {
+        if (NULL == ni_names[q]) {
+            continue;
+        }
+        snprintf(label, sizeof(label), "node_index %s: name %s as prte_node_match", what,
+                 ni_names[q]);
+        CHECK(label, prte_node_index_match_name(idx, ni_names[q]) ==
+                         prte_node_match(list, ni_names[q]));
+    }
+    for (q = 0; q < 40; q++) {
+        probe = ni_make(seed);
+        snprintf(label, sizeof(label), "node_index %s: node %s as prte_nptr_match", what,
+                 probe->name);
+        CHECK(label, prte_node_index_match_node(idx, probe) == ni_walk_node(list, probe));
+        PMIX_RELEASE(probe);
+    }
+    return failures;
+}
+
+static int test_node_index(void)
+{
+    int failures = 0, round, i, n;
+    unsigned seed = 42;
+    prte_node_index_t idx;
+    pmix_list_t list;
+    prte_node_t *nd, *nodes[24];
+    pmix_list_item_t *item;
+
+    reset_globals();
+    ni_names[7] = prte_process_info.nodename;
+
+    for (round = 0; round < 20; round++) {
+        /* a list, in list order */
+        PMIX_CONSTRUCT(&list, pmix_list_t);
+        prte_node_index_construct(&idx);
+        n = 1 + rand_r(&seed) % 12;
+        for (i = 0; i < n; i++) {
+            nd = ni_make(&seed);
+            pmix_list_append(&list, &nd->super);
+        }
+        CHECK("node_index: index a list", PRTE_SUCCESS == prte_node_index_add_list(&idx, &list));
+        failures += ni_compare(&idx, &list, &seed, "list");
+        /* take some out - from the list and from the index */
+        for (i = 0; i < n / 2; i++) {
+            item = pmix_list_get_first(&list);
+            for (int k = rand_r(&seed) % (int) pmix_list_get_size(&list); 0 < k; k--) {
+                item = pmix_list_get_next(item);
+            }
+            prte_node_index_remove(&idx, (prte_node_t *) item);
+            pmix_list_remove_item(&list, item);
+            PMIX_RELEASE(item);
+        }
+        failures += ni_compare(&idx, &list, &seed, "list after removal");
+        /* a node appended, and another name given to one already there */
+        nd = ni_make(&seed);
+        pmix_list_append(&list, &nd->super);
+        prte_node_index_append(&idx, nd);
+        nd = (prte_node_t *) pmix_list_get_first(&list);
+        PMIx_Argv_append_unique_nosize(&nd->aliases, "n9");
+        prte_node_index_add_alias(&idx, nd, "n9");
+        CHECK("node_index list: an added alias is found",
+              prte_node_index_match_name(&idx, "n9") == prte_node_match(&list, "n9"));
+        failures += ni_compare(&idx, &list, &seed, "list after additions");
+        prte_node_index_destruct(&idx);
+        PMIX_LIST_DESTRUCT(&list);
+
+        /* the pool, in index order, with gaps */
+        n = 1 + rand_r(&seed) % 20;
+        for (i = 0; i < n; i++) {
+            nodes[i] = ni_make(&seed);
+            nodes[i]->index = pmix_pointer_array_add(prte_node_pool, nodes[i]);
+        }
+        for (i = 0; i < n; i += 3) {
+            pmix_pointer_array_set_item(prte_node_pool, nodes[i]->index, NULL);
+            PMIX_RELEASE(nodes[i]);
+        }
+        prte_node_index_construct(&idx);
+        CHECK("node_index: index the pool", PRTE_SUCCESS == prte_node_index_add_pool(&idx));
+        failures += ni_compare(&idx, NULL, &seed, "pool");
+        prte_node_index_destruct(&idx);
+        reset_globals();
+    }
+
+    /* a node with no name answers to nothing, aliases or not */
+    prte_node_index_construct(&idx);
+    nd = PMIX_NEW(prte_node_t);
+    PMIx_Argv_append_nosize(&nd->aliases, "n1");
+    prte_node_index_add(&idx, nd, 0);
+    CHECK("node_index: a nameless node is not found by its alias",
+          NULL == prte_node_index_match_name(&idx, "n1"));
+    CHECK("node_index: a NULL name misses", NULL == prte_node_index_match_name(&idx, NULL));
+    PMIX_RELEASE(nd);
+    prte_node_index_destruct(&idx);
+
+    ni_names[7] = NULL;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_node_index\n");
+    }
     return failures;
 }
 
@@ -2968,6 +3124,7 @@ int main(void)
     failures += test_proc_lookups();
     failures += test_proc_runtime_authority();
     failures += test_node_matching();
+    failures += test_node_index();
     failures += test_node_copy();
     failures += test_app_copy();
     failures += test_map_copy();

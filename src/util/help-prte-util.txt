@@ -82,6 +82,26 @@ The %s option was given "%s" without the value it requires:
 
 Please write it as %s=<value>.
 #
+[file-too-large]
+A file was not read because it is larger than PRRTE accepts:
+
+  File:   %s
+  Limit:  %d MiB
+
+Files named for a job - a hostfile, a rankfile - are read by the DVM
+master itself, so what one may hold is bounded. The file was not used.
+#
+[file-line-too-long]
+A file was not read because one of its lines is longer than PRRTE
+accepts:
+
+  File:   %s
+  Line:   %d
+  Limit:  %d KiB
+
+Files named for a job - a hostfile, a rankfile - are read by the DVM
+master itself, so what one may hold is bounded. The file was not used.
+#
 [file-read-failed]
 A file could not be read to its end:
 

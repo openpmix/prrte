@@ -35,6 +35,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_node_index.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
@@ -88,79 +89,16 @@ static void normalize_node(prte_node_t *node)
     PMIx_Argv_append_unique_nosize(&node->aliases, node->rawname);
 }
 
-/*
- * Add the specified node definitions to the global data store
- *
- * NOTE: this removes all items from the list - but only when it succeeds.
- * An error return leaves whatever it had not reached still on the list, so
- * the caller must PMIX_LIST_DESTRUCT it rather than PMIX_DESTRUCT it.  The
- * node in hand when the error was hit is released here; nothing else can,
- * since it is already off the list and not yet in the pool.
- */
-int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
+static int insert_list(pmix_list_t *nodes, prte_job_t *djob, prte_node_t *hnp_node,
+                       bool skiphnp, prte_node_index_t *pidx)
 {
     pmix_list_item_t *item;
-    int32_t num_nodes;
     int rc, i;
-    prte_node_t *node, *hnp_node, *nptr;
-    bool skiphnp = false, found;
+    prte_node_t *node, *nptr;
+    bool found;
     prte_attribute_t *kv, *kv2;
     prte_proc_t *daemon;
-    prte_job_t *djob;
     pmix_status_t prc;
-
-    /* get the number of nodes */
-    num_nodes = (int32_t) pmix_list_get_size(nodes);
-    if (0 == num_nodes) {
-        return PRTE_SUCCESS; /* nothing to do */
-    }
-
-    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                         "%s ras:base:node_insert inserting %ld nodes",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) num_nodes));
-
-    /* mark the job as being a large-cluster sim if that was requested */
-    if (1 < prte_ras_base.multiplier && NULL != jdata) {
-        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, PRTE_ATTR_GLOBAL, true);
-    }
-
-    /* set the size of the global array - this helps minimize time
-     * spent doing realloc's
-     */
-    rc = pmix_pointer_array_set_size(prte_node_pool,
-                                     num_nodes * prte_ras_base.multiplier);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    /* if we are not launching, get the daemon job */
-    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-
-    /* get the hnp node's info */
-    hnp_node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
-
-    if (prte_ras_base.launch_orted_on_hn) {
-        if (NULL != hnp_node) {
-            PMIX_LIST_FOREACH(node, nodes, prte_node_t)
-            {
-                if (prte_check_host_is_local(node->name)) {
-                    prte_hnp_is_allocated = true;
-                    break;
-                }
-            }
-            if (prte_hnp_is_allocated &&
-                !(PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping) & PRTE_MAPPING_NO_USE_LOCAL)) {
-                if (NULL != hnp_node->name) {
-                    free(hnp_node->name);
-                }
-                hnp_node->name = strdup("prte");
-                skiphnp = true;
-                PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_NO_USE_LOCAL);
-                PRTE_FLAG_SET(hnp_node, PRTE_NODE_NON_USABLE); // leave this node out of mapping operations
-            }
-        }
-    }
 
     /* cycle through the list */
     while (NULL != (item = pmix_list_remove_first(nodes))) {
@@ -225,11 +163,13 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             /* if the node name is different, store it as an alias */
             if (0 != strcmp(hnp_node->name, node->name)) {
                 PMIx_Argv_append_unique_nosize(&hnp_node->aliases, node->name);
+                prte_node_index_add_alias(pidx, hnp_node, node->name);
             }
              // transfer across any new aliases
             if (NULL != node->aliases) {
                 for (i=0; NULL != node->aliases[i]; i++) {
                     PMIx_Argv_append_unique_nosize(&hnp_node->aliases, node->aliases[i]);
+                    prte_node_index_add_alias(pidx, hnp_node, node->aliases[i]);
                 }
             }
             if (NULL != node->rawname) {
@@ -248,6 +188,9 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 }
                 PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
                 node->index = pmix_pointer_array_add(prte_node_pool, node);
+                if (0 <= node->index) {
+                    prte_node_index_add(pidx, node, node->index);
+                }
             }
         } else {
             /* insert the object into the prte_nodes global array */
@@ -257,32 +200,26 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                                  (NULL == node->name) ? "NULL" : node->name, node->slots));
             // see if we already have this node
             found = false;
-            for (i=0; i < prte_node_pool->size; i++) {
-                nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, i);
-                if (NULL == nptr) {
-                    continue;
+            nptr = prte_node_index_match_node(pidx, node);
+            if (NULL != nptr) {
+                found = true;
+                /* The incoming entry is discarded in favor of the one
+                 * already in the pool, so anything the caller marked on
+                 * it has to be carried across. A dynamic addition marks
+                 * its nodes PRTE_NODE_STATE_ADDED precisely so the DVM
+                 * extension will launch a daemon on them; dropping that
+                 * for a node the pool already knows about makes the grow
+                 * a no-op. That is the normal case when re-growing a node
+                 * that was previously shrunk out of the DVM: the shrink
+                 * removes its daemon, but the pool entry survives. */
+                if (PRTE_NODE_STATE_ADDED == node->state) {
+                    nptr->state = PRTE_NODE_STATE_ADDED;
                 }
-                if (prte_nptr_match(nptr, node)) {
-                    found = true;
-                    /* The incoming entry is discarded in favor of the one
-                     * already in the pool, so anything the caller marked on
-                     * it has to be carried across. A dynamic addition marks
-                     * its nodes PRTE_NODE_STATE_ADDED precisely so the DVM
-                     * extension will launch a daemon on them; dropping that
-                     * for a node the pool already knows about makes the grow
-                     * a no-op. That is the normal case when re-growing a node
-                     * that was previously shrunk out of the DVM: the shrink
-                     * removes its daemon, but the pool entry survives. */
-                    if (PRTE_NODE_STATE_ADDED == node->state) {
-                        nptr->state = PRTE_NODE_STATE_ADDED;
+                if (PRTE_ATTR_IS_TRUE(&node->attributes, PRTE_NODE_ADD_SLOTS)) {
+                    nptr->slots = adjust_slots(nptr->slots, node->slots);
+                    if (nptr->slots > nptr->slots_max && nptr->slots_max > 0) {
+                        nptr->slots = nptr->slots_max;
                     }
-                    if (PRTE_ATTR_IS_TRUE(&node->attributes, PRTE_NODE_ADD_SLOTS)) {
-                        nptr->slots = adjust_slots(nptr->slots, node->slots);
-                        if (nptr->slots > nptr->slots_max && nptr->slots_max > 0) {
-                            nptr->slots = nptr->slots_max;
-                        }
-                    }
-                    break;
                 }
             }
             if (found) {
@@ -334,6 +271,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                     return rc;
                 }
             }
+            prte_node_index_add(pidx, node, node->index);
             if (NULL != djob &&
                 PRTE_ATTR_IS_TRUE(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH) &&
                 NULL == node->daemon) {
@@ -359,9 +297,97 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                     return rc;
                 }
                 nptr->index = pmix_pointer_array_add(prte_node_pool, nptr);
+                if (0 <= nptr->index) {
+                    prte_node_index_add(pidx, nptr, nptr->index);
+                }
             }
         }
     }
 
     return PRTE_SUCCESS;
+}
+
+/*
+ * Add the specified node definitions to the global data store
+ *
+ * NOTE: this removes all items from the list - but only when it succeeds.
+ * An error return leaves whatever it had not reached still on the list, so
+ * the caller must PMIX_LIST_DESTRUCT it rather than PMIX_DESTRUCT it.  The
+ * node in hand when the error was hit is released here; nothing else can,
+ * since it is already off the list and not yet in the pool.
+ */
+int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
+{
+    int32_t num_nodes;
+    int rc;
+    prte_node_t *node, *hnp_node;
+    bool skiphnp = false;
+    prte_job_t *djob;
+    prte_node_index_t pidx;
+
+    /* get the number of nodes */
+    num_nodes = (int32_t) pmix_list_get_size(nodes);
+    if (0 == num_nodes) {
+        return PRTE_SUCCESS; /* nothing to do */
+    }
+
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+                         "%s ras:base:node_insert inserting %ld nodes",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) num_nodes));
+
+    /* mark the job as being a large-cluster sim if that was requested */
+    if (1 < prte_ras_base.multiplier && NULL != jdata) {
+        prte_set_bool_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, PRTE_ATTR_GLOBAL, true);
+    }
+
+    /* set the size of the global array - this helps minimize time
+     * spent doing realloc's
+     */
+    rc = pmix_pointer_array_set_size(prte_node_pool,
+                                     num_nodes * prte_ras_base.multiplier);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    /* if we are not launching, get the daemon job */
+    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+
+    /* get the hnp node's info */
+    hnp_node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+
+    if (prte_ras_base.launch_orted_on_hn) {
+        if (NULL != hnp_node) {
+            PMIX_LIST_FOREACH(node, nodes, prte_node_t)
+            {
+                if (prte_check_host_is_local(node->name)) {
+                    prte_hnp_is_allocated = true;
+                    break;
+                }
+            }
+            if (prte_hnp_is_allocated &&
+                !(PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping) & PRTE_MAPPING_NO_USE_LOCAL)) {
+                if (NULL != hnp_node->name) {
+                    free(hnp_node->name);
+                }
+                hnp_node->name = strdup("prte");
+                skiphnp = true;
+                PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_NO_USE_LOCAL);
+                PRTE_FLAG_SET(hnp_node, PRTE_NODE_NON_USABLE); // leave this node out of mapping operations
+            }
+        }
+    }
+
+    /* Each node is looked up in the pool to see whether we already have
+     * it, so look it up in an index of the pool rather than walking the
+     * pool for each one - that made inserting N nodes quadratic. The index
+     * is built after the HNP's entry has been renamed above, so it knows
+     * the pool as the walk would see it, and grows as nodes go in. */
+    prte_node_index_construct(&pidx);
+    rc = prte_node_index_add_pool(&pidx);
+    if (PRTE_SUCCESS == rc) {
+        rc = insert_list(nodes, djob, hnp_node, skiphnp, &pidx);
+    }
+    prte_node_index_destruct(&pidx);
+    return rc;
 }

@@ -29,6 +29,7 @@
 #include "src/mca/state/state.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_node_index.h"
 #include "src/util/proc_info.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
@@ -310,11 +311,10 @@ static bool parse_slots(const char *value, int *result)
  * which is for root and our own user alone, so with `logins` false such a
  * line is refused. What is wrong with the file is said to nspace: the job
  * a spawn's --add-hostfile came with, whose tool is waiting on it. */
-static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_list_t *nodes,
-                                      uid_t uid, gid_t gid, bool logins)
+static pmix_status_t read_hostfile(const char *nspace, char *hostfile, pmix_list_t *nodes,
+                                   uid_t uid, gid_t gid, bool logins, prte_node_index_t *pidx)
 {
     prte_textfile_t tf;
-    FILE *fp;
     char *line, *cptr, *ptr, *ndname, *username;
     bool addslots, failed = false;
     int slots, rc;
@@ -337,9 +337,9 @@ static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_l
         prte_show_help(nspace, "help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
         return PMIX_ERR_SILENT;
     }
-    fp = tf.fp;
-
-    while (NULL != (line = pmix_getline(fp, &failed))) {
+    /* a line at a time, within the limits every file we read is held to
+     * (prte_textfile_getline) */
+    while (NULL != (line = prte_textfile_getline(&tf))) {
         // ignore comments and blank lines
         if (0 == strlen(line)) {
             free(line);
@@ -448,7 +448,7 @@ process:
          * out for itself and had already drifted from it - it compared
          * nptr->name with no NULL check, which is the same drift the framework
          * guide records for --display-cpus. */
-        nptr = prte_node_match(NULL, ndname);
+        nptr = prte_node_index_match_name(pidx, ndname);
         if (NULL != nptr) {
             if (addslots) {
                 adjust_slots(nptr, slots);
@@ -486,12 +486,35 @@ process:
         }
         free(line);
     }
+    failed = tf.failed;
     prte_textfile_close(&tf);
     if (failed) {
-        prte_show_help(nspace, "help-prte-util.txt", "file-read-failed", true, hostfile);
+        if (!prte_textfile_report_limit(&tf, nspace, hostfile)) {
+            prte_show_help(nspace, "help-prte-util.txt", "file-read-failed", true, hostfile);
+        }
         return PMIX_ERR_SILENT;
     }
     return PMIX_SUCCESS;
+}
+
+/* Each line is looked up in the node pool, so look it up in an index of
+ * the pool (prte_node_index_t) rather than walking the pool once per line,
+ * which made a long file quadratic. Nothing here changes the pool: new
+ * nodes go on the caller's list, for prte_ras_base_node_insert(). */
+static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_list_t *nodes,
+                                      uid_t uid, gid_t gid, bool logins)
+{
+    prte_node_index_t pidx;
+    pmix_status_t rc;
+
+    prte_node_index_construct(&pidx);
+    if (PRTE_SUCCESS != prte_node_index_add_pool(&pidx)) {
+        prte_node_index_destruct(&pidx);
+        return PMIX_ERR_OUT_OF_RESOURCE;
+    }
+    rc = read_hostfile(nspace, hostfile, nodes, uid, gid, logins, &pidx);
+    prte_node_index_destruct(&pidx);
+    return rc;
 }
 
 static pmix_status_t modify(prte_pmix_server_req_t *req)
