@@ -6,7 +6,7 @@ Sharing a DVM between users
 By default a DVM serves one user: the user it runs as. Tools of any other
 user are refused when they connect. The ``prte_pmix_no_foreign_tools``
 MCA parameter (default ``true``) controls this; setting it to ``0`` lets
-other users' tools connect::
+other users' tools connect, to the daemon on any node of the DVM::
 
    prte --prtemca prte_pmix_no_foreign_tools 0 ...
 
