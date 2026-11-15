@@ -679,6 +679,105 @@ static void reset_children(void)
     }
 }
 
+
+/* Whom a job arriving in a launch request belongs to.
+ *
+ * It is the owner of the job that asked for it. When that job is not one the
+ * master holds, the owner used to be left unset - and an unset owner is read
+ * as the DVM's own user, so the job would have run as the DVM rather than as
+ * its requester. That is refused now. The cases the DVM itself decides are
+ * kept: a job it asks for itself is its own user's, and the apps of a
+ * session it builds name their owner. */
+static int test_job_owner(void)
+{
+    int failures = 0;
+    pmix_proc_t save_me, sender, proxy;
+    prte_job_t *req, *jdata;
+    uint32_t id;
+    int rc;
+
+    memcpy(&save_me, PRTE_PROC_MY_NAME, sizeof(pmix_proc_t));
+    PMIX_LOAD_PROCID(PRTE_PROC_MY_NAME, "prte-owner-test@0", 0);
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                PRTE_GLOBAL_ARRAY_MAX_SIZE, PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    }
+
+    /* the requester's job, as a tool's is recorded when it connects */
+    req = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(req->nspace, "prte-owner-test-tool");
+    PRTE_FLAG_SET(req, PRTE_JOB_FLAG_TOOL);
+    req->uid = 4242;
+    req->gid = 4343;
+    CHECK("job_owner: register the requester", PRTE_SUCCESS == prte_set_job_data_object(req));
+    PMIX_LOAD_PROCID(&sender, "prte-owner-test@0", 3);   /* a daemon relayed it */
+
+    PMIX_LOAD_PROCID(&proxy, req->nspace, 0);
+    jdata = PMIX_NEW(prte_job_t);
+    rc = prte_plm_base_job_owner(jdata, &sender, &proxy);
+    CHECK("job_owner: a known requester's job owns it",
+          PRTE_SUCCESS == rc && 4242 == jdata->uid && 4343 == jdata->gid);
+    PMIX_RELEASE(jdata);
+
+    /* an owner a job brings with it from anywhere but the master is dropped */
+    jdata = PMIX_NEW(prte_job_t);
+    id = 0;
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL, &id, PMIX_UINT32);
+    rc = prte_plm_base_job_owner(jdata, &sender, &proxy);
+    CHECK("job_owner: an owner from a daemon is not taken",
+          PRTE_SUCCESS == rc && 4242 == jdata->uid &&
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, NULL, PMIX_UINT32));
+    PMIX_RELEASE(jdata);
+
+    /* the requester's job is gone */
+    PMIX_LOAD_PROCID(&proxy, "prte-owner-test-gone", 0);
+    jdata = PMIX_NEW(prte_job_t);
+    rc = prte_plm_base_job_owner(jdata, &sender, &proxy);
+    CHECK("job_owner: an unknown requester's job is refused", PRTE_ERR_NOT_FOUND == rc);
+    CHECK("job_owner: ...and the job is left with no owner", PRTE_INVALID_UID == jdata->uid);
+    PMIX_RELEASE(jdata);
+    /* an empty namespace must not match ours */
+    PMIX_LOAD_PROCID(&proxy, NULL, 0);
+    jdata = PMIX_NEW(prte_job_t);
+    CHECK("job_owner: an empty requester namespace is refused",
+          PRTE_ERR_NOT_FOUND == prte_plm_base_job_owner(jdata, &sender, &proxy));
+    PMIX_RELEASE(jdata);
+    jdata = PMIX_NEW(prte_job_t);
+    CHECK("job_owner: no requester at all is refused",
+          PRTE_ERR_NOT_FOUND == prte_plm_base_job_owner(jdata, &sender, NULL));
+    PMIX_RELEASE(jdata);
+
+    /* a job the DVM asks for itself - prterun's own */
+    PMIX_LOAD_PROCID(&proxy, PRTE_PROC_MY_NAME->nspace, 0);
+    jdata = PMIX_NEW(prte_job_t);
+    rc = prte_plm_base_job_owner(jdata, PRTE_PROC_MY_NAME, &proxy);
+    CHECK("job_owner: the DVM's own job is its user's",
+          PRTE_SUCCESS == rc && prte_process_info.euid == jdata->uid);
+    PMIX_RELEASE(jdata);
+
+    /* the apps of a session the master built name their owner */
+    PMIX_LOAD_PROCID(&proxy, "prte-owner-test-gone", 0);
+    jdata = PMIX_NEW(prte_job_t);
+    id = 5151;
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID, PRTE_ATTR_GLOBAL, &id, PMIX_UINT32);
+    id = 5252;
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID, PRTE_ATTR_GLOBAL, &id, PMIX_UINT32);
+    rc = prte_plm_base_job_owner(jdata, PRTE_PROC_MY_NAME, &proxy);
+    CHECK("job_owner: a session's apps keep the owner the master gave them",
+          PRTE_SUCCESS == rc && 5151 == jdata->uid && 5252 == jdata->gid);
+    PMIX_RELEASE(jdata);
+
+    pmix_pointer_array_set_item(prte_job_data, req->index, NULL);
+    PMIX_RELEASE(req);
+    memcpy(PRTE_PROC_MY_NAME, &save_me, sizeof(pmix_proc_t));
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_job_owner\n");
+    }
+    return failures;
+}
+
 /*
  * A daemon reports proc state to the HNP with a PRTE_PLM_UPDATE_PROC_STATE
  * message built by prte_plm_base_pack_state_{for_proc,update}.  Its only
@@ -1162,6 +1261,7 @@ int main(void)
     failures += test_setup_prted_cmd();
     failures += test_append_basic_args();
     failures += test_naming();
+    failures += test_job_owner();
     failures += test_state_update_wire();
     failures += test_remote_launch_wire();
     failures += test_late_report_keeps_termination();

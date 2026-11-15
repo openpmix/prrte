@@ -223,6 +223,17 @@ sender they are removed before the owner is decided. Everything after this
 point - the user the job runs as, the directives it may carry, the
 reservations it may use - is judged by that owner.
 
+The decision is `prte_plm_base_job_owner()`, and it **refuses a job whose
+requester's job the master does not hold** (`requester-unknown`,
+`PRTE_ERR_NOT_FOUND`). Leaving the owner unset there is not a neutral
+answer: `prte_pmix_server_job_owner()` reads an unset owner as the DVM's
+own user, so the job would run as the DVM rather than as whoever asked.
+Only a job the DVM asks for itself (prterun's, whose requester is in our
+own namespace) and a session's apps the master built take an owner without
+that lookup; a singleton's job, which records no owner, passes its unset
+one on, and that is our user's, as the singleton is. `test_plm`'s
+`test_job_owner` covers each case.
+
 Placing a job on a reservation is vetted here, by the job's owner - the
 uid recorded for its requester's job - through `session_usable()`, which
 asks `prte_pmix_server_session_permitted_uid()`. Nothing is granted to the
