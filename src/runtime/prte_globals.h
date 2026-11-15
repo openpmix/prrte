@@ -298,11 +298,12 @@ typedef struct{
     char *alloc_module; // name of RAS module that created this allocation
     struct timeval timeout;  // time limit on session
     /* Armed event that terminates the session when its time limit expires.
-     * Set only when an instantiating scheduler asked for one (PMIX_ALLOC_TIME
-     * or PMIX_TIMEOUT on a PMIX_SESSION_INSTANTIATE); re-armed by
-     * PMIX_SESSION_EXTEND and cancelled when the session is torn down. NULL
-     * whenever no limit is in force - which is every session PRRTE creates
-     * for itself, since only a scheduler imposes a session lifetime. */
+     * Set when a session control directive asked for one (PMIX_ALLOC_TIME or
+     * PMIX_TIMEOUT on PMIX_SESSION_INSTANTIATE or _EXTEND), or - with no
+     * scheduler - when an allocation request did (PMIX_ALLOC_TIME on
+     * PMIX_ALLOC_NEW or _EXTEND); see prte_pmix_server_session_set_limit and
+     * PRTE_SESSION_FLAG_LIMIT_HELD for who may change it. Cancelled when the
+     * session is torn down. NULL whenever no limit is in force. */
     prte_timer_t *timer;
     /* Termination status of each job that ran in this session, accumulated as
      * the jobs retire because the job objects themselves do not survive to

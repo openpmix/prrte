@@ -1155,22 +1155,24 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     /* Refuse a size change outside elastic mode before any module acts on
      * it: the scheduler-owned ones ask their scheduler first, and an
      * allocation granted to a request we then refuse would be stranded.
-     * EXTEND and ACTIVATE always grow the DVM.  Under a scheduler, so do NEW
-     * (it is served by asking for nodes) and RELEASE (the nodes go back).
-     * Without one, a NEW that names no nodes reserves nodes the DVM already
-     * has, and a release shrinks only if its nodes carry daemons - those two
-     * are decided where the nodes are known, below. */
+     * ACTIVATE always grows the DVM.  Under a scheduler, so do NEW and EXTEND
+     * (they are served by asking for nodes) and RELEASE (the nodes go back).
+     * Without one, a NEW or EXTEND that names no nodes asks for nothing the
+     * DVM does not already have - an EXTEND of that kind changes only the
+     * time limit or the disposition - and a release shrinks only if its
+     * nodes carry daemons, which is decided where the nodes are known,
+     * below. */
     if (!prte_elastic_mode) {
         bool resize = false;
 
         switch (req->allocdir) {
-        case PMIX_ALLOC_EXTEND:
 #if defined(PMIX_ALLOC_ACTIVATE)
         case PMIX_ALLOC_ACTIVATE:
-#endif
             resize = true;
             break;
+#endif
         case PMIX_ALLOC_NEW:
+        case PMIX_ALLOC_EXTEND:
             resize = prte_ras_base.scheduler_owned || ras_base_request_names_nodes(req);
             break;
         case PMIX_ALLOC_RELEASE:
@@ -1959,8 +1961,39 @@ static bool ras_base_get_string(const pmix_info_t *info, char **value)
     return true;
 }
 
+/* The time limit a request asks for (PMIX_ALLOC_TIME), in seconds, or -1 if
+ * it names none. */
+static pmix_status_t ras_base_get_limit(prte_pmix_server_req_t *req, long *limit)
+{
+    char *str;
+
+    *limit = -1;
+    for (size_t n = 0; n < req->ninfo; n++) {
+        if (!PMIx_Check_key(req->info[n].key, PMIX_ALLOC_TIME)) {
+            continue;
+        }
+        if (!ras_base_get_string(&req->info[n], &str)) {
+            return PMIX_ERR_BAD_PARAM;
+        }
+        *limit = prte_pmix_server_parse_session_time(str);
+        if (0 > *limit) {
+            return PMIX_ERR_BAD_PARAM;
+        }
+    }
+    return PMIX_SUCCESS;
+}
+
+/* Resolve the session a NEW or EXTEND is for, creating it for a NEW.
+ *
+ * `limit` is the time limit the request asks for (-1 for none). Without a
+ * scheduler the DVM serves it - see ras_base_complete_grow_request - and a
+ * limit the scheduler or a user who may change the DVM set
+ * (PRTE_SESSION_FLAG_LIMIT_HELD) is changed only by them, which is judged
+ * here, before anything about the session is changed. Under a scheduler the
+ * scheduler decided the time, and tells us by session control. */
 static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
                                            uid_t owner_uid, gid_t owner_gid,
+                                           long limit,
                                            prte_session_t **dest_out,
                                            bool *created)
 {
@@ -2041,6 +2074,10 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
     owner_nspace = (NULL != target) ? target : req->tproc.nspace;
 
     if (have_share && share) {
+        /* the general pool has no time limit for anyone to set */
+        if (0 <= limit && !prte_ras_base.scheduler_owned) {
+            return PMIX_ERR_BAD_PARAM;
+        }
         dest = prte_default_session;            /* general use */
     } else if (NULL != target && !is_tool) {
         return PMIX_ERR_NO_PERMISSIONS;         /* app may not retarget */
@@ -2059,6 +2096,23 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
         if (NULL == dest ||
             !prte_pmix_server_session_permitted(dest, &req->tproc, req->info, req->ninfo)) {
             return (NULL == dest) ? PMIX_ERR_NOT_FOUND : PMIX_ERR_NO_PERMISSIONS;
+        }
+        if (!prte_ras_base.scheduler_owned) {
+            /* with nothing to add, no time and no disposition, an extend
+             * extends nothing - which is an error, as it is for session
+             * control, not a success that did nothing */
+            if (0 > limit && !have_inherit && !ras_base_request_names_nodes(req)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
+            /* the owner may change a limit it set, but not one set by those
+             * who decide what the DVM's sessions hold */
+            if (0 <= limit && PRTE_FLAG_TEST(dest, PRTE_SESSION_FLAG_LIMIT_HELD) &&
+                !prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                               "ras-base:limit-not-permitted", true,
+                               (NULL != dest->alloc_refid) ? dest->alloc_refid : "(none)");
+                return PMIX_ERR_NO_PERMISSIONS;
+            }
         }
         /* a new inheritance value on EXTEND updates the disposition */
         if (have_inherit) {
@@ -2213,6 +2267,7 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
     bool created = false;
     uint32_t auid = 0, agid = 0;
     bool have_uid, have_gid;
+    long limit = -1;
 
     /* an add-host/add-hostfile request (from the --add-host and
      * --add-hostfile cmd line options) grows the DVM's general pool.
@@ -2243,7 +2298,13 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
         return;
     }
 
-    rc = ras_base_prepare_grow(req, (uid_t) auid, (gid_t) agid, &dest, &created);
+    rc = ras_base_get_limit(req, &limit);
+    if (PMIX_SUCCESS != rc) {
+        req->pstatus = rc;
+        return;
+    }
+
+    rc = ras_base_prepare_grow(req, (uid_t) auid, (gid_t) agid, limit, &dest, &created);
     if (PMIX_SUCCESS != rc) {
         req->pstatus = rc;
         return;
@@ -2274,6 +2335,16 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
 
     if (found) {
         prte_ras_base_activate_dvm_grow();
+    }
+    /* With no scheduler, we are what serves the time a request asks for:
+     * the session is terminated when it runs out, as a session control
+     * PMIX_SESSION_TERMINATE would. Whoever may change the DVM sets a limit
+     * the owner may not then change. Under a scheduler the scheduler decided
+     * the time, and tells us so with session control. */
+    if (0 <= limit && !prte_ras_base.scheduler_owned) {
+        prte_pmix_server_session_set_limit(dest, limit,
+                                           prte_pmix_server_dvm_permitted(&req->tproc, req->info,
+                                                                          req->ninfo));
     }
     ras_base_set_alloc_response(req, dest);
     return;

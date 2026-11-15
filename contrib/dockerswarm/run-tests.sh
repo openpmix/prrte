@@ -4655,6 +4655,40 @@ test_requesters() {
     fi
     RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
 
+    banner "requesters: the time an allocation is asked for is applied"
+    # With no scheduler the DVM serves PMIX_ALLOC_TIME itself, on a DVM that
+    # is not elastic too - an extend naming no nodes does not resize it. The
+    # owner may change a limit it set; one root sets is not the owner's to
+    # change. Each limit is checked by whether the allocation is still listed.
+    EXEC_TOOL_BG 1 "$rq alloc - - 40 5 > /tmp/rqalloc.out 2>&1"
+    aid=$(rq_alloc_id)
+    if [ -z "$aid" ]; then
+        bad "a user could not ask for an allocation with a time limit: $(RUN 'cat /tmp/rqalloc.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        out=$(RUN "timeout 60 $rq alloc-extend '$aid' 600" 2>&1)
+        echo "$out" | grep -q "ROLE ALLOC-EXTEND PMIX_SUCCESS" \
+            && ok "the owner lengthened the limit it set" \
+            || bad "the owner could not lengthen its own limit: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 8
+        RUN "timeout 60 $ROLETOOL '$uri' allocids" 2>&1 | grep -q "ROLE ALLOCID $aid" \
+            && ok "the allocation outlived the limit it first asked for" \
+            || bad "the allocation ended at its first limit despite the extend"
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' alloc-extend '$aid' 4" 2>&1)
+        echo "$out" | grep -q "ROLE ALLOC-EXTEND PMIX_SUCCESS" \
+            || bad "root could not set the allocation's limit: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN "timeout 60 $rq alloc-extend '$aid' 600" 2>&1)
+        if echo "$out" | grep -q "ROLE ALLOC-EXTEND PMIX_ERR_NO_PERMISSIONS"; then
+            ok "the owner may not change a limit root set"
+        else
+            bad "the owner's change to root's limit was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        sleep 8
+        RUN "timeout 60 $ROLETOOL '$uri' allocids" 2>&1 | grep -q "ROLE ALLOCID $aid" \
+            && bad "the allocation outlived the limit root set" \
+            || ok "the allocation ended at the limit root set"
+    fi
+    RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
+
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     ON 1 'rm -f /tmp/rqparent.sh /tmp/rqparent.out'
     for n in 1 2; do kill_stray "$n" sleep; done

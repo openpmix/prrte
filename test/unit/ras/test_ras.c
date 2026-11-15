@@ -2497,6 +2497,110 @@ static int test_alloc_owner(void)
     return failures;
 }
 
+/* The time an allocation request asks for, with no scheduler to decide it.
+ *
+ * Nothing on the allocation path used to read PMIX_ALLOC_TIME, so an EXTEND
+ * that asked only for time found no node list, grew nothing and answered
+ * success - and the session's limit was what it had been. The DVM now serves
+ * the time itself, and a limit set by those who decide what the DVM's
+ * sessions hold (PRTE_SESSION_FLAG_LIMIT_HELD) is not the owner's to change,
+ * while one the owner set is. An extend that asks for nothing is an error. */
+static pmix_status_t time_extend(uint32_t ruid, uint32_t rgid, uint32_t ouid, uint32_t ogid,
+                                 const char *aid, const char *time)
+{
+    prte_pmix_server_req_t *req;
+    pmix_info_t x[4];
+    size_t nx = 0, k;
+    pmix_status_t rc;
+
+    PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_UID, &ouid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_GID, &ogid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_ID, aid, PMIX_STRING);
+    if (NULL != time) {
+        PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_TIME, time, PMIX_STRING);
+    }
+    req = mkalloc_req(PMIX_ALLOC_EXTEND, ruid, rgid, x, nx);
+    req->pstatus = PMIX_SUCCESS;
+    prte_ras_base_complete_request(req);
+    rc = req->pstatus;
+    PMIX_RELEASE(req);
+    for (k = 0; k < nx; k++) {
+        PMIX_INFO_DESTRUCT(&x[k]);
+    }
+    return rc;
+}
+
+static int test_alloc_time(void)
+{
+    int failures = 0;
+    prte_session_t *s;
+    uint32_t me = (uint32_t) prte_process_info.euid;
+    uint32_t mygrp = (uint32_t) prte_process_info.egid;
+    /* an ordinary user: not root, not us */
+    uint32_t user = (0 == me) ? 4242 : me + 1;
+    uint32_t ugrp = 4242;
+    bool saved_owned = prte_ras_base.scheduler_owned;
+    const char *aid = "prte-unit-test.4343";
+
+    prte_ras_base.scheduler_owned = false;
+    s = PMIX_NEW(prte_session_t);
+    s->session_id = 4343;
+    s->alloc_refid = strdup(aid);
+    s->flags |= PRTE_SESSION_FLAG_RESERVED;
+    s->owner_uid = (uid_t) user;
+    s->owner_gid = (gid_t) ugrp;
+    CHECK("alloc_time/register", PRTE_SUCCESS == prte_set_session_object(s));
+    PMIX_RETAIN(s);
+
+    CHECK("alloc_time: the owner may set a time limit",
+          PMIX_SUCCESS == time_extend(user, ugrp, user, ugrp, aid, "60"));
+    CHECK("alloc_time: ...and it is in force",
+          NULL != s->timer && 60 == s->timeout.tv_sec);
+    CHECK("alloc_time: ...as the owner's own",
+          !PRTE_FLAG_TEST(s, PRTE_SESSION_FLAG_LIMIT_HELD));
+    CHECK("alloc_time: the owner may change its own limit",
+          PMIX_SUCCESS == time_extend(user, ugrp, user, ugrp, aid, "90") &&
+          90 == s->timeout.tv_sec);
+
+    CHECK("alloc_time: an extend asking for nothing is refused",
+          PMIX_ERR_BAD_PARAM == time_extend(user, ugrp, user, ugrp, aid, NULL));
+    CHECK("alloc_time: a time that is not one is refused",
+          PMIX_ERR_BAD_PARAM == time_extend(user, ugrp, user, ugrp, aid, "soon"));
+    CHECK("alloc_time: ...and changes nothing", 90 == s->timeout.tv_sec);
+
+    /* our own user is one who may change the DVM */
+    CHECK("alloc_time: the DVM's user may set the limit",
+          PMIX_SUCCESS == time_extend(me, mygrp, user, ugrp, aid, "120"));
+    CHECK("alloc_time: ...which the owner then does not hold",
+          PRTE_FLAG_TEST(s, PRTE_SESSION_FLAG_LIMIT_HELD) && 120 == s->timeout.tv_sec);
+    fprintf(stdout, "-- the next case refuses an owner's change to a held limit;"
+                    " the message it prints is expected --\n");
+    CHECK("alloc_time: the owner may not change a limit it does not hold",
+          PMIX_ERR_NO_PERMISSIONS == time_extend(user, ugrp, user, ugrp, aid, "999"));
+    CHECK("alloc_time: ...which stays as it was", 120 == s->timeout.tv_sec);
+    CHECK("alloc_time: the DVM's user may change it again",
+          PMIX_SUCCESS == time_extend(me, mygrp, user, ugrp, aid, "30") &&
+          30 == s->timeout.tv_sec);
+
+    /* under a scheduler the scheduler decided the time, and says so with
+     * session control - the request's own value is not ours to apply */
+    prte_ras_base.scheduler_owned = true;
+    (void) time_extend(user, ugrp, user, ugrp, aid, "999");
+    CHECK("alloc_time: under a scheduler the request's time is not applied",
+          30 == s->timeout.tv_sec);
+    prte_ras_base.scheduler_owned = false;
+
+    prte_ras_base_teardown_reservation(s, false);
+    CHECK("alloc_time: teardown disarms the limit", NULL == s->timer);
+    PMIX_RELEASE(s);
+    prte_ras_base.scheduler_owned = saved_owned;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_alloc_time\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2552,6 +2656,7 @@ int main(void)
     failures += test_spawn_alloc();
     failures += test_alloc_owner();
     failures += test_teardown_reservation();
+    failures += test_alloc_time();
     failures += test_hnp_locality_match();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so

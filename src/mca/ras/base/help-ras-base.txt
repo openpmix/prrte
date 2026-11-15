@@ -237,6 +237,16 @@ or extend a session is held to the same rules, including when it comes
 from the session's owner: a user asks for more resources with an
 allocation request, which the scheduler decides.
 #
+[ras-base:limit-not-permitted]
+A request to change an allocation's time limit was refused:
+
+  Allocation:  %s
+
+The limit was set by the scheduler, or by a user who may change the DVM
+(root, the user the DVM runs as, and the users and groups the DVM was
+started with), and only they may change it. A limit the allocation's
+owner set on its own request may be changed by the owner.
+#
 [ras-base:release-not-permitted]
 A request to take nodes out of the DVM was refused, because the user who
 made it may not release what it named:
