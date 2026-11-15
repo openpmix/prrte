@@ -83,6 +83,7 @@ typedef struct {
     size_t napps;
     pmix_info_t *personality;
     char **nodelists;           /* rendered PMIX_ALLOC_NODE_LIST strings */
+    bool names_login;           /* one of them names a user@host */
     char *alloc_refid;          /* PMIX_ALLOC_ID */
     char *user_refid;           /* PMIX_ALLOC_REQ_ID */
     uid_t uid;                  /* the requester's user and group */
@@ -239,6 +240,18 @@ static void set_op(prte_sessctrl_t *ctl, prte_sessctrl_op_t op, bool flag)
     ctl->nops++;
 }
 
+/* Record one rendered node list, and whether it names a user to reach a
+ * host as. The list is looked at as it will be read, so a user written
+ * inside a regex is seen. Takes ownership of the string. */
+static void add_nodelist(prte_sessctrl_t *ctl, char *ndstring)
+{
+    if (NULL != strchr(ndstring, '@')) {
+        ctl->names_login = true;
+    }
+    PMIx_Argv_append_nosize(&ctl->nodelists, ndstring);
+    free(ndstring);
+}
+
 /* Scan the resource description carried by PMIX_SESSION_RESOURCES. Only the
  * node-naming forms mean anything to PRRTE: it does not select machines, it is
  * told which ones it has. A request that asks PRRTE to choose (a node COUNT, a
@@ -257,8 +270,7 @@ static pmix_status_t scan_resources(prte_sessctrl_t *ctl,
             if (PMIX_SUCCESS != rc) {
                 return rc;
             }
-            PMIx_Argv_append_nosize(&ctl->nodelists, ndstring);
-            free(ndstring);
+            add_nodelist(ctl, ndstring);
 
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_ID)) {
             rc = get_string_directive(&info[n], &ctl->alloc_refid);
@@ -447,8 +459,7 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             if (PMIX_SUCCESS != rc) {
                 return rc;
             }
-            PMIx_Argv_append_nosize(&ctl->nodelists, ndstring);
-            free(ndstring);
+            add_nodelist(ctl, ndstring);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_ID)) {
             rc = get_string_directive(info, &ctl->alloc_refid);
@@ -1466,6 +1477,37 @@ static pmix_status_t apply_to_all(prte_pmix_server_req_t *req,
     return ret;
 }
 
+/* May the requester direct us to make a session, or to change what one
+ * holds? Instantiate and extend are not requests for resources - a user
+ * asks for those with PMIx_Allocation_request, and the scheduler decides.
+ * They are how the scheduler tells the DVM what it has decided: the nodes a
+ * session holds, possibly new ones the DVM grows onto, and for how long. So
+ * they are for the scheduler, or - with no scheduler - for whoever may change
+ * the DVM itself (prte_pmix_server_dvm_permitted), the session's owner
+ * included. The owner's own directives to its session - pause, resume,
+ * signal, terminate - are judged in apply_to_session(). Naming a user to
+ * reach a host as is narrower still: the master logs in as that user, so
+ * that is for root and our own user alone (prte_pmix_server_grow_permitted),
+ * as it is on an allocation request. */
+static bool grant_permitted(prte_pmix_server_req_t *req, prte_sessctrl_t *ctl)
+{
+    bool ok, login = false;
+
+    ok = prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo);
+    if (ok && ctl->names_login) {
+        ok = prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, true);
+        login = !ok;
+    }
+    if (!ok && NULL != ctl->nodelists) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                       "ras-base:grow-not-permitted", true,
+                       (PRTE_SESSCTRL_INSTANTIATE == ctl->op) ? "SESSION INSTANTIATE"
+                                                         : "SESSION EXTEND",
+                       login ? "a user to reach a host as" : "hosts");
+    }
+    return ok;
+}
+
 /* Process a session control directive addressed to this DVM.
  *
  * Returns a pmix_status_t - NOT a PRRTE return code. The result is handed to
@@ -1499,16 +1541,16 @@ static pmix_status_t process_directive(prte_pmix_server_req_t *req)
         goto done;
     }
 
+    /* a directive to make a session, or to change what one holds, is judged
+     * before anything is looked up. With a scheduler attached, a request
+     * from anyone else went up to it rather than coming here. */
+    if ((PRTE_SESSCTRL_INSTANTIATE == ctl.op || PRTE_SESSCTRL_EXTEND == ctl.op) &&
+        !grant_permitted(req, &ctl)) {
+        rc = PMIX_ERR_NO_PERMISSIONS;
+        goto done;
+    }
+
     if (PRTE_SESSCTRL_INSTANTIATE == ctl.op) {
-        /* a new session takes nodes - from the pool, or new ones the DVM
-         * grows onto - so creating one changes what the DVM consists of,
-         * which is for the scheduler, or for whoever may act on the DVM
-         * itself. (With a scheduler attached, anyone else's request went
-         * up to it rather than coming here.) */
-        if (!prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)) {
-            rc = PMIX_ERR_NO_PERMISSIONS;
-            goto done;
-        }
         rc = session_instantiate(req, &ctl);
         if (PMIX_SUCCESS == rc) {
             session = prte_get_session_object(req->sessionID);

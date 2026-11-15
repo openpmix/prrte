@@ -281,7 +281,13 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 #    define PRTE_INHERIT_DEFAULT_VALUE 3
 #endif
 
-/* Object for tracking allocations */
+/* Object for tracking allocations. Two different operations create one:
+ * a granted allocation request (PMIx_Allocation_request PMIX_ALLOC_NEW -
+ * a user asking for resources, decided by the scheduler or, with none, by
+ * the selected ras module; see prte_ras_base_modify), and a scheduler's
+ * directive to instantiate a session over resources it has already decided
+ * on (PMIx_Session_control PMIX_SESSION_INSTANTIATE; see
+ * pmix_server_session.c). The object is the same either way. */
 typedef struct{
     pmix_object_t super;
     prte_session_flags_t flags;

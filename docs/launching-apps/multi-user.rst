@@ -74,8 +74,18 @@ and groups the DVM was started with (``prte --rtos users=...,groups=...``),
 as creating a session is. When the DVM hands such requests to a PMIx
 scheduler, the scheduler decides instead.
 
+A user asks for resources - a new allocation, or more nodes or time for one
+of its own - with ``PMIx_Allocation_request``, and the scheduler decides.
+``PMIx_Session_control`` with ``PMIX_SESSION_INSTANTIATE`` or
+``PMIX_SESSION_EXTEND`` is not such a request: it is how the scheduler tells
+the DVM what it has decided. With no scheduler attached, those two
+directives are accepted only from the same users who may grow the DVM, and
+that includes the user the session is for. The user a session is for may
+still pause, resume, signal and terminate it.
+
 A host may be given as ``user@host`` to name the user the DVM logs in to
-it as, on the command line or in a hostfile of hosts to add. That is
+it as, on the command line, in a hostfile of hosts to add, or in the node
+list of a session being created or extended. That is
 accepted only from root and the DVM's own user, and a host name may
 contain only letters, digits, ``.``, ``-`` and ``_``.
 

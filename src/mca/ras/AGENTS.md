@@ -236,7 +236,7 @@ owner (`prte_pmix_server_job_user()`) or the request's requester
 one thing the master does *as itself* is narrower: logging in as a named
 user (`user@host`) is for root and the DVM's own user alone, and `ras/hosts`
 refuses a `user@` found inside a file it reads for anyone else
-(`process_hostfile()`). It is judged in two places, with the same rule:
+(`process_hostfile()`). It is judged in three places, with the same rule:
 
 - `prte_ras_base_modify()`, for an allocation request: a NEW or EXTEND that
   names nodes (`ras_base_names_hosts()`, which reads a node list through
@@ -250,6 +250,13 @@ refuses a `user@` found inside a file it reads for anyone else
   (`prte_pmix_server_is_identity_key()`) and puts in the owner's
   `PMIX_USERID`, since the array is the client's own and only PMIx or the
   spawn's admission may say who asked.
+- session control (`pmix_server_session.c`, `grant_permitted()`):
+  `PMIX_SESSION_INSTANTIATE` and `PMIX_SESSION_EXTEND`. These are the
+  scheduler's directives to the DVM, not requests for resources - a user
+  asks for those through `prte_ras_base_modify()` - so with no scheduler
+  both are for whoever may change the DVM, the session's owner included; a
+  `user@host` in either is for root and our own user alone. These requests reach `prte_ras_base_insert_node_string()`
+  directly and never pass through `prte_ras_base_modify()`.
 - spawn admission (`plm_base_receive.c`): `--add-host`, `--add-hostfile`
   and `--activate` (`grow_directive()`). The request
   `prte_ras_base_add_hosts()` then builds names the master as its
