@@ -138,6 +138,18 @@ decimal number of slots to apply to every node.
 Nodes that arrived without slot information will be sized by the number
 of cores instead.  Please correct the value and try again.
 #
+[requester-unknown]
+A job was refused because the job of the process that asked for it is not
+known to the DVM:
+
+  Job:           %s
+  Requested by:  %s
+
+A job belongs to the user whose process or tool asked for it, and runs as
+that user. With the requester's job no longer known - a tool that left
+before its request was served, for example - there is no user to run the
+job as.
+#
 [foreign-directive]
 A job was refused because it asked for something PRRTE would have to do
 with the DVM's own privileges:

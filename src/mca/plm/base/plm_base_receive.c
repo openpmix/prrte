@@ -531,6 +531,66 @@ static const char *grow_directive(prte_job_t *jdata, uid_t owner)
     return NULL;
 }
 
+/* Decide whom a job arriving in a launch request belongs to.
+ *
+ * The job belongs to whoever asked for it (proxy, the PRTE_JOB_LAUNCH_PROXY).
+ * Identity descends the job tree from the tool that started it, so a job an
+ * application spawns is recorded against the user who launched that
+ * application - not left anonymous because the job itself never presented
+ * credentials.
+ *
+ * The one job that arrives already naming its owner is one built here in
+ * the master: the apps of a session the scheduler created for a user, which
+ * are that user's. An owner on a job from any other sender is not ours to
+ * take, and is dropped. A job the DVM asks for itself - prterun's own - is
+ * our user's, and our daemon job records no identity to inherit.
+ *
+ * Anything else whose requester's job we do not hold is refused. The owner
+ * would otherwise be left unset, and an unset owner is read as our own user
+ * (prte_pmix_server_job_owner) - so the job would run as our own user
+ * rather than as its requester's. That can only happen when the requester's
+ * job has gone before its request was served, and answering the request
+ * with an error is all that is left to do. */
+int prte_plm_base_job_owner(prte_job_t *jdata, const pmix_proc_t *sender,
+                            const pmix_proc_t *proxy)
+{
+    uint32_t oid, *oidptr = &oid;
+    prte_job_t *parent;
+
+    if (PMIX_CHECK_PROCID_STRICT(sender, PRTE_PROC_MY_NAME) &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID,
+                           (void **) &oidptr, PMIX_UINT32)) {
+        jdata->uid = (uid_t) oid;
+        jdata->gid = PRTE_INVALID_GID;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID,
+                               (void **) &oidptr, PMIX_UINT32)) {
+            jdata->gid = (gid_t) oid;
+        }
+        return PRTE_SUCCESS;
+    }
+    prte_remove_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID);
+    prte_remove_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID);
+
+    if (NULL == proxy) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    /* strictly: an empty namespace matches anything otherwise */
+    if (PMIX_CHECK_NSPACE_STRICT(proxy->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        jdata->uid = prte_process_info.euid;
+        jdata->gid = prte_process_info.egid;
+        return PRTE_SUCCESS;
+    }
+    parent = prte_get_job_data_object(proxy->nspace);
+    if (NULL == parent) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    /* which may itself be unset - a singleton's job records none - and is
+     * then our own user's, as that job is */
+    jdata->uid = parent->uid;
+    jdata->gid = parent->gid;
+    return PRTE_SUCCESS;
+}
+
 void prte_plm_base_recv(int status, pmix_proc_t *sender,
                         pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tag, void *cbdata)
@@ -847,44 +907,14 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             goto ANSWER_LAUNCH;
         }
 
-        /* The job belongs to whoever asked for it. Identity descends the job
-         * tree from the tool that started it, so an allocation an application
-         * requests is recorded against the user who launched that application
-         * - not left anonymous because the job itself never presented
-         * credentials.
-         *
-         * The one job that arrives already naming its owner is one built
-         * here in the master: the apps of a session the scheduler created
-         * for a user, which are that user's. An owner on a job from any
-         * other sender is not ours to take, and is dropped. */
-        {
-            uint32_t oid, *oidptr = &oid;
-
-            if (PMIX_CHECK_PROCID_STRICT(sender, PRTE_PROC_MY_NAME) &&
-                prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID,
-                                   (void **) &oidptr, PMIX_UINT32)) {
-                jdata->uid = (uid_t) oid;
-                jdata->gid = PRTE_INVALID_GID;
-                if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID,
-                                       (void **) &oidptr, PMIX_UINT32)) {
-                    jdata->gid = (gid_t) oid;
-                }
-            } else {
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_OWNER_UID);
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_OWNER_GID);
-                parent = prte_get_job_data_object(nptr->nspace);
-                if (NULL != parent) {
-                    jdata->uid = parent->uid;
-                    jdata->gid = parent->gid;
-                }
-            }
-        }
-        /* a job we launch ourselves - prterun's own - is our user's, and
-         * our daemon job records no identity to inherit */
-        if (PRTE_INVALID_UID == jdata->uid &&
-            PMIX_CHECK_NSPACE(nptr->nspace, PRTE_PROC_MY_NAME->nspace)) {
-            jdata->uid = prte_process_info.euid;
-            jdata->gid = prte_process_info.egid;
+        /* The job belongs to whoever asked for it - see
+         * prte_plm_base_job_owner. A job whose requester's job we do not
+         * hold has no owner to run as, and must not run as us instead. */
+        rc = prte_plm_base_job_owner(jdata, sender, nptr);
+        if (PRTE_SUCCESS != rc) {
+            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-plm-base.txt", "requester-unknown",
+                           true, PRTE_JOB_NSPACE(jdata), PRTE_NAME_PRINT(nptr));
+            goto ANSWER_LAUNCH;
         }
         /* and every daemon tells its PMIx server who owns the job when it
          * registers it - PMIx decides who may access a job's data by that */
