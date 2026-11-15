@@ -215,44 +215,30 @@ static bool valid_relative(const char *s)
 }
 
 /*
- * Split a host entry into its optional username and the node name.
+ * Take the node name out of a host entry.
  *
- * A name may carry the account to reach it with, written in front and
- * separated by a single "@".  Anything else with an "@" in it is neither a
- * hostname nor a "user@hostname", and has to be refused by name, file and
- * line like every other failure here.
- *
- * Do not reach for PMIx_Argv_split() to do this.  It drops empty fields, so
- * "someone@" is one field and "@hostA" and "someone@@hostA" are two, and
- * all three were accepted: the first as a node named "someone", which a
- * launcher then tries to reach.
+ * An entry is a host's name and nothing more. "user@host" used to name an
+ * account to reach the host as, and the launcher logged in to it as that
+ * account - so the daemon there ran as a user other than the DVM's own,
+ * which nothing in the DVM is built for: that daemon holds the DVM's key
+ * like any other. So an entry naming an account is refused, by name, file
+ * and line, rather than having its account dropped and the host reached as
+ * our own user, which is not what the file asked for.
  */
-static int hostfile_parse_username(const char *value, char **username, char **node_name)
+static int hostfile_parse_host(const char *value, char **node_name)
 {
-    const char *at;
-    size_t len;
-
-    at = strchr(value, '@');
-    if (NULL == at) {
-        *node_name = strdup(value);
-        return PRTE_SUCCESS;
-    }
-    if (at == value || '\0' == at[1] || NULL != strchr(at + 1, '@')) {
+    if (NULL != strchr(value, '@')) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "user-host", true,
                        cur_hostfile_name, cur_hostfile_line, value);
         return PRTE_ERR_SILENT;
     }
-    len = (size_t) (at - value);
-    *username = (char *) malloc(len + 1);
-    memcpy(*username, value, len);
-    (*username)[len] = '\0';
-    *node_name = strdup(at + 1);
+    *node_name = strdup(value);
     return PRTE_SUCCESS;
 }
 
 /* Put a node on the exclude list, or note another name for one already
  * there.  The leading "^" has been stripped by the caller. */
-static void hostfile_exclude(const char *node_name, const char *username, pmix_list_t *exclude,
+static void hostfile_exclude(const char *node_name, pmix_list_t *exclude,
                              prte_node_index_t *eidx)
 {
     prte_node_t *node;
@@ -265,10 +251,6 @@ static void hostfile_exclude(const char *node_name, const char *username, pmix_l
     if (NULL == node) {
         node = PMIX_NEW(prte_node_t);
         node->name = strdup(node_name);
-        if (NULL != username) {
-            prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
-                               (void *) username, PMIX_STRING);
-        }
         pmix_list_append(exclude, &node->super);
         prte_node_index_append(eidx, node);
     } else if (0 != strcmp(node_name, node->name)) {
@@ -291,7 +273,6 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
     bool rank_form = false;
     bool excluded;
     char *node_name = NULL;
-    char *username = NULL;
     const char *entry;
     hostfile_key_t key;
     int i, rc, count;
@@ -344,7 +325,7 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
      * there was no user, and otherwise gave the user a name starting with
      * "^" and counted the host as one more slot of a node to use. */
     excluded = ('^' == entry[0]);
-    rc = hostfile_parse_username(excluded ? entry + 1 : entry, &username, &node_name);
+    rc = hostfile_parse_host(excluded ? entry + 1 : entry, &node_name);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
@@ -354,9 +335,8 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
             free(node_name);
             node_name = strdup(prte_process_info.nodename);
         }
-        hostfile_exclude(node_name, username, exclude, eidx);
+        hostfile_exclude(node_name, exclude, eidx);
         free(node_name);
-        free(username);
         return PRTE_SUCCESS;
     }
 
@@ -374,10 +354,6 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
         node = PMIX_NEW(prte_node_t);
         node->name = strdup(node_name);
         node->slots = 1;
-        if (NULL != username) {
-            prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
-                               PMIX_STRING);
-        }
         pmix_list_append(updates, &node->super);
         prte_node_index_append(uidx, node);
     } else {
@@ -393,8 +369,6 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
         }
     }
     free(node_name);
-    free(username);
-    username = NULL;
 
     if (rank_form) {
         /* the slot count is the one the rankfile implied, so say it was
@@ -418,9 +392,18 @@ options:
 
         switch (key) {
         case HKEY_USERNAME:
-            prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
-                               fields[i + 2], PMIX_STRING);
-            break;
+            /* an account to reach the host as - refused, as "user@host" is
+             * (hostfile_parse_host) */
+            {
+                char *given = NULL;
+
+                pmix_asprintf(&given, "%s=%s", fields[i], fields[i + 2]);
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "user-host",
+                               true, cur_hostfile_name, cur_hostfile_line,
+                               (NULL == given) ? fields[i] : given);
+                free(given);
+            }
+            goto refuse;
 
         case HKEY_PORT:
             if (PRTE_SUCCESS != parse_count(fields[i + 2], &count)) {

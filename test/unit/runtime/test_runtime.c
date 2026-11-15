@@ -835,7 +835,7 @@ static int test_node_copy(void)
     src->slots_max = 128;
     src->slots_available = 60;
     src->session = sess;
-    prte_set_attribute(&src->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
+    prte_set_attribute(&src->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL,
                        "operator", PMIX_STRING);
 
     CHECK("nodecopy: copy succeeds", PRTE_SUCCESS == prte_node_copy(&cpy, src));
@@ -856,7 +856,8 @@ static int test_node_copy(void)
     CHECK("nodecopy: the copy answers to the alias too", prte_quickmatch(cpy, "bm07"));
     CHECK("nodecopy: session carried", sess == cpy->session);
     CHECK("nodecopy: attributes carried",
-          prte_get_attribute(&cpy->attributes, PRTE_NODE_USERNAME, (void **) &user, PMIX_STRING)
+          prte_get_attribute(&cpy->attributes, PRTE_NODE_SERIAL_NUMBER, (void **) &user,
+                             PMIX_STRING)
               && NULL != user && 0 == strcmp("operator", user));
     free(user);
 
@@ -1277,9 +1278,12 @@ static int test_node_pack_roundtrip(void)
     src->num_procs = 0xbeef;
     src->state = PRTE_NODE_STATE_UP;
     PRTE_FLAG_SET(src, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-    prte_set_attribute(&src->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_GLOBAL,
+    prte_set_attribute(&src->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_GLOBAL,
                        "svc", PMIX_STRING);
-    prte_set_attribute(&src->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL, "wn", PMIX_STRING);
+    {
+        int port = 4242;
+        prte_set_attribute(&src->attributes, PRTE_NODE_PORT, PRTE_ATTR_LOCAL, &port, PMIX_INT);
+    }
 
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
     rc = prte_node_pack(&buf, src);
@@ -1299,12 +1303,12 @@ static int test_node_pack_roundtrip(void)
         CHECK("wire: the oversubscribed flag round-trips",
               PRTE_FLAG_TEST(dst, PRTE_NODE_FLAG_OVERSUBSCRIBED));
         CHECK("wire: a GLOBAL node attribute crosses",
-              prte_get_attribute(&dst->attributes, PRTE_NODE_USERNAME, (void **) &sval,
+              prte_get_attribute(&dst->attributes, PRTE_NODE_SERIAL_NUMBER, (void **) &sval,
                                  PMIX_STRING)
                   && NULL != sval && 0 == strcmp("svc", sval));
         free(sval);
         CHECK("wire: a LOCAL node attribute does not cross",
-              !prte_get_attribute(&dst->attributes, PRTE_NODE_SERIAL_NUMBER, NULL, PMIX_STRING));
+              !prte_get_attribute(&dst->attributes, PRTE_NODE_PORT, NULL, PMIX_INT));
         PMIX_RELEASE(dst);
     }
 

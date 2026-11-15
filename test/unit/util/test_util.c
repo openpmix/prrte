@@ -806,40 +806,32 @@ static prte_node_t *find_node(pmix_list_t *list, const char *name)
     return NULL;
 }
 
-/* "user@host" in a list of hosts names the user to reach the host as. The
- * user is kept apart - the node is named for the host alone, as a hostfile
- * entry would be - and a name with characters no host or user name has is
- * refused, since it goes on the launch agent's command line. */
+/* A host in a list of hosts is a name alone. A name with characters no host
+ * name has is refused, since it goes on the launch agent's command line, and
+ * so is one naming an account to reach the host as ("user@host"). */
 static int test_dash_host_names(void)
 {
     int failures = 0;
     pmix_list_t nodes;
     prte_node_t *nd;
-    char *spec, *user;
+    char *spec;
     size_t k;
+    /* An account to reach a host as ("user@host") is refused along with the
+     * malformed names: the DVM reaches every node as its own user, so a
+     * host may not name another - and is not reached as us instead */
     const char *bad[] = {"no de", "node$x", "-node", "@node", "alice@", "a@b@c", "node'1",
-                         "alice@-node", "al;ice@node", NULL};
+                         "alice@-node", "al;ice@node", "alice@nodeU", "alice@nodeU:2",
+                         "nodeA,alice@nodeU", NULL};
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    spec = strdup("alice@nodeU:2,node_1.a-b");
-    CHECK("names: a user and a host, and a host of every allowed character",
+    spec = strdup("nodeU:2,node_1.a-b");
+    CHECK("names: a host, and a host of every allowed character",
           PRTE_SUCCESS == prte_util_add_dash_host_nodes(&nodes, spec));
     free(spec);
     nd = find_node(&nodes, "nodeU");
-    CHECK("names: the node is named for the host alone", NULL != nd && 2 == nd->slots);
-    user = NULL;
-    CHECK("names: the user is recorded apart",
-          NULL != nd &&
-          prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, (void **) &user, PMIX_STRING) &&
-          NULL != user && 0 == strcmp(user, "alice"));
-    free(user);
-    CHECK("names: and is not taken for an alias",
-          NULL == nd || NULL == nd->aliases || 0 == PMIx_Argv_count(nd->aliases));
-    CHECK("names: no node is named with the user in it", NULL == find_node(&nodes, "alice@nodeU"));
+    CHECK("names: the node is named for the host", NULL != nd && 2 == nd->slots);
     nd = find_node(&nodes, "node_1.a-b");
-    CHECK("names: dots, dashes and underscores are taken",
-          NULL != nd && !prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, NULL,
-                                            PMIX_STRING));
+    CHECK("names: dots, dashes and underscores are taken", NULL != nd);
     PMIX_LIST_DESTRUCT(&nodes);
 
     fprintf(stdout, "-- the next cases are refused; the messages they print are expected --\n");
@@ -1112,15 +1104,13 @@ static int test_hostfile(void)
     unlink(badpath);
 
     /*
-     * "user@host" names a host and the account to reach it with. Anything
-     * carrying a second "@" is neither a hostname nor a "user@hostname",
-     * and it has to be refused - by name, file and line, like every other
-     * parse failure here. It used to print a bare "WARNING: Unhandled
-     * user@host-combination" through pmix_output and abandon the rest of
-     * the file, naming neither the file nor the line, which is the least
-     * that was said about any failure and the one a user is most likely to
-     * reach by typo. Both token classes that can carry a name have to
-     * refuse it, so check the plain entry and the "rank N=<host>" form.
+     * An entry with an "@" in it names an account to reach the host with,
+     * which is refused - by name, file and line, like every other parse
+     * failure here. A malformed one (a second "@") used to print a bare
+     * "WARNING: Unhandled user@host-combination" through pmix_output and
+     * abandon the rest of the file, naming neither the file nor the line.
+     * Both token classes that can carry a name have to refuse it, so check
+     * the plain entry and the "rank N=<host>" form.
      */
     if (NULL == write_hostfile("hostA\n"
                                "someone@hostB\n",
@@ -1129,21 +1119,11 @@ static int test_hostfile(void)
         unlink(path);
         return failures + 1;
     }
+    /* an account to reach the host as is refused: the DVM reaches every
+     * node as its own user, and does not reach this one as us instead */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     rc = prte_util_add_hostfile_nodes(&nodes, badpath, prte_process_info.euid, prte_process_info.egid);
-    CHECK("a user@host entry parses", PRTE_SUCCESS == rc);
-    nd = find_node(&nodes, "hostB");
-    CHECK("and the host is the part after the @", NULL != nd);
-    if (NULL != nd) {
-        char *uname = NULL;
-        CHECK("and the user is the part before it",
-              prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, (void **) &uname,
-                                 PMIX_STRING)
-                  && NULL != uname && 0 == strcmp("someone", uname));
-        if (NULL != uname) {
-            free(uname);
-        }
-    }
+    CHECK("a user@host entry is refused", PRTE_SUCCESS != rc);
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(badpath);
 

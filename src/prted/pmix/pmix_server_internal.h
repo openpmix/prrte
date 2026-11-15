@@ -818,14 +818,13 @@ PRTE_EXPORT bool prte_pmix_server_dvm_permitted_uid(uid_t uid);
 /* May a requester have the DVM bring hosts in, or start daemons on hosts
  * it holds, naming them itself? Naming hosts - directly, or in a file of
  * them, which is read as the requester (prte_pmix_server_open_as) - is for
- * whoever may change the DVM (prte_pmix_server_dvm_permitted_uid). Naming a
- * user to reach a host as (`user` - "user@host") is for root and our own
- * user alone: the master logs in as itself. The scheduler, and a request
- * we made of ourselves, may do both. */
+ * whoever may change the DVM (prte_pmix_server_dvm_permitted_uid), the
+ * scheduler, and a request we made of ourselves. A host may not name an
+ * account to reach it as ("user@host"): every parser refuses that, from
+ * anyone, since the DVM runs no daemon as another user. */
 PRTE_EXPORT bool prte_pmix_server_grow_permitted(const pmix_proc_t *requestor,
-                                                 const pmix_info_t *info, size_t ninfo,
-                                                 bool user);
-PRTE_EXPORT bool prte_pmix_server_grow_permitted_uid(uid_t uid, bool user);
+                                                 const pmix_info_t *info, size_t ninfo);
+PRTE_EXPORT bool prte_pmix_server_grow_permitted_uid(uid_t uid);
 
 /* Who a job owned by `owner` may be started as by a process running as
  * `me`. PRTE_SUCCESS with *change false: as `me`, because it is ours or

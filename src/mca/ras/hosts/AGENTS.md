@@ -85,12 +85,10 @@ when it is selected and its scheduler is out of touch.) It serves:
   returned - and it is opened as whoever named it: the owner of the job a
   spawn's `--add-hostfile` came with (`req->jdata`), or the requester of
   an allocation. Each name must pass `prte_util_host_name_ok()` - the
-  `--host` rule - and `user@host` is split as `--host` splits it: the node
-  is `host`, and the user becomes `PRTE_NODE_USERNAME` on a node the DVM
-  does not yet hold. A `user@` is refused (`ras-base:grow-not-permitted`,
-  `PMIX_ERR_NO_PERMISSIONS`) unless whoever named the file may name a
-  login - root or the DVM's own user, the scheduler, or the master itself
-  (`prte_pmix_server_grow_permitted()`): the master logs in as itself.
+  `--host` rule - and a `user@host`, naming an account to reach the host as,
+  is refused from anyone (`ras-base:addhost-user-host`,
+  `PMIX_ERR_BAD_PARAM`), as it is in `--host`: the DVM reaches every node as
+  its own user and runs no daemon as another.
 - `PMIX_ADD_HOST` — comma-list of hosts via
   `prte_util_add_dash_host_nodes`.
 - It also claims `PMIX_ALLOC_NEW`/`EXTEND`/`RELEASE` so the base's

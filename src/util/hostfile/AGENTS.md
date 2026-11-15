@@ -38,11 +38,10 @@ is made of characters a name may contain.
 hostname                                 one slot
 hostname slots=4                         explicit count (also cpu=, count=)
 hostname slots=4 max_slots=8             also slots-max=, max-slots=, cpu_max=
-user@hostname                            username recorded as PRTE_NODE_USERNAME
+user@hostname, username=...             REFUSED: no host may name an account
 hostname port=2222                       ssh port
 ^hostname                                EXCLUDE this node
-^user@hostname                           also EXCLUDE: the "^" leads the whole entry
-192.168.1.10   /  fe80::1                IPv4 and IPv6, with or without user@
+192.168.1.10   /  fe80::1                IPv4 and IPv6
 +n3                                      relative: the 3rd node of the allocation
 +e   /  +e:2                             relative: all / N currently-empty nodes
 rank 0=hostname                           rankfile form (the rank is ignored here)
@@ -55,15 +54,18 @@ matched the hostname rule at all — it fell through to the catch-all and the
 **whole hostfile** was rejected as a parse error. `hostfile_parse_line()` had
 always known how to strip the `^` and move the node to the exclude list; it
 simply never saw one. `valid_nodename()` now takes a leading `^` on any name,
-with or without a `user@`, which is the shape that regex could not express in
-one rule. Keep the swarm case that reads a hostfile with a `^` line.
+which is the shape that regex could not express in one rule. Keep the swarm
+case that reads a hostfile with a `^` line.
 
-**Take the `^` off the entry before the user is split away.** The parser
-used to look for it on the node name after the split, which found it only
-when there was no user: `^someone@hostA` gave the user the name `^someone`,
-and — since hostA was already on the list — counted it as one more slot of
-a node to use. The exclusion that was asked for became an addition. `user@^host`
-is not a spelling of this and is refused, as the scanner refused it.
+**No entry may name an account to reach the host as.** `user@host` and the
+`username=` keys used to record `PRTE_NODE_USERNAME`, which `plm/ssh` put on
+the launch agent's command line, so the daemon there ran as a user other
+than the DVM's. The DVM runs no daemon as another user, so
+`hostfile_parse_host()` refuses any entry with an `@` in it - plain, `^`
+excluded, or the host of a `rank N=` line - and `HKEY_USERNAME` refuses the
+keys, both with the `user-host` topic, naming file and line. Refused, not
+dropped: dropping the account would reach the host as our own user, which
+is not what the file asked for.
 
 ## An exclusion-only hostfile is a selection, not an empty file
 
@@ -104,16 +106,15 @@ A hostfile is user input, and every way of getting it wrong has to come back
 as a `prte_show_help()` message out of `help-hostfile.txt` carrying
 `cur_hostfile_name` and `cur_hostfile_line`. Two failures did not:
 
-- A value that is neither `host` nor `user@host` — a second `@`, or an `@`
-  with nothing before or after it. It used to print `WARNING: Unhandled
-  user@host-combination` through `pmix_output` at two sites (the plain host
-  entry and the `rank N=<host>` form), naming neither the file nor the line,
-  and it is the failure a user is most likely to reach by typo. Both sites
-  now go through `hostfile_parse_username()` and the `user-host` topic.
-  That helper finds the `@` itself: `PMIx_Argv_split()` drops empty fields,
-  so while it was used `someone@` was a node named `someone` — added to the
-  allocation for a launcher to try to reach — and `@hostA` and
-  `someone@@hostA` were accepted as `hostA`.
+- A value with an `@` in it - which once meant an account, and a malformed
+  one (a second `@`, or nothing on one side). It used to print `WARNING:
+  Unhandled user@host-combination` through `pmix_output` at two sites (the
+  plain host entry and the `rank N=<host>` form), naming neither the file
+  nor the line. Both sites now go through `hostfile_parse_host()` and the
+  `user-host` topic, which refuses any `@`. Before that, while the split
+  was done with `PMIx_Argv_split()`, which drops empty fields, `someone@`
+  was a node named `someone` — added to the allocation for a launcher to try
+  to reach — and `@hostA` and `someone@@hostA` were accepted as `hostA`.
 - A `rank N` whose `=` never arrives. The loop that skips to the `=` runs to
   the end of the file, and the `done` arm returned a bare error with no
   message at all.
@@ -278,7 +279,7 @@ The same applies to walking a list while removing from it: save the successor
   length.
 - `test/unit/util/test_util.c` writes temporary hostfiles and parses them:
   slot counts, `max_slots`, comments, the `^` exclusion (including a duplicated
-  excluded name), a `user@host` entry and the refusal of a second `@` in both
+  excluded name), the refusal of a `user@host` entry and of a second `@` in both
   the plain and the `rank N=` form, a `rank` entry with no host, a malformed
   file, a good file parsed straight after a failed one, an exclusion-only
   filter both selecting and marking, and a missing default hostfile

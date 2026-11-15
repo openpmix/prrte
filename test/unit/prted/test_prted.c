@@ -4467,21 +4467,19 @@ static int test_access(void)
         CHECK("dvm/listed-not-job-member", !prte_pmix_server_job_permitted(ACC_LISTED, dvm));
         /* bringing hosts in: a listed user may name hosts, as it may create
          * a session, directly or in a file of them (which is read as that
-         * user) - but not a user to reach a host as, since the master logs
-         * in as itself */
-        CHECK("grow/listed names hosts", prte_pmix_server_grow_permitted(&other, info, 1, false));
-        CHECK("grow/listed may not name a user",
-              !prte_pmix_server_grow_permitted(&other, info, 1, true));
+         * user). Naming an account to reach a host as is refused from
+         * anyone, by the parsers, so it is no part of this rule */
+        CHECK("grow/listed names hosts", prte_pmix_server_grow_permitted(&other, info, 1));
         PMIX_INFO_DESTRUCT(&info[0]);
-        CHECK("grow/root may name a user", prte_pmix_server_grow_permitted_uid(0, true));
-        CHECK("grow/our user may name a user",
-              prte_pmix_server_grow_permitted_uid(prte_process_info.euid, true));
+        CHECK("grow/root names hosts", prte_pmix_server_grow_permitted_uid(0));
+        CHECK("grow/our user names hosts",
+              prte_pmix_server_grow_permitted_uid(prte_process_info.euid));
         CHECK("grow/a stranger may not name hosts",
-              !prte_pmix_server_grow_permitted_uid(ACC_STRANGER, false));
-        CHECK("grow/a request of our own may name a user",
-              prte_pmix_server_grow_permitted(PRTE_PROC_MY_NAME, NULL, 0, true));
+              !prte_pmix_server_grow_permitted_uid(ACC_STRANGER));
+        CHECK("grow/a request of our own names hosts",
+              prte_pmix_server_grow_permitted(PRTE_PROC_MY_NAME, NULL, 0));
         CHECK("grow/an unnamed request may not",
-              !prte_pmix_server_grow_permitted(&other, NULL, 0, false));
+              !prte_pmix_server_grow_permitted(&other, NULL, 0));
         id = ACC_STRANGER;
         PMIX_INFO_LOAD(&info[0], PMIX_USERID, &id, PMIX_UINT32);
         CHECK("dvm/unlisted", !prte_pmix_server_dvm_permitted(&other, info, 1));

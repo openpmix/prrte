@@ -871,9 +871,10 @@ static bool ras_base_session_has_daemons(prte_session_t *session)
 
 /* Does this request bring hosts into the DVM, or start daemons on hosts it
  * holds, by naming them - and does it name them in a file (`files`, which
- * only changes what a refusal says), or name a user to reach a host as
- * (`user`)? A node list is looked at as it will be read, so a user hidden
- * in a regex is seen. A user inside a file is found when it is read. */
+ * only changes what a refusal says), or name an account to reach a host as
+ * (`user`, "user@host", which is refused from anyone)? A node list is looked
+ * at as it will be read, so an account hidden in a regex is seen. One
+ * inside a file is found when the file is read. */
 static bool ras_base_names_hosts(prte_pmix_server_req_t *req, bool *files, bool *user)
 {
     bool named = false, activate = false;
@@ -1189,25 +1190,32 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
 
     /* Naming hosts to bring into the DVM, or to start daemons on, is for
      * whoever may change the DVM - whether named directly or in a file of
-     * them, which is read as the requester - and naming a user to reach a
-     * host as, for root and our own user alone
-     * (prte_pmix_server_grow_permitted). Activation is served here, so it
-     * is always judged here; a grow is judged here unless a scheduler is to
-     * decide it. */
+     * them, which is read as the requester (prte_pmix_server_grow_permitted).
+     * Activation is served here, so it is always judged here; a grow is
+     * judged here unless a scheduler is to decide it. A host naming an
+     * account to reach it as is refused from anyone, and before a scheduler
+     * is asked: the DVM runs no daemon as another user, so it would only
+     * refuse the grant once the scheduler had made it. */
     {
-        bool files, user, activate = false;
+        bool files, user, named, activate = false;
 
 #if defined(PMIX_ALLOC_ACTIVATE)
         activate = (PMIX_ALLOC_ACTIVATE == req->allocdir);
 #endif
-        if (ras_base_names_hosts(req, &files, &user) &&
-            (activate || !ras_base_scheduler_decides()) &&
-            !prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo, user)) {
+        named = ras_base_names_hosts(req, &files, &user);
+        if (user) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:user-host", true,
+                           PMIx_Alloc_directive_string(req->allocdir));
+            req->pstatus = PMIX_ERR_BAD_PARAM;
+            goto respond;
+        }
+        if (named && (activate || !ras_base_scheduler_decides()) &&
+            !prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo)) {
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
                            "ras-base:grow-not-permitted", true,
                            PMIx_Alloc_directive_string(req->allocdir),
-                           user ? "a user to reach a host as"
-                                : (files ? "a file of hosts" : "hosts"));
+                           files ? "a file of hosts" : "hosts");
             req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }

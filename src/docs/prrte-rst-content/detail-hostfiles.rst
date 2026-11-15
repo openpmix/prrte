@@ -40,27 +40,21 @@ than 1 MiB; a larger file is refused with a message saying which limit
 it met. The same limits apply to a rankfile and to a sequence file
 (``--map-by seq``).
 
-A node name may carry the account PRRTE is to use when reaching that
-node, written in front of it and separated by a single ``@``:
-
-.. code:: sh
-
-   user01@node01  slots=4
-
-An entry may contain at most one ``@``, and both the account and the
-node name must be given: a second ``@``, or an ``@`` with nothing on
-one side of it, is reported as a parse error naming the hostfile and
-the line it is on.
+An entry names a node and nothing else. PRRTE reaches every node as the
+user the DVM runs as, and does not start a daemon as any other user, so
+an entry may not name an account to reach the node as: ``user@node`` and
+the ``username=`` keyword are refused as parse errors, naming the
+hostfile and the line. So is a rankfile entry naming one.
 
 A node name written with a leading ``^`` is *excluded* rather than
-used.  The ``^`` goes in front of the whole entry, account included:
+used:
 
 .. code:: sh
 
    node01  slots=4
    node02  slots=4
    node03  slots=4
-   ^user01@node02
+   ^node02
 
 Where the hostfile also names nodes, an exclusion takes a node back
 out of what it named |mdash| the file above names ``node01`` and

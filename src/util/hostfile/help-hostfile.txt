@@ -443,13 +443,13 @@ PRTE detected a parse error in the hostfile:
 
    %s
 
-The entry on line number %d is not a hostname or a "user@hostname":
+The entry on line number %d names an account to reach the host as:
 
    %s
 
-An entry may name at most one user, in the form "user@hostname", and both
-the user and the hostname must be given. Please correct the hostfile and
-try again.
+The DVM reaches every node as the user it runs as, and runs no daemon as
+any other user, so a hostfile may not name an account - neither as
+"user@hostname" nor with "username=". Remove it and try again.
 #
 [parse_error]
 
@@ -462,7 +462,7 @@ Line number %d could not be understood. The parser stopped at:
    %s
 
 A line names one host, optionally followed by any of "slots=",
-"max_slots=", "username=" and "port=", each with a value.
+"max_slots=" and "port=", each with a value.
 #
 [not-all-mapped-alloc]
 

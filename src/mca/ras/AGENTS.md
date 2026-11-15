@@ -232,16 +232,11 @@ and groups `--rtos users=`/`groups=` named when it started. A file of hosts
 (`PMIX_ADD_HOSTFILE`, an activation's `PMIX_HOSTFILE`) is held to the same
 rule as the hosts it names, since it is read as whoever named it - a job's
 owner (`prte_pmix_server_job_user()`) or the request's requester
-(`prte_pmix_server_request_user()`) - through `prte_textfile_open()`. The
-one thing the master does *as itself* is narrower: logging in as a named
-user (`user@host`) is for root and the DVM's own user alone, and `ras/hosts`
-refuses a `user@` found inside a file it reads for anyone else
-(`process_hostfile()`). It is judged in three places, with the same rule:
+(`prte_pmix_server_request_user()`) - through `prte_textfile_open()`. It
+is judged in three places, with the same rule:
 
 - `prte_ras_base_modify()`, for an allocation request: a NEW or EXTEND that
-  names nodes (`ras_base_names_hosts()`, which reads a node list through
-  `prte_ras_base_parse_node_list()` so a user inside a regex is seen), and
-  every ACTIVATE. A grow is not judged there when `ras/pmix` is the
+  names nodes (`ras_base_names_hosts()`), and every ACTIVATE. A grow is not judged there when `ras/pmix` is the
   selected module: its scheduler decides, and is told who asked
   (`PMIX_REQUESTOR`). Every other module acts on the names itself.
   An allocation a spawn carries (`PMIX_SPAWN_ALLOC`) comes here too, built
@@ -254,9 +249,9 @@ refuses a `user@` found inside a file it reads for anyone else
   `PMIX_SESSION_INSTANTIATE` and `PMIX_SESSION_EXTEND`. These are the
   scheduler's directives to the DVM, not requests for resources - a user
   asks for those through `prte_ras_base_modify()` - so with no scheduler
-  both are for whoever may change the DVM, the session's owner included; a
-  `user@host` in either is for root and our own user alone. These requests reach `prte_ras_base_insert_node_string()`
-  directly and never pass through `prte_ras_base_modify()`.
+  both are for whoever may change the DVM, the session's owner included.
+  These requests reach `prte_ras_base_insert_node_string()` directly and
+  never pass through `prte_ras_base_modify()`.
 - spawn admission (`plm_base_receive.c`): `--add-host`, `--add-hostfile`
   and `--activate` (`grow_directive()`). The request
   `prte_ras_base_add_hosts()` then builds names the master as its
@@ -276,11 +271,22 @@ the DVM choose which nodes go, so it is held to
 `prte_pmix_server_dvm_permitted()` as well. A refusal shows
 `ras-base:release-not-permitted`.
 
-`user@host` in a list of hosts (`prte_util_add_dash_host_nodes()`) is split
-the way a hostfile entry is: the node is named for the host, and the user is
-kept as `PRTE_NODE_USERNAME` for the launch agent. A name with any character
-other than letters, digits, `.`, `-` and `_` is refused
-(`dash-host:invalid-name`), since it goes on that agent's command line.
+**No host may name an account to reach it as.** `user@host`, and a
+hostfile's `username=`, used to set `PRTE_NODE_USERNAME`, which `plm/ssh`
+put on the launch agent's command line - so the daemon on that node ran as
+some other user than the DVM's, with the DVM's key like any other. Nothing
+in the DVM is built for that, and the attribute is gone: every parser
+refuses such an entry, from anyone - `prte_util_add_dash_host_nodes()`
+(`dash-host:user-host`, which covers `--host`, `PMIX_HOST`/`PMIX_ADD_HOST`
+and every allocation and session node list), the hostfile parser
+(`user-host`), the rankfile parser, and `ras/hosts`' add-hostfile reader.
+Refused, not dropped: reaching the host as our own user instead is not what
+was asked for. An allocation request naming one is refused in
+`prte_ras_base_modify()` (`ras-base:user-host`, `PMIX_ERR_BAD_PARAM`) before
+a scheduler is asked, and a session directive in `parse_directives()`, so
+neither is granted and then refused. A name with any other character than
+letters, digits, `.`, `-` and `_` is refused (`dash-host:invalid-name`),
+since it goes on the launch agent's command line.
 
 A non-elastic DVM used to serve these. An `--add-host` launched its daemon,
 and when that daemon failed to start the requester waited forever on a daemon

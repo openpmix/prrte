@@ -121,35 +121,6 @@ static int parse_rank(const char *value, int *result)
     return PRTE_SUCCESS;
 }
 
-/*
- * Take the node name out of a "<host>" or "<user>@<host>" field, or return
- * NULL if the field is neither.
- *
- * The user half is dropped.  That is what this parser has always done, and
- * it is worth knowing that it differs from the hostfile parser, which keeps
- * it as a node attribute: a rankfile record has nowhere to put it.  Saying
- * "username=" outright is refused as unsupported, so the two spellings of
- * the same thing get two different answers; changing that means giving the
- * record somewhere to keep it.
- *
- * Both halves must be there, and there is one "@".  PMIx_Argv_split() is
- * not the tool for this: it drops empty fields, so "someone@" came back as
- * a node named "someone", and "@nodeA" and "someone@@nodeA" as nodeA.
- */
-static char *node_from_entry(const char *entry)
-{
-    const char *at;
-
-    at = strchr(entry, '@');
-    if (NULL == at) {
-        return strdup(entry);
-    }
-    if (at == entry || '\0' == at[1] || NULL != strchr(at + 1, '@')) {
-        return NULL;
-    }
-    return strdup(at + 1);
-}
-
 void prte_util_rankfile_clear(pmix_hash_table_t *rankmap)
 {
     prte_rankfile_map_t *rfmap;
@@ -239,12 +210,16 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
             goto cleanup;
         }
 
-        node_name = node_from_entry(fields[3]);
-        if (NULL == node_name) {
-            /* more than one "@": neither a hostname nor a "user@hostname" */
-            rankfile_syntax_error(fields[3]);
+        /* "user@host" names an account to reach the host as. This parser
+         * used to drop the account and keep the host, which is not what the
+         * file asked for; the DVM reaches every node as its own user, so the
+         * entry is refused, as "username=" below and as a hostfile's are. */
+        if (NULL != strchr(fields[3], '@')) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt",
+                           "not-supported-rankfile", true, "user@host", rankfile);
             goto cleanup;
         }
+        node_name = strdup(fields[3]);
 
         /* strip the FQDN if we are not keeping them, but never off an
          * address, whose dots are not domain separators */

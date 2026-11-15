@@ -1135,14 +1135,14 @@ static int test_hosts_add_hostfile(void)
     char dir[] = "/tmp/prte-ras-addhf-XXXXXX";
     char *path = NULL;
     size_t n;
-    prte_node_t *hnp;
     struct {
         const char *content;
         bool accepted;
     } cases[] = {
         {"prte-unit-test-hnp\n", true},
         {"prte-unit-test-hnp slots=1\n", true},
-        {"someuser@prte-unit-test-hnp\n", true},
+        /* an account to reach the host as is refused, from anyone */
+        {"someuser@prte-unit-test-hnp\n", false},
         {"# a comment\n\n  prte-unit-test-hnp\n", true},
         {"bad$name\n", false},
         {"-oops\n", false},
@@ -1165,7 +1165,6 @@ static int test_hosts_add_hostfile(void)
     if (NULL == mod->modify || NULL == mkdtemp(dir)) {
         return failures + 1;
     }
-    hnp = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
 
     /* a FIFO with no writer: refused, and at once */
     pmix_asprintf(&path, "%s/fifo", dir);
@@ -1207,10 +1206,14 @@ static int test_hosts_add_hostfile(void)
             CHECK(label, PMIX_OPERATION_SUCCEEDED != rc);
         }
     }
-    /* A file of hosts is read as whoever named it. A requester that is our
-     * own user reads it, and may name a login */
+    /* A file of hosts is read as whoever named it - and an account to reach
+     * a host as is refused even from our own user, who may otherwise name
+     * any host */
     CHECK("addhf: write hostfile", 0 == write_hostfile(path, "someuser@prte-unit-test-hnp\n"));
-    CHECK("addhf: our own user may name a login",
+    CHECK("addhf: not even our own user may name an account",
+          PMIX_ERR_BAD_PARAM == hosts_add_hostfile_as(mod, path, prte_process_info.euid));
+    CHECK("addhf: write hostfile", 0 == write_hostfile(path, "prte-unit-test-hnp\n"));
+    CHECK("addhf: our own user may name the host",
           PMIX_OPERATION_SUCCEEDED == hosts_add_hostfile_as(mod, path, prte_process_info.euid));
     /* another user's request is read as that user, which a process not
      * running as root cannot become - so here the file cannot be opened
@@ -1225,12 +1228,6 @@ static int test_hosts_add_hostfile(void)
     free(path);
     rmdir(dir);
 
-    /* the user named for a node the DVM already holds is not recorded on
-     * it - its daemon is already there */
-    if (NULL != hnp) {
-        CHECK("addhf: an existing node is not given a user",
-              !prte_get_attribute(&hnp->attributes, PRTE_NODE_USERNAME, NULL, PMIX_STRING));
-    }
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_hosts_add_hostfile\n");

@@ -59,8 +59,17 @@ A host in an add-hostfile is not a name a host can have:
   File: %s
 
 A host's name is made of letters, digits, ".", "-" and "_", and does
-not begin with "-". It may be preceded by "user@" to name the user to
-reach the host as, which follows the same rule.
+not begin with "-".
+#
+[ras-base:addhost-user-host]
+A host in an add-hostfile names an account to reach it as:
+
+  Host: %s
+  File: %s
+
+The DVM reaches every node as the user it runs as, and runs no daemon as
+any other user, so a host may not be given as "user@host". Remove the
+account and try again.
 #
 [negative-slots]
 A host was provided in an add-hostfile that is unknown
@@ -219,6 +228,16 @@ A request named a node that another session holds:
 A session keeps its nodes until it ends or releases them, so they cannot
 be given to another session or reservation. The request was refused.
 #
+[ras-base:user-host]
+A request naming hosts was refused, because a host in it names an account
+to reach it as ("user@host"):
+
+  Request:  %s
+
+The DVM reaches every node as the user it runs as, and runs no daemon as
+any other user, so a host may not name an account. Remove it and try
+again.
+#
 [ras-base:grow-not-permitted]
 A request to bring hosts into the DVM was refused, because the user
 who made it may not ask for what it named:
@@ -229,10 +248,8 @@ who made it may not ask for what it named:
 Bringing hosts into a DVM changes what it consists of, and is for root,
 the user the DVM runs as, and the users and groups the DVM was started
 with ("--rtos users=..." and "groups=..."). A file of hosts is read as
-the user who named it, and its hosts are judged the same way. A user to
-reach a host as ("user@host"), whether in the request or in a file of
-hosts, is accepted only from root and the user the DVM runs as, since
-the DVM logs in as that user. A session control directive to instantiate
+the user who named it, and its hosts are judged the same way. A session
+control directive to instantiate
 or extend a session is held to the same rules, including when it comes
 from the session's owner: a user asks for more resources with an
 allocation request, which the scheduler decides.

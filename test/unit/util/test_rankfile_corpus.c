@@ -21,13 +21,6 @@
  *
  * What is still wrong as things stand:
  *
- *  - "username=" is refused with a message calling it unsupported, while
- *    "user@host" on the same line is accepted and the user half discarded.
- *    The hostfile parser keeps the user as a node attribute; a rankfile
- *    record has nowhere to put one, so the two spellings of the same thing
- *    get two different answers.  Changing that means giving the record
- *    somewhere to keep it.
- *
  *  - "rank" with no number is refused, but a line that names a rank and a
  *    node and then stops is accepted and contributes a record with no slot
  *    list at all.
@@ -222,7 +215,10 @@ static const corpus_case_t corpus[] = {
     {"fqdn", "rank 0=node01.example.com slot=0\n", "rc=ok nranks=1 | 0:node01/0"},
     {"ipv4", "rank 0=10.0.0.1 slot=0\n", "rc=ok nranks=1 | 0:10.0.0.1/0"},
     {"ipv6", "rank 0=fe80::1 slot=0\n", "rc=ok nranks=1 | 0:fe80::1/0"},
-    {"user@host", "rank 0=someone@nodeA slot=0\n", "rc=ok nranks=1 | 0:nodeA/0"},
+    /* an account to reach the host as is refused, as "username=" is: it
+     * used to be dropped and the host reached as some other user than the
+     * one the file named */
+    {"user@host is refused", "rank 0=someone@nodeA slot=0\n", "rc=err5 nranks=0"},
     {"a name that is all digits", "rank 0=12345 slot=0\n", "rc=ok nranks=1 | 0:12345/0"},
     {"name with a dash", "rank 0=node-01 slot=0\n", "rc=ok nranks=1 | 0:node-01/0"},
     {"slots is a synonym for slot", "rank 0=nodeA slots=0\n", "rc=ok nranks=1 | 0:nodeA/0"},

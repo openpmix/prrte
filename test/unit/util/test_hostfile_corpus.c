@@ -93,7 +93,6 @@ static char *render(int rc, pmix_list_t *nodes)
     prte_node_t *nd;
     char *out = NULL, *tmp;
     char buf[512];
-    char *uname;
     int port, *portptr;
     int i;
 
@@ -112,16 +111,6 @@ static char *render(int rc, pmix_list_t *nodes)
         free(out);
         out = tmp;
 
-        uname = NULL;
-        if (prte_get_attribute(&nd->attributes, PRTE_NODE_USERNAME, (void **) &uname, PMIX_STRING)
-            && NULL != uname) {
-            pmix_asprintf(&tmp, "%s user=%s", out, uname);
-            free(out);
-            out = tmp;
-        }
-        if (NULL != uname) {
-            free(uname);
-        }
 
         /* a scalar attribute is fetched through a pointer the caller
          * already aimed at its own storage -- see plm_ssh_module.c */
@@ -189,12 +178,10 @@ static const corpus_case_t corpus[] = {
     {"slots", "hostA slots=4\nhostB slots=2\n", "rc=ok | hostA slots=4 max=0 given=1 | hostB slots=2 max=0 given=1"},
     {"slots and max", "hostA slots=2 max_slots=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
     {"max alone", "hostA max_slots=8\n", "rc=ok | hostA slots=8 max=8 given=1"},
-    {"user@host", "someone@hostA\n", "rc=ok | hostA slots=1 max=0 given=0 user=someone"},
     {"port", "hostA port=2222\n", "rc=ok | hostA slots=1 max=0 given=0 port=2222"},
     {"repeat accumulates slots", "hostA\nhostA\nhostA\n", "rc=ok | hostA slots=3 max=0 given=1"},
     {"exclusion", "hostA\nhostB\n^hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
     {"exclusion of a name not present", "hostA\n^hostZ\n", "rc=ok | hostA slots=1 max=0 given=0"},
-    {"exclusion carrying a user@", "hostA\nhostB\n^someone@hostA\n", "rc=ok | hostB slots=1 max=0 given=0"},
 
     /* --- comments and whitespace ---------------------------------- */
     {"hash comment", "# comment\nhostA\n# another\n", "rc=ok | hostA slots=1 max=0 given=0"},
@@ -230,26 +217,30 @@ static const corpus_case_t corpus[] = {
     /* --- name forms ------------------------------------------------ */
     {"fqdn", "node01.example.com slots=2\n", "rc=ok | node01.example.com slots=2 max=0 given=1"},
     {"ipv4", "10.0.0.1 slots=2\n", "rc=ok | 10.0.0.1 slots=2 max=0 given=1"},
-    {"user@ipv4", "someone@10.0.0.1\n", "rc=ok | 10.0.0.1 slots=1 max=0 given=0 user=someone"},
-    {"user@fqdn", "someone@node01.example.com\n", "rc=ok | node01.example.com slots=1 max=0 given=0 user=someone"},
     {"ipv6", "fe80::1 slots=2\n", "rc=ok | fe80::1 slots=2 max=0 given=1"},
     {"excluded fqdn", "node01.example.com\nhostB\n^node01.example.com\n", "rc=ok | hostB slots=1 max=0 given=0"},
     {"a name that is all digits", "12345 slots=2\n", "rc=ok | 12345 slots=2 max=0 given=1"},
     {"name with a dash", "host-01 slots=2\n", "rc=ok | host-01 slots=2 max=0 given=1"},
     {"name with an underscore", "host_01 slots=2\n", "rc=ok | host_01 slots=2 max=0 given=1"},
 
-    /* --- the username= and port= keyword forms ---------------------- */
-    {"username keyword", "hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"user-name keyword", "hostA user-name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"user_name keyword", "hostA user_name=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
-    {"username with a dot", "hostA username=bob.smith\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob.smith"},
-    {"username keyword beats user@", "alice@hostA username=bob\n", "rc=ok | hostA slots=1 max=0 given=0 user=bob"},
+    /* --- an account to reach a host as: refused, in every form ------
+     * The DVM reaches every node as its own user and runs no daemon as
+     * another, so neither "user@host" nor "username=" is accepted - not
+     * even in an exclusion, or on a rankfile line read as a hostfile. */
+    {"user@host", "someone@hostA\n", "rc=err43"},
+    {"user@ipv4", "someone@10.0.0.1\n", "rc=err43"},
+    {"user@fqdn", "someone@node01.example.com\n", "rc=err43"},
+    {"exclusion carrying a user@", "hostA\nhostB\n^someone@hostA\n", "rc=err43"},
+    {"username keyword", "hostA username=bob\n", "rc=err43"},
+    {"user-name keyword", "hostA user-name=bob\n", "rc=err43"},
+    {"user_name keyword", "hostA user_name=bob\n", "rc=err43"},
+    {"username keyword with user@", "alice@hostA username=bob\n", "rc=err43"},
+    {"rank line with user@", "rank 0=someone@hostA slot=0\n", "rc=err43"},
 
     /* --- a rankfile read as a hostfile ------------------------------ */
     {"rank lines", "rank 0=hostA slot=0-1\nrank 1=hostB slot=2-3\n", "rc=ok | hostA slots=1 max=0 given=1 | hostB slots=1 max=0 given=1"},
     {"rank lines repeating a host", "rank 0=hostA slot=0\nrank 1=hostA slot=1\n",
      "rc=ok | hostA slots=2 max=0 given=1"},
-    {"rank line with user@", "rank 0=someone@hostA slot=0\n", "rc=ok | hostA slots=1 max=0 given=1 user=someone"},
 
     /* --- refusals --------------------------------------------------- */
     {"a second @", "a@b@hostA\n", "rc=err43"},
