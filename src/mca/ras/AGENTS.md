@@ -490,8 +490,12 @@ input list.** Walk it carefully before touching allocation code:
   `launch_orted_on_hn` + `NO_USE_LOCAL` handling can instead rename the
   HNP node to `"prte"`, flag it `PRTE_NODE_NON_USABLE`, and skip the
   dedup so the head node is left out of mapping.
-- **General dedup.** For every other node, an exhaustive `prte_nptr_match`
-  scan of the pool decides add-vs-update. `PRTE_NODE_ADD_SLOTS` means
+- **General dedup.** For every other node, the first pool entry
+  `prte_nptr_match` accepts decides add-vs-update - found in a
+  `prte_node_index_t` of the pool built for the insert (`insert_list()`),
+  not by walking the pool per node, which made inserting a large allocation
+  quadratic. The index is built after the HNP rename below and grows with
+  every node inserted, copies included. `PRTE_NODE_ADD_SLOTS` means
   "adjust the existing slot count" (clamped to `[0, slots_max]`) rather
   than replace it. **On a match the incoming object is released and the
   loop moves on**: the pool entry is authoritative, so the duplicate must

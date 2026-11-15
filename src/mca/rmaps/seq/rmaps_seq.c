@@ -604,7 +604,10 @@ static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid)
     failed = tf.failed;
     prte_textfile_close(&tf);
     if (failed) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed", true, path);
+        if (!prte_textfile_report_limit(&tf, PRTE_PROC_MY_NAME->nspace, path)) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed",
+                           true, path);
+        }
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;

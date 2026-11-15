@@ -195,7 +195,8 @@ int test_textfile(void)
     /* --- a line longer than any fixed buffer ------------------------
      * A line read in pieces would have its remainder read as a record of
      * its own.  A rankfile naming a long cpu list is not an absurd thing
-     * to write, so the reader must not have a maximum line length at all. */
+     * to write, so a line is read whole, up to PRTE_TEXTFILE_MAX_LINE -
+     * far longer than any such list; past it the file is refused, below. */
     big = (char *) malloc(9000);
     want = (char *) malloc(9000);
     if (NULL != big && NULL != want) {
@@ -283,6 +284,100 @@ int test_textfile(void)
     }
     /* ...and closing a file that was never opened, twice, is harmless */
     prte_textfile_close(&tf);
+
+    /* --- what a file may hold ---------------------------------------
+     * These files are read on the DVM master's progress thread, so what
+     * one may hold is bounded: a line past PRTE_TEXTFILE_MAX_LINE, or a
+     * file past PRTE_TEXTFILE_MAX_BYTES, stops the read with "failed" and
+     * says which ("limit"), and no line is held whole on the way. */
+    {
+        char path[256];
+        FILE *fp;
+        size_t k;
+        char **f;
+
+        snprintf(path, sizeof(path), "prte_tf_limit_%lu.txt", (unsigned long) getpid());
+
+        /* a line of exactly the limit is read */
+        fp = fopen(path, "w");
+        if (NULL != fp) {
+            for (k = 0; k < PRTE_TEXTFILE_MAX_LINE; k++) {
+                fputc('a', fp);
+            }
+            fputs("\nhostB\n", fp);
+            fclose(fp);
+            CHECK("a line at the limit opens",
+                  PRTE_SUCCESS == prte_textfile_open(&tf, path, geteuid(), getegid()));
+            f = prte_textfile_next(&tf);
+            CHECK("a line at the limit is read whole",
+                  NULL != f && PRTE_TEXTFILE_MAX_LINE == strlen(f[0]));
+            f = prte_textfile_next(&tf);
+            CHECK("...and the next line after it",
+                  NULL != f && 0 == strcmp(f[0], "hostB") && !tf.failed);
+            prte_textfile_close(&tf);
+        }
+
+        /* one byte more is refused, at that line */
+        fp = fopen(path, "w");
+        if (NULL != fp) {
+            fputs("hostA\n", fp);
+            for (k = 0; k <= PRTE_TEXTFILE_MAX_LINE; k++) {
+                fputc('a', fp);
+            }
+            fputs("\nhostB\n", fp);
+            fclose(fp);
+            CHECK("a long line's file opens",
+                  PRTE_SUCCESS == prte_textfile_open(&tf, path, geteuid(), getegid()));
+            f = prte_textfile_next(&tf);
+            CHECK("the line before a long one is read", NULL != f && 0 == strcmp(f[0], "hostA"));
+            CHECK("a line past the limit stops the read", NULL == prte_textfile_next(&tf));
+            CHECK("...as a failure", tf.failed);
+            CHECK("...at the line limit, on its line",
+                  PRTE_TEXTFILE_LIMIT_LINE == tf.limit && 2 == tf.lineno);
+            prte_textfile_close(&tf);
+            CHECK("...which survives the close", PRTE_TEXTFILE_LIMIT_LINE == tf.limit);
+        }
+
+        /* a file larger than the limit is refused before a byte is read */
+        fp = fopen(path, "w");
+        if (NULL != fp) {
+            fclose(fp);
+            if (0 == truncate(path, (off_t) PRTE_TEXTFILE_MAX_BYTES + 1)) {
+                CHECK("a file past the size limit opens",
+                      PRTE_SUCCESS == prte_textfile_open(&tf, path, geteuid(), getegid()));
+                CHECK("...and reads nothing", NULL == prte_textfile_next(&tf));
+                CHECK("...as a failure, at the size limit",
+                      tf.failed && PRTE_TEXTFILE_LIMIT_SIZE == tf.limit);
+                prte_textfile_close(&tf);
+            } else {
+                fprintf(stdout, "  SKIP textfile size-limit case (truncate failed)\n");
+            }
+        }
+
+        /* the raw reader, for a reader with a syntax of its own */
+        fp = fopen(path, "w");
+        if (NULL != fp) {
+            char *line;
+
+            fputs("hostA # kept\n\nhostB", fp);
+            fclose(fp);
+            CHECK("the raw reader opens",
+                  PRTE_SUCCESS == prte_textfile_open(&tf, path, geteuid(), getegid()));
+            line = prte_textfile_getline(&tf);
+            CHECK("a raw line keeps its comment", NULL != line && 0 == strcmp(line, "hostA # kept"));
+            free(line);
+            line = prte_textfile_getline(&tf);
+            CHECK("an empty raw line is a line", NULL != line && 0 == strcmp(line, ""));
+            free(line);
+            line = prte_textfile_getline(&tf);
+            CHECK("a last raw line needs no newline", NULL != line && 0 == strcmp(line, "hostB"));
+            free(line);
+            CHECK("...and then the end, clean", NULL == prte_textfile_getline(&tf) && !tf.failed);
+            CHECK("...having counted its lines", 3 == tf.lineno);
+            prte_textfile_close(&tf);
+        }
+        unlink(path);
+    }
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_textfile\n");

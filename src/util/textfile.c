@@ -20,6 +20,7 @@
 #include "constants.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_string_copy.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/textfile.h"
 
 /* A carriage return is whitespace here, which it was not to the lexer this
@@ -150,6 +151,14 @@ int prte_textfile_open(prte_textfile_t *tf, const char *path, uid_t uid, gid_t g
         close(fd);
         return PRTE_ERR_BAD_PARAM;
     }
+    if ((off_t) PRTE_TEXTFILE_MAX_BYTES < sbuf.st_size) {
+        /* opened, and nothing to read: the first read reports the limit,
+         * which is where every caller already looks for a failure */
+        close(fd);
+        tf->failed = true;
+        tf->limit = PRTE_TEXTFILE_LIMIT_SIZE;
+        return PRTE_SUCCESS;
+    }
     flags = fcntl(fd, F_GETFL);
     if (0 > flags || 0 > fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)) {
         close(fd);
@@ -163,12 +172,115 @@ int prte_textfile_open(prte_textfile_t *tf, const char *path, uid_t uid, gid_t g
     return PRTE_SUCCESS;
 }
 
+/*
+ * One physical line, without its newline, in storage the caller frees -
+ * pmix_getline(), with the limits: a NUL byte or a read error fails the
+ * line, and so does a line longer than PRTE_TEXTFILE_MAX_LINE or a file
+ * that has grown past PRTE_TEXTFILE_MAX_BYTES since it was opened. Each is
+ * stopped where it is met, so neither is ever held in memory whole.
+ */
+static char *read_line(prte_textfile_t *tf)
+{
+    char *line = NULL, *grown;
+    size_t len = 0, size = 0;
+    bool started = false;
+    int c;
+
+    for (;;) {
+        c = getc(tf->fp);
+        if (EOF == c) {
+            if (ferror(tf->fp)) {
+                goto fail;
+            }
+            /* a final line with no newline is still a line */
+            break;
+        }
+        started = true;
+        if (PRTE_TEXTFILE_MAX_BYTES <= tf->bytes) {
+            tf->limit = PRTE_TEXTFILE_LIMIT_SIZE;
+            goto fail;
+        }
+        tf->bytes++;
+        if ('\n' == c) {
+            break;
+        }
+        if ('\0' == c) {
+            goto fail;
+        }
+        if (PRTE_TEXTFILE_MAX_LINE <= len) {
+            /* the line being read is the next one */
+            tf->limit = PRTE_TEXTFILE_LIMIT_LINE;
+            tf->lineno++;
+            goto fail;
+        }
+        /* room for this character and the terminator after it */
+        if (len + 2 > size) {
+            size = (0 == size) ? 256 : 2 * size;
+            grown = (char *) realloc(line, size);
+            if (NULL == grown) {
+                goto fail;
+            }
+            line = grown;
+        }
+        line[len++] = (char) c;
+    }
+
+    if (!started) {
+        /* the end of the stream, with nothing at all on this line */
+        return NULL;
+    }
+    if (NULL == line) {
+        /* an empty line is still a line */
+        line = strdup("");
+        if (NULL == line) {
+            goto fail;
+        }
+        return line;
+    }
+    line[len] = '\0';
+    return line;
+
+fail:
+    free(line);
+    tf->failed = true;
+    return NULL;
+}
+
+char *prte_textfile_getline(prte_textfile_t *tf)
+{
+    char *line;
+
+    if (NULL == tf->fp) {
+        return NULL;
+    }
+    line = read_line(tf);
+    if (NULL != line) {
+        tf->lineno++;
+    }
+    return line;
+}
+
+bool prte_textfile_report_limit(prte_textfile_t *tf, const char *nspace, const char *path)
+{
+    switch (tf->limit) {
+    case PRTE_TEXTFILE_LIMIT_SIZE:
+        prte_show_help(nspace, "help-prte-util.txt", "file-too-large", true, path,
+                       PRTE_TEXTFILE_MAX_BYTES / (1024 * 1024));
+        return true;
+    case PRTE_TEXTFILE_LIMIT_LINE:
+        prte_show_help(nspace, "help-prte-util.txt", "file-line-too-long", true, path,
+                       tf->lineno, PRTE_TEXTFILE_MAX_LINE / 1024);
+        return true;
+    default:
+        return false;
+    }
+}
+
 char **prte_textfile_next(prte_textfile_t *tf)
 {
     size_t need;
     char *code;
     char **fields;
-    bool failed;
 
     if (NULL == tf->fp) {
         return NULL;
@@ -182,11 +294,8 @@ char **prte_textfile_next(prte_textfile_t *tf)
          * would otherwise be a node list built from fragments, reported as
          * a success */
         free(tf->raw);
-        tf->raw = pmix_getline(tf->fp, &failed);
+        tf->raw = read_line(tf);
         if (NULL == tf->raw) {
-            if (failed) {
-                tf->failed = true;
-            }
             return NULL;
         }
         tf->lineno++;
@@ -239,7 +348,7 @@ void prte_textfile_close(prte_textfile_t *tf)
     }
     tf->nfields = 0;
     tf->in_comment = false;
-    /* "failed" and "lineno" are left as they are: together they are the
+    /* "failed", "limit" and "lineno" are left as they are: together they are the
      * answer to a question a caller may still be asking after closing the
      * file - whether the read reached the end, and where it stopped if not.
      * prte_textfile_open() zeroes the whole struct, so reusing one for a

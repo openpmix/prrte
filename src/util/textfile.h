@@ -25,9 +25,10 @@
  * whether the file says "slots=4" or "slots = 4".  Both spellings have
  * always parsed and both still do.
  *
- * A line of any length is read, with pmix_getline().  A rankfile line
- * naming a long cpu list is not an absurd thing to write, and a line read
- * in pieces would have its second half taken for a record of its own.
+ * A line is read whole, never in pieces: a rankfile line naming a long cpu
+ * list is not an absurd thing to write, and a line read in pieces would
+ * have its second half taken for a record of its own.  It is held to
+ * PRTE_TEXTFILE_MAX_LINE, and the file to PRTE_TEXTFILE_MAX_BYTES (below).
  *
  * The file has to be text.  A NUL byte stops the read and sets "failed",
  * because the fields reach their callers as C strings and there is nothing
@@ -50,6 +51,26 @@
 
 BEGIN_C_DECLS
 
+/*
+ * How much a file may hold.  These files are named by whoever starts a job,
+ * and they are read on the DVM master's progress thread, which serves every
+ * user of the DVM while it reads: so what one file may cost is bounded.  A
+ * file larger than PRTE_TEXTFILE_MAX_BYTES, or with a line longer than
+ * PRTE_TEXTFILE_MAX_LINE, is refused - "failed" is set, and "limit" says
+ * which bound it met (prte_textfile_report_limit).  The size is checked on
+ * the descriptor when the file is opened and again as it is read, since a
+ * file can grow after it is opened.  The largest real files are rankfiles,
+ * at a line per rank: a million ranks is some 40 MB.
+ */
+#define PRTE_TEXTFILE_MAX_BYTES (64 * 1024 * 1024)
+#define PRTE_TEXTFILE_MAX_LINE  (1024 * 1024)
+
+typedef enum {
+    PRTE_TEXTFILE_LIMIT_NONE = 0,
+    PRTE_TEXTFILE_LIMIT_SIZE, /* the file is larger than PRTE_TEXTFILE_MAX_BYTES */
+    PRTE_TEXTFILE_LIMIT_LINE  /* line "lineno" is longer than PRTE_TEXTFILE_MAX_LINE */
+} prte_textfile_limit_t;
+
 typedef struct {
     FILE *fp;
     char *raw;       /* one physical line, however long */
@@ -59,6 +80,8 @@ typedef struct {
     int lineno;      /* 1-based, of the line the fields came from */
     bool in_comment; /* a block comment is open across this line break */
     bool failed;     /* reading stopped short of the end of the file */
+    size_t bytes;    /* read so far, held to PRTE_TEXTFILE_MAX_BYTES */
+    prte_textfile_limit_t limit; /* which bound stopped the read, if one did */
 } prte_textfile_t;
 
 /*
@@ -90,6 +113,23 @@ PRTE_EXPORT int prte_textfile_open(prte_textfile_t *tf, const char *path, uid_t 
  * nodes, reported as a success.
  */
 PRTE_EXPORT char **prte_textfile_next(prte_textfile_t *tf);
+
+/*
+ * Return the next physical line as it is, without its newline - comments
+ * and all - in storage the caller frees, or NULL at the end of the file or
+ * on a failure, which "failed" tells apart as for prte_textfile_next().  For
+ * a reader with a syntax of its own; it is held to the same limits.
+ */
+PRTE_EXPORT char *prte_textfile_getline(prte_textfile_t *tf);
+
+/*
+ * If the read stopped at one of the limits above, say so to nspace for the
+ * file at path and return true; otherwise say nothing and return false, for
+ * the caller to report the failure as it reports any other.  Usable after
+ * prte_textfile_close().
+ */
+PRTE_EXPORT bool prte_textfile_report_limit(prte_textfile_t *tf, const char *nspace,
+                                            const char *path);
 
 /* Close the file and release everything it is holding.  Safe to call on a
  * file that was never opened, and safe to call twice. */
