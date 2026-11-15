@@ -242,6 +242,15 @@ one a scheduler has to ask for rather than the one it gets by saying nothing.
 The DVM master's own node is never shrunk out of its own DVM, even when it is
 a member of the reservation being handed back.
 
+Handing nodes back shrinks the DVM, so it needs a scheduler to hand them to
+and a DVM that can change size (``prte_elastic_mode``). Without either, the
+nodes go back to the DVM's general pool instead, daemons and all, whatever
+the disposition says. The same holds for a release of a reservation, by
+allocation id or by naming its nodes: with no scheduler attached the nodes
+return to the general pool. Taking a node out of a DVM that has no
+scheduler is a release of a node of the general pool, which only those who
+may change the DVM may ask for.
+
 What PRRTE does not support
 ---------------------------
 

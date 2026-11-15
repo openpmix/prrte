@@ -210,11 +210,11 @@ can still be refused cleanly:
   scheduler first and an allocation granted to a request refused afterwards
   would be stranded;
 - without a scheduler, a release by node list in
-  `ras_base_complete_release_request()` only when it has shrink targets, and
-  a release by allocation id in `ras_base_teardown_by_alloc_id()` only when
-  the reservation's nodes carry daemons. A NEW that names no nodes reserves
-  nodes the DVM already has, and a release of daemon-less nodes shrinks
-  nothing; both stay legal.
+  `ras_base_complete_release_request()` only when it has shrink targets -
+  nodes of the general pool, since a node a reservation holds is not shrunk
+  there (see below). A release by allocation id shrinks nothing without a
+  scheduler, so it is not refused. A NEW that names no nodes reserves none,
+  and a release of daemon-less nodes shrinks nothing; both stay legal.
 - a session's nodes (`PMIX_SESSION_INSTANTIATE`, `PMIX_SESSION_EXTEND`) in
   `prte_ras_base_insert_node_string()`, per node, before any is inserted:
   a node with no daemon of ours is refused on a non-elastic DVM, while a node
@@ -598,7 +598,7 @@ elastic-DVM or PMIx_Allocation code:
 | `prte_ras_base_complete_request()` | The heavy reservation router. For `PMIX_ALLOC_NEW`/`EXTEND` it resolves the destination `prte_session_t` (honoring `PMIX_ALLOC_TARGET`/`SHARE`/`INHERITANCE`/`ID`/`REQ_ID`), parses `PMIX_ALLOC_NODE_LIST`, inserts the nodes, and attaches them to the reservation (`add_nodes_to_session`). For `PMIX_ALLOC_RELEASE` it tears down a named reservation or xcasts a `PRTE_DAEMON_SHRINK_CMD`. Marks `PRTE_JOB_EXTEND_DVM` and re-launches daemons for grows. |
 | `prte_ras_base_release_allocation()` | Session-destruct hook: cycles modules whose `release_allocation` matches `session->alloc_module`. |
 | `prte_ras_base_shrink_complete()` | Offers a drained `prte_shrink_campaign_t` to every module's `shrink_complete`. |
-| `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, release the registry's reference on it, and — if `return_to_scheduler` — shrink its daemon-carrying nodes out of the DVM. |
+| `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, release the registry's reference on it, and — if `return_to_scheduler`, and there is a scheduler holding the allocation (`prte_ras_base.scheduler_owned`) and the DVM is elastic — shrink its daemon-carrying nodes out of the DVM. Otherwise the nodes stay, in the general pool. |
 | `prte_ras_base_check_reservations_on_term()` | On namespace termination, fire each reservation's inheritance disposition (`PMIX_ALLOC_INHERIT_NONE`/`CHILD`/`CHILD_DEFAULT`/`DEFAULT`). |
 
 ### Whom an allocation is for
@@ -738,6 +738,21 @@ types; a PMIx older than that refuses the documented spelling.
   `PMIX_ERR_UNPACK_INADEQUATE_SPACE` for a command that asked nothing of it.
   The guard lives in `ras_base_send_dvm_shrink`, which is the one place every
   caller passes through.
+
+### Returning a reservation's nodes needs someone to return them to
+
+"Return the nodes to the scheduler" - `PMIX_ALLOC_INHERIT_NONE`/`_CHILD`,
+an explicit release - means shrinking their daemons out of the DVM. That
+takes a scheduler or resource manager holding the allocation, to have them
+back, and an elastic DVM, which can shed a daemon. Without either,
+`prte_ras_base_teardown_reservation()` sends the nodes to the general pool
+instead, whatever it was asked: with no scheduler the nodes are the DVM's
+own, and a reservation's owner is not one who may take nodes out of the
+DVM; a fixed-size DVM cannot, and used to broadcast the shrink anyway. A
+release by node list follows the same rule (`ras_base_find_shrink_targets()`
+takes a node a reservation holds back into the general pool). Taking a node
+out of a DVM with no scheduler is a release of a general-pool node, which
+`ras_base_release_permitted()` holds to `prte_pmix_server_dvm_permitted()`.
 
 ### Tearing a reservation down releases it — which is why the job side counts
 

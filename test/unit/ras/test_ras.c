@@ -2601,6 +2601,117 @@ static int test_alloc_time(void)
     return failures;
 }
 
+/* Returning a reservation's nodes shrinks their daemons out of the DVM, for
+ * the scheduler or resource manager holding the allocation to have them back.
+ * With no scheduler there is nobody to give them to, and a DVM that is not
+ * elastic cannot shed a daemon: in either case the nodes go back to the
+ * general pool, with their daemons, whatever the teardown was asked to do.
+ * A release naming a reserved node, with no scheduler, likewise takes the
+ * node out of its reservation and leaves it in the DVM. */
+static prte_session_t *pool_resv(uint32_t id, const char *aid, prte_node_t **nd_out)
+{
+    prte_session_t *s;
+    prte_node_t *nd;
+    prte_proc_t *d;
+
+    s = PMIX_NEW(prte_session_t);
+    s->session_id = id;
+    s->alloc_refid = strdup(aid);
+    s->flags |= PRTE_SESSION_FLAG_RESERVED;
+    s->owner_uid = (uid_t) prte_process_info.euid;
+    s->owner_gid = (gid_t) prte_process_info.egid;
+    prte_set_session_object(s);
+
+    nd = PMIX_NEW(prte_node_t);
+    pmix_asprintf(&nd->name, "prte-unit-test-rtp-%u", (unsigned) id);
+    nd->state = PRTE_NODE_STATE_UP;
+    nd->slots = 1;
+    nd->index = pmix_pointer_array_add(prte_node_pool, nd);
+    /* a daemon of ours, not the master's own */
+    d = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&d->name, PRTE_PROC_MY_NAME->nspace, 7);
+    nd->daemon = d;
+    nd->session = s;
+    PMIX_RETAIN(nd);
+    pmix_pointer_array_add(s->nodes, nd);
+    *nd_out = nd;
+    return s;
+}
+
+static void pool_resv_done(prte_node_t *nd)
+{
+    pmix_pointer_array_set_item(prte_node_pool, nd->index, NULL);
+    PMIX_RELEASE(nd);
+}
+
+static int test_return_to_pool(void)
+{
+    int failures = 0;
+    bool saved_owned = prte_ras_base.scheduler_owned;
+    bool saved_elastic = prte_elastic_mode;
+    size_t ncamp = pmix_list_get_size(&prte_shrink_campaigns);
+    int fence = prte_dvm_launch_fence;
+    prte_session_t *s;
+    prte_node_t *nd;
+
+    /* no scheduler, elastic: nothing to return the nodes to */
+    prte_ras_base.scheduler_owned = false;
+    prte_elastic_mode = true;
+    s = pool_resv(4401, "prte-unit-test.4401", &nd);
+    prte_ras_base_teardown_reservation(s, true);
+    CHECK("return_to_pool: with no scheduler the node is unreserved", NULL == nd->session);
+    CHECK("return_to_pool: ...and keeps its daemon", NULL != nd->daemon);
+    CHECK("return_to_pool: ...and nothing is shrunk",
+          ncamp == pmix_list_get_size(&prte_shrink_campaigns) && fence == prte_dvm_launch_fence);
+    pool_resv_done(nd);
+
+    /* a scheduler, but a DVM that cannot change size */
+    prte_ras_base.scheduler_owned = true;
+    prte_elastic_mode = false;
+    s = pool_resv(4402, "prte-unit-test.4402", &nd);
+    prte_ras_base_teardown_reservation(s, true);
+    CHECK("return_to_pool: a fixed-size DVM unreserves the node", NULL == nd->session);
+    CHECK("return_to_pool: ...and keeps its daemon", NULL != nd->daemon);
+    CHECK("return_to_pool: ...and nothing is shrunk",
+          ncamp == pmix_list_get_size(&prte_shrink_campaigns) && fence == prte_dvm_launch_fence);
+    pool_resv_done(nd);
+
+    /* no scheduler: a release naming a reserved node unreserves it */
+    prte_ras_base.scheduler_owned = false;
+    prte_elastic_mode = true;
+    {
+        prte_pmix_server_req_t *req;
+        uint32_t me = (uint32_t) prte_process_info.euid;
+        uint32_t mygrp = (uint32_t) prte_process_info.egid;
+        pmix_info_t x[1];
+
+        s = pool_resv(4403, "prte-unit-test.4403", &nd);
+        PMIX_RETAIN(s);
+        PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_NODE_LIST, nd->name, PMIX_STRING);
+        req = mkalloc_req(PMIX_ALLOC_RELEASE, me, mygrp, x, 1);
+        req->pstatus = PMIX_SUCCESS;
+        prte_ras_base_complete_request(req);
+        CHECK("return_to_pool: releasing a reserved node succeeds", PMIX_SUCCESS == req->pstatus);
+        CHECK("return_to_pool: ...takes it out of its reservation",
+              NULL == nd->session && NULL == pmix_pointer_array_get_item(s->nodes, 0));
+        CHECK("return_to_pool: ...and leaves it in the DVM",
+              NULL != nd->daemon && ncamp == pmix_list_get_size(&prte_shrink_campaigns) &&
+                  fence == prte_dvm_launch_fence);
+        PMIX_RELEASE(req);
+        PMIX_INFO_DESTRUCT(&x[0]);
+        prte_ras_base_teardown_reservation(s, false);
+        PMIX_RELEASE(s);
+        pool_resv_done(nd);
+    }
+
+    prte_ras_base.scheduler_owned = saved_owned;
+    prte_elastic_mode = saved_elastic;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_return_to_pool\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2656,6 +2767,7 @@ int main(void)
     failures += test_spawn_alloc();
     failures += test_alloc_owner();
     failures += test_teardown_reservation();
+    failures += test_return_to_pool();
     failures += test_alloc_time();
     failures += test_hnp_locality_match();
     /* after test_select(), which opens the framework and latches a
