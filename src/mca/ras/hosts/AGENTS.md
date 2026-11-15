@@ -80,9 +80,10 @@ when it is selected and its scheduler is out of touch.) It serves:
   existing pool nodes by name/alias and adjusts slots, or appends new
   `PRTE_NODE_STATE_ADDED` nodes. Rejects a new node given negative slots.
   The file is opened with `prte_textfile_open()` (non-blocking, regular
-  files only, decided on the descriptor) because this runs on the
-  master's progress thread, where a bare `fopen()` of a FIFO never
-  returned - and it is opened as whoever named it: the owner of the job a
+  files only, decided on the descriptor, and opened and read in a child
+  the master waits for no longer than `pmix_runas_timeout`) because this
+  runs on the master's progress thread, where a bare `fopen()` of a FIFO
+  never returned - and it is opened as whoever named it: the owner of the job a
   spawn's `--add-hostfile` came with (`req->jdata`), or the requester of
   an allocation. Each name must pass `prte_util_host_name_ok()` - the
   `--host` rule - and a `user@host`, naming an account to reach the host as,

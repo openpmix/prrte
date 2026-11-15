@@ -852,17 +852,29 @@ PRTE_EXPORT int prte_pmix_server_job_run_as(prte_job_t *jdata, uid_t *uid, gid_t
  * reach. For the files a job or a request names that the master reads or
  * writes on its behalf: a hostfile, a rankfile, the proctable.
  *
- * Who may be acted as is prte_pmix_server_run_as's rule. When that comes
- * out as ourselves - the file is our own user's, or root's on a DVM that
- * is not root's - fn runs here. When we are root acting for another user
- * it runs in a child that has become that user, with its groups
- * (pmix_util_run_as), which passes back the descriptor fn opened.
+ * Who may be acted as is prte_pmix_server_run_as's rule. fn always runs
+ * in a child (pmix_util_run_as_child): one that has become that user, with
+ * its groups, when we are root acting for another, and one that is simply
+ * us when that rule comes out as ourselves. Either way the master waits
+ * for it no longer than pmix_util_runas_timeout (PMIx's pmix_runas_timeout),
+ * since a path someone named may be on a filesystem that does not answer -
+ * and that is as true of a file opened as ourselves as of one opened as
+ * the user. The child passes back the descriptor fn opened.
  *
  * Returns that descriptor, or -1 with errno set: EPERM when we may not act
- * as uid at all, or do not know its group. fn is held to
- * pmix_util_run_as's rules - no lock, no stdio, no output. Progress thread
- * only: the groups come from our records of each user. */
+ * as uid at all, or do not know its group, and ETIMEDOUT when the child did
+ * not answer in time. fn is held to pmix_util_run_as's rules - no lock, no
+ * stdio, no output. Progress thread only: the groups come from our records
+ * of each user. */
 PRTE_EXPORT int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg);
+
+/* The same, for work that is not an open: fn(arg) returns 0 if it
+ * succeeded, -1 if not, and so does this. What the work produces has to
+ * reach us through something the child inherited - a descriptor it writes
+ * to, as prte_textfile_open() does - since the child's memory is its own.
+ * Nothing it does after the open is then left for the master to wait on:
+ * a descriptor handed back is read here, with no bound. */
+PRTE_EXPORT int prte_pmix_server_work_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg);
 
 /* Who a file jdata names is opened as: its owner and the owner's group
  * (PRTE_INVALID_GID when that is not known). Ourselves for a NULL jdata. */

@@ -29,7 +29,8 @@ typedef struct {
 
 /* The open, and the checks that decide whether what was opened may be
  * emptied - all made by whoever the file is written for, and so, when that
- * is another user, in a child that has become it (prte_pmix_server_open_as):
+ * is another user, in a child that has become it (prte_pmix_server_open_as,
+ * prte_pmix_server_work_as):
  * no output, no stdio, nothing but the calls. "Our own" file is then that
  * user's. */
 static int output_file_open_fn(void *arg)
@@ -59,13 +60,6 @@ static int output_file_open_fn(void *arg)
 
 FILE *prte_output_file_open(const char *path, mode_t mode, struct stat *st)
 {
-    return prte_output_file_open_as(path, mode, st, prte_process_info.euid,
-                                    prte_process_info.egid);
-}
-
-FILE *prte_output_file_open_as(const char *path, mode_t mode, struct stat *st, uid_t uid,
-                               gid_t gid)
-{
     output_file_t of;
     struct stat buf;
     FILE *fp;
@@ -77,7 +71,8 @@ FILE *prte_output_file_open_as(const char *path, mode_t mode, struct stat *st, u
     }
     of.path = path;
     of.mode = mode;
-    fd = prte_pmix_server_open_as(uid, gid, output_file_open_fn, &of);
+    fd = prte_pmix_server_open_as(prte_process_info.euid, prte_process_info.egid,
+                                  output_file_open_fn, &of);
     if (0 > fd) {
         return NULL;
     }
@@ -94,6 +89,72 @@ FILE *prte_output_file_open_as(const char *path, mode_t mode, struct stat *st, u
         *st = buf;
     }
     return fp;
+}
+
+typedef struct {
+    output_file_t of;
+    int content; /* the master's temporary file, inherited by the child */
+} output_file_copy_t;
+
+/* The open, its checks, and the whole write, made as the user the file is
+ * written for, in a child (prte_pmix_server_work_as): the content is read
+ * from the temporary file by position, so nothing depends on the
+ * descriptor's shared offset */
+static int output_file_copy_fn(void *arg)
+{
+    output_file_copy_t *oc = (output_file_copy_t *) arg;
+    char buf[16384];
+    off_t in = 0;
+    ssize_t nr, nw, done;
+    int fd;
+
+    fd = output_file_open_fn(&oc->of);
+    if (0 > fd) {
+        return -1;
+    }
+    for (;;) {
+        do {
+            nr = pread(oc->content, buf, sizeof(buf), in);
+        } while (0 > nr && EINTR == errno);
+        if (0 > nr) {
+            close(fd);
+            return -1;
+        }
+        if (0 == nr) {
+            break;
+        }
+        for (done = 0; done < nr; done += nw) {
+            do {
+                nw = write(fd, buf + done, (size_t) (nr - done));
+            } while (0 > nw && EINTR == errno);
+            if (0 >= nw) {
+                close(fd);
+                return -1;
+            }
+        }
+        in += nr;
+    }
+    if (0 != close(fd)) {
+        return -1;
+    }
+    return 0;
+}
+
+int prte_output_file_write_as(const char *path, mode_t mode, uid_t uid, gid_t gid, FILE *content)
+{
+    output_file_copy_t oc;
+
+    if (NULL == path || '\0' == path[0] || NULL == content) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (0 != fflush(content)) {
+        return -1;
+    }
+    oc.of.path = path;
+    oc.of.mode = mode;
+    oc.content = fileno(content);
+    return prte_pmix_server_work_as(uid, gid, output_file_copy_fn, &oc);
 }
 
 void prte_output_file_remove(const char *path, const struct stat *st)

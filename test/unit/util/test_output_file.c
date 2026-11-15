@@ -26,6 +26,7 @@
 #include <unistd.h>
 
 #include "src/util/pmix_printf.h"
+#include "src/util/pmix_runas.h"
 #include "src/util/prte_output_file.h"
 
 int test_output_file(void);
@@ -143,6 +144,49 @@ int test_output_file(void)
 
     /* and a directory is not a file */
     CHECK("directory-refused", NULL == prte_output_file_open(base, 0644, NULL));
+
+    /* what the master writes for a job - the proctable - is written by a
+     * child, as the job's owner, from a temporary file of ours: here, the
+     * owner is us */
+    fp = tmpfile();
+    CHECK("write-as-staging", NULL != fp);
+    if (NULL != fp) {
+        int saved = pmix_util_runas_timeout;
+
+        fputs("(rank, host, exe, pid) = (0, n, a, 1)\n", fp);
+        CHECK("write-as", 0 == prte_output_file_write_as(path, 0644, geteuid(), getegid(), fp));
+        text = slurp(path);
+        CHECK("write-as-content",
+              NULL != text && 0 == strcmp(text, "(rank, host, exe, pid) = (0, n, a, 1)\n"));
+        free(text);
+        /* written afresh, not appended */
+        CHECK("write-as-again", 0 == prte_output_file_write_as(path, 0644, geteuid(), getegid(), fp));
+        text = slurp(path);
+        CHECK("write-as-replaces",
+              NULL != text && 0 == strcmp(text, "(rank, host, exe, pid) = (0, n, a, 1)\n"));
+        free(text);
+        unlink(path);
+        /* the same refusals as an open: not through a symlink */
+        put(other, "keep\n");
+        CHECK("write-as-symlink-setup", 0 == symlink(other, lnk));
+        CHECK("write-as-symlink-refused",
+              0 != prte_output_file_write_as(lnk, 0644, geteuid(), getegid(), fp));
+        text = slurp(other);
+        CHECK("write-as-symlink-target-untouched", NULL != text && 0 == strcmp(text, "keep\n"));
+        free(text);
+        unlink(lnk);
+        unlink(other);
+        /* and a child that does not finish is given up at the timeout */
+        pmix_util_runas_timeout = 1;
+        pmix_util_runas_test_stall = true;
+        CHECK("write-as-stalled",
+              0 != prte_output_file_write_as(path, 0644, geteuid(), getegid(), fp) &&
+                  ETIMEDOUT == errno);
+        pmix_util_runas_test_stall = false;
+        pmix_util_runas_timeout = saved;
+        CHECK("write-as-stalled-nothing-written", 0 != access(path, F_OK));
+        fclose(fp);
+    }
 
     rmdir(base);
     free(path);
