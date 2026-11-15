@@ -720,6 +720,14 @@ static void arm_session_timer(prte_session_t *session, long seconds)
                         session->session_id, seconds);
 }
 
+void prte_pmix_server_session_set_limit(prte_session_t *session, long seconds, bool held)
+{
+    arm_session_timer(session, seconds);
+    if (held) {
+        PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_LIMIT_HELD);
+    }
+}
+
 /* True when the session's disposition says its nodes go back to the scheduler
  * rather than back to the DVM's general pool. Mirrors what
  * prte_ras_base_check_reservations_on_term applies on namespace termination,
@@ -863,7 +871,7 @@ static pmix_status_t session_extend(prte_session_t *session, prte_sessctrl_t *ct
         }
     }
     if (0 <= ctl->timelimit) {
-        arm_session_timer(session, ctl->timelimit);
+        prte_pmix_server_session_set_limit(session, ctl->timelimit, true);
     }
     if (ctl->have_inheritance) {
         /* an extend may also revise what becomes of the nodes at the end */
@@ -1277,7 +1285,7 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     }
 
     if (0 < ctl->timelimit) {
-        arm_session_timer(session, ctl->timelimit);
+        prte_pmix_server_session_set_limit(session, ctl->timelimit, true);
     }
 
     if (NULL != ctl->apps) {

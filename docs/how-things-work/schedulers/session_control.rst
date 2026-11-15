@@ -227,6 +227,13 @@ When the limit expires PRRTE terminates the session exactly as an explicit
 ``PMIX_SESSION_TERMINATE`` would. ``PMIX_SESSION_EXTEND`` re-arms the limit.
 No limit is in force unless one was asked for.
 
+With no scheduler attached, an allocation request (``PMIx_Allocation_request``)
+may ask for a time limit with ``PMIX_ALLOC_TIME`` as well, on
+``PMIX_ALLOC_NEW`` or ``PMIX_ALLOC_EXTEND``, and the DVM applies it the same
+way. A limit set by session control, or by a request from root, the DVM's own
+user or a user named by ``--rtos users=``/``groups=``, cannot then be changed
+by an allocation request from the session's owner.
+
 When a session is reclaimed, ``PMIX_ALLOC_INHERITANCE`` decides what becomes
 of its nodes: ``PMIX_ALLOC_INHERIT_NONE`` and ``PMIX_ALLOC_INHERIT_CHILD``
 hand them back to the scheduler, and the default returns them to the DVM's
