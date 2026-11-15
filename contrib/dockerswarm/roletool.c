@@ -144,7 +144,8 @@ static void usage(const char *name)
             " allocids | instantiate-for <session-id> <hosts> <nspace> <rank> |"
             " instantiate-owned <session-id> <hosts> <uid> <gid> |"
             " sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]] |"
-            " terminate <session-id> | alloc [<uid> <gid> [seconds]] |"
+            " terminate <session-id> | extend <session-id> <hosts|-> [<time>] |"
+            " alloc [<uid> <gid> [seconds]] |"
             " alloc-release <alloc-id>\n",
             name);
 }
@@ -177,6 +178,7 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "instantiate-owned") && 7 != argc) ||
         (0 == strcmp(op, "sched-instantiate") && 5 != argc && 7 > argc) ||
         (0 == strcmp(op, "terminate") && 4 != argc) ||
+        (0 == strcmp(op, "extend") && 5 != argc && 6 != argc) ||
         (0 == strcmp(op, "alloc") && 3 != argc && 5 != argc && 6 != argc) ||
         (0 == strcmp(op, "alloc-release") && 4 != argc)) {
         usage(argv[0]);
@@ -312,6 +314,31 @@ int main(int argc, char **argv)
         rc = lock.status;
         printf("ROLE TERMINATE %s\n", PMIx_Error_string(rc));
         PMIX_INFO_DESTRUCT(&dirs[0]);
+
+    } else if (0 == strcmp(op, "extend")) {
+        size_t ndirs = 0;
+
+        sid = (uint32_t) strtoul(argv[3], NULL, 10);
+        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_SESSION_EXTEND, &flag, PMIX_BOOL);
+        if (0 != strcmp(argv[4], "-")) {
+            PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_NODE_LIST, argv[4], PMIX_STRING);
+        }
+        if (6 == argc) {
+            PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_TIME, argv[5], PMIX_STRING);
+        }
+        lock_init(&lock);
+        rc = PMIx_Session_control(sid, dirs, ndirs, ctrl_cb, &lock);
+        if (PMIX_SUCCESS != rc) {
+            lock_wake(&lock, rc);
+        } else {
+            lock_wait(&lock);
+        }
+        rc = lock.status;
+        printf("ROLE EXTEND %s\n", PMIx_Error_string(rc));
+        while (0 < ndirs) {
+            --ndirs;
+            PMIX_INFO_DESTRUCT(&dirs[ndirs]);
+        }
 
     } else if (0 == strcmp(op, "alloc")) {
         pmix_info_t *results = NULL;

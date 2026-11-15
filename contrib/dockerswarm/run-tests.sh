@@ -4279,7 +4279,8 @@ test_session() {
 #     the session, the allocation and the job the new one is connected to
 #   * a process set over procs of root's job
 #   * the scheduler role, which decides every session
-#   * a new session, which takes nodes out of the general pool
+#   * a directive to instantiate or extend a session - the scheduler's
+#     to give - even from the user the session is for
 #
 # and root's own scheduler, once it has gone, must not keep the DVM
 # deferring to it.  A DVM started naming that user - --rtos users= and
@@ -4511,6 +4512,30 @@ test_requesters() {
     else
         ok "the scheduler created a session for another user"
         sleep 2
+        # an extend is the scheduler's directive to the DVM, as instantiate
+        # is - a user asks for more with an allocation request - so with no
+        # scheduler it is for whoever may change the DVM, the owner included
+        out=$(RUN "timeout 60 $rq extend 4275 node1:1" 2>&1)
+        if echo "$out" | grep -q "ROLE EXTEND PMIX_SUCCESS"; then
+            bad "the user a session is for directed an extend adding nodes"
+        elif echo "$out" | grep -q "ROLE EXTEND PMIX_ERR_NO_PERMISSIONS"; then
+            ok "the user a session is for may not direct an extend adding nodes"
+        else
+            bad "adding nodes to a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        out=$(RUN "timeout 60 $rq extend 4275 - 3600" 2>&1)
+        if echo "$out" | grep -q "ROLE EXTEND PMIX_SUCCESS"; then
+            bad "the user a session is for directed an extend adding time"
+        elif echo "$out" | grep -q "ROLE EXTEND PMIX_ERR_NO_PERMISSIONS"; then
+            ok "the user a session is for may not direct an extend adding time"
+        else
+            bad "lengthening a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        # the control: root may
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' extend 4275 - 3600" 2>&1)
+        echo "$out" | grep -q "ROLE EXTEND PMIX_SUCCESS" \
+            && ok "root lengthened a session it made for another user" \
+            || bad "root could not lengthen a session: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         # the scheduler has gone by now, and the DVM must know it: these
         # are decided here, not passed to a scheduler nobody would answer as
         out=$(RUN "timeout 60 $rq2 terminate 4275" 2>&1)
@@ -4652,6 +4677,27 @@ test_requesters() {
         out=$(RUN "timeout 60 $SESSCTL terminate 4271" 2>&1)
         echo "$out" | grep -q PMIX_SUCCESS \
             || bad "could not terminate session 4271: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        banner "requesters: only root and the DVM's user may name a login for a session"
+        # the master logs in as a user named in user@host, so naming one is
+        # narrower than changing the DVM, here as on an allocation request
+        out=$(RUN "timeout 60 $rq instantiate 4278 nobody@node2:2" 2>&1)
+        if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+            bad "a user named by --rtos users= named a login for a session"
+            RUN "timeout 60 $SESSCTL terminate 4278" >/dev/null 2>&1
+        elif echo "$out" | grep -q "ROLE SESSION PMIX_ERR_NO_PERMISSIONS"; then
+            ok "a user named by --rtos users= may not name a login for a session"
+        else
+            bad "naming a login for a session failed oddly: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        # the control: root may
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate 4278 nobody@node2:2" 2>&1)
+        if echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+            ok "root named a login for a session"
+            RUN "timeout 60 $SESSCTL terminate 4278" >/dev/null 2>&1
+        else
+            bad "root could not name a login for a session: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
 
         banner "requesters: allocations are listed to those who may use them"
         out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate 4272 node2:2" 2>&1)
