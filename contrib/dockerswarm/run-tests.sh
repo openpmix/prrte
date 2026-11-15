@@ -11206,8 +11206,12 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         if [ -z "$aid" ]; then
             bad "no allocation id from the background grow: $(RUN 'tr "\n" " " < /tmp/rel-own.out' | tail -c 200)"
         else
-            # by node list: node3 leaves the reservation, not the DVM
-            out=$(RUN 'timeout 90 elastic shrink node3' 2>&1); sleep 3
+            # by node list: node3 leaves the reservation, not the DVM. No
+            # daemon goes, so no grow/shrink completion follows the answer -
+            # the answer is the whole of it (--no-wait)
+            out=$(RUN 'timeout 90 elastic shrink node3 --no-wait' 2>&1); sleep 3
+            echo "$out" | grep -q SUCCESS \
+                || bad "releasing a reserved node failed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
             [ "$(prted_count 3)" = 1 ] \
                 && ok "a node released from a reservation kept its daemon" \
                 || bad "releasing a reserved node shrank it out of the DVM: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
@@ -11216,7 +11220,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
                 && ok "...and it is back in the general pool" \
                 || bad "a node released from a reservation is not usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
             # by allocation id: the rest of the reservation goes back too
-            out=$(RUN "timeout 90 elastic release-id '$aid'" 2>&1); sleep 3
+            out=$(RUN "timeout 90 elastic release-id '$aid' --no-wait" 2>&1); sleep 3
             echo "$out" | grep -q SUCCESS \
                 || bad "releasing allocation $aid failed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
             [ "$(prted_count 2)" = 1 ] \
@@ -11921,16 +11925,19 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             || bad "a directive-less request was not refused as malformed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
 
         # granted, then the launch fails: the allocation goes back before the
-        # spawn's own error is delivered, so the node it took is free again -
-        # the daemon leaving is what that looks like from outside
+        # spawn's own error is delivered, so the node it took is free again.
+        # This DVM has no scheduler to hand the node to, so it goes back to
+        # the general pool, daemon and all - free means a plain --host job
+        # with no allocation directive can use it
         out=$(RUN 'timeout 120 elastic spawnalloc node3:2 --req-id badexe -- /no/such/binary' 2>&1)
         echo "$out" | grep -q 'SPAWN FAILED: PMIX_ERR_JOB_FAILED_TO_LAUNCH' \
             && ok "a launch failure is reported as one, not as an allocation failure" \
             || bad "the launch failure was not reported: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
         sleep 4
-        [ "$(prted_count 3)" = 0 ] \
-            && ok "the allocation it had obtained was handed back" \
-            || bad "the failed spawn is still holding its allocation"
+        out=$(RUN 'timeout 60 prun --host node3:2 -np 2 hostname' 2>&1)
+        [ "$(echo "$out" | grep -c '^node3$')" = 2 ] \
+            && ok "the allocation it had obtained was handed back to the general pool" \
+            || bad "the failed spawn is still holding its allocation: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         # ...and the node it gave back can be allocated again. This is the
         # half that a hand-rolled release used to break: the daemons were told
         # to go while the master still believed they were there, so the next
