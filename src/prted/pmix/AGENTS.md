@@ -1975,11 +1975,17 @@ codes that has to survive grow, shrink and daemon loss.
   off: `PMIX_SOCKET_MODE` lets anyone connect (PMIx then opens the
   socket's directory to match), and the session directory gains search
   permission but not read, so it can be passed through but not listed.
-  Every directory PRRTE makes inside it stays `0700`. The master does
-  this for tools; every *other* daemon of such a DVM does it too when it
-  runs as root, because it then starts other users' processes as those
-  users (`prte_pmix_server_job_run_as`), and they have to reach it. The
-  swarm's `test_requesters` and `test_run_as` are the cases that reach it.
+  Every directory PRRTE makes inside it stays `0700`. Every daemon of such
+  a DVM does this, not only the master, and every daemon also tells PMIx
+  `PMIX_SERVER_ALLOW_FOREIGN_TOOLS` - without that PMIx refuses another
+  user's tool before `_toolconn()` is asked, which made a multi-user DVM
+  take other users' tools at the master alone: a `prun` in a job script,
+  attached to its own node's daemon, was refused there. A daemon running
+  as root also needs the path for the processes it starts as other users
+  (`prte_pmix_server_job_run_as`). What an attached tool may do is still
+  the master's decision, from the user PMIx established for it here. The
+  swarm's `test_requesters` and `test_run_as` are the cases that reach
+  it.
 - **A client connects as the user its job runs as, not as ours.**
   `_client_conn()` (`pmix_server_gen.c`) compares the uid and gid PMIx
   authenticated for a connecting client against

@@ -1251,15 +1251,28 @@ int pmix_server_init(void)
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
+        /* A DVM that takes other users' tools takes them at every daemon,
+         * not just at the master: a tool attaches to the daemon on its own
+         * node - a prun in a job script, the one its environment names -
+         * and the master decides what it may do, from the user PMIx
+         * establishes for its connection here (_toolconn, and the
+         * PRTE_PLM_TOOL_ATTACHED_CMD relay). Without saying so to PMIx, it
+         * refuses every tool not of our user before we are asked. */
+        flag = !prte_pmix_server_globals.no_foreign_tools;
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
+                           (void*)&flag, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
 #if defined(PMIX_SOCKET_MODE)
-        /* A DVM that takes other users' tools takes their jobs too, and a
-         * daemon running as root starts those jobs' processes as the users
-         * they belong to (prte_pmix_server_job_run_as) - which must then
-         * reach this daemon's socket, by the same path the master opens to
-         * tools. PMIx still lets in only the processes it was told of, as
-         * the user it was told. A daemon not running as root starts no other
-         * user's processes, so has nothing to open. */
-        if (!prte_pmix_server_globals.no_foreign_tools && 0 == prte_process_info.euid) {
+        /* ...and those tools, and - for a daemon running as root - the
+         * processes it starts as other users (prte_pmix_server_job_run_as),
+         * must reach this daemon's socket, by the same path the master
+         * opens. PMIx still lets in only the processes it was told of, as
+         * the user it was told. */
+        if (flag) {
             rc = open_to_foreign_tools(ilist);
             if (PRTE_SUCCESS != rc) {
                 PMIX_INFO_LIST_RELEASE(ilist);
