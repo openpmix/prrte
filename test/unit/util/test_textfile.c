@@ -25,11 +25,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "constants.h"
 #include "src/util/pmix_printf.h"
+#include "src/util/pmix_runas.h"
 #include "src/util/textfile.h"
 
 int test_textfile(void);
@@ -377,6 +379,53 @@ int test_textfile(void)
             prte_textfile_close(&tf);
         }
         unlink(path);
+    }
+
+    /* --- what a file may cost in time --------------------------------
+     * The open and the read are made in a child the master waits for no
+     * longer than pmix_runas_timeout, whoever the file is read for - our
+     * own user included, which used to open and read in place, with no
+     * bound. PMIx's test hook makes the child stall as one does on a
+     * filesystem that has stopped answering. */
+    {
+        char path[256];
+        struct timeval t0, t1;
+        double took;
+        int saved = pmix_util_runas_timeout;
+        FILE *fp;
+
+        snprintf(path, sizeof(path), "prte_tf_stall_%lu.txt", (unsigned long) getpid());
+        fp = fopen(path, "w");
+        if (NULL != fp) {
+            fputs("hostA\n", fp);
+            fclose(fp);
+            pmix_util_runas_timeout = 1;
+            pmix_util_runas_test_stall = true;
+            gettimeofday(&t0, NULL);
+            CHECK("a read that does not finish still opens, to fail at the first read",
+                  PRTE_SUCCESS == prte_textfile_open(&tf, path, geteuid(), getegid()));
+            gettimeofday(&t1, NULL);
+            pmix_util_runas_test_stall = false;
+            pmix_util_runas_timeout = saved;
+            took = (double) (t1.tv_sec - t0.tv_sec) + (double) (t1.tv_usec - t0.tv_usec) / 1e6;
+            CHECK("...given up at the timeout", 0.9 <= took && took < 4.0);
+            CHECK("...with nothing read", NULL == prte_textfile_next(&tf) && tf.failed);
+            CHECK("...and the limit named", PRTE_TEXTFILE_LIMIT_TIME == tf.limit);
+            prte_textfile_close(&tf);
+            /* and with the child answering again, the same file reads */
+            CHECK("the same file reads once the child answers",
+                  PRTE_SUCCESS == prte_textfile_open(&tf, path, geteuid(), getegid()));
+            {
+                char **f = prte_textfile_next(&tf);
+
+                CHECK("...whole", NULL != f && 0 == strcmp(f[0], "hostA") &&
+                                      NULL == prte_textfile_next(&tf) && !tf.failed);
+            }
+            prte_textfile_close(&tf);
+            unlink(path);
+        } else {
+            fprintf(stdout, "  SKIP textfile stall case (could not write %s)\n", path);
+        }
     }
 
     if (0 == failures) {

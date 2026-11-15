@@ -41,6 +41,7 @@
 #endif /* HAVE_SYS_TIME_H */
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <string.h>
 
@@ -1578,18 +1579,18 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
         } else if (0 == strcmp(file, "+")) {
             fp = stderr;
         } else {
-            /* attempt to open the specified file - as the job's owner,
-             * who named it */
-            uid_t fuid;
-            gid_t fgid;
-
-            prte_pmix_server_job_user(jdata, &fuid, &fgid);
-            fp = prte_output_file_open_as(file, 0666, NULL, fuid, fgid);
+            /* written here into a temporary file of ours, and then copied to
+             * the file named by a child acting as the job's owner, who named
+             * it - so neither the open nor the write of a path on a
+             * filesystem that has stopped answering can hold the master for
+             * longer than PMIx's pmix_runas_timeout (prte_output_file_write_as) */
+            fp = tmpfile();
             if (NULL == fp) {
                 pmix_output(0, "Unable to open file %s for output of proctable: %s", file,
                             strerror(errno));
                 goto next;
             }
+            (void) fcntl(fileno(fp), F_SETFD, FD_CLOEXEC);
         }
         for (n=0; n < jdata->procs->size; n++) {
             proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, n);
@@ -1608,6 +1609,15 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
                     proc->name.rank, proc->node->name, app->app, (long) proc->pid);
         }
         if (stdout != fp && stderr != fp) {
+            uid_t fuid;
+            gid_t fgid;
+
+            prte_pmix_server_job_user(jdata, &fuid, &fgid);
+            if (0 != prte_output_file_write_as(file, 0666, fuid, fgid, fp)) {
+                pmix_output(0, "Unable to write file %s for output of proctable: %s", file,
+                            (ETIMEDOUT == errno) ? "the write did not finish in time"
+                                                 : strerror(errno));
+            }
             fclose(fp);
         }
     }

@@ -61,6 +61,14 @@ BEGIN_C_DECLS
  * the descriptor when the file is opened and again as it is read, since a
  * file can grow after it is opened.  The largest real files are rankfiles,
  * at a line per rank: a million ranks is some 40 MB.
+ *
+ * And what a file may cost in time is bounded too.  The file is opened and
+ * read whole in a child, which copies it into a temporary file the master
+ * then reads (prte_pmix_server_work_as), and the master waits for that
+ * child no longer than PMIx's pmix_runas_timeout (10 seconds by default) - for
+ * a file on a filesystem that has stopped answering, at the open or part
+ * way through, as for any other.  A read that took longer is refused the
+ * same way, with "limit" PRTE_TEXTFILE_LIMIT_TIME.
  */
 #define PRTE_TEXTFILE_MAX_BYTES (64 * 1024 * 1024)
 #define PRTE_TEXTFILE_MAX_LINE  (1024 * 1024)
@@ -68,7 +76,8 @@ BEGIN_C_DECLS
 typedef enum {
     PRTE_TEXTFILE_LIMIT_NONE = 0,
     PRTE_TEXTFILE_LIMIT_SIZE, /* the file is larger than PRTE_TEXTFILE_MAX_BYTES */
-    PRTE_TEXTFILE_LIMIT_LINE  /* line "lineno" is longer than PRTE_TEXTFILE_MAX_LINE */
+    PRTE_TEXTFILE_LIMIT_LINE, /* line "lineno" is longer than PRTE_TEXTFILE_MAX_LINE */
+    PRTE_TEXTFILE_LIMIT_TIME  /* the file was not read within PMIx's pmix_runas_timeout */
 } prte_textfile_limit_t;
 
 typedef struct {
@@ -88,8 +97,8 @@ typedef struct {
  * Open a file for reading, as user uid and group gid: the owner of the job
  * that named it, the requester of an allocation that did, or our own user
  * (prte_process_info.euid/egid) for the DVM's own configuration.  The open
- * is made as that user (prte_pmix_server_open_as), so a file it could not
- * read is not read for it.  Returns PRTE_SUCCESS, PRTE_ERR_NOT_FOUND if it
+ * and the read are made as that user (prte_pmix_server_work_as), so a file
+ * it could not read is not read for it.  Returns PRTE_SUCCESS, PRTE_ERR_NOT_FOUND if it
  * cannot be opened (by that user), or PRTE_ERR_BAD_PARAM if the path is not
  * a regular file -- which is worth telling apart, because fopen() opens a
  * directory quite happily and every read from the result then fails in a

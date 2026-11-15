@@ -37,7 +37,11 @@ Blank lines and lines beginning with a ``#`` are ignored.
 
 A hostfile may hold at most 64 MiB, and no line in it may be longer
 than 1 MiB; a larger file is refused with a message saying which limit
-it met. The same limits apply to a rankfile and to a sequence file
+it met. Reading it may also take no longer than PMIx's
+``pmix_runas_timeout`` MCA parameter (10 seconds by default): the DVM
+master reads the file in a separate process, as the user the file is
+read for, and gives up on a file whose file system does not answer in
+that time. The same limits apply to a rankfile and to a sequence file
 (``--map-by seq``).
 
 An entry names a node and nothing else. PRRTE reaches every node as the
