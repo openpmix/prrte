@@ -205,13 +205,17 @@ int prte_pmix_server_job_run_as(prte_job_t *jdata, uid_t *uid, gid_t *gid, bool 
     return PRTE_SUCCESS;
 }
 
-int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg)
+/* fn(arg) as uid and gid, always in a child (pmix_util_run_as_child), so
+ * that the wait for it is bounded by pmix_util_runas_timeout whoever it
+ * is for: a path a user named can stall on a filesystem that does not
+ * answer as surely opened as ourselves as opened as that user */
+static int run_as_child(uid_t uid, gid_t gid, bool want_fd, int (*fn)(void *arg), void *arg)
 {
     pmix_data_array_t *groups = NULL;
     gid_t *gids = NULL;
     size_t n, ngids = 0;
     bool change;
-    int fd, err;
+    int rc, err;
 
     /* asked of the kernel rather than read from prte_process_info: what
      * matters is whether this process can become uid, and the record is
@@ -221,7 +225,8 @@ int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *a
         return -1;
     }
     if (!change) {
-        return fn(arg);
+        /* as ourselves - the child changes nothing */
+        return pmix_util_run_as_child(geteuid(), getegid(), NULL, 0, want_fd, fn, arg);
     }
     if (PRTE_INVALID_GID == gid) {
         /* guessing a group could hand the open one the user does not have */
@@ -248,11 +253,21 @@ int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *a
     if (NULL != groups) {
         PMIX_DATA_ARRAY_FREE(groups);
     }
-    fd = pmix_util_run_as(uid, gid, gids, ngids, true, fn, arg);
+    rc = pmix_util_run_as_child(uid, gid, gids, ngids, want_fd, fn, arg);
     err = errno;
     free(gids);
     errno = err;
-    return fd;
+    return rc;
+}
+
+int prte_pmix_server_open_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg)
+{
+    return run_as_child(uid, gid, true, fn, arg);
+}
+
+int prte_pmix_server_work_as(uid_t uid, gid_t gid, int (*fn)(void *arg), void *arg)
+{
+    return run_as_child(uid, gid, false, fn, arg);
 }
 
 void prte_pmix_server_job_user(prte_job_t *jdata, uid_t *uid, gid_t *gid)

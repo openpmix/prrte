@@ -1608,7 +1608,7 @@ Every up-call, and what it is judged by:
 
 | Up-call | What is judged | Where |
 |---|---|---|
-| `spawn` | a parent outside the requester's job; placing the job on a reservation, for its owner; directives naming hosts, and preloading; files it names are opened as its owner (`prte_pmix_server_open_as`) | `interim()` (`prte_pmix_server_parent_permitted`); `plm_base_receive.c` (`session_usable`, `grow_directive`, `foreign_directive`) |
+| `spawn` | a parent outside the requester's job; placing the job on a reservation, for its owner; directives naming hosts, and preloading; files it names are read and written as its owner, in a bounded child (`prte_pmix_server_work_as`) | `interim()` (`prte_pmix_server_parent_permitted`); `plm_base_receive.c` (`session_usable`, `grow_directive`, `foreign_directive`) |
 | `allocate` | naming hosts to grow onto or activate; a release, by allocation, node or count; extending a reservation; cancelling a pending request | `prte_ras_base_modify()`, `ras_base_prepare_grow()`, `prte_ras_slurm_pending_req_permitted()` |
 | `session_control` | instantiation and extension (`prte_pmix_server_dvm_permitted`); a `user@host` in a node list, refused from anyone; naming a session's owner, which only the scheduler may do; every other directive (`prte_pmix_server_session_permitted`) | `pmix_server_session.c` (`grant_permitted`) |
 | `job_control` | each target, by its job's rule; untargeted signal and kill reach only permitted jobs; a DVM halt is root's and our user's | `pmix_server_job_ctrl.c` |

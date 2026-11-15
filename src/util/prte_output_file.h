@@ -28,12 +28,19 @@ BEGIN_C_DECLS
  * it was (for prte_output_file_remove). NULL with errno set otherwise. */
 PRTE_EXPORT FILE *prte_output_file_open(const char *path, mode_t mode, struct stat *st);
 
-/* The same, done as user uid, group gid - the owner of the job that named
- * path - so that it is created, checked and emptied as that user: "of our
- * own" above means of that user's, and the kernel resolves the path with
- * that user's permissions (prte_pmix_server_open_as). */
-PRTE_EXPORT FILE *prte_output_file_open_as(const char *path, mode_t mode, struct stat *st,
-                                           uid_t uid, gid_t gid);
+/* Write what content holds to path afresh, as prte_output_file_open()
+ * would open it, but done as user uid, group gid - the owner of the job
+ * that named path - so that it is created, checked, emptied and written as
+ * that user: "of our own" above means of that user's, and the kernel
+ * resolves the path with that user's permissions. All of it happens in a
+ * child (prte_pmix_server_work_as) that the master waits for no longer
+ * than PMIx's pmix_runas_timeout, since the path may be on a filesystem
+ * that does not answer; content is a temporary file of ours (tmpfile())
+ * that the child inherits and copies from the start. For a file the DVM
+ * master writes for a job, the proctable. 0 on success, -1 with errno set
+ * otherwise - ETIMEDOUT when the child did not finish in time. */
+PRTE_EXPORT int prte_output_file_write_as(const char *path, mode_t mode, uid_t uid, gid_t gid,
+                                          FILE *content);
 
 /* Remove path - but only if it is still the file st recorded. */
 PRTE_EXPORT void prte_output_file_remove(const char *path, const struct stat *st);
