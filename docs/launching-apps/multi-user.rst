@@ -99,3 +99,12 @@ name only itself; root may name any user. Any user may name a group it
 belongs to. Anything else is refused with ``PMIX_ERR_NO_PERMISSIONS``.
 The allocation belongs to the user and group it is for, and they are who
 may extend or release it.
+
+With no scheduler attached, the DVM applies the time an allocation request
+asks for (``PMIX_ALLOC_TIME``): the allocation ends that long after the
+request is granted. A later ``PMIX_ALLOC_EXTEND`` naming a time sets a new
+limit, that long from then. The user an allocation is for may change a limit
+it set itself; a limit set by root, the DVM's own user, a user named by
+``prte --rtos users=...,groups=...``, or a scheduler may be changed only by
+one of them, and an attempt by the allocation's user is refused with
+``PMIX_ERR_NO_PERMISSIONS``.

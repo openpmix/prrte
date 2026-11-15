@@ -145,8 +145,8 @@ static void usage(const char *name)
             " instantiate-owned <session-id> <hosts> <uid> <gid> |"
             " sched-instantiate <session-id> <hosts> [<uid> <gid> [cmd...]] |"
             " terminate <session-id> | extend <session-id> <hosts|-> [<time>] |"
-            " alloc [<uid> <gid> [seconds]] |"
-            " alloc-release <alloc-id>\n",
+            " alloc [<uid> <gid> [<seconds> [<time>]]] |"
+            " alloc-release <alloc-id> | alloc-extend <alloc-id> <time>\n",
             name);
 }
 
@@ -179,8 +179,9 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "sched-instantiate") && 5 != argc && 7 > argc) ||
         (0 == strcmp(op, "terminate") && 4 != argc) ||
         (0 == strcmp(op, "extend") && 5 != argc && 6 != argc) ||
-        (0 == strcmp(op, "alloc") && 3 != argc && 5 != argc && 6 != argc) ||
-        (0 == strcmp(op, "alloc-release") && 4 != argc)) {
+        (0 == strcmp(op, "alloc") && 3 != argc && 5 != argc && 6 != argc && 7 != argc) ||
+        (0 == strcmp(op, "alloc-release") && 4 != argc) ||
+        (0 == strcmp(op, "alloc-extend") && 5 != argc)) {
         usage(argv[0]);
         return 1;
     }
@@ -353,6 +354,10 @@ int main(int argc, char **argv)
             id = (uint32_t) strtoul(argv[4], NULL, 10);
             PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_GID, &id, PMIX_UINT32);
         }
+        if (7 == argc) {
+            /* the time the allocation is asked for, not how long we hold it */
+            PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_TIME, argv[6], PMIX_STRING);
+        }
         rc = PMIx_Allocation_request(PMIX_ALLOC_NEW, (0 < ndirs) ? dirs : NULL, ndirs,
                                      &results, &nresults);
         for (n = 0; PMIX_SUCCESS == rc && n < nresults; n++) {
@@ -366,7 +371,7 @@ int main(int argc, char **argv)
         if (NULL != results) {
             PMIX_INFO_FREE(results, nresults);
         }
-        if (6 == argc) {
+        if (6 <= argc) {
             sleep((unsigned) strtoul(argv[5], NULL, 10));
         }
         while (0 < ndirs) {
@@ -385,6 +390,20 @@ int main(int argc, char **argv)
             PMIX_INFO_FREE(results, nresults);
         }
         PMIX_INFO_DESTRUCT(&dirs[0]);
+
+    } else if (0 == strcmp(op, "alloc-extend")) {
+        pmix_info_t *results = NULL;
+        size_t nresults = 0;
+
+        PMIX_INFO_LOAD(&dirs[0], PMIX_ALLOC_ID, argv[3], PMIX_STRING);
+        PMIX_INFO_LOAD(&dirs[1], PMIX_ALLOC_TIME, argv[4], PMIX_STRING);
+        rc = PMIx_Allocation_request(PMIX_ALLOC_EXTEND, dirs, 2, &results, &nresults);
+        printf("ROLE ALLOC-EXTEND %s\n", PMIx_Error_string(rc));
+        if (NULL != results) {
+            PMIX_INFO_FREE(results, nresults);
+        }
+        PMIX_INFO_DESTRUCT(&dirs[0]);
+        PMIX_INFO_DESTRUCT(&dirs[1]);
 
     } else if (0 == strcmp(op, "purge")) {
         PMIX_LOAD_PROCID(&member, argv[3], (pmix_rank_t) strtoul(argv[4], NULL, 10));

@@ -529,6 +529,16 @@ PRTE_EXPORT extern void prte_pmix_server_group_member_left(pmix_status_t code,
  * return it in seconds, or -1 if the string is not a well-formed time. */
 PRTE_EXPORT extern long prte_pmix_server_parse_session_time(const char *str);
 
+/* Set a session's time limit to `seconds` from now - 0 removes it - and
+ * record whether whoever set it holds the authority to (`held`): the
+ * scheduler, by session control, or a user who may change the DVM. A limit so
+ * set may be changed only by them; one a session's owner set on its own
+ * allocation request may be changed by the owner too. When the limit expires
+ * the session is terminated as PMIX_SESSION_TERMINATE would. MUST be called on
+ * the PRRTE progress thread. */
+PRTE_EXPORT void prte_pmix_server_session_set_limit(prte_session_t *session, long seconds,
+                                                    bool held);
+
 /* Execute a session control directive against this DVM's own sessions, and
  * answer the request. Used when the directive came from the scheduler (a
  * directive TO us) or when there is no scheduler to defer to, in which case

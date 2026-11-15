@@ -644,6 +644,35 @@ EXTEND's reservation keeps the owner it has.
   Slurm for the requested user and group is not done; the note on
   `prte_ras_slurm_serve_extend_req()` says what it would take.
 
+### The time an allocation is for
+
+With no scheduler (`!prte_ras_base.scheduler_owned`), the DVM serves a
+request's `PMIX_ALLOC_TIME` itself: `ras_base_complete_grow_request()` sets
+the session's limit to that long from now
+(`prte_pmix_server_session_set_limit()`, the same timer session control
+uses), on a NEW and on an EXTEND, and the session is terminated when it
+expires. Nothing on this path read the key before, so an EXTEND asking only
+for time found no node list, grew nothing and answered success.
+
+Who may change a limit depends on who set it. One set by the scheduler, by
+session control, or by a requester who may change the DVM
+(`prte_pmix_server_dvm_permitted()`) carries `PRTE_SESSION_FLAG_LIMIT_HELD`,
+and an owner's EXTEND naming a time is then refused
+(`ras-base:limit-not-permitted`); a limit the owner set on its own request it
+may change. That is judged in `ras_base_prepare_grow()`, before anything
+about the session is changed. A time on a request for the general pool
+(`PMIX_ALLOC_SHARE`) is refused - the pool has no lifetime to limit - and an
+EXTEND that names no nodes, no time and no disposition extends nothing and
+is refused with `PMIX_ERR_BAD_PARAM`, as session control refuses one.
+
+Such an EXTEND is also not a resize: outside elastic mode,
+`prte_ras_base_modify()` refuses an EXTEND only when it names nodes or a
+scheduler serves it, as it does a NEW.
+
+Under a scheduler none of this applies. The scheduler decided the time, and
+tells the DVM with session control; the value in the request is not the
+DVM's to apply.
+
 ### A request's directives arrive from a client and are typed by a client
 
 `req->info` is the requester's own array: `pmix_server_alloc_fn` hands the
