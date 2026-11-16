@@ -4715,6 +4715,54 @@ test_requesters() {
     fi
     RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
 
+    banner "requesters: a request id names an allocation only to the job that made it"
+    # wait for a held "roletool alloc-reqid" to have shown its properties
+    rq_reqid_done() {
+        for _ in $(seq 1 20); do
+            RUN 'grep -q "^ROLE ALLOCPROPS \|^ROLE REQID-EXTEND PMIX_ERR\|^ROLE ALLOC PMIX_ERR" /tmp/rqalloc.out 2>/dev/null' && break
+            sleep 1
+        done
+        RUN 'cat /tmp/rqalloc.out 2>/dev/null' | tr -d '\r'
+    }
+    EXEC_TOOL_BG 1 "$rq alloc-reqid swarm-req 1 30 > /tmp/rqalloc.out 2>&1"
+    aid=$(rq_alloc_id)
+    if [ -z "$aid" ]; then
+        bad "a user could not ask for an allocation under a request id: $(RUN 'cat /tmp/rqalloc.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    else
+        out=$(rq_reqid_done)
+        echo "$out" | grep -q "ROLE REQID-EXTEND PMIX_SUCCESS" \
+            && ok "the job that made a request extends the allocation by its request id" \
+            || bad "the requester could not extend by its request id: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q "ROLE ALLOCPROP pmix.alloc.reqid swarm-req$" \
+            && ok "an allocation's properties give its request id" \
+            || bad "the request id is not among the properties: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q "ROLE ALLOCPROP pmix.cmd.line .*roletool.*alloc-reqid" \
+            && ok "...and the command line that requested it" \
+            || bad "the requesting command line is not among the properties: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q "ROLE ALLOCPROP pmix.euid 65534$" \
+            && ok "...and its owner" \
+            || bad "the owner is not among the properties: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN "timeout 60 $rq alloc-extend-reqid swarm-req 600" 2>&1)
+        echo "$out" | grep -q "ROLE REQID-EXTEND PMIX_ERR_NOT_FOUND" \
+            && ok "a later command of the same user cannot name it by request id" \
+            || bad "another command named the allocation by request id: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(RUN "timeout 60 $rq2 allocprops '$aid'" 2>&1)
+        echo "$out" | grep -q "ROLE ALLOCPROPS PMIX_ERR_NO_PERMISSIONS" \
+            && ok "another user is not told its properties" \
+            || bad "another user's query of the allocation was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
+    EXEC_TOOL_BG 1 "$rq alloc-reqid swarm-dup 2 30 > /tmp/rqalloc.out 2>&1"
+    out=$(rq_reqid_done)
+    if [ 2 -ne "$(echo "$out" | grep -c '^ROLE ALLOCATED ')" ]; then
+        bad "a user could not make two requests under one request id: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        echo "$out" | grep -q "ROLE REQID-EXTEND PMIX_ERR_BAD_PARAM" \
+            && ok "a request id a job used twice names neither allocation" \
+            || bad "a request id used twice was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    RUN 'pkill -f "roletool.*alloc"; rm -f /tmp/rqalloc.out; true'
+
     banner "requesters: the time an allocation is asked for is applied"
     # With no scheduler the DVM serves PMIX_ALLOC_TIME itself, on a DVM that
     # is not elastic too - an extend naming no nodes does not resize it. The
@@ -4812,6 +4860,10 @@ test_requesters() {
             else
                 ok "another user is not shown root's reservation"
             fi
+            out=$(RUN "timeout 60 $rq allocprops roletool.4272" 2>&1 | tr -d '\r')
+            echo "$out" | grep -q "ROLE ALLOCPROPS PMIX_ERR_NO_PERMISSIONS" \
+                && ok "...nor told its properties" \
+                || bad "another user's query of root's reservation was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
             RUN "timeout 60 $SESSCTL terminate 4272" >/dev/null 2>&1
         fi
 
@@ -4865,6 +4917,14 @@ test_requesters() {
                     ok "a session naming root's job as requester is its creator's"
                 else
                     bad "session 4273 is not listed to its creator: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                fi
+                out=$(RUN "timeout 60 $ROLETOOL '$uri' allocprops roletool.4273" 2>&1 | tr -d '\r')
+                if ! echo "$out" | grep -q "ROLE ALLOCPROP pmix.requestor "; then
+                    bad "session 4273's requester is not given: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                elif echo "$out" | grep -q "ROLE ALLOCPROP pmix.requestor $ons:"; then
+                    bad "a session another user created was recorded as requested by root's job"
+                else
+                    ok "...and was requested by its creator"
                 fi
                 RUN "timeout 60 $SESSCTL terminate 4273" >/dev/null 2>&1
             fi

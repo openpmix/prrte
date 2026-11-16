@@ -326,6 +326,16 @@ typedef struct{
     /* The process that requested this allocation (req->tproc). Target of the
      * relayed PMIX_ALLOC_TIMEOUT_WARNING. Refreshed on EXTEND. */
     pmix_proc_t requestor;
+    /* The process that made the request this allocation was created for,
+     * and its command line - kept as they were, unlike requestor. A
+     * PMIX_ALLOC_REQ_ID names the allocation only to processes of this
+     * namespace (prte_get_session_object_from_refid), and both are returned
+     * by PMIX_QUERY_ALLOC_PROPERTIES so a user can tell its allocations
+     * apart. Set by prte_session_set_requested_by(); an invalid rank, and a
+     * NULL command line, when there was no such request (an allocation
+     * found at startup) or the command line was not known. */
+    pmix_proc_t requested_by;
+    char *requested_cmd;
     /* The user the reservation was granted to, taken from the requesting
      * tool's connection. The USER owns the reservation: spawning onto it and
      * operating on it are decided by uid
@@ -636,7 +646,17 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_proc_t);
 /** Get session object */
 PRTE_EXPORT prte_session_t *prte_get_session_object(const uint32_t session_id);
 PRTE_EXPORT prte_session_t *prte_get_session_object_from_id(const char *id);
-PRTE_EXPORT prte_session_t *prte_get_session_object_from_refid(const char *refid);
+/* The allocation that the processes of namespace nspace requested under
+ * PMIX_ALLOC_REQ_ID refid. A req_id need not be unique, so it names an
+ * allocation only to the job that made the request: PRTE_ERR_NOT_FOUND when
+ * that job made none under refid, and PRTE_ERR_BAD_PARAM when it made more
+ * than one - those can only be named by their PMIX_ALLOC_ID. */
+PRTE_EXPORT int prte_get_session_object_from_refid(const char *nspace, const char *refid,
+                                                   prte_session_t **session);
+/* Record proc as the process whose request created the session, with its
+ * command line where the DVM knows it (see prte_session_t.requested_by). */
+PRTE_EXPORT void prte_session_set_requested_by(prte_session_t *session,
+                                               const pmix_proc_t *proc);
 
 PRTE_EXPORT int prte_set_session_object(prte_session_t *session);
 

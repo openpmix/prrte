@@ -47,7 +47,10 @@ with the following fields:
 
 * user_refid: the user's string ID provided to the allocation request
   that generated this session via the ``PMIX_ALLOC_REQ_ID``. This will
-  be ``NULL`` if the user chose not to provide the ID.
+  be ``NULL`` if the user chose not to provide the ID. The ID need not be
+  unique, so it names the session only to the job that made the request,
+  and only if that job made one request under it; anything else names
+  the session by its ``alloc_refid``.
 
 * alloc_refid: the string ID assigned by the scheduler to the session.
   It is communicated in the ``PMIx_Session_control`` directive to the RTE

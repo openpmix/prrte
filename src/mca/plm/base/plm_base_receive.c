@@ -1007,15 +1007,23 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             goto moveon;
         }
 
+        /* A PMIX_ALLOC_REQ_ID names the allocation the requesting job made
+         * under it - only to that job, since a req_id need not be unique,
+         * and only if it made one: more than one is refused, as they can be
+         * told apart only by their PMIX_ALLOC_ID. From here on the job is
+         * placed by the session that holds the allocation. */
         tmp = NULL;
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REF_ID, (void **) &tmp, PMIX_STRING) &&
             NULL != tmp) {
-            session = prte_get_session_object_from_refid(tmp);
+            rc = prte_get_session_object_from_refid(nptr->nspace, tmp, &session);
+            if (PRTE_ERR_BAD_PARAM == rc) {
+                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt",
+                               "ras-base:req-id-ambiguous", true, tmp);
+            }
             free(tmp);
-            if (NULL == session) {
-                /* if the caller specified a session and we don't know about it, then
-                 * that is an unrecoverable error */
-                rc = PRTE_ERR_NOT_FOUND;
+            if (PRTE_SUCCESS != rc) {
+                /* naming an allocation that cannot be found, or cannot be
+                 * told apart from another, is an unrecoverable error */
                 goto ANSWER_LAUNCH;
             }
             goto moveon;

@@ -230,6 +230,12 @@ PRTE_EXPORT void prte_ras_base_complete_request(prte_pmix_server_req_t *req);
  * no allocation and are left alone. */
 PRTE_EXPORT pmix_status_t prte_ras_base_alloc_owner(prte_pmix_server_req_t *req);
 
+/* Add PMIX_ALLOC_ID id to a request's info, taking ownership of the array
+ * (the original is borrowed from the caller unless req->copy says it is the
+ * request's own). PMIX_ERR_NOMEM if it could not. */
+PRTE_EXPORT pmix_status_t prte_ras_base_add_alloc_id(prte_pmix_server_req_t *req,
+                                                     const char *id);
+
 END_C_DECLS
 
 #endif

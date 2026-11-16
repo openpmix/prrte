@@ -1117,6 +1117,66 @@ pmix_status_t prte_ras_base_alloc_owner(prte_pmix_server_req_t *req)
     return PMIX_SUCCESS;
 }
 
+static bool ras_base_get_string(const pmix_info_t *info, char **value);
+
+pmix_status_t prte_ras_base_add_alloc_id(prte_pmix_server_req_t *req, const char *id)
+{
+    pmix_info_t *info;
+    size_t n;
+
+    PMIX_INFO_CREATE(info, req->ninfo + 1);
+    if (NULL == info) {
+        return PMIX_ERR_NOMEM;
+    }
+    for (n = 0; n < req->ninfo; n++) {
+        PMIX_INFO_XFER(&info[n], &req->info[n]);
+    }
+    PMIX_INFO_LOAD(&info[req->ninfo], PMIX_ALLOC_ID, id, PMIX_STRING);
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+    req->info = info;
+    req->ninfo = req->ninfo + 1;
+    req->copy = true;
+    return PMIX_SUCCESS;
+}
+
+/* Turn an EXTEND's PMIX_ALLOC_REQ_ID into the PMIX_ALLOC_ID of the
+ * allocation the requesting job made under it - see the note at its call. */
+static pmix_status_t ras_base_resolve_req_id(prte_pmix_server_req_t *req)
+{
+    char *alloc_id = NULL, *req_id = NULL;
+    prte_session_t *session;
+    size_t n;
+    int rc;
+
+    for (n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+            if (!ras_base_get_string(&req->info[n], &alloc_id)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
+        } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+            if (!ras_base_get_string(&req->info[n], &req_id)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
+        }
+    }
+    if (NULL != alloc_id || NULL == req_id) {
+        return PMIX_SUCCESS;
+    }
+    rc = prte_get_session_object_from_refid(req->tproc.nspace, req_id, &session);
+    if (PRTE_ERR_BAD_PARAM == rc) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                       "ras-base:req-id-ambiguous", true, req_id);
+        return PMIX_ERR_BAD_PARAM;
+    }
+    if (PRTE_SUCCESS != rc || NULL == session->alloc_refid) {
+        return PMIX_SUCCESS;
+    }
+    return prte_ras_base_add_alloc_id(req, session->alloc_refid);
+}
+
+
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -1251,6 +1311,23 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
                 req->pstatus = PMIX_ERR_BAD_PARAM;
                 goto respond;
             }
+        }
+    }
+
+    /* An EXTEND may name the allocation by the PMIX_ALLOC_REQ_ID it was
+     * requested under rather than by its PMIX_ALLOC_ID. Everything past this
+     * point - the scheduler included - works by PMIX_ALLOC_ID, so the req_id
+     * is turned into it here. A req_id need not be unique, so it names an
+     * allocation only to the job that requested it, and only if that job
+     * made one request under it (prte_get_session_object_from_refid). One
+     * that names none of that job's allocations is left as it is: ras/slurm
+     * reads an EXTEND's req_id as the name of a new request, and the base
+     * refuses it as not found (ras_base_prepare_grow). */
+    if (PMIX_ALLOC_EXTEND == req->allocdir) {
+        rc = ras_base_resolve_req_id(req);
+        if (PMIX_SUCCESS != rc) {
+            req->pstatus = rc;
+            goto respond;
         }
     }
 
@@ -1590,6 +1667,7 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
     s->inheritance = inherit;
     if (NULL != requestor) {
         PMIX_XFER_PROCID(&s->requestor, requestor);
+        prte_session_set_requested_by(s, requestor);
     }
     /* retain the owning namespace's job object so its children subtree stays
      * walkable for CHILD-flavored drain; NULL for a tool with no job object */
@@ -2132,15 +2210,15 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
     } else if (NULL != target && !is_tool) {
         return PMIX_ERR_NO_PERMISSIONS;         /* app may not retarget */
     } else if (PMIX_ALLOC_EXTEND == req->allocdir) {
-        /* extend an existing reservation named by either identifier */
+        /* extend an existing reservation, named by its PMIX_ALLOC_ID. A
+         * req_id that named one of the requester's own was turned into its
+         * id on the way in (ras_base_resolve_req_id), so a req_id with no id
+         * beside it names none */
         if (NULL == alloc_id && NULL == req_id) {
             return PMIX_ERR_BAD_PARAM;          /* nothing names the target */
         }
         dest = (NULL != alloc_id) ? prte_get_session_object_from_id(alloc_id)
                                   : NULL;
-        if (NULL == dest && NULL != req_id) {
-            dest = prte_get_session_object_from_refid(req_id);
-        }
         /* growing a reservation is an operation on it, decided by who is
          * asking - see prte_pmix_server_session_permitted */
         if (NULL == dest ||

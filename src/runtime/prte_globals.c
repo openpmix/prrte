@@ -496,32 +496,52 @@ int prte_get_proc_runtime_state(const prte_proc_t *proc, prte_proc_state_t *stat
     return PRTE_SUCCESS;
 }
 
-prte_session_t *prte_get_session_object_from_refid(const char *refid)
+int prte_get_session_object_from_refid(const char *nspace, const char *refid,
+                                       prte_session_t **session)
 {
-    prte_session_t *session;
+    prte_session_t *s;
     int i;
 
-    /* if the job data wasn't setup, we cannot provide the data */
-    if (NULL == prte_sessions) {
-        return NULL;
-    }
-    /* if the session ID is invalid, then reject it */
-    if (NULL == refid) {
-        return NULL;
+    *session = NULL;
+    if (NULL == prte_sessions || NULL == nspace || NULL == refid) {
+        return PRTE_ERR_NOT_FOUND;
     }
     for (i = 0; i < prte_sessions->size; i++) {
-        session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
-        if (NULL == session) {
+        s = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
+        if (NULL == s || NULL == s->user_refid ||
+            !PMIX_CHECK_NSPACE(s->requested_by.nspace, nspace) ||
+            0 != strcasecmp(s->user_refid, refid)) {
             continue;
         }
-        if (NULL == session->user_refid) {
-            continue;
+        if (NULL != *session) {
+            *session = NULL;
+            return PRTE_ERR_BAD_PARAM;
         }
-        if (0 == strcasecmp(session->user_refid, refid)) {
-            return session;
-        }
+        *session = s;
     }
-    return NULL;
+    return (NULL == *session) ? PRTE_ERR_NOT_FOUND : PRTE_SUCCESS;
+}
+
+void prte_session_set_requested_by(prte_session_t *session, const pmix_proc_t *proc)
+{
+    prte_job_t *job;
+    prte_app_context_t *app;
+
+    PMIX_XFER_PROCID(&session->requested_by, proc);
+    if (NULL != session->requested_cmd) {
+        free(session->requested_cmd);
+        session->requested_cmd = NULL;
+    }
+    /* a tool's job holds the command line it sent when it connected, if it
+     * sent one; an application's, the one it was started with */
+    job = prte_get_job_data_object(proc->nspace);
+    if (NULL == job || NULL == job->apps) {
+        return;
+    }
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, 0);
+    if (NULL != app && NULL != app->argv) {
+        session->requested_cmd = PMIx_Argv_join(app->argv, ' ');
+    }
 }
 
 /* Monotonic, never reused: a released session's slot is handed to the next
@@ -1274,6 +1294,8 @@ static void session_con(prte_session_t *s)
     PMIX_LOAD_NSPACE(s->owner, NULL);
     s->owner_job = NULL;
     PMIX_LOAD_PROCID(&s->requestor, NULL, PMIX_RANK_INVALID);
+    PMIX_LOAD_PROCID(&s->requested_by, NULL, PMIX_RANK_INVALID);
+    s->requested_cmd = NULL;
     s->owner_uid = PRTE_INVALID_UID;
     s->owner_gid = PRTE_INVALID_GID;
     s->inheritance = PRTE_INHERIT_DEFAULT_VALUE;
@@ -1309,6 +1331,9 @@ static void session_des(prte_session_t *s)
     }
     if (NULL != s->alloc_module) {
         free(s->alloc_module);
+    }
+    if (NULL != s->requested_cmd) {
+        free(s->requested_cmd);
     }
 
     for (n=0; n < s->nodes->size; n++) {
