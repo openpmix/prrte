@@ -42,5 +42,6 @@ EXTRA_DIST = \
         prte_get_version.sh \
         find_common_syms \
         getdate.sh \
+        mca_library_paths.txt \
         from-savannah/upstream-config.guess \
         from-savannah/upstream-config.sub
