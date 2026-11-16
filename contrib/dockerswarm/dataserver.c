@@ -111,6 +111,16 @@
  *       back what it published whatever the second argument says - give the
  *       two different values and the item must still go.
  *
+ *   dataserver manywait <key> <count> [seconds]
+ *       Issue <count> PMIx_Lookup_nb calls for <key>, each with PMIX_WAIT
+ *       and PMIX_TIMEOUT = <seconds>, all at once.  A process may have only
+ *       prte_data_server_max_waiting lookups parked, so the ones beyond it
+ *       are answered PMIX_ERR_OUT_OF_RESOURCE straight away.  Prints
+ *       "WAITING", then "REFUSED <n>" five seconds later, then - once every
+ *       lookup is answered or <seconds> pass - "ANSWERED <n> REFUSED <n>
+ *       OTHER <n>", where ANSWERED counts the lookups a publish of <key>
+ *       satisfied.
+ *
  * <range> is one of session (default), namespace, local, proc-local, global.
  *
  * Why this exists: the store is a SINGLE array on the HNP, and every client
@@ -123,6 +133,7 @@
  * the reply goes back out through another.
  */
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -605,6 +616,79 @@ static int do_persist(const char *key, const char *value, const char *pstr,
     return 0;
 }
 
+/* manywait: the outcome of each non-blocking lookup */
+static pthread_mutex_t mw_lock = PTHREAD_MUTEX_INITIALIZER;
+static int mw_answered = 0, mw_refused = 0, mw_other = 0;
+
+static void mw_cb(pmix_status_t status, pmix_pdata_t data[], size_t ndata, void *cbdata)
+{
+    (void) data;
+    (void) ndata;
+    (void) cbdata;
+    pthread_mutex_lock(&mw_lock);
+    if (PMIX_SUCCESS == status) {
+        mw_answered++;
+    } else if (PMIX_ERR_OUT_OF_RESOURCE == status) {
+        mw_refused++;
+    } else {
+        mw_other++;
+    }
+    pthread_mutex_unlock(&mw_lock);
+}
+
+static int do_manywait(const char *key, int count, int seconds)
+{
+    pmix_status_t rc;
+    pmix_info_t info[2];
+    char *keys[2] = {(char *) key, NULL};
+    int i, done, waited;
+
+    rc = PMIx_Init(&myproc, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Init: %s\n", PMIx_Error_string(rc));
+        return 1;
+    }
+    PMIX_INFO_LOAD(&info[0], PMIX_WAIT, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&info[1], PMIX_TIMEOUT, &seconds, PMIX_INT);
+    for (i = 0; i < count; i++) {
+        rc = PMIx_Lookup_nb(keys, info, 2, mw_cb, NULL);
+        if (PMIX_SUCCESS != rc) {
+            /* answered without a callback */
+            pthread_mutex_lock(&mw_lock);
+            if (PMIX_ERR_OUT_OF_RESOURCE == rc) {
+                mw_refused++;
+            } else {
+                mw_other++;
+            }
+            pthread_mutex_unlock(&mw_lock);
+        }
+    }
+    printf("WAITING\n");
+    fflush(stdout);
+    sleep(5);
+    pthread_mutex_lock(&mw_lock);
+    printf("REFUSED %d\n", mw_refused);
+    pthread_mutex_unlock(&mw_lock);
+    fflush(stdout);
+    for (waited = 5; waited < seconds; waited++) {
+        pthread_mutex_lock(&mw_lock);
+        done = mw_answered + mw_refused + mw_other;
+        pthread_mutex_unlock(&mw_lock);
+        if (count <= done) {
+            break;
+        }
+        sleep(1);
+    }
+    pthread_mutex_lock(&mw_lock);
+    printf("ANSWERED %d REFUSED %d OTHER %d\n", mw_answered, mw_refused, mw_other);
+    pthread_mutex_unlock(&mw_lock);
+    fflush(stdout);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIx_Finalize(NULL, 0);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     char *keys[2];
@@ -655,6 +739,13 @@ int main(int argc, char **argv)
         keys[1] = argv[3];
         return do_lookup(keys, 2, (5 > argc) ? 20 : atoi(argv[4]),
                          (0 == strcmp(argv[1], "lookup2wait")), NULL);
+    }
+    if (0 == strcmp(argv[1], "manywait")) {
+        if (4 > argc) {
+            fprintf(stderr, "manywait needs <key> <count>\n");
+            return 2;
+        }
+        return do_manywait(argv[2], atoi(argv[3]), (5 > argc) ? 60 : atoi(argv[4]));
     }
     if (0 == strcmp(argv[1], "pubtimeout")) {
         if (4 > argc) {
