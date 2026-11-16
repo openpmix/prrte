@@ -27,6 +27,7 @@
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
+#include "src/util/prte_config_file.h"
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/runtime/prte_globals.h"
@@ -124,6 +125,7 @@ static bool is_local(prte_bootstrap_config_t *cfg, const char *candidate)
 int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
 {
     char *path, *line, *ptr;
+    const char *why;
     FILE *fp;
     char *dvmnodes = NULL;
     int rc = PRTE_ERR_SILENT;
@@ -140,12 +142,19 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
     cfg->connect_max_time = 30;
     cfg->retry_max_delay = 5;
 
-    /* see if we can open a configuration file */
+    /* See if we can open a configuration file. It names the DVM's key, its
+     * controller and its nodes, so it is read only if nobody but root or
+     * the user we run as could have put it there (prte_open_config_file) */
     path = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte.conf", NULL);
-    fp = fopen(path, "r");
+    fp = prte_open_config_file(path, &why);
     if (NULL == fp) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-not-found", true,
-                       prte_process_info.nodename, path);
+        if (NULL != why) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                           "bootstrap-file-refused", true, prte_process_info.nodename, path, why);
+        } else {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
+                           "bootstrap-not-found", true, prte_process_info.nodename, path);
+        }
         free(path);
         return PRTE_ERR_SILENT;
     }
@@ -272,8 +281,11 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
     /* we must be able to parse that list */
     ret = regex_extract_nodes(dvmnodes, &cfg->nodes);
     if (PMIX_SUCCESS != ret) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-bad-nodelist", true,
-                       prte_process_info.nodename, path, dvmnodes, PMIx_Error_string(ret));
+        /* a failure that has already said why needs no second message */
+        if (PMIX_ERR_SILENT != ret) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-bad-nodelist",
+                           true, prte_process_info.nodename, path, dvmnodes, PMIx_Error_string(ret));
+        }
         goto cleanup;
     }
     /* we must have the controller host so we can find it */
@@ -723,13 +735,21 @@ static pmix_status_t regex_parse_value_range(char *base, char *range, int num_di
     return PMIX_SUCCESS;
 }
 
+/* A node list in a file of its own is as much the DVM's configuration as
+ * prte.conf, and is held to the same test */
 static pmix_status_t read_file(char *regexp, char ***names)
 {
     char *line;
     FILE *fp;
     bool failed = false;
+    const char *why;
 
-    fp = fopen(regexp, "r");
+    fp = prte_open_config_file(regexp, &why);
+    if (NULL == fp && NULL != why) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt", "bootstrap-file-refused",
+                       true, prte_process_info.nodename, regexp, why);
+        return PMIX_ERR_SILENT;
+    }
     if (NULL == fp) {
         return PMIX_ERR_BAD_PARAM;
     }

@@ -361,14 +361,126 @@ static int boot_nodes(const char *dir, const char *nodes, prte_bootstrap_config_
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     fp = fopen(path, "w");
-    free(path);
     if (NULL == fp) {
+        free(path);
         return PRTE_ERROR;
     }
     fprintf(fp, "DVMControllerHost=ctrl\nDVMNodes=%s\n", nodes);
     fclose(fp);
+    /* writable by its owner only, whatever the umask: anything more is
+     * refused (prte_open_config_file) */
+    chmod(path, 0644);
+    free(path);
     rc = prte_bootstrap_parse(cfg);
     return rc;
+}
+
+/*
+ * prte.conf names the DVM's key, its controller and its nodes, and a
+ * DVMNodes "file:" list names the nodes too, so each is read only if
+ * nobody but root or the user we run as could have written it - the file
+ * and the directory holding it. Either was read with a plain fopen(), so
+ * whoever could write it decided which key a bootstrapped daemon trusts
+ * and which controller it joins.
+ */
+static bool nodes_are(prte_bootstrap_config_t *cfg, const char *expected);
+
+static int test_bootstrap_file_refused(void)
+{
+    int failures = 0;
+    char dir[] = "/tmp/prte_boot_file_XXXXXX";
+    char *savedir = prte_install_dirs.sysconfdir;
+    char *conf = NULL, *list = NULL, *spec = NULL, *real = NULL;
+    prte_bootstrap_config_t cfg;
+    FILE *fp;
+
+    if (NULL == mkdtemp(dir)) {
+        fprintf(stderr, "FAIL [bootfile]: mkdtemp\n");
+        return 1;
+    }
+    prte_install_dirs.sysconfdir = dir;
+    pmix_asprintf(&conf, "%s/prte.conf", dir);
+    pmix_asprintf(&list, "%s/nodes.txt", dir);
+    pmix_asprintf(&spec, "file:%s", list);
+    pmix_asprintf(&real, "%s/real.conf", dir);
+    fprintf(stdout, "-- the next cases refuse configuration files; the messages they print "
+                    "are expected --\n");
+
+    CHECK("bootfile: a file only its owner can write is read",
+          PRTE_SUCCESS == boot_nodes(dir, "bn[2:1-2]", &cfg) && nodes_are(&cfg, "bn01,bn02"));
+    prte_bootstrap_config_free(&cfg);
+
+    chmod(conf, 0664);
+    CHECK("bootfile: one its group can write is refused", PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    chmod(conf, 0646);
+    CHECK("bootfile: one others can write is refused", PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    chmod(conf, 0644);
+
+    /* a symbolic link at the name, to a file that would pass */
+    rename(conf, real);
+    CHECK("bootfile: a symlink is refused",
+          0 == symlink(real, conf) && PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    unlink(conf);
+    /* ...and a second name for it */
+    CHECK("bootfile: a file with another name is refused",
+          0 == link(real, conf) && PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    unlink(real);
+
+    /* the directory holding it */
+    chmod(dir, 0770);
+    CHECK("bootfile: a directory its group can write is refused",
+          PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    chmod(dir, 01777);
+    CHECK("bootfile: ...unless it is sticky", PRTE_SUCCESS == prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    chmod(dir, 0700);
+
+    /* a node list in a file of its own */
+    fp = fopen(list, "w");
+    if (NULL != fp) {
+        fprintf(fp, "ln1\nln2\n");
+        fclose(fp);
+    }
+    chmod(list, 0644);
+    CHECK("bootfile: a node list file only its owner can write is read",
+          PRTE_SUCCESS == boot_nodes(dir, spec, &cfg) && nodes_are(&cfg, "ln1,ln2"));
+    prte_bootstrap_config_free(&cfg);
+    chmod(list, 0666);
+    CHECK("bootfile: one anyone can write is refused", PRTE_SUCCESS != boot_nodes(dir, spec, &cfg));
+    prte_bootstrap_config_free(&cfg);
+    chmod(list, 0644);
+
+    /* owned by another user - only root can make one */
+    if (0 == geteuid()) {
+        CHECK("bootfile: prte.conf owned by another user is refused",
+              0 == chown(conf, 1, 1) && PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+        prte_bootstrap_config_free(&cfg);
+        CHECK("bootfile: prte.conf given back", 0 == chown(conf, 0, 0));
+        CHECK("bootfile: a directory owned by another user is refused",
+              0 == chown(dir, 1, 1) && PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+        prte_bootstrap_config_free(&cfg);
+        CHECK("bootfile: the directory given back", 0 == chown(dir, 0, 0));
+    } else {
+        fprintf(stdout, "  SKIP bootfile: another user's files (needs root)\n");
+    }
+
+    prte_install_dirs.sysconfdir = savedir;
+    unlink(conf);
+    unlink(list);
+    rmdir(dir);
+    free(conf);
+    free(list);
+    free(spec);
+    free(real);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_bootstrap_file_refused\n");
+    }
+    return failures;
 }
 
 static bool nodes_are(prte_bootstrap_config_t *cfg, const char *expected)
@@ -3106,6 +3218,7 @@ int main(void)
     failures += test_node_insert();
     failures += test_bootstrap_ranks();
     failures += test_bootstrap_nodelist();
+    failures += test_bootstrap_file_refused();
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();

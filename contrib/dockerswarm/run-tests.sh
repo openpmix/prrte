@@ -12251,6 +12251,20 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
                 && ok "the controller refused to start without a key" \
                 || bad "controller started without a DVM key"
         fi
+
+        # prte.conf names the key, the controller and the nodes, so it is
+        # read only if nobody but root or the daemon's own user could have
+        # written it.  One that anybody can write is refused, saying why.
+        if bootstrap_write_conf "node1" "node2,node3,node4" && \
+           bootstrap_vol "chmod 0666 $BOOT_CONF"; then
+            out=$(RUN 'timeout 40 prted --bootstrap 2>&1' || true)
+            echo "$out" | grep -q "group or others can write it" \
+                && ok "a prte.conf anybody can write is refused with a diagnostic" \
+                || bad "a writable prte.conf was not refused: $(echo "$out" | tr '\n' ' ' | head -c 200)"
+            [ "$(prted_count 1)" = 0 ] \
+                && ok "the controller refused to start on it" \
+                || bad "controller started on a prte.conf anybody can write"
+        fi
         bootstrap_restore_conf
         cleanup_swarm
     else
