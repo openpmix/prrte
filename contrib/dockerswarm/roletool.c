@@ -32,6 +32,7 @@
  *   roletool <uri> alloc-naming <alloc-id>
  *   roletool <uri> allocprops <alloc-id>
  *   roletool <uri> allocnodes [<alloc-id>]
+ *   roletool <uri> signal <signum> <nspace:rank|nspace:*>...
  *   roletool <uri> alloc-reqid <req-id> <count> <seconds>
  *   roletool <uri> alloc-extend-reqid <req-id> <time>
  *
@@ -74,6 +75,9 @@
  *   allocprops   ask for the properties of allocation <alloc-id>
  *   allocnodes   ask for the nodes of allocation <alloc-id>, or of the
  *                whole DVM (PMIX_QUERY_ALLOCATION)
+ *   signal       send <signum> by PMIx_Job_control (PMIX_JOB_CTRL_SIGNAL)
+ *                to every target given, each <nspace>:<rank>, or
+ *                <nspace>:* for the whole job
  *   alloc-reqid  ask for <count> new allocations of no nodes, each under
  *                PMIX_ALLOC_REQ_ID <req-id>; then extend by <req-id> alone
  *                for 600 seconds, show the first one's properties, and
@@ -100,6 +104,7 @@
  *   ROLE ALLOCPROPS <status>
  *   ROLE ALLOCNODE <hostname>    (one per node told)
  *   ROLE ALLOCNODES <status>
+ *   ROLE SIGNAL <status>
  *   ROLE REQID-EXTEND <status>
  *
  * Why this cannot be a unit test: what is being asked is whether the DVM
@@ -183,6 +188,7 @@ static void usage(const char *name)
             " alloc-release <alloc-id> | alloc-extend <alloc-id> <time> |"
             " instantiate-id <session-id> <hosts> <alloc-id|-> |"
             " alloc-naming <alloc-id> | allocprops <alloc-id> | allocnodes [<alloc-id>] |"
+            " signal <signum> <nspace:rank|nspace:*>... |"
             " alloc-reqid <req-id> <count> <seconds> |"
             " alloc-extend-reqid <req-id> <time> | spawn-leave <usec> <cmd> [args...]\n",
             name);
@@ -299,6 +305,7 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "pset") && 6 != argc) ||
         (0 == strcmp(op, "claim") && 5 != argc && 6 != argc) ||
         (0 == strcmp(op, "purge") && 5 != argc) ||
+        (0 == strcmp(op, "signal") && 5 > argc) ||
         (0 == strcmp(op, "notify") && 4 != argc) ||
         (0 == strcmp(op, "instantiate-for") && 7 != argc) ||
         (0 == strcmp(op, "instantiate-owned") && 7 != argc) ||
@@ -682,6 +689,41 @@ int main(int argc, char **argv)
         }
         PMIX_INFO_DESTRUCT(&dirs[0]);
         PMIX_INFO_DESTRUCT(&dirs[1]);
+
+    } else if (0 == strcmp(op, "signal")) {
+        pmix_proc_t *tgts;
+        int ntgts = argc - 4, k, sig;
+        char *colon;
+
+        /* targets are <nspace>:<rank>, "*" for the whole job */
+        sig = atoi(argv[3]);
+        tgts = (pmix_proc_t *) calloc((size_t) ntgts, sizeof(pmix_proc_t));
+        for (k = 0; NULL != tgts && k < ntgts; k++) {
+            colon = strrchr(argv[4 + k], ':');
+            if (NULL == colon) {
+                break;
+            }
+            *colon = '\0';
+            PMIX_LOAD_PROCID(&tgts[k], argv[4 + k],
+                             (0 == strcmp(colon + 1, "*")) ? PMIX_RANK_WILDCARD
+                                                           : (pmix_rank_t) strtoul(colon + 1, NULL, 10));
+        }
+        if (NULL == tgts || k < ntgts) {
+            rc = PMIX_ERR_BAD_PARAM;
+        } else {
+            PMIX_INFO_LOAD(&dirs[0], PMIX_JOB_CTRL_SIGNAL, &sig, PMIX_INT);
+            lock_init(&lock);
+            rc = PMIx_Job_control_nb(tgts, (size_t) ntgts, dirs, 1, ctrl_cb, &lock);
+            if (PMIX_SUCCESS != rc) {
+                lock_wake(&lock, rc);
+            } else {
+                lock_wait(&lock);
+            }
+            rc = lock.status;
+            PMIX_INFO_DESTRUCT(&dirs[0]);
+        }
+        printf("ROLE SIGNAL %s\n", PMIx_Error_string(rc));
+        free(tgts);
 
     } else if (0 == strcmp(op, "purge")) {
         PMIX_LOAD_PROCID(&member, argv[3], (pmix_rank_t) strtoul(argv[4], NULL, 10));

@@ -448,6 +448,26 @@ check_vpid:
     return PRTE_EQUAL;
 }
 
+bool prte_util_proc_targeted(const pmix_proc_t *targets, size_t ntargets,
+                             const pmix_proc_t *proc)
+{
+    size_t n;
+
+    if (0 == ntargets) {
+        return true;
+    }
+    for (n = 0; NULL != targets && n < ntargets; n++) {
+        if ('\0' == targets[n].nspace[0] ||
+            !PMIX_CHECK_NSPACE_STRICT(targets[n].nspace, proc->nspace)) {
+            continue;
+        }
+        if (PMIX_RANK_WILDCARD == targets[n].rank || targets[n].rank == proc->rank) {
+            return true;
+        }
+    }
+    return false;
+}
+
 char *prte_pretty_print_timing(int64_t secs, int64_t usecs)
 {
     unsigned long minutes, seconds;
