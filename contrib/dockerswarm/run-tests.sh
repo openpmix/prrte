@@ -3825,16 +3825,20 @@ test_prted() {
     banner "prted: a job-control signal reaches every target it names, and only those"
     # PMIX_JOB_CTRL_SIGNAL with several targets used to signal only the job
     # of the first and report success, and a target naming one rank signalled
-    # the whole of its job.  Each proc says which job and rank it is, and
-    # dies on SIGTERM; a third job, not named, must be left alone.
+    # the whole of its job.  Each proc traps SIGUSR1 and leaves a marker named
+    # for its job and rank, so which procs got the signal is plain - a signal
+    # that killed would end the rest of the job with it.  A fourth job, never
+    # named, must get nothing.
     for n in 1 2; do kill_stray "$n" sleep; done
+    # five procs on node2: the four jobs' and nothing else, so it needs
+    # five slots there
     if ! RUN "test -x $ROLETOOL"; then
         skp "roletool not installed -- re-run ./build.sh"
-    elif ! prted_dvm_start 'node1:4,node2:4'; then
+    elif ! prted_dvm_start 'node1:4,node2:8'; then
         bad "could not start a DVM for the multi-target signal test"
     else
         uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
-        ON 2 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE RANK=\$PMIX_RANK\nexec sleep 120\n" > /tmp/sigtgt.sh && chmod +x /tmp/sigtgt.sh'
+        ON 2 'rm -f /tmp/sigmark.*; printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE RANK=\$PMIX_RANK\ntrap \"touch /tmp/sigmark.\$PMIX_NAMESPACE.\$PMIX_RANK\" USR1\nwhile :; do sleep 1; done\n" > /tmp/sigtgt.sh && chmod +x /tmp/sigtgt.sh'
         PRUN_BG /tmp/sigA.out '--host node2:1 -n 1 /tmp/sigtgt.sh'
         PRUN_BG /tmp/sigB.out '--host node2:1 -n 1 /tmp/sigtgt.sh'
         PRUN_BG /tmp/sigC.out '--host node2:2 -n 2 /tmp/sigtgt.sh'
@@ -3843,35 +3847,38 @@ test_prted() {
         nsA=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigA.out' | tr -d '\r' | head -1)
         nsB=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigB.out' | tr -d '\r' | head -1)
         nsC=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigC.out' | tr -d '\r' | head -1)
-        n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
-        if [ -z "$nsA" ] || [ -z "$nsB" ] || [ -z "$nsC" ] || [ "$n" != 5 ]; then
-            bad "could not get four jobs running on node2 (saw $n procs; A=$nsA B=$nsB C=$nsC)"
+        nsD=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigD.out' | tr -d '\r' | head -1)
+        n=$(ON 2 'pgrep -c -f /tmp/sigtgt.sh' 2>/dev/null | tr -d ' \r')
+        if [ -z "$nsA" ] || [ -z "$nsB" ] || [ -z "$nsC" ] || [ -z "$nsD" ] || [ "$n" != 5 ]; then
+            bad "could not get four jobs running on node2 (saw $n procs; A=$nsA B=$nsB C=$nsC D=$nsD)"
         else
-            out=$(RUN "timeout 60 $ROLETOOL '$uri' signal 15 '$nsA:*' '$nsB:*'" 2>&1)
-            sleep 5
-            n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' signal 10 '$nsA:*' '$nsB:*'" 2>&1)
+            sleep 4
+            marks=$(ON 2 'ls /tmp/sigmark.* 2>/dev/null' | tr -d '\r' | sed 's|/tmp/sigmark\.||' | sort | tr '\n' ' ')
+            expect=$(printf '%s\n' "$nsA.0" "$nsB.0" | sort | tr '\n' ' ')
             if ! echo "$out" | grep -q "ROLE SIGNAL PMIX_SUCCESS"; then
                 bad "the two-job signal failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
-            elif [ "$n" = 3 ]; then
+            elif [ "$marks" = "$expect" ]; then
                 ok "a signal naming two jobs reached both, and no other"
             else
-                bad "a signal naming two jobs left $n procs on node2; expected 3"
+                bad "a signal naming two jobs reached [$marks]; expected [$expect]"
             fi
-            out=$(RUN "timeout 60 $ROLETOOL '$uri' signal 15 '$nsC:1'" 2>&1)
-            sleep 5
-            n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+            ON 2 'rm -f /tmp/sigmark.*'
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' signal 10 '$nsC:1'" 2>&1)
+            sleep 4
+            marks=$(ON 2 'ls /tmp/sigmark.* 2>/dev/null' | tr -d '\r' | sed 's|/tmp/sigmark\.||' | tr '\n' ' ')
             if ! echo "$out" | grep -q "ROLE SIGNAL PMIX_SUCCESS"; then
                 bad "the one-rank signal failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
-            elif [ "$n" = 2 ]; then
+            elif [ "$marks" = "$nsC.1 " ]; then
                 ok "a signal naming one rank reached that rank only"
             else
-                bad "a signal naming one rank left $n procs on node2; expected 2"
+                bad "a signal naming rank 1 of a job reached [$marks]; expected [$nsC.1]"
             fi
         fi
-        RUN 'pkill -f "sleep 120"' >/dev/null 2>&1
+        ON 2 'pkill -f /tmp/sigtgt.sh; true'
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
-    ON 2 'rm -f /tmp/sigtgt.sh; true'
+    ON 2 'rm -f /tmp/sigtgt.sh /tmp/sigmark.*; true'
     RUN 'rm -f /tmp/sigA.out /tmp/sigB.out /tmp/sigC.out /tmp/sigD.out'
     cleanup_swarm
 
