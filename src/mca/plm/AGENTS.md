@@ -506,7 +506,13 @@ daemon via `prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, …)`:
 - `prte_plm_base_prted_terminate_job(nspace)` — wildcard-proc → kill.
 - `prte_plm_base_prted_kill_local_procs(procs)` —
   `PRTE_DAEMON_KILL_LOCAL_PROCS`.
-- `prte_plm_base_prted_signal_local_procs(job, signal)`.
+- `prte_plm_base_prted_signal_local_procs(job, signal)` - the whole of one
+  job, or every job for an empty nspace - and
+  `prte_plm_base_prted_signal_targets(targets, ntargets, signal)`, which both
+  go through: one `PRTE_DAEMON_SIGNAL_LOCAL_PROCS` broadcast naming each
+  target by job and rank. Job control's `PMIX_JOB_CTRL_SIGNAL` uses it with
+  the request's targets as given, so every job named is signalled and a
+  target naming one rank signals only that rank.
 
 A daemon reporting in *after* that broadcast gets the order point to point,
 from `prte_plm_base_prted_exit_late()` (the command it re-sends is the one

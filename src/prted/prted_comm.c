@@ -388,52 +388,82 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         break;
 
         /****    SIGNAL_LOCAL_PROCS   ****/
-    case PRTE_DAEMON_SIGNAL_LOCAL_PROCS:
-        /* unpack the jobid */
+    case PRTE_DAEMON_SIGNAL_LOCAL_PROCS: {
+        /* The procs to signal, each by job and rank - PMIX_RANK_WILDCARD for
+         * the whole job - so a request naming several jobs, or one rank of a
+         * job, reaches exactly those. None names every local proc. */
+        pmix_proc_t *tgts = NULL;
+        int32_t ntgts = 0, k;
+        bool suspend = false;
+
         n = 1;
-        ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
+        ret = PMIx_Data_unpack(NULL, buffer, &ntgts, &n, PMIX_INT32);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             goto CLEANUP;
         }
-
-        /* look up job data object */
-        jdata = prte_get_job_data_object(job);
+        if (0 > ntgts || !prte_pmix_count_fits(buffer, (size_t) ntgts)) {
+            PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            goto CLEANUP;
+        }
+        if (0 < ntgts) {
+            PMIX_PROC_CREATE(tgts, (size_t) ntgts);
+            if (NULL == tgts) {
+                PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                goto CLEANUP;
+            }
+            n = ntgts;
+            ret = PMIx_Data_unpack(NULL, buffer, tgts, &n, PMIX_PROC);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_PROC_FREE(tgts, (size_t) ntgts);
+                goto CLEANUP;
+            }
+        }
 
         /* get the signal */
         n = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &signal, &n, PMIX_INT32);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
+            if (NULL != tgts) {
+                PMIX_PROC_FREE(tgts, (size_t) ntgts);
+            }
             goto CLEANUP;
         }
 
-        /* Convert SIGTSTP to SIGSTOP so we can suspend a.out */
+        /* Convert SIGTSTP to SIGSTOP so we can suspend a.out. A job is
+         * marked suspended, or resumed, only when the whole of it was
+         * signalled - not when one of its ranks was */
         if (SIGTSTP == signal) {
             if (prte_debug_daemons_flag) {
                 pmix_output(0, "%s prted_cmd: converted SIGTSTP to SIGSTOP before delivering",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             }
             signal = SIGSTOP;
-            if (NULL != jdata) {
-                jdata->state |= PRTE_JOB_STATE_SUSPENDED;
+            suspend = true;
+        }
+        for (k = 0; k < ntgts; k++) {
+            if (PMIX_RANK_WILDCARD != tgts[k].rank ||
+                NULL == (jdata = prte_get_job_data_object(tgts[k].nspace))) {
+                continue;
             }
-        } else if (SIGCONT == signal && NULL != jdata) {
-            jdata->state &= ~PRTE_JOB_STATE_SUSPENDED;
+            if (suspend) {
+                jdata->state |= PRTE_JOB_STATE_SUSPENDED;
+            } else if (SIGCONT == signal) {
+                jdata->state &= ~PRTE_JOB_STATE_SUSPENDED;
+            }
         }
 
         if (prte_debug_daemons_flag) {
-            pmix_output(0, "%s prted_cmd: received signal_local_procs, delivering signal %d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signal);
+            pmix_output(0, "%s prted_cmd: received signal_local_procs for %d targets, delivering signal %d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntgts, signal);
         }
 
-        /* Signal them.  The command names a target job, so honor it:
-         * handing NULL to the ODLS means "every local child", which in a
-         * persistent DVM hosting several jobs would deliver the signal to
-         * jobs that were never named.  An empty nspace means "all jobs",
-         * which is what the job-control path packs when it is given no
-         * targets at all. */
-        if (0 == strlen(job)) {
+        /* Signal them. Handing NULL to the ODLS means "every local child",
+         * which is only what an empty list asks for: otherwise each child
+         * is signalled by name, if a target names it. */
+        if (0 == ntgts) {
             if (PRTE_SUCCESS != (ret = prte_odls.signal_local_procs(NULL, signal))) {
                 PRTE_ERROR_LOG(ret);
             }
@@ -441,7 +471,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             for (i = 0; i < prte_local_children->size; i++) {
                 proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
                 if (NULL == proct ||
-                    !PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
+                    !prte_util_proc_targeted(tgts, (size_t) ntgts, &proct->name)) {
                     continue;
                 }
                 ret = prte_odls.signal_local_procs(&proct->name, signal);
@@ -449,8 +479,10 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                     PRTE_ERROR_LOG(ret);
                 }
             }
+            PMIX_PROC_FREE(tgts, (size_t) ntgts);
         }
         break;
+    }
 
         /****    ADD_LOCAL_PROCS   ****/
     case PRTE_DAEMON_ADD_LOCAL_PROCS:

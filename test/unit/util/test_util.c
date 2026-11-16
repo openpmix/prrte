@@ -176,6 +176,46 @@ static int test_compare_name_fields(void)
     return failures;
 }
 
+/*
+ * A signal names its targets by job and rank, and each daemon signals the
+ * local procs they name. Only the first target's job used to be signalled,
+ * and a target naming one rank signalled the whole of its job.
+ */
+static int test_proc_targeted(void)
+{
+    int failures = 0;
+    pmix_proc_t t[3], p;
+
+    PMIX_LOAD_PROCID(&t[0], "sig.job1", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&t[1], "sig.job2", 3);
+    PMIX_LOAD_PROCID(&t[2], "sig.job3", 0);
+
+    PMIX_LOAD_PROCID(&p, "sig.job1", 7);
+    CHECK("targeted: any rank of a job named whole", prte_util_proc_targeted(t, 3, &p));
+    PMIX_LOAD_PROCID(&p, "sig.job2", 3);
+    CHECK("targeted: the rank named", prte_util_proc_targeted(t, 3, &p));
+    PMIX_LOAD_PROCID(&p, "sig.job2", 2);
+    CHECK("targeted: not another rank of that job", !prte_util_proc_targeted(t, 3, &p));
+    PMIX_LOAD_PROCID(&p, "sig.job3", 0);
+    CHECK("targeted: a later target's job, not only the first's",
+          prte_util_proc_targeted(t, 3, &p));
+    PMIX_LOAD_PROCID(&p, "sig.job4", 0);
+    CHECK("targeted: not a job none names", !prte_util_proc_targeted(t, 3, &p));
+    CHECK("targeted: no targets name every proc", prte_util_proc_targeted(NULL, 0, &p));
+    /* an empty nspace in a target is no job at all, not every job */
+    PMIX_LOAD_PROCID(&t[0], NULL, PMIX_RANK_WILDCARD);
+    CHECK("targeted: an empty nspace names nothing", !prte_util_proc_targeted(t, 1, &p));
+    /* a prefix of a job's name is not that job */
+    PMIX_LOAD_PROCID(&t[0], "sig.job", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&p, "sig.job1", 0);
+    CHECK("targeted: a job's name is matched whole", !prte_util_proc_targeted(t, 1, &p));
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_proc_targeted\n");
+    }
+    return failures;
+}
+
 static int test_name_printing(void)
 {
     int failures = 0;
@@ -2234,6 +2274,7 @@ int main(void)
     failures += test_json_window_resizes();
     failures += test_compare_name_fields();
     failures += test_name_printing();
+    failures += test_proc_targeted();
     failures += test_error_strings();
     failures += test_error_bound();
     failures += test_state_strings();

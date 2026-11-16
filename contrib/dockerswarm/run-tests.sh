@@ -3822,6 +3822,59 @@ test_prted() {
     fi
     cleanup_swarm
 
+    banner "prted: a job-control signal reaches every target it names, and only those"
+    # PMIX_JOB_CTRL_SIGNAL with several targets used to signal only the job
+    # of the first and report success, and a target naming one rank signalled
+    # the whole of its job.  Each proc says which job and rank it is, and
+    # dies on SIGTERM; a third job, not named, must be left alone.
+    for n in 1 2; do kill_stray "$n" sleep; done
+    if ! RUN "test -x $ROLETOOL"; then
+        skp "roletool not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:4,node2:4'; then
+        bad "could not start a DVM for the multi-target signal test"
+    else
+        uri=$(RUN "head -1 $PRTED_URI" 2>/dev/null | tr -d '\r\n')
+        ON 2 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE RANK=\$PMIX_RANK\nexec sleep 120\n" > /tmp/sigtgt.sh && chmod +x /tmp/sigtgt.sh'
+        PRUN_BG /tmp/sigA.out '--host node2:1 -n 1 /tmp/sigtgt.sh'
+        PRUN_BG /tmp/sigB.out '--host node2:1 -n 1 /tmp/sigtgt.sh'
+        PRUN_BG /tmp/sigC.out '--host node2:2 -n 2 /tmp/sigtgt.sh'
+        PRUN_BG /tmp/sigD.out '--host node2:1 -n 1 /tmp/sigtgt.sh'
+        sleep 10
+        nsA=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigA.out' | tr -d '\r' | head -1)
+        nsB=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigB.out' | tr -d '\r' | head -1)
+        nsC=$(RUN 'sed -n "s/^NS=\([^ ]*\) .*/\1/p" /tmp/sigC.out' | tr -d '\r' | head -1)
+        n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+        if [ -z "$nsA" ] || [ -z "$nsB" ] || [ -z "$nsC" ] || [ "$n" != 5 ]; then
+            bad "could not get four jobs running on node2 (saw $n procs; A=$nsA B=$nsB C=$nsC)"
+        else
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' signal 15 '$nsA:*' '$nsB:*'" 2>&1)
+            sleep 5
+            n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+            if ! echo "$out" | grep -q "ROLE SIGNAL PMIX_SUCCESS"; then
+                bad "the two-job signal failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            elif [ "$n" = 3 ]; then
+                ok "a signal naming two jobs reached both, and no other"
+            else
+                bad "a signal naming two jobs left $n procs on node2; expected 3"
+            fi
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' signal 15 '$nsC:1'" 2>&1)
+            sleep 5
+            n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+            if ! echo "$out" | grep -q "ROLE SIGNAL PMIX_SUCCESS"; then
+                bad "the one-rank signal failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            elif [ "$n" = 2 ]; then
+                ok "a signal naming one rank reached that rank only"
+            else
+                bad "a signal naming one rank left $n procs on node2; expected 2"
+            fi
+        fi
+        RUN 'pkill -f "sleep 120"' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    ON 2 'rm -f /tmp/sigtgt.sh; true'
+    RUN 'rm -f /tmp/sigA.out /tmp/sigB.out /tmp/sigC.out /tmp/sigD.out'
+    cleanup_swarm
+
     banner "prted: a tool attached to a NON-MASTER daemon completes its job"
     # A prun started on a compute node of a persistent DVM, with no --dvm-uri,
     # finds its LOCAL daemon's rendezvous file and attaches there instead of to

@@ -30,6 +30,8 @@
 
 #include "prte_config.h"
 
+#include <stdlib.h>
+
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_output.h"
 
@@ -37,6 +39,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/plm.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
@@ -95,37 +98,6 @@ static bool targets_permitted(const pmix_proc_t *requestor, const pmix_proc_t ta
     return true;
 }
 
-/* xcast a signal for the local procs of one job, or of every job when
- * jobid is empty */
-static pmix_status_t send_signal(pmix_nspace_t jobid, int32_t signum)
-{
-    pmix_data_buffer_t *cmd;
-    prte_daemon_cmd_flag_t cmmnd = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-    pmix_status_t rc;
-    int prc;
-
-    PMIX_DATA_BUFFER_CREATE(cmd);
-    rc = PMIx_Data_pack(NULL, cmd, &cmmnd, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, cmd, jobid, 1, PMIX_PROC_NSPACE);
-    }
-    if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, cmd, &signum, 1, PMIX_INT32);
-    }
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(cmd);
-        return rc;
-    }
-    prc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd);
-    PMIX_DATA_BUFFER_RELEASE(cmd);
-    if (PRTE_SUCCESS != prc) {
-        PRTE_ERROR_LOG(prc);
-        return prte_pmix_convert_rc(prc);
-    }
-    return PMIX_SUCCESS;
-}
-
 /* process a job control request - runs on the PRRTE progress
  * thread, since it accesses proc objects and drives the PLM
  * and daemon-command xcasts */
@@ -137,7 +109,6 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
     int32_t signum, ntgts;
     size_t m, n;
     prte_proc_t *proc;
-    pmix_nspace_t jobid;
     pmix_pointer_array_t parray, *ptrarray;
     pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t cmmnd;
@@ -270,26 +241,40 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
             if (PMIX_SUCCESS != rc) {
                 return rc;
             }
-            if (NULL != targets) {
-                /* the job of the first target */
-                PMIX_LOAD_NSPACE(jobid, targets[0].nspace);
-                rc = send_signal(jobid, signum);
+            /* Every target, each by its job and rank, in one broadcast. Only
+             * the first target's job used to be signalled - the rest were
+             * passed over and the request reported success - and a target
+             * naming one rank signalled the whole of its job. */
+            if (NULL != targets && 0 < ntargets) {
+                prc = prte_plm_base_prted_signal_targets(targets, ntargets, signum);
             } else if (all) {
                 /* every job */
-                PMIX_LOAD_NSPACE(jobid, NULL);
-                rc = send_signal(jobid, signum);
+                prc = prte_plm_base_prted_signal_targets(NULL, 0, signum);
             } else {
-                /* every job the requester may access */
-                rc = PMIX_SUCCESS;
-                for (n = 0; PMIX_SUCCESS == rc && n < (size_t) prte_job_data->size; n++) {
+                /* every job the requester may access, as a whole */
+                pmix_proc_t *jobs;
+                size_t njobs = 0;
+
+                jobs = (pmix_proc_t *) calloc((size_t) prte_job_data->size + 1,
+                                              sizeof(pmix_proc_t));
+                if (NULL == jobs) {
+                    return PMIX_ERR_NOMEM;
+                }
+                for (n = 0; n < (size_t) prte_job_data->size; n++) {
                     jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, (int) n);
                     if (untargeted_job(jdata, requestor, directives, ndirs)) {
-                        rc = send_signal(jdata->nspace, signum);
+                        PMIX_LOAD_PROCID(&jobs[njobs], jdata->nspace, PMIX_RANK_WILDCARD);
+                        ++njobs;
                     }
                 }
+                /* none is none - not every job, which is what no targets
+                 * means to the daemons */
+                prc = (0 == njobs) ? PRTE_SUCCESS
+                                   : prte_plm_base_prted_signal_targets(jobs, njobs, signum);
+                free(jobs);
             }
-            if (PMIX_SUCCESS != rc) {
-                return rc;
+            if (PRTE_SUCCESS != prc) {
+                return prte_pmix_convert_rc(prc);
             }
             return PMIX_OPERATION_SUCCEEDED;
         }
