@@ -33,6 +33,7 @@
 #include "prte_config.h"
 #include "types.h"
 
+#include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/pmix_mca_base_framework.h"
@@ -98,6 +99,12 @@ typedef struct {
      * counts go back when the map is done. Emptied by
      * prte_rmaps_base_restore_resized() at the end of every map. */
     pmix_list_t resized_nodes;
+    /* the same entries keyed by node, so recording one and finding a
+     * node's original count are not a walk of the list: a hostfile capping
+     * every node recorded each of them, and walking the list for every one
+     * made filtering a job's nodes quadratic. Set up on first use. */
+    pmix_hash_table_t resized_index;
+    bool resized_indexed;
 } prte_rmaps_base_t;
 
 /* one entry of prte_rmaps_base.resized_nodes: the node is borrowed, since

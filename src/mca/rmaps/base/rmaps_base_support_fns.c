@@ -141,6 +141,19 @@ static bool node_in_targets(prte_node_t *nd,
 /*
  * Query the registry for all nodes allocated to a specified app_context
  */
+/* The entry this map recorded for node, or NULL */
+static prte_rmaps_base_resize_t *resized_entry(prte_node_t *node)
+{
+    void *rsz = NULL;
+
+    if (!prte_rmaps_base.resized_indexed ||
+        PMIX_SUCCESS != pmix_hash_table_get_value_uint64(&prte_rmaps_base.resized_index,
+                                                         (uint64_t) (uintptr_t) node, &rsz)) {
+        return NULL;
+    }
+    return (prte_rmaps_base_resize_t *) rsz;
+}
+
 void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots)
 {
     prte_rmaps_base_resize_t *rsz;
@@ -148,21 +161,31 @@ void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots)
     /* if this map already grew the node, the value it had the first time is
      * the one to put back - a later app must not record the grown count as
      * the original */
-    PMIX_LIST_FOREACH(rsz, &prte_rmaps_base.resized_nodes, prte_rmaps_base_resize_t) {
-        if (rsz->node == node) {
-            return;
-        }
+    if (NULL != resized_entry(node)) {
+        return;
+    }
+    if (!prte_rmaps_base.resized_indexed) {
+        PMIX_CONSTRUCT(&prte_rmaps_base.resized_index, pmix_hash_table_t);
+        pmix_hash_table_init(&prte_rmaps_base.resized_index, 1024);
+        prte_rmaps_base.resized_indexed = true;
     }
     rsz = PMIX_NEW(prte_rmaps_base_resize_t);
     rsz->node = node;   // borrowed - the pool owns it
     rsz->slots = slots;
     rsz->slots_given = PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
     pmix_list_append(&prte_rmaps_base.resized_nodes, &rsz->super);
+    /* the list holds the entry; the index only points at it */
+    pmix_hash_table_set_value_uint64(&prte_rmaps_base.resized_index,
+                                     (uint64_t) (uintptr_t) node, rsz);
 }
 
 void prte_rmaps_base_restore_resized(void)
 {
     prte_rmaps_base_resize_t *rsz;
+
+    if (prte_rmaps_base.resized_indexed) {
+        pmix_hash_table_remove_all(&prte_rmaps_base.resized_index);
+    }
 
     while (NULL != (rsz = (prte_rmaps_base_resize_t *)
                     pmix_list_remove_first(&prte_rmaps_base.resized_nodes))) {
@@ -189,14 +212,9 @@ void prte_rmaps_base_restore_resized(void)
  * count if this map has not touched it. */
 static int32_t original_slots(prte_node_t *node)
 {
-    prte_rmaps_base_resize_t *rsz;
+    prte_rmaps_base_resize_t *rsz = resized_entry(node);
 
-    PMIX_LIST_FOREACH(rsz, &prte_rmaps_base.resized_nodes, prte_rmaps_base_resize_t) {
-        if (rsz->node == node) {
-            return rsz->slots;
-        }
-    }
-    return node->slots;
+    return (NULL == rsz) ? node->slots : rsz->slots;
 }
 
 /* Whether this app counts hwthreads, rather than cores, as its cpus: the
