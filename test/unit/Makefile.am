@@ -17,6 +17,13 @@ dist_check_SCRIPTS = check_static_init.pl check_query_authority.py \
                      check_query_qualifiers.py \
                      check_ctor_coverage.py check_attr_pairing.py
 
+# Run the .py tests with the interpreter configure found, not the first
+# python3 on PATH that their "#!/usr/bin/env python3" line reaches.
+# PYTHON is empty in a tarball build that did not look for Python; the
+# scripts then run through their shebang, as they did before.
+TEST_EXTENSIONS = .py
+PY_LOG_COMPILER = $(PYTHON)
+
 # check_ctor_coverage.py reads its baseline from the source directory, so it
 # has to travel with the script rather than only being in the repository.
 EXTRA_DIST = ctor_coverage_baseline.txt
