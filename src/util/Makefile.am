@@ -58,6 +58,7 @@ headers = \
         prte_poly1305.h \
         prte_json_scan.h \
         prte_json_window.h \
+        prte_config_file.h \
         prte_output_file.h \
         proc_info.h \
         prte_show_help.h \
@@ -81,6 +82,7 @@ sources = \
         prte_cmd_line.c \
         prte_json_scan.c \
         prte_json_window.c \
+        prte_config_file.c \
         prte_output_file.c \
         proc_info.c \
         prte_show_help.c \

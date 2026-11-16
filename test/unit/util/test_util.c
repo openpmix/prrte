@@ -103,6 +103,7 @@ extern int test_textfile(void);
 extern int test_dvm_key(void);
 extern int test_session_dir(void);
 extern int test_output_file(void);
+extern int test_config_file(void);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -2250,6 +2251,7 @@ int main(void)
     failures += test_dvm_key();
     failures += test_session_dir();
     failures += test_output_file();
+    failures += test_config_file();
 
     prte_finalize();
 
