@@ -29,6 +29,8 @@
 #include "constants.h"
 #include "types.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef HAVE_SYS_TIME_H
@@ -44,6 +46,7 @@
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 #include "src/util/prte_show_help.h"
 
 #include "src/runtime/data_server/prte_data_server.h"
@@ -125,6 +128,26 @@ int prte_data_server_init(void)
 
     PMIX_CONSTRUCT(&prte_data_store.pending, pmix_list_t);
 
+    /* The most lookups one requesting PROCESS may have parked here.
+     *
+     * A PMIX_WAIT lookup waits until a publish answers it, its own
+     * PMIX_TIMEOUT runs out, or its process ends - and a process using
+     * PMIx_Lookup_nb may have any number of them, each holding its keys
+     * here and a request on its daemon, and each walked by every publish.
+     * Per process rather than per user: the ordinary case is one waiting
+     * lookup per process, and every rank of a large job may be waiting on
+     * the same name at once, which a per-user cap would refuse. */
+    prte_data_store.max_waiting = 64;
+    (void) pmix_mca_base_var_register("prte", "prte", "data", "server_max_waiting",
+                                      "Maximum number of lookups waiting for data (PMIX_WAIT) "
+                                      "that one process may have in a datastore at a time; one "
+                                      "beyond it is refused with PMIX_ERR_OUT_OF_RESOURCE.  0 "
+                                      "disables the cap",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_data_store.max_waiting);
+    PMIX_CONSTRUCT(&prte_data_store.waiting, pmix_hash_table_t);
+    pmix_hash_table_init(&prte_data_store.waiting, 128);
+
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_SERVER,
                   PRTE_RML_PERSISTENT, prte_data_server, NULL);
     /* requests that are about our own store, whatever else is configured */
@@ -160,6 +183,88 @@ void prte_data_server_finalize(void)
     PMIX_DESTRUCT(&prte_data_store.store);
     PMIX_LIST_DESTRUCT(&prte_data_store.pending);
     PMIX_LIST_DESTRUCT(&prte_data_store.usage);
+    {
+        void *key, *value, *in_node, *out_node;
+        size_t keysize;
+        pmix_status_t rc;
+
+        rc = pmix_hash_table_get_first_key_ptr(&prte_data_store.waiting, &key, &keysize,
+                                               &value, &in_node);
+        while (PMIX_SUCCESS == rc) {
+            free(value);
+            rc = pmix_hash_table_get_next_key_ptr(&prte_data_store.waiting, &key, &keysize,
+                                                  &value, in_node, &out_node);
+            in_node = out_node;
+        }
+        PMIX_DESTRUCT(&prte_data_store.waiting);
+    }
+}
+
+/* one process's parked lookups */
+typedef struct {
+    int count;
+    /* the refusal is reported once while the process has lookups parked */
+    bool warned;
+} prte_ds_waiting_t;
+
+static size_t waiting_key(const pmix_proc_t *proc, char *key, size_t size)
+{
+    int len = snprintf(key, size, "%s:%u", proc->nspace, (unsigned) proc->rank);
+
+    return (0 > len) ? 0 : ((size_t) len < size ? (size_t) len : size - 1);
+}
+
+bool prte_ds_park(prte_data_req_t *req)
+{
+    char key[PMIX_MAX_NSLEN + 16];
+    size_t klen = waiting_key(&req->requestor, key, sizeof(key));
+    prte_ds_waiting_t *w = NULL;
+
+    if (PMIX_SUCCESS != pmix_hash_table_get_value_ptr(&prte_data_store.waiting, key, klen,
+                                                      (void **) &w)) {
+        w = NULL;
+    }
+    if (NULL != w && 0 < prte_data_store.max_waiting &&
+        prte_data_store.max_waiting <= w->count) {
+        if (!w->warned) {
+            w->warned = true;
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-data-server.txt",
+                           "datastore:max-waiting", true,
+                           prte_process_info.nodename, PMIX_NAME_PRINT(&req->requestor),
+                           prte_data_store.max_waiting);
+        }
+        return false;
+    }
+    if (NULL == w) {
+        w = (prte_ds_waiting_t *) calloc(1, sizeof(*w));
+        if (NULL == w ||
+            PMIX_SUCCESS != pmix_hash_table_set_value_ptr(&prte_data_store.waiting, key, klen, w)) {
+            free(w);
+            return false;
+        }
+    }
+    w->count++;
+    pmix_list_append(&prte_data_store.pending, &req->super);
+    return true;
+}
+
+void prte_ds_unpark(prte_data_req_t *req)
+{
+    char key[PMIX_MAX_NSLEN + 16];
+    size_t klen = waiting_key(&req->requestor, key, sizeof(key));
+    prte_ds_waiting_t *w = NULL;
+
+    pmix_list_remove_item(&prte_data_store.pending, &req->super);
+    if (PMIX_SUCCESS != pmix_hash_table_get_value_ptr(&prte_data_store.waiting, key, klen,
+                                                      (void **) &w) ||
+        NULL == w) {
+        return;
+    }
+    if (0 < --w->count) {
+        return;
+    }
+    pmix_hash_table_remove_value_ptr(&prte_data_store.waiting, key, klen);
+    free(w);
 }
 
 void prte_data_server(int status, pmix_proc_t *sender,

@@ -592,7 +592,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             continue;
         }
         if (prte_ds_answer_parked(req)) {
-            pmix_list_remove_item(&prte_data_store.pending, &req->super);
+            prte_ds_unpark(req);
             PMIX_RELEASE(req);
         }
     }
