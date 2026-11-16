@@ -231,17 +231,20 @@ PRTE_EXPORT void prte_odls_base_default_wait_local_proc(int fd, short sd, void *
 /* define a function type to signal a local proc */
 typedef int (*prte_odls_base_signal_local_fn_t)(pid_t pid, int signum);
 
-/* Check an app's working directory and, if check_app, its executable, as
- * uid/gid, in a child: the directory is entered (falling back to that
- * user's home directory when usercwd is false), the executable resolved
- * through the app's PATH and checked for execution. On success app->cwd and
- * app->app take what was found, *wdir the absolute directory, and the app's
- * PWD is set. Returns PMIx's PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE,
+/* Check an app's working directory, if check_cwd, and its executable, if
+ * check_app, as uid/gid, in a child. With check_cwd the directory is
+ * entered, falling back to that user's home directory when usercwd is
+ * false, and on success app->cwd and *wdir take what was used and the
+ * absolute directory, and the app's PWD is set; without it the directory
+ * is only entered. With check_app the executable is resolved through the
+ * app's PATH and checked for execution, and app->app takes what was found
+ * - so it is called once the app's environment is complete. Returns PMIx's PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE,
  * PMIX_ERR_JOB_EXE_NOT_FOUND or PMIX_ERR_EXE_NOT_ACCESSIBLE as
  * pmix_util_check_context_cwd()/_app() would. Used for a job whose owner
  * is not the daemon's own user. */
 PRTE_EXPORT int prte_odls_base_check_as_owner(prte_app_context_t *app, char **wdir, uid_t uid,
-                                              gid_t gid, bool usercwd, bool check_app);
+                                              gid_t gid, bool usercwd, bool check_cwd,
+                                              bool check_app);
 
 PRTE_EXPORT int
 prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal,

@@ -427,17 +427,21 @@ to `prte_event_base`.
   when the directory was not one the user asked for, a `PATH` search for a
   naked name, `access(X_OK)` - as whoever calls them. For a job whose owner
   is not the daemon's own user (`prte_pmix_server_job_run_as()` says
-  `change`), `setup_path` makes both in a child that is the owner
+  `change`), each is made in a child that is the owner
   (`prte_odls_base_check_as_owner()`, through `prte_pmix_server_work_as()`)
-  and reads the answers back: the daemon itself goes into no directory the
-  user named, and the fallback is the *owner's* home, looked up before the
-  fork. Made as root, a directory or program only root could reach passed,
-  a naked name could resolve to a copy the owner cannot run, and the
-  fallback went to root's own home. The executable is checked in the same
-  child, before `prte_filem` places files: such a job cannot preload, so
-  nothing placed could change the answer, and `launch_local` skips its own
-  `check_context_app` (`app_checked`). A job of the daemon's own user is
-  checked in place as before, and pays for no child.
+  and the daemon reads the answers back: the daemon itself goes into no
+  directory the user named, and the fallback is the *owner's* home, looked
+  up before the fork. Made as root, a directory or program only root could
+  reach passed, a naked name could resolve to a copy the owner cannot run,
+  and the fallback went to root's own home. **They are two children, at
+  the two places the checks have always been**: the directory in
+  `setup_path` (`check_cwd`), and the executable where `launch_local`
+  checks everyone's (`check_app`), once `prte_launch_environ`, the env
+  directives and `setup_fork` have made the job's environment complete.
+  Folding the executable into the first child searched for it before the
+  env directives were applied, so a `PATH` given with `-x` was not the one
+  searched. A job of the daemon's own user is checked in place as before,
+  and pays for no child.
 
   **`process_envars` owns the envar directives — all of them.** It runs
   for every personality whatever that personality's `setup_fork` does,
@@ -872,9 +876,9 @@ computed proc state.
   leaks a caddy (plus its `wdir` string). Each of them also owes exactly one
   `spawn_report()`, or the child's launch is never accounted for.
 - **`setup_path` writes through to `app->cwd`.** `launch_local` calls it as
-  `setup_path(jobdat, app, &app->cwd, &app_checked)`, so it overwrites (and
-  must first free) the app's existing `cwd`; `restart_proc` instead passes a
-  local temp, and NULL for `app_checked`. Don't assume `*wdir` starts NULL.
+  `setup_path(jobdat, app, &app->cwd)`, so it overwrites (and must first
+  free) the app's existing `cwd`; `restart_proc` instead passes a local
+  temp. Don't assume `*wdir` starts NULL.
 - **One cleanup label, not scattered `return`s.** `get_add_procs_data` and
   `construct_child_list` build `pmix_info_t` arrays and `PMIX_INFO_LIST`s
   that every exit has to release. Prefer a single `goto REPORT_ERROR` over

@@ -1181,7 +1181,7 @@ static int test_check_as_owner(void)
     app->app = strdup("prog");
     pmix_asprintf(&env_path, "PATH=%s", real);
     PMIx_Argv_append_nosize(&app->env, env_path);
-    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true, true);
     CHECK("check_as_owner: a directory and a program on PATH are found",
           PMIX_SUCCESS == rc && NULL != wdir && 0 == strcmp(wdir, real) &&
               0 == strcmp(app->app, exe));
@@ -1193,12 +1193,12 @@ static int test_check_as_owner(void)
     /* a directory the user asked for that is not there */
     free(app->cwd);
     pmix_asprintf(&app->cwd, "%s/missing", real);
-    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true, true);
     CHECK("check_as_owner: a missing directory the user asked for is refused",
           PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE == rc);
 
     /* one the user did not ask for falls back to the owner's home */
-    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, false, false);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, false, true, false);
     CHECK("check_as_owner: a missing default directory falls back to the owner's home",
           NULL == pw || (PMIX_SUCCESS == rc && 0 == strcmp(app->cwd, pw->pw_dir)));
     free(wdir);
@@ -1209,15 +1209,42 @@ static int test_check_as_owner(void)
     app->cwd = strdup(real);
     free(app->app);
     app->app = strdup("no-such-program");
-    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true, true);
     CHECK("check_as_owner: a program on no PATH directory is not found",
           PMIX_ERR_JOB_EXE_NOT_FOUND == rc);
     free(app->app);
     app->app = strdup(plain);
-    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true, true);
     CHECK("check_as_owner: a file that is not executable is refused",
           PMIX_ERR_EXE_NOT_ACCESSIBLE == rc);
     free(wdir);
+
+    /* the executable alone, once the directory is decided: a program named
+     * relative to it is found there, on the PATH the app now has */
+    free(app->app);
+    app->app = strdup("./prog");
+    rc = prte_odls_base_check_as_owner(app, NULL, uid, gid, false, false, true);
+    CHECK("check_as_owner: a program alone, named from the directory, is found",
+          PMIX_SUCCESS == rc && 0 == strcmp(app->app, "./prog"));
+    /* from a directory that does not hold it - the working directory is
+     * searched too - a naked name is found only through the PATH the app
+     * has when it is checked */
+    free(app->cwd);
+    app->cwd = strdup("/");
+    free(app->app);
+    app->app = strdup("prog");
+    PMIx_Argv_free(app->env);
+    app->env = NULL;
+    PMIx_Argv_append_nosize(&app->env, "PATH=/nonexistent");
+    rc = prte_odls_base_check_as_owner(app, NULL, uid, gid, false, false, true);
+    CHECK("check_as_owner: ...and searched for on the PATH it has at the time",
+          PMIX_ERR_JOB_EXE_NOT_FOUND == rc);
+    PMIx_Argv_free(app->env);
+    app->env = NULL;
+    PMIx_Argv_append_nosize(&app->env, env_path);
+    rc = prte_odls_base_check_as_owner(app, NULL, uid, gid, false, false, true);
+    CHECK("check_as_owner: ...which, once it names the program's directory, finds it",
+          PMIX_SUCCESS == rc && 0 == strcmp(app->app, exe));
 
     PMIX_RELEASE(app);
     unlink(exe);
