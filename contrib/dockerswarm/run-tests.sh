@@ -3169,7 +3169,8 @@ test_runtime() {
         # The file pmix_server_uri names says which server every publish
         # and lookup goes to, so the master reads it only if it is the file
         # at that name (not a symbolic link), has one name, cannot be
-        # written by its group or others, and is owned by root or the
+        # written by others - nor by its group, unless the DVM's user is
+        # in that group and is not root - and is owned by root or the
         # DVM's own user.  A DVM is pointed at each variant of the server's
         # own file in turn; a failed attach fails every request after it,
         # so a publish says which were read.  The 0644 copy is the control.
@@ -3179,7 +3180,11 @@ test_runtime() {
              cp /tmp/ds-server.uri /tmp/ds-gw.uri && chmod 0664 /tmp/ds-gw.uri &&
              cp /tmp/ds-server.uri /tmp/ds-hl.uri && chmod 0644 /tmp/ds-hl.uri &&
              ln /tmp/ds-hl.uri /tmp/ds-hl2.uri' >/dev/null 2>&1
-        for v in copy:read link:refused gw:refused hl:refused; do
+        # a group-writable copy is the DVM user's own group's: read unless
+        # the DVM runs as root, which takes no group write
+        gw=refused
+        [ "$(RUN 'id -u' | tr -d '\r')" = 0 ] || gw=read
+        for v in copy:read link:refused gw:$gw hl:refused; do
             f=${v%%:*}; want=${v##*:}
             if ! dvm_start_uri /tmp/ds-c.uri 'node8:2' "--prtemca pmix_server_uri file:/tmp/ds-$f.uri"; then
                 bad "could not start a DVM pointed at the $f file"
@@ -12341,7 +12346,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         if bootstrap_write_conf "node1" "node2,node3,node4" && \
            bootstrap_vol "chmod 0666 $BOOT_CONF"; then
             out=$(RUN 'timeout 40 prted --bootstrap 2>&1' || true)
-            echo "$out" | grep -q "group or others can write it" \
+            echo "$out" | grep -q "can be written by anyone" \
                 && ok "a prte.conf anybody can write is refused with a diagnostic" \
                 || bad "a writable prte.conf was not refused: $(echo "$out" | tr '\n' ' ' | head -c 200)"
             [ "$(prted_count 1)" = 0 ] \
