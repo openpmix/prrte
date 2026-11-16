@@ -1313,7 +1313,6 @@ DONE:
 static const char *alloc_target_opts[] = {
     PRTE_CLI_SESSION_ID,
     PRTE_CLI_TARGET_ALLOC,
-    PRTE_CLI_ALLOC_REFID,
     NULL
 };
 
@@ -1582,7 +1581,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     }
     if (1 < ntargets) {
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "alloc-target-conflict", true,
-                       PRTE_CLI_SESSION_ID, PRTE_CLI_TARGET_ALLOC, PRTE_CLI_ALLOC_REFID);
+                       PRTE_CLI_SESSION_ID, PRTE_CLI_TARGET_ALLOC);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -1610,10 +1609,6 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_TARGET_ALLOC);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ALLOC_ID, opt->values[0], PMIX_STRING);
-    }
-    opt = pmix_cmd_line_get_param(results, PRTE_CLI_ALLOC_REFID);
-    if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ALLOC_REQ_ID, opt->values[0], PMIX_STRING);
     }
 
     /* give the schizo components a chance to add to the job info */

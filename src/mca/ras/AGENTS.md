@@ -697,7 +697,7 @@ one:
   or scheduler sees it. A req_id that names none of the requester's
   allocations is left alone - `ras/slurm` reads an EXTEND's req_id as the
   name of the new request - and the base then refuses it as not found;
-- a spawn's `PMIX_ALLOC_REQ_ID` (`--alloc-refid`, `PRTE_JOB_REF_ID`) is
+- a spawn's `PMIX_ALLOC_REQ_ID` (`PRTE_JOB_REF_ID`) is
   resolved against the spawn's requester in `plm_base_receive.c`;
 - `ras/slurm`'s pending requests, which have no `PMIX_ALLOC_ID` yet, are
   named by the requesting namespace together with the req_id.
