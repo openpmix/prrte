@@ -2713,6 +2713,201 @@ static int test_return_to_pool(void)
     return failures;
 }
 
+/* An allocation's PMIX_ALLOC_ID is assigned by what grants it - the
+ * scheduler, or ras/hosts when there is none - never by the requester, and
+ * never made up by the base. */
+static const char *info_string(prte_pmix_server_req_t *req, const char *key)
+{
+    size_t n;
+
+    for (n = 0; NULL != req->info && n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, key) &&
+            PMIX_STRING == req->info[n].value.type) {
+            return req->info[n].value.data.string;
+        }
+    }
+    return NULL;
+}
+
+static int count_sessions(void)
+{
+    int k, count = 0;
+
+    for (k = 0; k < prte_sessions->size; k++) {
+        if (NULL != pmix_pointer_array_get_item(prte_sessions, k)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+/* a PMIX_ALLOC_NEW of no nodes as the module's answer leaves it: the
+ * owner, and the id when one is given */
+static prte_pmix_server_req_t *mknew_answer(const char *aid, const char *reqid)
+{
+    uint32_t me = (uint32_t) prte_process_info.euid;
+    uint32_t mygrp = (uint32_t) prte_process_info.egid;
+    pmix_info_t x[4];
+    size_t nx = 0, k;
+    prte_pmix_server_req_t *req;
+
+    PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_UID, &me, PMIX_UINT32);
+    PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_GID, &mygrp, PMIX_UINT32);
+    if (NULL != aid) {
+        PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_ID, aid, PMIX_STRING);
+    }
+    if (NULL != reqid) {
+        PMIX_INFO_LOAD(&x[nx++], PMIX_ALLOC_REQ_ID, reqid, PMIX_STRING);
+    }
+    req = mkalloc_req(PMIX_ALLOC_NEW, me, mygrp, x, nx);
+    for (k = 0; k < nx; k++) {
+        PMIX_INFO_DESTRUCT(&x[k]);
+    }
+    return req;
+}
+
+static int test_alloc_id(void)
+{
+    int failures = 0;
+    bool saved_owned = prte_ras_base.scheduler_owned;
+    bool saved_elastic = prte_elastic_mode;
+    prte_pmix_server_req_t *req, *req2;
+    prte_session_t *s, *held;
+    pmix_mca_base_component_t *comp;
+    pmix_mca_base_module_t *module = NULL;
+    prte_ras_base_module_t *mod;
+    int before, pri = -1;
+    char *first = NULL;
+
+    prte_ras_base.scheduler_owned = false;
+    prte_elastic_mode = true;
+    fprintf(stdout, "-- the next test refuses allocation ids; the messages it "
+                    "prints are expected --\n");
+
+    /* a requester may not supply the id of a new allocation */
+    before = count_sessions();
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    req->allocdir = PMIX_ALLOC_NEW;
+    req->ninfo = 1;
+    req->info = PMIx_Info_create(1);
+    req->copy = true;
+    PMIX_INFO_LOAD(&req->info[0], PMIX_ALLOC_ID, "prte-unit-test-mine", PMIX_STRING);
+    req->infocbfunc = resize_cb;
+    resize_answered = false;
+    resize_status = PMIX_SUCCESS;
+    prte_ras_base_modify(0, 0, req);
+    CHECK("alloc_id: a NEW carrying PMIX_ALLOC_ID is refused",
+          resize_answered && PMIX_ERR_BAD_PARAM == resize_status);
+    CHECK("alloc_id: ...and creates nothing",
+          before == count_sessions() &&
+              NULL == prte_get_session_object_from_id("prte-unit-test-mine"));
+
+    /* an answer that gives no id creates no reservation */
+    req = mknew_answer(NULL, "prte-unit-test-req");
+    req->pstatus = PMIX_SUCCESS;
+    prte_ras_base_complete_request(req);
+    CHECK("alloc_id: a NEW answered with no id fails",
+          PMIX_ERR_BAD_PARAM == req->pstatus);
+    CHECK("alloc_id: ...and creates nothing", before == count_sessions());
+    PMIX_RELEASE(req);
+
+    /* the id the answer gives is the reservation's, returned with the
+     * requester's own */
+    req = mknew_answer("prte-unit-test-sched.1", "prte-unit-test-req");
+    req->pstatus = PMIX_SUCCESS;
+    prte_ras_base_complete_request(req);
+    s = prte_get_session_object_from_id("prte-unit-test-sched.1");
+    CHECK("alloc_id: a NEW answered with an id succeeds", PMIX_SUCCESS == req->pstatus);
+    CHECK("alloc_id: ...creating the reservation under that id",
+          NULL != s && NULL != s->user_refid &&
+              0 == strcmp("prte-unit-test-req", s->user_refid));
+    CHECK("alloc_id: ...and returning both ids",
+          NULL != info_string(req, PMIX_ALLOC_ID) &&
+              0 == strcmp("prte-unit-test-sched.1", info_string(req, PMIX_ALLOC_ID)) &&
+              NULL != info_string(req, PMIX_ALLOC_REQ_ID) &&
+              0 == strcmp("prte-unit-test-req", info_string(req, PMIX_ALLOC_REQ_ID)));
+    PMIX_RELEASE(req);
+
+    /* an id that already names a reservation is refused, and that
+     * reservation is left as it was */
+    before = count_sessions();
+    req = mknew_answer("prte-unit-test-sched.1", "prte-unit-test-other");
+    req->pstatus = PMIX_SUCCESS;
+    prte_ras_base_complete_request(req);
+    CHECK("alloc_id: a NEW answered with an id in use fails",
+          PMIX_ERR_EXISTS == req->pstatus);
+    CHECK("alloc_id: ...creating nothing", before == count_sessions());
+    CHECK("alloc_id: ...and leaving the holder as it was",
+          s == prte_get_session_object_from_id("prte-unit-test-sched.1") &&
+              0 == strcmp("prte-unit-test-req", s->user_refid));
+    PMIX_RELEASE(req);
+    if (NULL != s) {
+        prte_ras_base_teardown_reservation(s, false);
+    }
+
+    /* with no scheduler, ras/hosts assigns the id */
+    comp = find_ras_component("hosts");
+    if (NULL == comp || NULL == comp->pmix_mca_query_component ||
+        PRTE_SUCCESS != comp->pmix_mca_query_component(&module, &pri) || NULL == module) {
+        fprintf(stdout, "SKIP test_alloc_id ras/hosts cases: ras/hosts not found\n");
+    } else {
+        mod = (prte_ras_base_module_t *) module;
+        req = mknew_answer(NULL, "prte-unit-test-req");
+        CHECK("alloc_id: ras/hosts serves a NEW",
+              PMIX_OPERATION_SUCCEEDED == mod->modify(req));
+        CHECK("alloc_id: ...giving it an id", NULL != info_string(req, PMIX_ALLOC_ID));
+        CHECK("alloc_id: ...and keeping the request's own",
+              NULL != info_string(req, PMIX_ALLOC_REQ_ID) &&
+                  0 == strcmp("prte-unit-test-req", info_string(req, PMIX_ALLOC_REQ_ID)));
+        if (NULL != info_string(req, PMIX_ALLOC_ID)) {
+            first = strdup(info_string(req, PMIX_ALLOC_ID));
+        }
+        req->pstatus = PMIX_SUCCESS;
+        prte_ras_base_complete_request(req);
+        held = (NULL == first) ? NULL : prte_get_session_object_from_id(first);
+        CHECK("alloc_id: ...which the reservation is created under",
+              PMIX_SUCCESS == req->pstatus && NULL != held);
+        PMIX_RELEASE(req);
+
+        /* the next is given another, as the first is still held */
+        req2 = mknew_answer(NULL, NULL);
+        CHECK("alloc_id: ras/hosts serves a second NEW",
+              PMIX_OPERATION_SUCCEEDED == mod->modify(req2));
+        CHECK("alloc_id: ...with a different id",
+              NULL != first && NULL != info_string(req2, PMIX_ALLOC_ID) &&
+                  0 != strcmp(first, info_string(req2, PMIX_ALLOC_ID)));
+        PMIX_RELEASE(req2);
+
+#if defined(PMIX_ALLOC_SHARE)
+        /* nodes for the general pool make no reservation, so need no id */
+        {
+            bool share = true;
+            pmix_info_t x[1];
+
+            PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_SHARE, &share, PMIX_BOOL);
+            req2 = mkalloc_req(PMIX_ALLOC_NEW, (uint32_t) prte_process_info.euid,
+                               (uint32_t) prte_process_info.egid, x, 1);
+            PMIX_INFO_DESTRUCT(&x[0]);
+            CHECK("alloc_id: ras/hosts gives a shared NEW no id",
+                  PMIX_OPERATION_SUCCEEDED == mod->modify(req2) &&
+                      NULL == info_string(req2, PMIX_ALLOC_ID));
+            PMIX_RELEASE(req2);
+        }
+#endif
+        if (NULL != held) {
+            prte_ras_base_teardown_reservation(held, false);
+        }
+        free(first);
+    }
+
+    prte_ras_base.scheduler_owned = saved_owned;
+    prte_elastic_mode = saved_elastic;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_alloc_id\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2770,6 +2965,7 @@ int main(void)
     failures += test_teardown_reservation();
     failures += test_return_to_pool();
     failures += test_alloc_time();
+    failures += test_alloc_id();
     failures += test_hnp_locality_match();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
