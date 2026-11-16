@@ -36,6 +36,12 @@
 #    include <sys/wait.h>
 #endif
 #include <errno.h>
+#include <fcntl.h>
+#include <pwd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #ifdef HAVE_SYS_STAT_H
 #    include <sys/stat.h>
 #endif /* HAVE_SYS_STAT_H */
@@ -1316,7 +1322,208 @@ REPORT_ERROR:
     return rc;
 }
 
-static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
+/*
+ * The working directory and the executable, checked as the job's owner.
+ *
+ * pmix_util_check_context_cwd() and _app() decide where a job runs and what
+ * it runs - chdir() into the directory, fall back to the home directory when
+ * the directory was not one the user asked for, search PATH for a naked
+ * name, access(X_OK) - and they decide it as whoever calls them. Here that
+ * is the daemon's user, which for a job of another user's is root: a
+ * directory or program only root can reach passed, a naked name could
+ * resolve to one the owner cannot run, the fallback went to root's own home
+ * rather than the owner's, and the daemon itself moved into directories the
+ * user named. So for a job of another user's, both checks are made in a
+ * child that is the owner (prte_pmix_server_work_as), and the daemon reads
+ * the answers back. A job of the daemon's own user is checked in place, as
+ * before: the identity is already the right one, and the launch path pays
+ * for no child.
+ *
+ * The child writes a status, then the directory it used, the absolute
+ * directory it ended up in and the executable it resolved, each as a length
+ * and its bytes, into the daemon's temporary file. The owner's home
+ * directory is looked up before the fork: NSS is not safe to call in it.
+ */
+typedef struct {
+    const char *cwd;  /* app->cwd, if there is one */
+    bool usercwd;     /* the user asked for that directory */
+    const char *home; /* the owner's home directory, or NULL */
+    const char *app;  /* app->app, NULL if it is not to be checked */
+    char **env;       /* app->env, for its PATH */
+    int out;          /* the daemon's temporary file */
+} prte_odls_owner_check_t;
+
+static int put_bytes(int fd, off_t *off, const void *p, size_t n)
+{
+    const char *b = (const char *) p;
+    ssize_t nw;
+
+    while (0 < n) {
+        nw = pwrite(fd, b, n, *off);
+        if (0 > nw && EINTR == errno) {
+            continue;
+        }
+        if (0 >= nw) {
+            return -1;
+        }
+        b += nw;
+        n -= (size_t) nw;
+        *off += nw;
+    }
+    return 0;
+}
+
+static int put_str(int fd, off_t *off, const char *s)
+{
+    uint32_t len = (NULL == s) ? 0 : (uint32_t) strlen(s);
+
+    if (0 != put_bytes(fd, off, &len, sizeof(len))) {
+        return -1;
+    }
+    return (0 == len) ? 0 : put_bytes(fd, off, s, len);
+}
+
+static int owner_check_fn(void *arg)
+{
+    prte_odls_owner_check_t *oc = (prte_odls_owner_check_t *) arg;
+    int32_t status = PMIX_SUCCESS;
+    const char *used = oc->cwd;
+    char dir[PRTE_PATH_MAX];
+    char *app = NULL;
+    off_t off = 0;
+
+    /* as pmix_util_check_context_cwd() does, but as the owner, and falling
+     * back to the owner's home directory */
+    if (NULL != oc->cwd && 0 != chdir(oc->cwd)) {
+        if (oc->usercwd) {
+            status = PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE;
+        } else if (NULL != oc->home) {
+            if (0 != chdir(oc->home)) {
+                status = PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE;
+            } else {
+                used = oc->home;
+            }
+        }
+    }
+    dir[0] = '\0';
+    if (PMIX_SUCCESS == status && NULL == getcwd(dir, sizeof(dir))) {
+        status = PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (PMIX_SUCCESS == status && NULL != oc->app) {
+        app = strdup(oc->app);
+        status = (NULL == app) ? PRTE_ERR_OUT_OF_RESOURCE
+                               : pmix_util_check_context_app(&app, (char *) used, oc->env);
+    }
+    if (0 != put_bytes(oc->out, &off, &status, sizeof(status)) ||
+        0 != put_str(oc->out, &off, used) || 0 != put_str(oc->out, &off, dir) ||
+        0 != put_str(oc->out, &off, app)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int get_str(int fd, off_t *off, char **s)
+{
+    uint32_t len;
+
+    *s = NULL;
+    if (sizeof(len) != pread(fd, &len, sizeof(len), *off)) {
+        return -1;
+    }
+    *off += sizeof(len);
+    if (0 == len) {
+        return 0;
+    }
+    if (4 * PRTE_PATH_MAX < len || NULL == (*s = (char *) malloc(len + 1))) {
+        return -1;
+    }
+    if ((ssize_t) len != pread(fd, *s, len, *off)) {
+        free(*s);
+        *s = NULL;
+        return -1;
+    }
+    (*s)[len] = '\0';
+    *off += len;
+    return 0;
+}
+
+int prte_odls_base_check_as_owner(prte_app_context_t *app, char **wdir, uid_t uid, gid_t gid,
+                                  bool usercwd, bool check_app)
+{
+    prte_odls_owner_check_t oc;
+    struct passwd pwd, *pwp = NULL;
+    char pwbuf[4096];
+    char *used = NULL, *dir = NULL, *exe = NULL;
+    int32_t status;
+    off_t off = 0;
+    FILE *tf;
+    int rc;
+
+    memset(&oc, 0, sizeof(oc));
+    oc.cwd = app->cwd;
+    oc.usercwd = usercwd;
+    if (0 == getpwuid_r(uid, &pwd, pwbuf, sizeof(pwbuf), &pwp) && NULL != pwp) {
+        oc.home = pwp->pw_dir;
+    }
+    oc.app = check_app ? app->app : NULL;
+    oc.env = app->env;
+    tf = tmpfile();
+    if (NULL == tf) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    /* nothing we launch should inherit it */
+    (void) fcntl(fileno(tf), F_SETFD, FD_CLOEXEC);
+    oc.out = fileno(tf);
+    if (0 != prte_pmix_server_work_as(uid, gid, owner_check_fn, &oc)) {
+        /* it did not answer in time - the directory is on a filesystem
+         * that has stopped answering - or could not be run */
+        fclose(tf);
+        return PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE;
+    }
+    if (sizeof(status) != pread(fileno(tf), &status, sizeof(status), 0)) {
+        fclose(tf);
+        return PRTE_ERROR;
+    }
+    off = sizeof(status);
+    if (0 != get_str(fileno(tf), &off, &used) || 0 != get_str(fileno(tf), &off, &dir) ||
+        0 != get_str(fileno(tf), &off, &exe)) {
+        fclose(tf);
+        free(used);
+        free(dir);
+        free(exe);
+        return PRTE_ERROR;
+    }
+    fclose(tf);
+    rc = status;
+    if (PMIX_SUCCESS == rc) {
+        /* the directory the job runs in: the fallback, if it came to that */
+        if (NULL != used && (NULL == app->cwd || 0 != strcmp(used, app->cwd))) {
+            free(app->cwd);
+            app->cwd = used;
+            used = NULL;
+        }
+        if (NULL != dir) {
+            if (NULL != *wdir) {
+                free(*wdir);
+            }
+            *wdir = dir;
+            PMIx_Setenv("PWD", dir, true, &app->env);
+            dir = NULL;
+        }
+        if (NULL != exe) {
+            free(app->app);
+            app->app = exe;
+            exe = NULL;
+        }
+    }
+    free(used);
+    free(dir);
+    free(exe);
+    return rc;
+}
+
+static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir,
+                      bool *app_checked)
 {
     int rc = PRTE_SUCCESS;
     char dir[PRTE_PATH_MAX];
@@ -1361,6 +1568,25 @@ static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
         */
         if (PRTE_ATTR_IS_TRUE(&app->attributes, PRTE_APP_USER_CWD)) {
             usercwd = true;
+        }
+        /* a job of another user's is checked as that user - see
+         * prte_odls_base_check_as_owner(). Its executable too, when the caller would check
+         * it next: such a job cannot preload, so nothing the next steps put
+         * in place could change the answer */
+        {
+            uid_t uid;
+            gid_t gid;
+            bool change = false;
+
+            if (NULL != job &&
+                PRTE_SUCCESS == prte_pmix_server_job_run_as(job, &uid, &gid, &change) && change) {
+                rc = prte_odls_base_check_as_owner(app, wdir, uid, gid, usercwd,
+                                                   NULL != app_checked);
+                if (PMIX_SUCCESS == rc && NULL != app_checked) {
+                    *app_checked = true;
+                }
+                goto CLEANUP;
+            }
         }
         rc = pmix_util_check_context_cwd(&app->cwd, true, usercwd);
         if (PMIX_SUCCESS != rc) {
@@ -2223,7 +2449,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     prte_job_t *jobdat;
     pmix_nspace_t job;
     prte_odls_base_fork_local_proc_fn_t fork_local = caddy->fork_local;
-    bool index_argv;
+    bool index_argv, app_checked;
     char *msg, **xfer;
     prte_odls_spawn_caddy_t *cd;
     prte_odls_spawn_caddy_t proto;
@@ -2359,7 +2585,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* setup the working directory for this app - will jump us
          * to that directory
          */
-        if (PRTE_SUCCESS != (rc = setup_path(jobdat, app, &app->cwd))) {
+        app_checked = false;
+        if (PRTE_SUCCESS != (rc = setup_path(jobdat, app, &app->cwd, &app_checked))) {
             PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:launch:setup_path failed with error %s(%d)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc), rc));
@@ -2414,7 +2641,9 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             goto GETOUT;
         }
 
-        rc = pmix_util_check_context_app(&app->app, app->cwd, app->env);
+        /* checked already, as the owner, for a job of another user's */
+        rc = app_checked ? PMIX_SUCCESS
+                         : pmix_util_check_context_app(&app->app, app->cwd, app->env);
         /* do not ERROR_LOG - it will be reported elsewhere */
         if (PMIX_SUCCESS != rc) {
             /* Deliberately NOT converted - see the note in setup_path().
@@ -3294,7 +3523,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     }
 
     /* setup the path */
-    if (PRTE_SUCCESS != (rc = setup_path(jobdat, app, &wdir))) {
+    if (PRTE_SUCCESS != (rc = setup_path(jobdat, app, &wdir, NULL))) {
         PRTE_ERROR_LOG(rc);
         if (NULL != wdir) {
             free(wdir);
