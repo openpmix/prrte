@@ -39,10 +39,8 @@ If no session is named, the job is mapped onto the session that
 requested it (the DVM's default session, in the case of a tool such as
 ``prun``).
 
-.. note:: The same allocation can be named in three different ways
-          |mdash| by the session ID given here, by the ID the host
-          environment assigned to the allocation (``--alloc-id``), or
-          by the reference ID the user attached to the allocation
-          request (``--alloc-refid``). These are alternative spellings
-          of one directive and therefore cannot be combined on a single
-          command line.
+.. note:: The same allocation can be named in two different ways
+          |mdash| by the session ID given here, or by the ID the host
+          environment assigned to the allocation (``--alloc-id``).
+          These are alternative spellings of one directive and
+          therefore cannot be combined on a single command line.

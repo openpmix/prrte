@@ -59,11 +59,6 @@ Synonym for ``--hostfile``.
 
 .. include:: /prrte-rst-content/cli-alloc-id.rst
 
-``--alloc-refid <id>``
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. include:: /prrte-rst-content/cli-alloc-refid.rst
-
 ``--session-id <id>``
 ^^^^^^^^^^^^^^^^^^^^^
 

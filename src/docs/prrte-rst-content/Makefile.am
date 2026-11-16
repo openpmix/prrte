@@ -23,7 +23,6 @@ dist_rst_DATA = \
     cli-add-host.rst \
     cli-add-hostfile.rst \
     cli-alloc-id.rst \
-    cli-alloc-refid.rst \
     cli-allow-run-as-root.rst \
     cli-app-prefix.rst \
     cli-app.rst \
