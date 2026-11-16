@@ -67,15 +67,18 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid, time_t *start_time,
                                    time_t *end_time);
 int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time);
 
-/* Features to serve cancel requests */
+/* Features to serve cancel requests. A pending request is named by the
+ * namespace that made it and its PMIX_ALLOC_REQ_ID: a req_id need not be
+ * unique, so it names a request only to the job that made it. */
 /* owner: the user who made the request, who may cancel it */
-int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id,
-                                   uid_t owner);
+int prte_ras_slurm_add_pending_req(const char *nspace, const char *request_id,
+                                   const char *slurm_job_id, uid_t owner);
 /* PRTE_SUCCESS if uid may cancel the pending request, PRTE_ERR_PERM if not,
  * PRTE_ERR_NOT_FOUND if there is none */
-int prte_ras_slurm_pending_req_permitted(const char *request_id, uid_t uid);
-int prte_ras_slurm_remove_pending_req(const char *request_id);
-int prte_ras_slurm_cancel_pending_req(const char *request_id);
+int prte_ras_slurm_pending_req_permitted(const char *nspace, const char *request_id,
+                                         uid_t uid);
+int prte_ras_slurm_remove_pending_req(const char *nspace, const char *request_id);
+int prte_ras_slurm_cancel_pending_req(const char *nspace, const char *request_id);
 int prte_ras_slurm_modify_cancel_init(void);
 int prte_ras_slurm_modify_cancel_finalize(void);
 int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req);
@@ -84,7 +87,7 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req);
 int prte_ras_slurm_modify_extend_init(void);
 int prte_ras_slurm_modify_extend_finalize(void);
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
-void prte_ras_slurm_extend_abort_request(const char *request_id);
+void prte_ras_slurm_extend_abort_request(const char *nspace, const char *request_id);
 
 /* Features to serve release requests */
 int prte_ras_slurm_modify_release_init(void);

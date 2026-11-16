@@ -885,6 +885,21 @@ the daemon answering the query faulted on them. What this file fetches out
 of the job store is requestor data wearing a server's clothes; check its
 type on the way out as carefully as on the way in.
 
+### Allocations are told to those who may operate on them
+
+`PMIX_QUERY_ALLOC_IDS` lists, besides the general pool, only the
+reservations `prte_pmix_server_session_permitted()` lets the caller operate
+on, and `PMIX_QUERY_ALLOC_PROPERTIES` answers about one of those only -
+`PMIX_ERR_NO_PERMISSIONS` otherwise. Its properties are what lets a user
+tell its allocations apart and clean them up: besides
+`PMIX_ALLOC_RELEASABLE` and `PMIX_ALLOC_SEQUENCE`, the
+`PMIX_ALLOC_REQ_ID` it was requested under, the process that requested it
+(`PMIX_REQUESTOR`, from `session->requested_by`) and that process's
+`PMIX_CMD_LINE` (`session->requested_cmd`, recorded at the request since
+the requester's job may since have ended), and its owner's `PMIX_USERID`
+and `PMIX_GRPID`. Each is returned only where it is known: a tool's command
+line is whatever it sent when it connected, and may be absent.
+
 ### An unknown namespace is not always a client error
 
 The `PMIX_NSPACE` qualifier is validated by walking `prte_job_data`, and off

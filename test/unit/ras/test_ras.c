@@ -2908,6 +2908,159 @@ static int test_alloc_id(void)
     return failures;
 }
 
+/* A PMIX_ALLOC_REQ_ID need not be unique, so it names an allocation only to
+ * the job that requested it, and only if that job made one request under it.
+ * An EXTEND naming one is given the allocation's PMIX_ALLOC_ID on the way in,
+ * and everything after works by that. */
+static prte_session_t *reqid_resv(uint32_t id, const char *aid, const char *nspace,
+                                  const char *reqid)
+{
+    prte_session_t *s = PMIX_NEW(prte_session_t);
+    pmix_proc_t who;
+
+    s->session_id = id;
+    s->alloc_refid = strdup(aid);
+    s->user_refid = strdup(reqid);
+    s->flags |= PRTE_SESSION_FLAG_RESERVED;
+    s->owner_uid = (uid_t) prte_process_info.euid;
+    s->owner_gid = (gid_t) prte_process_info.egid;
+    PMIX_LOAD_PROCID(&who, nspace, 0);
+    prte_session_set_requested_by(s, &who);
+    prte_set_session_object(s);
+    return s;
+}
+
+static bool reqid_answered;
+static pmix_status_t reqid_status;
+static char *reqid_alloc_id;
+
+static void reqid_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                     void *cbdata, pmix_release_cbfunc_t release_fn,
+                     void *release_cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) release_cbdata;
+    size_t n;
+    PRTE_HIDE_UNUSED_PARAMS(cbdata, release_fn);
+
+    reqid_answered = true;
+    reqid_status = status;
+    for (n = 0; n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_ALLOC_ID) &&
+            PMIX_STRING == info[n].value.type && NULL == reqid_alloc_id) {
+            reqid_alloc_id = strdup(info[n].value.data.string);
+        }
+    }
+    /* nothing runs the event base release_fn would post to */
+    PMIX_RELEASE(req);
+}
+
+/* an EXTEND from rank 0 of nspace naming reqid alone, through
+ * prte_ras_base_modify: the status it is answered with, and the
+ * PMIX_ALLOC_ID the request then carries in *aid (NULL if none) */
+static pmix_status_t reqid_extend(const char *nspace, const char *reqid, char **aid)
+{
+    prte_pmix_server_req_t *req = PMIX_NEW(prte_pmix_server_req_t);
+
+    req->allocdir = PMIX_ALLOC_EXTEND;
+    PMIX_LOAD_PROCID(&req->tproc, nspace, 0);
+    req->ninfo = 1;
+    req->info = PMIx_Info_create(1);
+    req->copy = true;
+    PMIX_INFO_LOAD(&req->info[0], PMIX_ALLOC_REQ_ID, reqid, PMIX_STRING);
+    req->infocbfunc = reqid_cb;
+    reqid_answered = false;
+    reqid_status = PMIX_SUCCESS;
+    reqid_alloc_id = NULL;
+    prte_ras_base_modify(0, 0, req);
+    *aid = reqid_alloc_id;
+    return reqid_answered ? reqid_status : PMIX_ERR_TIMEOUT;
+}
+
+static int test_req_id_scope(void)
+{
+    int failures = 0, rc;
+    bool saved_owned = prte_ras_base.scheduler_owned;
+    bool saved_elastic = prte_elastic_mode;
+    prte_session_t *a1, *b1, *a2, *a2b, *found;
+    char *aid = NULL;
+    pmix_status_t st;
+
+    prte_ras_base.scheduler_owned = false;
+    prte_elastic_mode = true;
+    a1 = reqid_resv(4501, "prte-unit-test.4501", "prte-unit-test-ns-a", "r1");
+    b1 = reqid_resv(4502, "prte-unit-test.4502", "prte-unit-test-ns-b", "r1");
+    a2 = reqid_resv(4503, "prte-unit-test.4503", "prte-unit-test-ns-a", "r2");
+    a2b = reqid_resv(4504, "prte-unit-test.4504", "prte-unit-test-ns-a", "r2");
+
+    rc = prte_get_session_object_from_refid("prte-unit-test-ns-a", "r1", &found);
+    CHECK("req_id: a job's request id names its own allocation",
+          PRTE_SUCCESS == rc && a1 == found);
+    rc = prte_get_session_object_from_refid("prte-unit-test-ns-b", "r1", &found);
+    CHECK("req_id: ...and another job's same id names that job's",
+          PRTE_SUCCESS == rc && b1 == found);
+    rc = prte_get_session_object_from_refid("prte-unit-test-ns-c", "r1", &found);
+    CHECK("req_id: a job that made no request under it finds none",
+          PRTE_ERR_NOT_FOUND == rc && NULL == found);
+    rc = prte_get_session_object_from_refid("prte-unit-test-ns-a", "r2", &found);
+    CHECK("req_id: one a job used twice names neither",
+          PRTE_ERR_BAD_PARAM == rc && NULL == found);
+
+    fprintf(stdout, "-- the next cases name allocations by request id; the messages "
+                    "they print are expected --\n");
+    st = reqid_extend("prte-unit-test-ns-b", "r1", &aid);
+    CHECK("req_id: an EXTEND by request id is given the allocation's id",
+          reqid_answered && NULL != aid && 0 == strcmp("prte-unit-test.4502", aid));
+    (void) st;
+    free(aid);
+    st = reqid_extend("prte-unit-test-ns-c", "r1", &aid);
+    CHECK("req_id: ...but not when its job made no request under it",
+          reqid_answered && NULL == aid);
+    free(aid);
+    st = reqid_extend("prte-unit-test-ns-a", "r2", &aid);
+    CHECK("req_id: an EXTEND by a request id its job used twice is refused",
+          PMIX_ERR_BAD_PARAM == st && NULL == aid);
+    free(aid);
+
+    /* past the way in, a request id alone names nothing */
+    {
+        uint32_t me = (uint32_t) prte_process_info.euid;
+        uint32_t mygrp = (uint32_t) prte_process_info.egid;
+        pmix_info_t x[4];
+        prte_pmix_server_req_t *req;
+        size_t k;
+
+        PMIX_INFO_LOAD(&x[0], PMIX_ALLOC_UID, &me, PMIX_UINT32);
+        PMIX_INFO_LOAD(&x[1], PMIX_ALLOC_GID, &mygrp, PMIX_UINT32);
+        PMIX_INFO_LOAD(&x[2], PMIX_ALLOC_REQ_ID, "r1", PMIX_STRING);
+        PMIX_INFO_LOAD(&x[3], PMIX_ALLOC_TIME, "60", PMIX_STRING);
+        req = mkalloc_req(PMIX_ALLOC_EXTEND, me, mygrp, x, 4);
+        PMIX_LOAD_PROCID(&req->tproc, "prte-unit-test-ns-a", 0);
+        req->pstatus = PMIX_SUCCESS;
+        prte_ras_base_complete_request(req);
+        CHECK("req_id: an EXTEND reaching the base by request id alone is not found",
+              PMIX_ERR_NOT_FOUND == req->pstatus && NULL == a1->timer);
+        PMIX_RELEASE(req);
+        for (k = 0; k < 4; k++) {
+            PMIX_INFO_DESTRUCT(&x[k]);
+        }
+    }
+
+    CHECK("req_id: the requester is recorded",
+          PMIX_CHECK_NSPACE(a1->requested_by.nspace, "prte-unit-test-ns-a") &&
+              0 == a1->requested_by.rank);
+
+    prte_ras_base_teardown_reservation(a1, false);
+    prte_ras_base_teardown_reservation(b1, false);
+    prte_ras_base_teardown_reservation(a2, false);
+    prte_ras_base_teardown_reservation(a2b, false);
+    prte_ras_base.scheduler_owned = saved_owned;
+    prte_elastic_mode = saved_elastic;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_req_id_scope\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -2966,6 +3119,7 @@ int main(void)
     failures += test_return_to_pool();
     failures += test_alloc_time();
     failures += test_alloc_id();
+    failures += test_req_id_scope();
     failures += test_hnp_locality_match();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so

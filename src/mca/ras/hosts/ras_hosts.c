@@ -534,8 +534,6 @@ static uint32_t hosts_alloc_counter = 0;
 static pmix_status_t assign_alloc_id(prte_pmix_server_req_t *req)
 {
     char id[16];
-    pmix_info_t *info;
-    size_t n;
 
     do {
         if (0 == ++hosts_alloc_counter) {
@@ -544,23 +542,7 @@ static pmix_status_t assign_alloc_id(prte_pmix_server_req_t *req)
         snprintf(id, sizeof(id), "%u", hosts_alloc_counter);
     } while (NULL != prte_get_session_object_from_id(id));
 
-    PMIX_INFO_CREATE(info, req->ninfo + 1);
-    if (NULL == info) {
-        return PMIX_ERR_NOMEM;
-    }
-    for (n = 0; n < req->ninfo; n++) {
-        PMIX_INFO_XFER(&info[n], &req->info[n]);
-    }
-    PMIX_INFO_LOAD(&info[req->ninfo], PMIX_ALLOC_ID, id, PMIX_STRING);
-    /* the original array is borrowed from the caller unless the request
-     * already owns it */
-    if (req->copy && NULL != req->info) {
-        PMIX_INFO_FREE(req->info, req->ninfo);
-    }
-    req->info = info;
-    req->ninfo = req->ninfo + 1;
-    req->copy = true;
-    return PMIX_SUCCESS;
+    return prte_ras_base_add_alloc_id(req, id);
 }
 
 static pmix_status_t modify(prte_pmix_server_req_t *req)

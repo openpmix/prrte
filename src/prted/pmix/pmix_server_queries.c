@@ -1312,6 +1312,14 @@ static void _query(int sd, short args, void *cbdata)
                     ret = prte_pmix_convert_rc(prc);
                     goto done;
                 }
+                /* an allocation's properties are told to those who may
+                 * operate on it - as PMIX_QUERY_ALLOC_IDS lists it to them */
+                if (prte_default_session != session &&
+                    !prte_pmix_server_session_permitted(session, &cd->proct,
+                                                        q->qualifiers, q->nqual)) {
+                    ret = PMIX_ERR_NO_PERMISSIONS;
+                    goto done;
+                }
                 PMIX_INFO_LIST_START(proplist);
                 rc = PMIX_SUCCESS;
                 /* a named property selects it; naming none returns all */
@@ -1324,6 +1332,37 @@ static void _query(int sd, short args, void *cbdata)
                     (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_SEQUENCE))) {
                     PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_SEQUENCE,
                                        &session->acquisition, PMIX_UINT32);
+                }
+                /* What lets a user tell its allocations apart: the
+                 * PMIX_ALLOC_REQ_ID it was requested under, the process that
+                 * requested it and that process's command line, and whose
+                 * it is. Each only where it is known. */
+                if (PMIX_SUCCESS == rc && NULL != session->user_refid &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_REQ_ID))) {
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_REQ_ID,
+                                       session->user_refid, PMIX_STRING);
+                }
+                if (PMIX_SUCCESS == rc && '\0' != session->requested_by.nspace[0] &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_REQUESTOR))) {
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_REQUESTOR,
+                                       &session->requested_by, PMIX_PROC);
+                }
+                if (PMIX_SUCCESS == rc && NULL != session->requested_cmd &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_CMD_LINE))) {
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_CMD_LINE,
+                                       session->requested_cmd, PMIX_STRING);
+                }
+                if (PMIX_SUCCESS == rc && PRTE_INVALID_UID != session->owner_uid &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_USERID))) {
+                    uint32_t ouid = (uint32_t) session->owner_uid;
+
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_USERID, &ouid, PMIX_UINT32);
+                }
+                if (PMIX_SUCCESS == rc && PRTE_INVALID_GID != session->owner_gid &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_GRPID))) {
+                    uint32_t ogid = (uint32_t) session->owner_gid;
+
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_GRPID, &ogid, PMIX_UINT32);
                 }
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
