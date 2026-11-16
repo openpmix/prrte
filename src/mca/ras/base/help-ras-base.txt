@@ -288,6 +288,31 @@ allocation was granted for, as PMIX_ALLOC_UID and PMIX_ALLOC_GID. Without
 them there is no owner to record for the allocation, so the request was
 treated as failed.
 #
+[ras-base:alloc-id-requested]
+A request for a new allocation carried an allocation id (PMIX_ALLOC_ID).
+
+The id of an allocation is assigned by the scheduler that grants it, or by
+the DVM when there is no scheduler, and is returned in the response. A
+requester names its request with PMIX_ALLOC_REQ_ID instead. The request was
+refused.
+#
+[ras-base:alloc-id-missing]
+A new allocation was granted without an allocation id (PMIX_ALLOC_ID).
+
+The component that served the request must return the id the allocation
+was given: it is how the allocation is named from then on, and without it
+nothing could extend or release the allocation. The request was treated as
+failed.
+#
+[ras-base:alloc-id-in-use]
+A new allocation was granted with an allocation id that already names
+another allocation:
+
+  Allocation id:  %s
+
+Allocation ids must be unique, as each is how its allocation is named. The
+request was treated as failed, and the existing allocation is unchanged.
+#
 [ras-base:alloc-owner-mismatch]
 A scheduler answered an allocation request for a different user or group
 than the one it was asked for:

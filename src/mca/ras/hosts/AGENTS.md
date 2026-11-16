@@ -99,6 +99,13 @@ when it is selected and its scheduler is out of touch.) It serves:
   there is no scheduler to ask, so it is granted for exactly the
   `PMIX_ALLOC_UID`/`GID` the request carries, which
   `prte_ras_base_alloc_owner()` checked or filled in first.
+- With no scheduler, it is also what grants a `PMIX_ALLOC_NEW`, so it
+  assigns the allocation's `PMIX_ALLOC_ID` (`assign_alloc_id()`): numbers
+  counted from 1, skipping any that already name a reservation, added to
+  the request's info for the base to record and return. An add-host, or a
+  request to share the nodes with the general pool, creates no reservation
+  and is given no id (`makes_reservation()`). See "Who assigns an
+  allocation's id" in `src/mca/ras/AGENTS.md`.
 
 New nodes clear `prte_nidmap_communicated` and are inserted via
 `prte_ras_base_node_insert`. Returns `PMIX_OPERATION_SUCCEEDED` when it

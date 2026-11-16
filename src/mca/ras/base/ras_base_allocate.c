@@ -1237,6 +1237,23 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         }
     }
 
+    /* An allocation's PMIX_ALLOC_ID is the scheduler's to assign - or, with
+     * no scheduler, ras/hosts' - and is how the allocation is named from then
+     * on. A requester names its request with PMIX_ALLOC_REQ_ID instead, so a
+     * PMIX_ALLOC_ID on a new request is refused rather than passed to the
+     * module that assigns one. Checked before any module sees the request,
+     * as nothing after this point could tell the two apart. */
+    if (PMIX_ALLOC_NEW == req->allocdir) {
+        for (size_t n = 0; n < req->ninfo; n++) {
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                               "ras-base:alloc-id-requested", true);
+                req->pstatus = PMIX_ERR_BAD_PARAM;
+                goto respond;
+            }
+        }
+    }
+
     /* Whom an allocation is for: what the requester may name, and the
      * requester itself where it names nothing. Settled before any module
      * sees the request, since a module passes it on to its scheduler */
@@ -1531,15 +1548,16 @@ static void shrink_xcast_complete(void *cbdata)
     prte_event_active(&camp->ev, PRTE_EV_WRITE, 1);
 }
 
-/* monotonic counter used to mint unique session ids for reservations that
- * the host (rather than a scheduler) must identify on its own. */
+/* monotonic counter used to assign unique session ids to reservations - a
+ * session id is PRRTE's own, unlike the allocation's PMIX_ALLOC_ID */
 static uint32_t prte_ras_reservation_counter = 0;
 
 /* Create a new reservation owned by the given namespace, and belonging to
  * owner_uid/owner_gid - the PMIX_ALLOC_UID/GID the allocation was granted
  * for. The group's members may use it only if the request named the group
- * (group_named). Returns NULL on failure. alloc_id (scheduler-assigned
- * PMIX_ALLOC_ID) and req_id (requester PMIX_ALLOC_REQ_ID) are optional. */
+ * (group_named). alloc_id is the PMIX_ALLOC_ID the module that served the
+ * request assigned, and is required; req_id, the requester's
+ * PMIX_ALLOC_REQ_ID, is optional. Returns NULL on failure. */
 static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
                                           pmix_proc_t *requestor,
                                           const char *alloc_id, const char *req_id,
@@ -1559,14 +1577,13 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
         s->session_id = ++prte_ras_reservation_counter;
     } while (UINT32_MAX == s->session_id ||
              NULL != prte_get_session_object(s->session_id));
-    /* prefer a scheduler-assigned allocation id; otherwise mint one */
-    if (NULL != alloc_id) {
-        s->alloc_refid = strdup(alloc_id);
-    } else {
-        pmix_asprintf(&s->alloc_refid, "%s.%u", nspace, s->session_id);
-    }
+    s->alloc_refid = strdup(alloc_id);
     if (NULL != req_id) {
         s->user_refid = strdup(req_id);
+    }
+    if (NULL == s->alloc_refid || (NULL != req_id && NULL == s->user_refid)) {
+        PMIX_RELEASE(s);
+        return NULL;
     }
     s->flags |= PRTE_SESSION_FLAG_RESERVED | PRTE_SESSION_FLAG_DYNAMIC;
     PMIX_LOAD_NSPACE(s->owner, nspace);
@@ -2155,6 +2172,23 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
          * recent requester */
         PMIX_XFER_PROCID(&dest->requestor, &req->tproc);
     } else {                                    /* PMIX_ALLOC_NEW */
+        /* The module that served the request assigned the allocation's id:
+         * the scheduler's answer carries it, and ras/hosts adds one when
+         * there is no scheduler. The requester could not have supplied it
+         * (prte_ras_base_modify refuses that), so an id here is the
+         * module's, and its absence is the module's error. The scheduler is
+         * responsible for keeping its ids unique, but one already naming
+         * another reservation would make both unreachable by it. */
+        if (NULL == alloc_id) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:alloc-id-missing", true);
+            return PMIX_ERR_BAD_PARAM;
+        }
+        if (NULL != prte_get_session_object_from_id(alloc_id)) {
+            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
+                           "ras-base:alloc-id-in-use", true, alloc_id);
+            return PMIX_ERR_EXISTS;
+        }
         dest = create_reservation(owner_nspace, inherit, &req->tproc,
                                   alloc_id, req_id, owner_uid, owner_gid, req->alloc_gid_named);
         if (NULL == dest) {

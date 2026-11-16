@@ -18,6 +18,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdint.h>
 
 #include "src/class/pmix_list.h"
@@ -499,6 +500,69 @@ static pmix_status_t process_hostfile(const char *nspace, char *hostfile, pmix_l
     return rc;
 }
 
+/* Whether a PMIX_ALLOC_NEW creates a reservation, and so needs an id: an
+ * add-host grows the general pool, and a request to share the nodes puts
+ * them there (see ras_base_prepare_grow), and neither has an allocation to
+ * name. */
+static bool makes_reservation(const prte_pmix_server_req_t *req)
+{
+    size_t n;
+
+    for (n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST) ||
+            PMIx_Check_key(req->info[n].key, PMIX_ADD_HOSTFILE)) {
+            return false;
+        }
+#if defined(PMIX_ALLOC_SHARE)
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_SHARE) &&
+            PMIX_INFO_TRUE(&req->info[n])) {
+            return false;
+        }
+#endif
+    }
+    return true;
+}
+
+/* With no scheduler, this component grants the allocation, so it assigns
+ * the allocation's PMIX_ALLOC_ID - as a scheduler's answer would carry one.
+ * The ids are numbers counted from 1, skipping any already naming a
+ * reservation. The id is added to the request's info, where
+ * prte_ras_base_complete_request() records it with the reservation, along
+ * with the requester's PMIX_ALLOC_REQ_ID, and returns both. */
+static uint32_t hosts_alloc_counter = 0;
+
+static pmix_status_t assign_alloc_id(prte_pmix_server_req_t *req)
+{
+    char id[16];
+    pmix_info_t *info;
+    size_t n;
+
+    do {
+        if (0 == ++hosts_alloc_counter) {
+            hosts_alloc_counter = 1;
+        }
+        snprintf(id, sizeof(id), "%u", hosts_alloc_counter);
+    } while (NULL != prte_get_session_object_from_id(id));
+
+    PMIX_INFO_CREATE(info, req->ninfo + 1);
+    if (NULL == info) {
+        return PMIX_ERR_NOMEM;
+    }
+    for (n = 0; n < req->ninfo; n++) {
+        PMIX_INFO_XFER(&info[n], &req->info[n]);
+    }
+    PMIX_INFO_LOAD(&info[req->ninfo], PMIX_ALLOC_ID, id, PMIX_STRING);
+    /* the original array is borrowed from the caller unless the request
+     * already owns it */
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+    req->info = info;
+    req->ninfo = req->ninfo + 1;
+    req->copy = true;
+    return PMIX_SUCCESS;
+}
+
 static pmix_status_t modify(prte_pmix_server_req_t *req)
 {
     int rc;
@@ -611,9 +675,21 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
      * It also makes our answer say whom the allocation is for, as every
      * module's must: there is no scheduler here to ask, so the allocation is
      * granted for exactly the PMIX_ALLOC_UID/GID the request carries, which
-     * prte_ras_base_alloc_owner checked or filled in before we were called. */
+     * prte_ras_base_alloc_owner checked or filled in before we were called.
+     *
+     * A PMIX_ALLOC_NEW that creates a reservation is given its PMIX_ALLOC_ID
+     * here (assign_alloc_id). */
     switch (req->allocdir) {
     case PMIX_ALLOC_NEW:
+        if (makes_reservation(req)) {
+            rc = assign_alloc_id(req);
+            if (PMIX_SUCCESS != rc) {
+                req->pstatus = rc;
+                return rc;
+            }
+        }
+        handled = true;
+        break;
     case PMIX_ALLOC_EXTEND:
     case PMIX_ALLOC_RELEASE:
         handled = true;

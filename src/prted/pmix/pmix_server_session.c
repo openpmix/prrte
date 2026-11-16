@@ -1199,6 +1199,26 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     if (NULL != prte_get_session_object(req->sessionID)) {
         return PMIX_ERR_EXISTS;
     }
+    /* The scheduler names the allocation it is instantiating with its own
+     * PMIX_ALLOC_ID, which is how the session is named in allocation
+     * requests from then on - the DVM has no id of its own to give it.
+     * Keeping the ids unique is the scheduler's job, but one that already
+     * names a session would leave both unreachable by it. */
+    if (NULL == ctl->alloc_refid) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s session ctrl: instantiate of session %u names no "
+                            "allocation id (PMIX_ALLOC_ID)",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->sessionID);
+        return PMIX_ERR_BAD_PARAM;
+    }
+    if (NULL != prte_get_session_object_from_id(ctl->alloc_refid)) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s session ctrl: instantiate of session %u names allocation "
+                            "id %s, which another session already has",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->sessionID,
+                            ctl->alloc_refid);
+        return PMIX_ERR_EXISTS;
+    }
     if (NULL != ctl->apps && NULL == ctl->nodelists) {
         /* A session withholds the nodes named for it from general use, so one
          * created with no resource description holds nothing and no job in it
@@ -1241,14 +1261,14 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
          * reservation and persists until explicitly terminated. */
         session->flags |= PRTE_SESSION_FLAG_AUTO_COMPLETE;
     }
-    if (NULL != ctl->alloc_refid) {
-        session->alloc_refid = strdup(ctl->alloc_refid);
-    } else {
-        pmix_asprintf(&session->alloc_refid, "%s.%u", ctl->requestor.nspace,
-                      session->session_id);
-    }
+    session->alloc_refid = strdup(ctl->alloc_refid);
     if (NULL != ctl->user_refid) {
         session->user_refid = strdup(ctl->user_refid);
+    }
+    if (NULL == session->alloc_refid ||
+        (NULL != ctl->user_refid && NULL == session->user_refid)) {
+        PMIX_RELEASE(session);
+        return PMIX_ERR_NOMEM;
     }
     session->inheritance = ctl->inheritance;
     PMIX_LOAD_NSPACE(session->owner, ctl->requestor.nspace);

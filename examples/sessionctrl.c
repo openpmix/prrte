@@ -18,7 +18,8 @@
  * makes this usable as a test client.
  *
  *   sessionctrl instantiate <id> [--hosts LIST] [--time SPEC] [--sep]
- *                                [--inherit DISP] [-- <cmd> [args...]]
+ *                                [--inherit DISP] [--alloc-id ID]
+ *                                [-- <cmd> [args...]]
  *   sessionctrl pause      <id>
  *   sessionctrl resume     <id>
  *   sessionctrl preempt    <id> [--nspace NS]
@@ -28,6 +29,11 @@
  *   sessionctrl terminate  <id>
  *
  * <id> may be given as "all" to address every session under our control.
+ *
+ * This tool stands in for a scheduler, and a scheduler names the allocation
+ * it instantiates with its own PMIX_ALLOC_ID - the DVM refuses an
+ * instantiation without one. --alloc-id gives it; by default the tool uses
+ * "sessionctrl.<id>".
  */
 
 #include <pmix.h>
@@ -112,7 +118,9 @@ static void usage(const char *me)
             "              --nspace NS    limit preempt/restore to one job\n"
             "              --sep          session terminates independently of its parent\n"
             "              --inherit DISP what becomes of the nodes at the end: none, child,\n"
-            "                             default or child-default (PMIX_ALLOC_INHERITANCE)\n",
+            "                             default or child-default (PMIX_ALLOC_INHERITANCE)\n"
+            "              --alloc-id ID  the allocation id an instantiation carries\n"
+            "                             (PMIX_ALLOC_ID; default sessionctrl.<sessionid>)\n",
             me);
 }
 
@@ -131,6 +139,8 @@ int main(int argc, char **argv)
     int signum = 0, i, cmdstart = 0, np = 1;
     bool sep = false, all = false;
     const char *inherit = NULL;
+    const char *allocid = NULL;
+    char defid[64];
     lock_t lock;
     char *end;
 
@@ -174,6 +184,8 @@ int main(int argc, char **argv)
             sep = true;
         } else if (0 == strcmp(argv[i], "--inherit") && i + 1 < argc) {
             inherit = argv[++i];
+        } else if (0 == strcmp(argv[i], "--alloc-id") && i + 1 < argc) {
+            allocid = argv[++i];
         } else if (0 == strcmp(op, "signal") && 0 == signum) {
             signum = (int) strtol(argv[i], &end, 10);
             if ('\0' != *end) {
@@ -186,8 +198,16 @@ int main(int argc, char **argv)
         }
     }
 
+    if (0 == strcmp(op, "instantiate") && NULL == allocid) {
+        snprintf(defid, sizeof(defid), "sessionctrl.%u", sessionid);
+        allocid = defid;
+    }
+
     /* count the directives we are about to build */
     ndirs = 2;                                          /* operation + ctrl id */
+    if (NULL != allocid) {
+        ndirs++;
+    }
     if (NULL != hosts) {
         ndirs++;
     }
@@ -237,6 +257,9 @@ int main(int argc, char **argv)
 
     if (NULL != hosts) {
         PMIX_INFO_LOAD(&dirs[n++], PMIX_ALLOC_NODE_LIST, hosts, PMIX_STRING);
+    }
+    if (NULL != allocid) {
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_ALLOC_ID, allocid, PMIX_STRING);
     }
     if (NULL != timespec) {
         PMIX_INFO_LOAD(&dirs[n++], PMIX_ALLOC_TIME, timespec, PMIX_STRING);

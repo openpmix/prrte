@@ -185,7 +185,7 @@ int main(int argc, char **argv)
         DEBUG_CONSTRUCT_MYQUERY(&mydata);
         PMIX_INFO_CREATE(info, 2);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &nnodes, PMIX_UINT64);
-        PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
+        PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_REQ_ID, myallocation, PMIX_STRING);
         if (PMIX_SUCCESS
             != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, &mydata))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Allocation_request_nb failed: %d\n",
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
          * specifically for when the allocation operation completes */
         DEBUG_CONSTRUCT_MYREL(&myrel);
         PMIX_INFO_CREATE(info, 2);
-        PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
+        PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_REQ_ID, myallocation, PMIX_STRING);
         PMIX_INFO_LOAD(&info[1], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
         DEBUG_CONSTRUCT_LOCK(&mylock);
         code = PMIX_NOTIFY_ALLOC_COMPLETE;
@@ -231,7 +231,7 @@ int main(int argc, char **argv)
         PMIX_QUERY_CREATE(query, 1);
         PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_ALLOC_STATUS);
         PMIX_INFO_CREATE(query[0].qualifiers, 1);
-        PMIX_INFO_LOAD(&query[0].qualifiers[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
+        PMIX_INFO_LOAD(&query[0].qualifiers[0], PMIX_ALLOC_REQ_ID, myallocation, PMIX_STRING);
 
         if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, 1, infocbfunc, (void *) &mydata))) {
             fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
