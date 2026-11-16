@@ -102,6 +102,23 @@ was not found on at least one node:
 Please ensure the file has been installed in the correct location on
 every node included in this PRRTE DVM.
 #
+[bootstrap-file-refused]
+
+Bootstrap startup was requested, but a configuration file it reads was
+refused on at least one node:
+
+   node:   %s
+   file:   %s
+   reason: %s
+
+These files name the DVM's key, its controller and its nodes, so they are
+read only if nobody but root or the user the daemon runs as could have
+written them: a regular file, not a symbolic link and with no other
+names, that only its owner can write, owned by root or that user, in a
+directory only its owner can write (or one with the sticky bit) owned by
+root or that user. Correct the file's ownership or permissions, or those
+of its directory, and start the daemon again.
+#
 [bootstrap-missing-field-name]
 
 Bootstrap startup was requested, but the required configuration file

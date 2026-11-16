@@ -16,7 +16,8 @@ test_util_SOURCES = \
     test_textfile.c \
     test_dvm_key.c \
     test_session_dir.c \
-    test_output_file.c
+    test_output_file.c \
+    test_config_file.c
 
 test_util_LDADD = $(top_builddir)/src/libprrte.la
 

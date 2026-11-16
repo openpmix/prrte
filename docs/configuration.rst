@@ -32,6 +32,15 @@ entries commented out. Simply uncomment the options of interest and
 set them to appropriate values. The file will be installed into the
 final ``<install-location>/etc`` when ``make install`` is performed.
 
+Because this file names the DVM's key, its controller and its nodes, a
+daemon reads it only if nobody but root or the user the daemon runs as
+could have written it. It must be a regular file, not a symbolic link and
+with no other names (hard links); it must be owned by root or that user
+and be writable by nobody else; and the directory holding it must be owned
+by root or that user and be writable by nobody else, unless it has the
+sticky bit set. A daemon refuses to start if the file does not meet these
+requirements, and says which one it failed.
+
 Configuration Options
 ---------------------
 
@@ -67,6 +76,9 @@ identifying the nodes upon which user applications can run. IP addresses can
 be provided in place of hostnames if desired. The regular expression can consist of
 a simple comma-delimited list of hostnames, or a comma-delimited list of hostname
 ranges (e.g., "linux0,linux[2-10]"), or a PMIx "native" regular expression.
+It may also be given as ``file:<path>``, naming a file that lists the nodes one
+per line; that file is held to the same requirements as the configuration file
+itself.
 
 ``DVMKeyFile=<path> (required)`` names the file holding the DVM's key.
 Every daemon of a DVM must prove to the others that it holds this key before
