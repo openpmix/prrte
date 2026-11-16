@@ -74,7 +74,8 @@ prte_rmaps_base_t prte_rmaps_base = {
     .default_ranking_policy = NULL,
     .require_hwtcpus = false,
     .have_cores = true,
-    .resized_nodes = PMIX_LIST_STATIC_INIT(prte_rmaps_base.resized_nodes)
+    .resized_nodes = PMIX_LIST_STATIC_INIT(prte_rmaps_base.resized_nodes),
+    .resized_indexed = false
 };
 
 static void rsz_con(prte_rmaps_base_resize_t *p)
@@ -165,6 +166,10 @@ static int prte_rmaps_base_close(void)
     /* a map always drains this, but a teardown in the middle of one must
      * not leak what it left */
     PMIX_LIST_DESTRUCT(&prte_rmaps_base.resized_nodes);
+    if (prte_rmaps_base.resized_indexed) {
+        PMIX_DESTRUCT(&prte_rmaps_base.resized_index);
+        prte_rmaps_base.resized_indexed = false;
+    }
     hwloc_bitmap_free(prte_rmaps_base.available);
     prte_rmaps_base.available = NULL;
     hwloc_bitmap_free(prte_rmaps_base.baseset);
