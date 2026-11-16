@@ -22,12 +22,14 @@
 BEGIN_C_DECLS
 
 /* Open path to read it, if it is the file at that name - not a symbolic
- * link to one, nor one of several names for it - a regular file that only
- * its owner can write, owned by root or the user we run as, in a directory
- * only its owner can write (or one with the sticky bit, as /tmp has),
- * owned by root or the user we run as. The file's tests are made on the
- * descriptor actually opened, and the open is non-blocking, since a FIFO
- * would block it.
+ * link to one, nor one of several names for it - a regular file owned by
+ * root or the user we run as, that nobody else can write but the members
+ * of a group we are in, in a directory held to the same rule (or one with
+ * the sticky bit, as /tmp has). Run as root, no group may write either:
+ * the members of a group root belongs to can be ordinary users. This is
+ * PMIx's rule for a parameter file, plus the refusal of links. The file's
+ * tests are made on the descriptor actually opened, and the open is
+ * non-blocking, since a FIFO would block it.
  *
  * Returns the stream, or NULL with *why saying which test failed - NULL
  * when the file could not be opened at all, errno saying why. */
