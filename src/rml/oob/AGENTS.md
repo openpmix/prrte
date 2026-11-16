@@ -238,6 +238,21 @@ Two things about the counting are easy to undo by "simplifying":
   leading `prte_oob_pending_ipv6_prefix` bits (default 64) - a host may use
   any address in its /64, so counting by full address gave one host the
   whole overall limit. A v4-mapped address is compared whole.
+- **All of loopback is one host.** Every address in 127.0.0.0/8 is this
+  host, and a local process may connect from any of them, so `same_host()`
+  counts them as one - compared whole, each was a host of its own and the
+  per-host limit did not limit a local process at all.
+- **Neither end handshakes without a key.** The dialer refuses to send a
+  HELLO when `prte_dvm_key_ready` is false (`tcp_peer_send_hello`), and the
+  listener refuses one (`auth_refuse` at the top of the inbound branch of
+  `tcp_peer_auth_step`): the proofs would otherwise be made and checked
+  under whatever the key buffer holds.
+- **A blocking send waits, and not for ever.**
+  `prte_oob_tcp_peer_send_blocking()` sends the handshake's small messages
+  on a non-blocking socket. When the socket is full it `poll()`s for room,
+  for no longer than `prte_oob_handshake_timeout` seconds in all, and then
+  fails the send; it used to retry `send()` at once, spinning on the
+  progress thread for as long as the peer did not read.
 
 A connection **we** open has the same deadline (`peer->hs_deadline`, armed by
 `prte_oob_tcp_peer_arm_deadline()` where the HELLO goes out and the peer enters

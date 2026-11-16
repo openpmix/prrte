@@ -34,7 +34,9 @@
 #    include <unistd.h>
 #endif
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 
 #ifdef HAVE_SYS_UIO_H
 #    include <sys/uio.h>
@@ -91,7 +93,6 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name);
 static int tcp_peer_send_hello(prte_oob_tcp_peer_t *peer);
 static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_handshake_t *hs,
                               prte_oob_tcp_hdr_t *hdr, char *msg);
-static int tcp_peer_send_blocking(int sd, void *data, size_t size);
 static int tcp_peer_read_handshake(int sd, prte_oob_tcp_handshake_t *hs);
 static void tcp_peer_connected(prte_oob_tcp_peer_t *peer);
 
@@ -832,7 +833,7 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     /* send it.  A failure is the caller's to act on, and every caller closes
      * the peer for it - closing here as well made that two closes, and each
      * close of a connection still coming up starts a fresh attempt */
-    if (PRTE_SUCCESS != tcp_peer_send_blocking(peer->sd, msg, sdsize)) {
+    if (PRTE_SUCCESS != prte_oob_tcp_peer_send_blocking(peer->sd, msg, sdsize)) {
         free(msg);
         return PRTE_ERR_UNREACH;
     }
@@ -886,7 +887,7 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     offset += sizeof(ack_flag);
 
     /* send it */
-    if (PRTE_SUCCESS != tcp_peer_send_blocking(sd, msg, sdsize)) {
+    if (PRTE_SUCCESS != prte_oob_tcp_peer_send_blocking(sd, msg, sdsize)) {
         /* it's ok if it fails - remote side may already
          * have identified the collision and closed the connection
          */
@@ -1082,7 +1083,7 @@ static int tcp_peer_send_auth(int sd, prte_oob_tcp_msg_type_t type, pmix_rank_t 
     if (NULL != second) {
         memcpy(msg + hdrsize + PRTE_OOB_TCP_AUTH_LEN, second, PRTE_OOB_TCP_AUTH_LEN);
     }
-    return tcp_peer_send_blocking(sd, msg, hdrsize + plen);
+    return prte_oob_tcp_peer_send_blocking(sd, msg, hdrsize + plen);
 }
 
 /* Open the handshake on a connection we dialed: a HELLO carrying our
@@ -1192,7 +1193,14 @@ static int tcp_peer_auth_step(prte_oob_tcp_peer_t *peer, int sd, prte_oob_tcp_ha
     int rc;
 
     if (NULL == peer) {
-        /* a connection somebody dialed to us */
+        /* a connection somebody dialed to us. With no key loaded there is
+         * nothing to prove anything with - the proofs would be made under
+         * whatever the key buffer holds - so refuse, as the dialer does
+         * (tcp_peer_send_hello) */
+        if (!prte_dvm_key_ready) {
+            free(msg);
+            return auth_refuse(NULL, sd, "this process holds no DVM key");
+        }
         if (PRTE_OOB_TCP_AUTH_NONE == au->phase) {
             if (MCA_OOB_TCP_AUTH_HELLO != hdr->type) {
                 free(msg);
@@ -1470,12 +1478,23 @@ void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer)
 /*
  * A blocking send on a non-blocking socket. Used to send the small amount of connection
  * information that identifies the peers endpoint.
+ *
+ * When the socket cannot take more it waits for it to (poll), for no longer
+ * than prte_oob_handshake_timeout seconds in all - it used to retry send() at
+ * once, spinning on the progress thread for as long as the peer did not read.
  */
-static int tcp_peer_send_blocking(int sd, void *data, size_t size)
+int prte_oob_tcp_peer_send_blocking(int sd, void *data, size_t size)
 {
     unsigned char *ptr = (unsigned char *) data;
     size_t cnt = 0;
-    int retval;
+    int retval, wait_ms;
+    struct timeval start, now;
+    struct pollfd pfd;
+    long elapsed_ms, limit_ms;
+
+    limit_ms = (0 < prte_oob_base.handshake_timeout) ? 1000L * prte_oob_base.handshake_timeout
+                                                     : 30000L;
+    gettimeofday(&start, NULL);
 
     PMIX_ACQUIRE_OBJECT(ptr);
 
@@ -1488,9 +1507,28 @@ static int tcp_peer_send_blocking(int sd, void *data, size_t size)
         if (retval < 0) {
             if (prte_socket_errno != EINTR && prte_socket_errno != EAGAIN
                 && prte_socket_errno != EWOULDBLOCK) {
-                pmix_output(0, "%s tcp_peer_send_blocking: send() to socket %d failed: %s (%d)\n",
+                pmix_output(0, "%s prte_oob_tcp_peer_send_blocking: send() to socket %d failed: %s (%d)\n",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, strerror(prte_socket_errno),
                             prte_socket_errno);
+                return PRTE_ERR_UNREACH;
+            }
+            if (EINTR == prte_socket_errno) {
+                continue;
+            }
+            /* wait for room, as long as there is time left */
+            gettimeofday(&now, NULL);
+            elapsed_ms = (now.tv_sec - start.tv_sec) * 1000L
+                         + (now.tv_usec - start.tv_usec) / 1000L;
+            if (limit_ms <= elapsed_ms) {
+                pmix_output(0, "%s prte_oob_tcp_peer_send_blocking: socket %d took nothing for %ld s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, limit_ms / 1000L);
+                return PRTE_ERR_UNREACH;
+            }
+            wait_ms = (int) (limit_ms - elapsed_ms);
+            pfd.fd = sd;
+            pfd.events = POLLOUT;
+            pfd.revents = 0;
+            if (0 > poll(&pfd, 1, wait_ms) && EINTR != errno) {
                 return PRTE_ERR_UNREACH;
             }
             continue;
@@ -1685,7 +1723,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd,
         PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, PRTE_PROC_MY_NAME->nspace);
         hdrsize = PRTE_OOB_TCP_HDR_LEN(&hdr);
         MCA_OOB_TCP_HDR_HTON(&hdr);
-        tcp_peer_send_blocking(sd, &hdr, hdrsize);
+        prte_oob_tcp_peer_send_blocking(sd, &hdr, hdrsize);
         CLOSE_THE_SOCKET(sd);
         return PRTE_SUCCESS;
     }
