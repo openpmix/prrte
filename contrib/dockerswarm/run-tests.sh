@@ -4864,6 +4864,24 @@ test_requesters() {
             echo "$out" | grep -q "ROLE ALLOCPROPS PMIX_ERR_NO_PERMISSIONS" \
                 && ok "...nor told its properties" \
                 || bad "another user's query of root's reservation was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(RUN "timeout 60 $rq allocnodes roletool.4272" 2>&1 | tr -d '\r')
+            echo "$out" | grep -q "ROLE ALLOCNODES PMIX_ERR_NO_PERMISSIONS" \
+                && ok "...nor told its nodes" \
+                || bad "another user was told the nodes of root's reservation: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(RUN "timeout 60 $rq allocnodes" 2>&1 | tr -d '\r')
+            if ! echo "$out" | grep -q "ROLE ALLOCNODES PMIX_SUCCESS"; then
+                bad "another user's query of the DVM's nodes failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            elif echo "$out" | grep -q "^ROLE ALLOCNODE node2$"; then
+                bad "another user was told of the node root's reservation holds"
+            elif echo "$out" | grep -q "^ROLE ALLOCNODE "; then
+                ok "...and the DVM's nodes it is told leave that one out"
+            else
+                bad "another user was told of no nodes at all: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            fi
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' allocnodes roletool.4272" 2>&1 | tr -d '\r')
+            echo "$out" | grep -q "^ROLE ALLOCNODE node2$" \
+                && ok "root is told its reservation's nodes" \
+                || bad "root was not told its own reservation's nodes: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
             RUN "timeout 60 $SESSCTL terminate 4272" >/dev/null 2>&1
         fi
 
