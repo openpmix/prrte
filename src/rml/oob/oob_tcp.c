@@ -779,15 +779,23 @@ static bool same_prefix6(const struct in6_addr *a, const struct in6_addr *b, int
  * for IPv6, is the interface identifier: one host may hold any address in
  * its prefix (prte_oob_pending_ipv6_prefix, default a /64), so the per-host
  * count compares only that.  An IPv4 address mapped into IPv6 is still one
- * IPv4 host. */
+ * IPv4 host, and all of 127.0.0.0/8 is one host: this one. */
 static bool same_host(const struct sockaddr_storage *a, const struct sockaddr_storage *b)
 {
     if (a->ss_family != b->ss_family) {
         return false;
     }
     if (AF_INET == a->ss_family) {
-        return 0 == memcmp(&((const struct sockaddr_in *) a)->sin_addr,
-                           &((const struct sockaddr_in *) b)->sin_addr, sizeof(struct in_addr));
+        const struct in_addr *a4 = &((const struct sockaddr_in *) a)->sin_addr;
+        const struct in_addr *b4 = &((const struct sockaddr_in *) b)->sin_addr;
+
+        /* every address in 127.0.0.0/8 is this host, and a local process may
+         * connect from any of them - counted apart, each was a host of its
+         * own to prte_oob_max_pending_per_host */
+        if (127 == (ntohl(a4->s_addr) >> 24) && 127 == (ntohl(b4->s_addr) >> 24)) {
+            return true;
+        }
+        return 0 == memcmp(a4, b4, sizeof(struct in_addr));
     }
 #if PRTE_ENABLE_IPV6
     if (AF_INET6 == a->ss_family) {

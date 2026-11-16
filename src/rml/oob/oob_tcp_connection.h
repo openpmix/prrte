@@ -117,6 +117,10 @@ PRTE_EXPORT void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
  * where the state word lives. */
 PRTE_EXPORT void prte_oob_tcp_peer_start_connect(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_tcp_peer_dump(prte_oob_tcp_peer_t *peer, const char *msg);
+/* Send all of data on a non-blocking socket, waiting for room when it is
+ * full for no longer than prte_oob_handshake_timeout seconds in all.
+ * PRTE_ERR_UNREACH if the socket fails or takes nothing for that long. */
+PRTE_EXPORT int prte_oob_tcp_peer_send_blocking(int sd, void *data, size_t size);
 PRTE_EXPORT bool prte_oob_tcp_peer_accept(prte_oob_tcp_peer_t *peer);
 PRTE_EXPORT void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer);
 /* Read and act on a connect handshake arriving on `sd` - an outbound one's

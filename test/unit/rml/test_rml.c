@@ -56,6 +56,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #ifdef HAVE_NETINET_IN_H
 #    include <netinet/in.h>
@@ -1116,6 +1117,24 @@ static int test_handshake_authenticates(void)
     close(sv[0]);
     close(sv[1]);
 
+    /* a listener holding no key at all answers no HELLO - the dialer
+     * already refused to send one; the listener would have made and checked
+     * proofs under whatever the key buffer held */
+    {
+        bool saved_ready = prte_dvm_key_ready;
+
+        CHECK("socketpair", make_pair(sv));
+        prte_dvm_key_ready = false;
+        len = build_auth(wire, MCA_OOB_TCP_AUTH_HELLO, 3, PRTE_PROC_MY_NAME->rank, nonce, NULL);
+        CHECK("wrote it", (ssize_t) len == write(sv[1], wire, len));
+        rc = prte_oob_tcp_peer_recv_connect_ack(NULL, sv[0], &hs, &hdr);
+        prte_dvm_key_ready = saved_ready;
+        CHECK("a listener with no key refuses the HELLO", PRTE_ERR_AUTHENTICATION_FAILED == rc);
+        CHECK("and the connection closed", !fd_is_open(sv[0]));
+        prte_oob_tcp_handshake_clear(&hs);
+        close(sv[1]);
+    }
+
     if (0 == failures) {
         fprintf(stdout, "PASSED test_handshake_authenticates\n");
     }
@@ -1947,12 +1966,13 @@ static int test_pending_handshakes_bounded(void)
     prte_event_base = prte_event_base_create();
     CHECK("event base", NULL != prte_event_base);
 
+    /* two hosts: loopback addresses are all one host (see the end) */
     memset(&a, 0, sizeof(a));
     a.sin_family = AF_INET;
-    a.sin_addr.s_addr = htonl(0x7f000001);
+    a.sin_addr.s_addr = htonl(0x0a000001);
     a.sin_port = htons(40000);
     b = a;
-    b.sin_addr.s_addr = htonl(0x7f000002);
+    b.sin_addr.s_addr = htonl(0x0a000002);
 
     CHECK("nothing pending to begin with", 0 == prte_oob_base.num_pending);
 
@@ -2024,6 +2044,34 @@ static int test_pending_handshakes_bounded(void)
     run_until_none_pending(5);
     CHECK("and give their places back", 0 == prte_oob_base.num_pending);
 
+    /* Every address in 127.0.0.0/8 is this host, and a local process may
+     * connect from any of them - so they are one host to the per-host count,
+     * which otherwise did not limit a local process at all */
+    {
+        struct sockaddr_in l1 = a, l2 = a;
+
+        l1.sin_addr.s_addr = htonl(0x7f000001);
+        l2.sin_addr.s_addr = htonl(0x7f0a0b0c);
+        prte_oob_base.max_pending = 8;
+        prte_oob_base.max_pending_per_host = 1;
+        CHECK("tcp pair", tcp_pair(sv[0]));
+        CHECK("tcp pair", tcp_pair(sv[1]));
+        CHECK("tcp pair", tcp_pair(sv[2]));
+        prte_oob_accept_connection(sv[0][0], (struct sockaddr *) &l1);
+        fprintf(stdout, "-- the next case is refused; the message it prints is expected --\n");
+        prte_oob_accept_connection(sv[1][0], (struct sockaddr *) &l2);
+        CHECK("another loopback address counts as the same host",
+              1 == prte_oob_base.num_pending && !fd_is_open(sv[1][0]));
+        prte_oob_accept_connection(sv[2][0], (struct sockaddr *) &a);
+        CHECK("an address off this host does not", 2 == prte_oob_base.num_pending
+              && fd_is_open(sv[2][0]));
+        for (i = 0; i < 3; i++) {
+            close(sv[i][1]);
+        }
+        run_until_none_pending(5);
+        CHECK("loopback ones given back", 0 == prte_oob_base.num_pending);
+    }
+
 #if PRTE_ENABLE_IPV6
     /* One host may hold any address in its IPv6 prefix, so the per-host
      * count is of the prefix (a /64 unless prte_oob_pending_ipv6_prefix
@@ -2078,6 +2126,52 @@ static int test_pending_handshakes_bounded(void)
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_pending_handshakes_bounded\n");
+    }
+    return failures;
+}
+
+/* A blocking send on a socket that takes nothing more gives up at the
+ * handshake deadline. It used to retry send() at once, for as long as the
+ * peer did not read, holding the progress thread the whole time. */
+static int test_send_blocking_gives_up(void)
+{
+    int failures = 0, sv[2], flags, sz = 4096;
+    int save_tmo = prte_oob_base.handshake_timeout;
+    char block[4096], small[64];
+    struct timeval t0, t1;
+    long ms;
+    ssize_t n;
+
+    CHECK("socketpair", 0 == socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    (void) setsockopt(sv[0], SOL_SOCKET, SO_SNDBUF, &sz, sizeof(sz));
+    (void) setsockopt(sv[1], SOL_SOCKET, SO_RCVBUF, &sz, sizeof(sz));
+    flags = fcntl(sv[0], F_GETFL);
+    (void) fcntl(sv[0], F_SETFL, flags | O_NONBLOCK);
+    memset(block, 'x', sizeof(block));
+    memset(small, 'y', sizeof(small));
+
+    /* room to send: it all goes */
+    CHECK("a send with room completes",
+          PRTE_SUCCESS == prte_oob_tcp_peer_send_blocking(sv[0], small, sizeof(small)));
+
+    /* fill it until it takes nothing, and nobody reads */
+    do {
+        n = send(sv[0], block, sizeof(block), 0);
+    } while (0 < n);
+    prte_oob_base.handshake_timeout = 1;
+    fprintf(stdout, "-- the next case gives up; the message it prints is expected --\n");
+    gettimeofday(&t0, NULL);
+    CHECK("a send to a peer that reads nothing gives up",
+          PRTE_ERR_UNREACH == prte_oob_tcp_peer_send_blocking(sv[0], small, sizeof(small)));
+    gettimeofday(&t1, NULL);
+    ms = (t1.tv_sec - t0.tv_sec) * 1000L + (t1.tv_usec - t0.tv_usec) / 1000L;
+    CHECK("...at its deadline", 900 <= ms && ms < 5000);
+    prte_oob_base.handshake_timeout = save_tmo;
+    close(sv[0]);
+    close(sv[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_send_blocking_gives_up\n");
     }
     return failures;
 }
@@ -2445,6 +2539,7 @@ int main(void)
     /* reports refusals with pmix_net_get_hostname(), so it too has to run
      * before PMIx is finalized below */
     failures += test_pending_handshakes_bounded();
+    failures += test_send_blocking_gives_up();
     /* delivers messages (PMIx_Data_load) and shows help, so it too has to
      * run while PMIx is up */
     fprintf(stdout, "-- the next test closes connections over messages whose tags do not "
