@@ -244,7 +244,7 @@ static void drop_parked(const pmix_proc_t *target, pmix_persistence_t horizon, u
                             "%s data server: dropping pending request from %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PMIX_NAME_PRINT(&req->requestor));
-        pmix_list_remove_item(&prte_data_store.pending, &req->super);
+        prte_ds_unpark(req);
         prte_ds_reply_parked(req, PMIX_ERR_NOT_FOUND, NULL);
         PMIX_RELEASE(req);
     }

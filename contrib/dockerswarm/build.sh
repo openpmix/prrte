@@ -675,7 +675,7 @@ build_linux() {
             # PMIX_RANGE_LOCAL turns on only exists across nodes.
             # (No apostrophes here: see the note further down.)
             echo ">>>> dataserver (publish/lookup) test client"
-            gcc ${asan_cflags:-} -O0 -g -o /opt/prte/prte/bin/dataserver \
+            gcc ${asan_cflags:-} -O0 -g -pthread -o /opt/prte/prte/bin/dataserver \
                 /prrte-src/contrib/dockerswarm/dataserver.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 

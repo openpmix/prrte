@@ -2318,6 +2318,46 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: a process may have only so many lookups waiting"
+    # A PMIX_WAIT lookup stays parked until a publish answers it, its
+    # timeout runs out or its process ends, so one process using
+    # PMIx_Lookup_nb could park any number.  prte_data_server_max_waiting
+    # (64) bounds it per process: the ones beyond are refused at once with
+    # PMIX_ERR_OUT_OF_RESOURCE, and a publish still answers the ones parked.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        bad "could not start a DVM for the waiting-lookup limit test"
+    else
+        PRUN_BG /tmp/ds-manywait.out "--host node3:1 -n 1 $DS manywait prte.test.manywait 70 60"
+        for _ in $(seq 1 20); do
+            RUN 'grep -q "^REFUSED" /tmp/ds-manywait.out 2>/dev/null' && break
+            sleep 1
+        done
+        out=$(RUN 'cat /tmp/ds-manywait.out 2>/dev/null' | tr -d '\r')
+        if ! echo "$out" | grep -q "^REFUSED"; then
+            bad "the waiting lookups never reported: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        else
+            echo "$out" | grep -q "^REFUSED 6$" \
+                && ok "the lookups beyond the limit were refused at once" \
+                || bad "not just the lookups beyond the limit were refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(PRUN "--host node2:1 -n 1 $DS publish prte.test.manywait here session 5" 2>&1)
+            echo "$out" | grep -q '^PUBLISHED prte.test.manywait' \
+                || bad "the publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            for _ in $(seq 1 20); do
+                RUN 'grep -q "^ANSWERED" /tmp/ds-manywait.out 2>/dev/null' && break
+                sleep 1
+            done
+            out=$(RUN 'cat /tmp/ds-manywait.out 2>/dev/null' | tr -d '\r')
+            echo "$out" | grep -q "^ANSWERED 64 REFUSED 6 OTHER 0$" \
+                && ok "the publish answered every lookup that was waiting" \
+                || bad "the waiting lookups were not all answered: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    RUN 'rm -f /tmp/ds-manywait.out'
+    cleanup_swarm
+
     banner "runtime/data_server: unpublish removes the data"
     # Only the publisher may unpublish its own keys, so this runs in one
     # process: publish, confirm, unpublish, confirm gone.

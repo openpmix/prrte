@@ -152,7 +152,7 @@ static void lookup_timeout(int sd, short args, void *cbdata)
                         PMIX_NAME_PRINT(&req->requestor));
 
     /* it is waiting for nothing now */
-    pmix_list_remove_item(&prte_data_store.pending, &req->super);
+    prte_ds_unpark(req);
 
     /* A timeout carries no payload, and the daemon-side receiver knows not
      * to look for one.  Nothing was taken out of the store on this
@@ -470,7 +470,13 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
         req->nwait = nwait;
         req->keys = keys;
         keys = NULL;
-        pmix_list_append(&prte_data_store.pending, &req->super);
+        if (!prte_ds_park(req)) {
+            /* its process has as many lookups waiting as it may - answer
+             * this one now rather than hold it */
+            PMIX_RELEASE(req);
+            PMIX_DESTRUCT(&rq);
+            return PMIX_ERR_OUT_OF_RESOURCE;
+        }
         if (0 < timeout) {
             /* the caller said how long it is prepared to wait */
             tv.tv_sec = timeout;

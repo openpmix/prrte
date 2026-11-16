@@ -1579,6 +1579,8 @@ static void ds_store_open(void)
     pmix_pointer_array_init(&prte_data_store.store, 1, INT_MAX, 1);
     PMIX_CONSTRUCT(&prte_data_store.pending, pmix_list_t);
     PMIX_CONSTRUCT(&prte_data_store.usage, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_data_store.waiting, pmix_hash_table_t);
+    pmix_hash_table_init(&prte_data_store.waiting, 128);
 }
 
 static void ds_store_close(void)
@@ -1586,6 +1588,8 @@ static void ds_store_close(void)
     PMIX_DESTRUCT(&prte_data_store.store);
     PMIX_LIST_DESTRUCT(&prte_data_store.pending);
     PMIX_LIST_DESTRUCT(&prte_data_store.usage);
+    /* every test takes what it parked back off, so nothing is counted */
+    PMIX_DESTRUCT(&prte_data_store.waiting);
 }
 
 static prte_data_object_t *ds_store_item(const char *key, const char *val,
@@ -2096,6 +2100,122 @@ static int test_data_server_wire_count(void)
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_data_server_wire_count\n");
+    }
+    return failures;
+}
+
+/* A lookup that waits for data (PMIX_WAIT) is parked until a publish
+ * answers it, its own timeout runs out or its process ends, and a process
+ * using PMIx_Lookup_nb could park any number. Each process may have
+ * prte_data_store.max_waiting parked at once; one beyond that is refused
+ * PMIX_ERR_OUT_OF_RESOURCE at once, and the count comes down as they
+ * leave. */
+static pmix_status_t ds_wait_lookup(const char *nspace, pmix_rank_t rank)
+{
+    pmix_data_buffer_t buf, *answer;
+    pmix_proc_t requestor, sender;
+    size_t n = 1;
+    char *key = "prte.test.never.published";
+    pmix_info_t info;
+    bool wait = true;
+    pmix_status_t rc;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    PMIX_LOAD_PROCID(&requestor, nspace, rank);
+    PMIx_Data_pack(NULL, &buf, &requestor, 1, PMIX_PROC);
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, &buf, &key, 1, PMIX_STRING);
+    PMIX_INFO_LOAD(&info, PMIX_WAIT, &wait, PMIX_BOOL);
+    PMIx_Data_pack(NULL, &buf, &n, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, &buf, &info, 1, PMIX_INFO);
+    PMIX_INFO_DESTRUCT(&info);
+    PMIX_LOAD_PROCID(&sender, "prte-daemons", 1);
+    /* a parked lookup disposes of the answer buffer itself */
+    PMIX_DATA_BUFFER_CREATE(answer);
+    rc = prte_ds_lookup(&sender, 0, &buf, answer);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(answer);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    return rc;
+}
+
+static size_t ds_parked_by(const char *nspace, pmix_rank_t rank)
+{
+    prte_data_req_t *req;
+    size_t count = 0;
+
+    PMIX_LIST_FOREACH(req, &prte_data_store.pending, prte_data_req_t) {
+        if (PMIX_CHECK_NSPACE(req->requestor.nspace, nspace) && rank == req->requestor.rank) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static int test_data_server_max_waiting(void)
+{
+    int failures = 0, i;
+    int saved = prte_data_store.max_waiting;
+    prte_data_req_t *req;
+    pmix_proc_t a;
+    bool ok;
+
+    ds_store_open();
+    prte_data_store.max_waiting = 3;
+    PMIX_LOAD_PROCID(&a, "waiting.job1", 0);
+
+    ok = true;
+    for (i = 0; i < 3; i++) {
+        ok = ok && (PMIX_SUCCESS == ds_wait_lookup("waiting.job1", 0));
+    }
+    CHECK("max_waiting: a process parks up to the limit", ok && 3 == ds_parked_by("waiting.job1", 0));
+    fprintf(stdout, "-- the next case refuses a lookup; the message it prints is expected --\n");
+    CHECK("max_waiting: one beyond it is refused",
+          PMIX_ERR_OUT_OF_RESOURCE == ds_wait_lookup("waiting.job1", 0) &&
+              3 == ds_parked_by("waiting.job1", 0));
+    CHECK("max_waiting: another process of the same job is not",
+          PMIX_SUCCESS == ds_wait_lookup("waiting.job1", 1));
+
+    /* one answered: the process may wait on another */
+    PMIX_LIST_FOREACH(req, &prte_data_store.pending, prte_data_req_t) {
+        if (PMIX_CHECK_PROCID(&req->requestor, &a)) {
+            break;
+        }
+    }
+    prte_ds_unpark(req);
+    PMIX_RELEASE(req);
+    CHECK("max_waiting: one leaving lets the process wait again",
+          PMIX_SUCCESS == ds_wait_lookup("waiting.job1", 0) &&
+              3 == ds_parked_by("waiting.job1", 0));
+
+    /* the process's lookups purged: its count starts again from nothing */
+    prte_data_server_purge_local(&a, PMIX_PERSIST_PROC, UINT32_MAX);
+    CHECK("max_waiting: a purge takes the process's lookups",
+          0 == ds_parked_by("waiting.job1", 0) && 1 == ds_parked_by("waiting.job1", 1));
+    ok = true;
+    for (i = 0; i < 3; i++) {
+        ok = ok && (PMIX_SUCCESS == ds_wait_lookup("waiting.job1", 0));
+    }
+    CHECK("max_waiting: ...and its count with them", ok);
+
+    /* 0 removes the cap */
+    prte_data_store.max_waiting = 0;
+    CHECK("max_waiting: 0 removes the limit", PMIX_SUCCESS == ds_wait_lookup("waiting.job1", 0) &&
+                                                  4 == ds_parked_by("waiting.job1", 0));
+
+    while (NULL != (req = (prte_data_req_t *) pmix_list_get_first(&prte_data_store.pending)) &&
+           (pmix_list_item_t *) req != pmix_list_get_end(&prte_data_store.pending)) {
+        prte_ds_unpark(req);
+        PMIX_RELEASE(req);
+    }
+    CHECK("max_waiting: nothing is counted once nothing waits",
+          0 == pmix_hash_table_get_size(&prte_data_store.waiting));
+    prte_data_store.max_waiting = saved;
+    ds_store_close();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_data_server_max_waiting\n");
     }
     return failures;
 }
@@ -3163,6 +3283,7 @@ int main(void)
     failures += test_data_server_collect();
     failures += test_data_server_cap();
     failures += test_data_server_purge_parked();
+    failures += test_data_server_max_waiting();
     failures += test_data_server_wire_count();
     failures += test_count_fits();
     failures += test_data_server_unpublish_reach();

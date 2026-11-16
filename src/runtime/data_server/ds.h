@@ -31,6 +31,7 @@
 #include "prte_config.h"
 #include "types.h"
 
+#include "src/class/pmix_hash_table.h"
 #include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
@@ -162,6 +163,12 @@ typedef struct {
      * re-arm on every read. */
     prte_event_t sweep_ev;
     bool sweep_active;
+    /* the most lookups one requesting process may have parked here,
+     * waiting for data; 0 disables */
+    int max_waiting;
+    /* how many each process has parked, keyed by "nspace:rank" - an entry
+     * exists only while its count is above zero. See prte_ds_park(). */
+    pmix_hash_table_t waiting;
 } prte_data_store_t;
 
 extern prte_data_store_t prte_data_store;
@@ -279,6 +286,17 @@ PRTE_EXPORT size_t prte_ds_collect(prte_data_req_t *req, char **keys,
  * prte_data_store.pending and release it.  Returns false, having changed
  * nothing, while it must keep waiting. */
 PRTE_EXPORT bool prte_ds_answer_parked(prte_data_req_t *req);
+
+/* Park a PMIX_WAIT lookup on prte_data_store.pending, counting it against
+ * its requesting process. Returns false, having parked nothing, when that
+ * process already has prte_data_store.max_waiting lookups parked; the
+ * caller then answers the lookup PMIX_ERR_OUT_OF_RESOURCE. */
+PRTE_EXPORT bool prte_ds_park(prte_data_req_t *req);
+
+/* Take a parked lookup off prte_data_store.pending, however it leaves -
+ * answered, timed out or purged - so its process's count comes down. It
+ * does not release the request. */
+PRTE_EXPORT void prte_ds_unpark(prte_data_req_t *req);
 
 /* Send a parked request its one reply: room number, the command it
  * answers, the status, and - when "pbo" is given - the values.  A status

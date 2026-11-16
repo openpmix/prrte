@@ -9,6 +9,27 @@
 #
 # This is the US/English help file for PRRTE's publish/lookup datastore.
 #
+[datastore:max-waiting]
+
+A process has as many lookups waiting for data (PMIX_WAIT) in a datastore
+as it may have at once, and a further one was refused.
+
+   Daemon:  %s
+   Process: %s
+   Limit:   %d lookups
+
+The refused lookup was answered at once with PMIX_ERR_OUT_OF_RESOURCE.
+The lookups already waiting are unaffected, and the process may wait on
+another once one of them is answered, times out or is cancelled.
+
+Raise the limit with the "prte_data_server_max_waiting" MCA parameter, or
+set it to 0 to remove it entirely:
+
+   prte --prtemca prte_data_server_max_waiting 256 ...
+
+This warning is printed once for each process that reaches the limit
+while its lookups are waiting.
+#
 [datastore:evicting]
 
 The datastore has reached the limit on how much published data it will

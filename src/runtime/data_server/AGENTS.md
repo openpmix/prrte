@@ -448,6 +448,22 @@ timer, so every path is covered by `PMIX_RELEASE`. Without the timer a wait
 for a key nobody publishes never returned: the timeout reached the daemon's
 caddy (`req->timeout` in `pmix_server_pub.c`) and went no further.
 
+**A process may have only `prte_data_server_max_waiting` (64) lookups
+parked at once.** A wait with no `PMIX_TIMEOUT` lasts as long as its
+process, and a process using `PMIx_Lookup_nb` could otherwise park any
+number - each holding its keys here and a request on its daemon, and each
+walked by every publish. So nothing goes on or comes off `pending` except
+through `prte_ds_park()` and `prte_ds_unpark()`, which keep a count per
+requesting process (`prte_data_store.waiting`, keyed `"nspace:rank"`, an
+entry only while the count is above zero). A lookup beyond the cap is not
+parked: `prte_ds_lookup()` returns `PMIX_ERR_OUT_OF_RESOURCE`, which the
+report path sends at once, and the daemon reads as a status with no
+payload. The cap is per process, not per user like `server_max_size`,
+because the ordinary case is one waiting lookup per process - and every
+rank of a large job waiting on the same name is that case, which a per-user
+cap would refuse. A path that took a request off `pending` directly would
+leave its process's count too high for good.
+
 **`PMIX_PERSISTENCE` is enforced by the purge, and only because the state
 machine says a lifetime ended.** `expires_by()` decides what a given
 horizon takes:
