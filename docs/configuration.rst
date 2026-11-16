@@ -33,13 +33,16 @@ set them to appropriate values. The file will be installed into the
 final ``<install-location>/etc`` when ``make install`` is performed.
 
 Because this file names the DVM's key, its controller and its nodes, a
-daemon reads it only if nobody but root or the user the daemon runs as
-could have written it. It must be a regular file, not a symbolic link and
-with no other names (hard links); it must be owned by root or that user
-and be writable by nobody else; and the directory holding it must be owned
-by root or that user and be writable by nobody else, unless it has the
-sticky bit set. A daemon refuses to start if the file does not meet these
-requirements, and says which one it failed.
+daemon reads it only if nobody but root, the user the daemon runs as and
+the members of that user's groups could have written it. It must be a
+regular file, not a symbolic link and with no other names (hard links); it
+must be owned by root or that user, and writable by nobody else except a
+group that user belongs to; and the directory holding it must be owned by
+root or that user and meet the same rule, unless it has the sticky bit
+set. A daemon running as root admits no group write at all, since the
+members of a group root belongs to can be ordinary users. A daemon refuses
+to start if the file does not meet these requirements, and says which one
+it failed.
 
 Configuration Options
 ---------------------

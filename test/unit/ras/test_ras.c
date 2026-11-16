@@ -410,8 +410,18 @@ static int test_bootstrap_file_refused(void)
           PRTE_SUCCESS == boot_nodes(dir, "bn[2:1-2]", &cfg) && nodes_are(&cfg, "bn01,bn02"));
     prte_bootstrap_config_free(&cfg);
 
+    /* our own group may write it - unless we are root, which takes no
+     * group write. Given our group explicitly: on the BSDs a new file
+     * takes its directory's, and /tmp's is wheel */
+    CHECK("bootfile: our group given", 0 == chown(conf, (uid_t) -1, getegid()));
     chmod(conf, 0664);
-    CHECK("bootfile: one its group can write is refused", PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    if (0 == geteuid()) {
+        CHECK("bootfile: as root, one its group can write is refused",
+              PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    } else {
+        CHECK("bootfile: one a group we are in can write is read",
+              PRTE_SUCCESS == prte_bootstrap_parse(&cfg));
+    }
     prte_bootstrap_config_free(&cfg);
     chmod(conf, 0646);
     CHECK("bootfile: one others can write is refused", PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
@@ -431,9 +441,19 @@ static int test_bootstrap_file_refused(void)
     unlink(real);
 
     /* the directory holding it */
-    chmod(dir, 0770);
-    CHECK("bootfile: a directory its group can write is refused",
+    chmod(dir, 0777);
+    CHECK("bootfile: a directory anyone can write is refused",
           PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    prte_bootstrap_config_free(&cfg);
+    CHECK("bootfile: our group given to the directory", 0 == chown(dir, (uid_t) -1, getegid()));
+    chmod(dir, 0770);
+    if (0 == geteuid()) {
+        CHECK("bootfile: as root, a directory its group can write is refused",
+              PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
+    } else {
+        CHECK("bootfile: a directory a group we are in can write is read",
+              PRTE_SUCCESS == prte_bootstrap_parse(&cfg));
+    }
     prte_bootstrap_config_free(&cfg);
     chmod(dir, 01777);
     CHECK("bootfile: ...unless it is sticky", PRTE_SUCCESS == prte_bootstrap_parse(&cfg));
