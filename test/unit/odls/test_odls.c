@@ -54,6 +54,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <pwd.h>
+#include <sys/stat.h>
 #ifdef HAVE_SYS_WAIT_H
 #    include <sys/wait.h>
 #endif
@@ -65,6 +67,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_printf.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
 #include "src/util/proc_info.h"
@@ -255,6 +258,11 @@ static int test_child_err_enum(void)
     /* every fatal code is a real, non-NONE value */
     CHECK("fatal IOF nonzero", PRTE_ODLS_CHILD_ERR_NONE != PRTE_ODLS_CHILD_ERR_IOF_SETUP);
     CHECK("fatal EXEC nonzero", PRTE_ODLS_CHILD_ERR_NONE != PRTE_ODLS_CHILD_ERR_EXEC);
+    /* the two the child names after a failed execve are fatal too */
+    CHECK("fatal EXEC_ISDIR/INTERP before warn group",
+          PRTE_ODLS_CHILD_ERR_CREDENTIALS < PRTE_ODLS_CHILD_ERR_EXEC_ISDIR &&
+          PRTE_ODLS_CHILD_ERR_EXEC_ISDIR < PRTE_ODLS_CHILD_ERR_EXEC_INTERP &&
+          PRTE_ODLS_CHILD_ERR_EXEC_INTERP < PRTE_ODLS_CHILD_WARN_NOT_BOUND);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_child_err_enum\n");
@@ -1126,6 +1134,104 @@ static int test_slice_discard(void)
     return failures;
 }
 
+/*
+ * A job's working directory and executable are checked as the job's owner
+ * when that is not the daemon's own user (prte_odls_base_check_as_owner):
+ * the daemon made both checks as itself, which for another user's job is
+ * root - so a directory or program only root could reach passed, a naked
+ * name resolved to one the owner may not run, and a working directory the
+ * user had not asked for fell back to root's home rather than the owner's.
+ * Run here as ourselves, which still runs the checks in the child: the
+ * answers, and that the daemon itself goes nowhere.
+ */
+static int test_check_as_owner(void)
+{
+    int failures = 0, rc;
+    char dir[] = "/tmp/prte_odls_owner_XXXXXX";
+    char here[PRTE_PATH_MAX], after[PRTE_PATH_MAX], real[PRTE_PATH_MAX];
+    char *exe = NULL, *plain = NULL, *wdir = NULL, *env_path = NULL;
+    prte_app_context_t *app;
+    struct passwd *pw = getpwuid(geteuid());
+    uid_t uid = geteuid();
+    gid_t gid = getegid();
+    FILE *fp;
+
+    if (NULL == mkdtemp(dir) || NULL == getcwd(here, sizeof(here)) ||
+        NULL == realpath(dir, real)) {
+        fprintf(stderr, "FAIL [check_as_owner]: setup\n");
+        return 1;
+    }
+    pmix_asprintf(&exe, "%s/prog", real);
+    pmix_asprintf(&plain, "%s/plain", real);
+    fp = fopen(exe, "w");
+    if (NULL != fp) {
+        fprintf(fp, "#!/bin/sh\nexit 0\n");
+        fclose(fp);
+    }
+    chmod(exe, 0755);
+    fp = fopen(plain, "w");
+    if (NULL != fp) {
+        fclose(fp);
+    }
+    chmod(plain, 0644);
+
+    /* a directory that is there, and an executable named by PATH */
+    app = PMIX_NEW(prte_app_context_t);
+    app->cwd = strdup(dir);
+    app->app = strdup("prog");
+    pmix_asprintf(&env_path, "PATH=%s", real);
+    PMIx_Argv_append_nosize(&app->env, env_path);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    CHECK("check_as_owner: a directory and a program on PATH are found",
+          PMIX_SUCCESS == rc && NULL != wdir && 0 == strcmp(wdir, real) &&
+              0 == strcmp(app->app, exe));
+    CHECK("check_as_owner: ...and the daemon stays where it was",
+          NULL != getcwd(after, sizeof(after)) && 0 == strcmp(here, after));
+    free(wdir);
+    wdir = NULL;
+
+    /* a directory the user asked for that is not there */
+    free(app->cwd);
+    pmix_asprintf(&app->cwd, "%s/missing", real);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    CHECK("check_as_owner: a missing directory the user asked for is refused",
+          PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE == rc);
+
+    /* one the user did not ask for falls back to the owner's home */
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, false, false);
+    CHECK("check_as_owner: a missing default directory falls back to the owner's home",
+          NULL == pw || (PMIX_SUCCESS == rc && 0 == strcmp(app->cwd, pw->pw_dir)));
+    free(wdir);
+    wdir = NULL;
+
+    /* executables that will not run */
+    free(app->cwd);
+    app->cwd = strdup(real);
+    free(app->app);
+    app->app = strdup("no-such-program");
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    CHECK("check_as_owner: a program on no PATH directory is not found",
+          PMIX_ERR_JOB_EXE_NOT_FOUND == rc);
+    free(app->app);
+    app->app = strdup(plain);
+    rc = prte_odls_base_check_as_owner(app, &wdir, uid, gid, true, true);
+    CHECK("check_as_owner: a file that is not executable is refused",
+          PMIX_ERR_EXE_NOT_ACCESSIBLE == rc);
+    free(wdir);
+
+    PMIX_RELEASE(app);
+    unlink(exe);
+    unlink(plain);
+    rmdir(dir);
+    free(exe);
+    free(plain);
+    free(env_path);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_check_as_owner\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1165,6 +1271,7 @@ int main(void)
     failures += test_process_envars();
     failures += test_child_pipe_protocol();
     failures += test_set_credentials();
+    failures += test_check_as_owner();
     failures += test_signal_skips_dead_procs();
     failures += test_mempolicy();
     failures += test_slice_discard();

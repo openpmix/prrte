@@ -111,6 +111,9 @@ typedef enum {
     PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC,   /* ptrace(TRACEME) failed */
     PRTE_ODLS_CHILD_ERR_EXEC,           /* execve failed */
     PRTE_ODLS_CHILD_ERR_CREDENTIALS,    /* could not become the job's owner */
+    PRTE_ODLS_CHILD_ERR_EXEC_ISDIR,     /* execve failed: the executable is a directory */
+    PRTE_ODLS_CHILD_ERR_EXEC_INTERP,    /* execve failed with ENOENT on a file that is
+                                         * there: its "#!" interpreter is missing */
     /* non-fatal warnings - the child continues on toward execve */
     PRTE_ODLS_CHILD_WARN_NOT_BOUND,     /* could not apply cpu binding */
     PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND, /* could not apply memory binding */

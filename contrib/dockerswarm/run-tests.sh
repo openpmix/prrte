@@ -5270,6 +5270,29 @@ test_run_as() {
         && ok "the job's directories are removed when it ends" \
         || bad "$n of the job's directories were left behind"
 
+    banner "run-as: its executable is found, and its directory checked, as that user"
+    # The daemon used to resolve a naked program name, and enter the working
+    # directory, as itself - root - before the process became the user. A
+    # PATH whose first directory only root can enter then named a copy there
+    # the user cannot run, and the job failed; searched as the user, the
+    # copy in the next directory is the one found. And a working directory
+    # only root can enter passed the daemon's check.
+    ON 2 'mkdir -p /root/runas-bin && chmod 700 /root/runas-bin && printf "#!/bin/sh\necho RUNAS-PATH root-copy\n" > /root/runas-bin/runas-which && chmod 755 /root/runas-bin/runas-which'
+    ON 2 'mkdir -p /tmp/runas-bin && printf "#!/bin/sh\necho RUNAS-PATH user-copy\n" > /tmp/runas-bin/runas-which && chmod 755 /tmp/runas-bin/runas-which'
+    out=$(RUN "cd /tmp && timeout 60 $rq -n 1 --host node2 -x PATH=/root/runas-bin:/tmp/runas-bin:/usr/bin:/bin runas-which" 2>&1)
+    echo "$out" | grep -q '^RUNAS-PATH user-copy' \
+        && ok "a program on PATH is the one the user can run" \
+        || bad "the user's job did not run the copy it can reach: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    out=$(RUN "cd /tmp && timeout 60 $rq -n 1 --host node2 --wdir /root/runas-bin hostname" 2>&1)
+    if echo "$out" | tr -d '\r' | grep -q '^node2$'; then
+        bad "the user's job ran in a directory only root can enter"
+    elif echo "$out" | grep -qi "working directory\|wdir"; then
+        ok "a working directory only root can enter is refused for the user"
+    else
+        bad "a root-only working directory was not refused as one: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    ON 2 'rm -rf /root/runas-bin /tmp/runas-bin; true'
+
     banner "run-as: root's own job still runs as root"
     out=$(RUN "cd /tmp && timeout 60 prun --dvm-uri '$uri' -n 2 --map-by node sh -c 'echo RUNAS \$(id -u)'" 2>&1)
     n=$(echo "$out" | grep -c '^RUNAS 0$')
