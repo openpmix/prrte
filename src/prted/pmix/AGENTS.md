@@ -887,10 +887,32 @@ type on the way out as carefully as on the way in.
 
 ### Allocations are told to those who may operate on them
 
-`PMIX_QUERY_ALLOC_IDS` lists, besides the general pool, only the
-reservations `prte_pmix_server_session_permitted()` lets the caller operate
-on, and `PMIX_QUERY_ALLOC_PROPERTIES` answers about one of those only -
-`PMIX_ERR_NO_PERMISSIONS` otherwise. Its properties are what lets a user
+Every node in the pool came either with the DVM's own allocation (or with
+nodes added to the general pool), which anyone may use, or with a
+reservation granted to a user, which no one else may. So a query tells its
+caller about a reservation, and about the nodes in it, only if
+`prte_pmix_server_session_permitted()` lets the caller operate on it -
+whether or not the query names it. `session_visible()` is that rule, and
+`visible_alloc_nodes()` applies it for the arms that report nodes:
+
+- `PMIX_QUERY_ALLOCATION` lists the general pool's nodes and those of the
+  caller's reservations;
+- `PMIX_NUM_SLOTS` counts the same nodes, and `PMIX_QUERY_AVAILABLE_SLOTS`
+  the free slots on them;
+- `PMIX_QUERY_ALLOC_IDS` lists, besides the general pool, only the
+  caller's reservations.
+
+Naming another's reservation (`PMIX_ALLOC_ID`) or a node in it
+(`PMIX_HOSTNAME`, `PMIX_NODEID`) is `PMIX_ERR_NO_PERMISSIONS`, as is asking
+for its properties. Whether a caller may operate on a session can take a
+group lookup, so `visible_build()` decides it once per session for the
+query rather than once per node. `PMIX_QUERY_ALLOCATION` still sends every
+topology: a node's `PMIX_TOPOLOGY_INDEX` is its topology's slot in
+`prte_node_topologies`, and the list is sent in slot order, so leaving one
+out would shift every topology after it onto the wrong nodes.
+
+`PMIX_QUERY_ALLOC_PROPERTIES` answers about one of the caller's
+reservations only. Its properties are what lets a user
 tell its allocations apart and clean them up: besides
 `PMIX_ALLOC_RELEASABLE` and `PMIX_ALLOC_SEQUENCE`, the
 `PMIX_ALLOC_REQ_ID` it was requested under, the process that requested it

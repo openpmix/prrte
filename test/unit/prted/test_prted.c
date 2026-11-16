@@ -2741,6 +2741,229 @@ static pmix_status_t run_query(pmix_query_t *q)
     return qstatus;
 }
 
+/*
+ * A query tells its caller only about the nodes it may use: those of the
+ * DVM's general pool, and those of the reservations it may operate on.
+ * Every node came either with the DVM's own allocation or with a
+ * reservation granted to a user, and the second kind is no one else's to
+ * use - so another user's reservation, and the nodes in it, were reported
+ * by PMIX_QUERY_ALLOCATION, PMIX_NUM_SLOTS and PMIX_QUERY_AVAILABLE_SLOTS to
+ * anyone who asked, named or not. Naming one is now PMIX_ERR_NO_PERMISSIONS.
+ */
+static pmix_status_t vq_status;
+static bool vq_done;
+static uint32_t vq_count;
+static int vq_nodes;
+static bool vq_seen[3];
+static const char *vq_names[3] = {"unit-test-vq-general", "unit-test-vq-mine",
+                                  "unit-test-vq-theirs"};
+
+static void vq_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                      void *cbdata, pmix_release_cbfunc_t release_fn, void *release_cbdata)
+{
+    size_t n, k, j;
+    pmix_info_t *list, *ninfo_arr;
+    PRTE_HIDE_UNUSED_PARAMS(cbdata);
+
+    vq_status = status;
+    for (n = 0; n < ninfo; n++) {
+        if ((PMIx_Check_key(info[n].key, PMIX_NUM_SLOTS) ||
+             PMIx_Check_key(info[n].key, PMIX_QUERY_AVAILABLE_SLOTS)) &&
+            PMIX_UINT32 == info[n].value.type) {
+            vq_count = info[n].value.data.uint32;
+        } else if (PMIx_Check_key(info[n].key, PMIX_QUERY_ALLOCATION) &&
+                   PMIX_DATA_ARRAY == info[n].value.type &&
+                   NULL != info[n].value.data.darray &&
+                   PMIX_INFO == info[n].value.data.darray->type) {
+            list = (pmix_info_t *) info[n].value.data.darray->array;
+            for (k = 0; k < info[n].value.data.darray->size; k++) {
+                if (!PMIx_Check_key(list[k].key, PMIX_NODE_INFO) ||
+                    PMIX_DATA_ARRAY != list[k].value.type ||
+                    NULL == list[k].value.data.darray ||
+                    0 == list[k].value.data.darray->size) {
+                    continue;
+                }
+                ++vq_nodes;
+                ninfo_arr = (pmix_info_t *) list[k].value.data.darray->array;
+                for (j = 0; j < 3; j++) {
+                    if (PMIX_STRING == ninfo_arr[0].value.type &&
+                        0 == strcmp(vq_names[j], ninfo_arr[0].value.data.string)) {
+                        vq_seen[j] = true;
+                    }
+                }
+            }
+        }
+    }
+    vq_done = true;
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+}
+
+/* key, asked by a process of user uid, naming allocid and hostname where
+ * they are not NULL */
+static pmix_status_t vq_run(const char *key, uint32_t uid, const char *allocid,
+                            const char *hostname)
+{
+    pmix_query_t q;
+    pmix_proc_t requestor;
+    pmix_status_t rc;
+    size_t nq = 1;
+    int spins = 0;
+
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, key);
+    nq += (NULL != allocid) ? 1 : 0;
+    nq += (NULL != hostname) ? 1 : 0;
+    PMIX_INFO_CREATE(q.qualifiers, nq);
+    q.nqual = nq;
+    nq = 0;
+    PMIX_INFO_LOAD(&q.qualifiers[nq++], PMIX_USERID, &uid, PMIX_UINT32);
+    if (NULL != allocid) {
+        PMIX_INFO_LOAD(&q.qualifiers[nq++], PMIX_ALLOC_ID, allocid, PMIX_STRING);
+    }
+    if (NULL != hostname) {
+        PMIX_INFO_LOAD(&q.qualifiers[nq++], PMIX_HOSTNAME, hostname, PMIX_STRING);
+    }
+    PMIX_LOAD_PROCID(&requestor, "unit-test-vq", 0);
+    vq_status = PMIX_SUCCESS;
+    vq_done = false;
+    vq_count = UINT32_MAX;
+    vq_nodes = 0;
+    memset(vq_seen, 0, sizeof(vq_seen));
+    rc = pmix_server_query_fn(&requestor, &q, 1, vq_cbfunc, NULL);
+    while (PMIX_SUCCESS == rc && !vq_done && spins < 1000) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE | PRTE_EVLOOP_NONBLOCK);
+        ++spins;
+    }
+    PMIX_QUERY_DESTRUCT(&q);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    return vq_done ? vq_status : PMIX_ERR_TIMEOUT;
+}
+
+static int test_query_visible_nodes(void)
+{
+    int failures = 0, i;
+    bool made = false, saved_hnp = prte_hnp_is_allocated;
+    prte_node_t *nodes[3];
+    prte_session_t *mine, *theirs;
+    const uint32_t me = 4242, them = 7777;
+    uint32_t dvm = (uint32_t) prte_process_info.euid;
+    int32_t slots[3] = {2, 3, 5};
+
+    if (me == dvm || them == dvm) {
+        fprintf(stdout, "SKIP test_query_visible_nodes: needs to run as a user other than "
+                        "%u and %u\n", me, them);
+        return 0;
+    }
+    if (NULL == prte_node_pool) {
+        /* what prte_init() would have made, and test_prted does not run */
+        prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_node_pool, 8, INT32_MAX, 8);
+        prte_sessions = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_sessions, 8, INT32_MAX, 8);
+        prte_default_session = PMIX_NEW(prte_session_t);
+        PMIX_RELEASE(prte_default_session->nodes);
+        prte_default_session->nodes = prte_node_pool;
+        prte_set_session_object(prte_default_session);
+        prte_node_topologies = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_node_topologies, 8, INT32_MAX, 8);
+        made = true;
+    }
+    /* the head node's slot is the first; count it */
+    prte_hnp_is_allocated = true;
+
+    mine = PMIX_NEW(prte_session_t);
+    mine->session_id = 4601;
+    mine->alloc_refid = strdup("unit-test-vq-mine");
+    mine->flags |= PRTE_SESSION_FLAG_RESERVED;
+    mine->owner_uid = (uid_t) me;
+    mine->owner_gid = (gid_t) me;
+    prte_set_session_object(mine);
+    theirs = PMIX_NEW(prte_session_t);
+    theirs->session_id = 4602;
+    theirs->alloc_refid = strdup("unit-test-vq-theirs");
+    theirs->flags |= PRTE_SESSION_FLAG_RESERVED;
+    theirs->owner_uid = (uid_t) them;
+    theirs->owner_gid = (gid_t) them;
+    prte_set_session_object(theirs);
+    for (i = 0; i < 3; i++) {
+        nodes[i] = PMIX_NEW(prte_node_t);
+        nodes[i]->name = strdup(vq_names[i]);
+        nodes[i]->slots = slots[i];
+        nodes[i]->state = PRTE_NODE_STATE_UP;
+        nodes[i]->index = pmix_pointer_array_add(prte_node_pool, nodes[i]);
+    }
+    nodes[1]->session = mine;
+    PMIX_RETAIN(nodes[1]);
+    pmix_pointer_array_add(mine->nodes, nodes[1]);
+    nodes[2]->session = theirs;
+    PMIX_RETAIN(nodes[2]);
+    pmix_pointer_array_add(theirs->nodes, nodes[2]);
+
+    /* a user: the general pool and its own reservation, and nothing else */
+    CHECK("visible: the whole allocation, as a user",
+          PMIX_SUCCESS == vq_run(PMIX_QUERY_ALLOCATION, me, NULL, NULL) &&
+              2 == vq_nodes && vq_seen[0] && vq_seen[1] && !vq_seen[2]);
+    CHECK("visible: its own reservation",
+          PMIX_SUCCESS == vq_run(PMIX_QUERY_ALLOCATION, me, "unit-test-vq-mine", NULL) &&
+              1 == vq_nodes && vq_seen[1]);
+    CHECK("visible: another user's reservation is refused",
+          PMIX_ERR_NO_PERMISSIONS == vq_run(PMIX_QUERY_ALLOCATION, me, "unit-test-vq-theirs",
+                                            NULL) && 0 == vq_nodes);
+    CHECK("visible: slots, as a user",
+          PMIX_SUCCESS == vq_run(PMIX_NUM_SLOTS, me, NULL, NULL) && 5 == vq_count);
+    CHECK("visible: slots of another user's reservation are refused",
+          PMIX_ERR_NO_PERMISSIONS == vq_run(PMIX_NUM_SLOTS, me, "unit-test-vq-theirs", NULL));
+    CHECK("visible: slots of a node in it are refused",
+          PMIX_ERR_NO_PERMISSIONS == vq_run(PMIX_NUM_SLOTS, me, NULL, "unit-test-vq-theirs"));
+    CHECK("visible: slots of a general node are told",
+          PMIX_SUCCESS == vq_run(PMIX_NUM_SLOTS, me, NULL, "unit-test-vq-general") &&
+              2 == vq_count);
+    CHECK("visible: available slots, as a user",
+          PMIX_SUCCESS == vq_run(PMIX_QUERY_AVAILABLE_SLOTS, me, NULL, NULL) && 5 == vq_count);
+
+    /* the other user sees its own instead */
+    CHECK("visible: the whole allocation, as the other user",
+          PMIX_SUCCESS == vq_run(PMIX_QUERY_ALLOCATION, them, NULL, NULL) &&
+              2 == vq_nodes && vq_seen[0] && !vq_seen[1] && vq_seen[2]);
+    CHECK("visible: available slots, as the other user",
+          PMIX_SUCCESS == vq_run(PMIX_QUERY_AVAILABLE_SLOTS, them, NULL, NULL) && 7 == vq_count);
+
+    /* the DVM's own user - root, run as root - is told about everything */
+    CHECK("visible: the whole allocation, as our own user",
+          PMIX_SUCCESS == vq_run(PMIX_QUERY_ALLOCATION, dvm, NULL, NULL) && 3 == vq_nodes);
+    CHECK("visible: slots, as our own user",
+          PMIX_SUCCESS == vq_run(PMIX_NUM_SLOTS, dvm, NULL, NULL) && 10 == vq_count);
+
+    pmix_pointer_array_set_item(prte_sessions, mine->index, NULL);
+    PMIX_RELEASE(mine);
+    pmix_pointer_array_set_item(prte_sessions, theirs->index, NULL);
+    PMIX_RELEASE(theirs);
+    for (i = 0; i < 3; i++) {
+        pmix_pointer_array_set_item(prte_node_pool, nodes[i]->index, NULL);
+        PMIX_RELEASE(nodes[i]);
+    }
+    if (made) {
+        /* this releases the pool with it */
+        pmix_pointer_array_set_item(prte_sessions, prte_default_session->index, NULL);
+        PMIX_RELEASE(prte_default_session);
+        prte_default_session = NULL;
+        prte_node_pool = NULL;
+        PMIX_RELEASE(prte_sessions);
+        prte_sessions = NULL;
+        PMIX_RELEASE(prte_node_topologies);
+        prte_node_topologies = NULL;
+    }
+    prte_hnp_is_allocated = saved_hnp;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_query_visible_nodes\n");
+    }
+    return failures;
+}
+
 static int test_query_qualifiers(void)
 {
     int failures = 0;
@@ -4786,6 +5009,7 @@ int main(void)
     failures += test_tool_spawn_parent();
     failures += test_tool_registration();
     failures += test_query_qualifiers();
+    failures += test_query_visible_nodes();
     failures += test_group_left();
     failures += test_prefix_normalization();
     failures += test_singleton_id();

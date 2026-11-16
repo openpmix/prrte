@@ -47,10 +47,14 @@ import sys
 CAPACITY = ("slots", "slots_max", "slots_inuse")
 # the session table, which a daemon holds only the default entry of
 SESSIONS = "prte_sessions"
-# the sanctioned ways in
+# the sanctioned ways in.  visible_alloc_nodes() is the file's own
+# wrapper around prte_get_allocated_nodes(), which also says which of the
+# nodes the caller may be told about, and returns that accessor's
+# PRTE_ERR_NOT_AUTHORITATIVE unchanged
 ACCESSORS = ("prte_get_allocated_nodes",
              "prte_get_allocation_session",
-             "prte_get_allocation_sessions")
+             "prte_get_allocation_sessions",
+             "visible_alloc_nodes")
 
 # The proc half.  ->state is no good as a marker here because prte_node_t
 # has one too and this file reads it legitimately (inside a branch the
