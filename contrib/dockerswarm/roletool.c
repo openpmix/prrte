@@ -28,6 +28,8 @@
  *   roletool <uri> terminate <session-id>
  *   roletool <uri> alloc [<uid> <gid> [seconds]]
  *   roletool <uri> alloc-release <alloc-id>
+ *   roletool <uri> instantiate-id <session-id> <hosts> <alloc-id|->
+ *   roletool <uri> alloc-naming <alloc-id>
  *
  * It connects to the DVM by its URI rather than by rendezvous file, since a
  * DVM's rendezvous files are readable by its own user only. A <uri> of "-"
@@ -37,7 +39,9 @@
  *   scheduler    connect declaring itself the DVM's scheduler, then leave
  *   spawn        start /bin/true, naming no parent
  *   parent       start /bin/true, naming <nspace>:<rank> as its parent
- *   instantiate  create session <session-id> holding <hosts>
+ *   instantiate  create session <session-id> holding <hosts>, with
+ *                allocation id roletool.<session-id> (PMIX_ALLOC_ID), as
+ *                every instantiate op gives it
  *   pset         define process set <name> holding <nspace>:<rank>
  *   claim        connect naming itself <nspace>:<rank>, then leave - after
  *                [seconds], when given, so its namespace is held meanwhile
@@ -59,6 +63,10 @@
  *                be "-" to leave it out - then leave after [seconds], when
  *                given: a reservation is released when its requester ends
  *   alloc-release  release allocation <alloc-id>
+ *   instantiate-id  create session <session-id> holding <hosts>, with
+ *                allocation id <alloc-id> - or none, given "-"
+ *   alloc-naming  ask for a new allocation of no nodes, naming <alloc-id>
+ *                as its PMIX_ALLOC_ID
  *
  * Output lines, all prefixed ROLE so the harness can grep:
  *
@@ -155,14 +163,15 @@ static void usage(const char *name)
             " terminate <session-id> | extend <session-id> <hosts|-> [<time>] |"
             " alloc [<uid> <gid> [<seconds> [<time>]]] |"
             " alloc-release <alloc-id> | alloc-extend <alloc-id> <time> |"
-            " spawn-leave <usec> <cmd> [args...]\n",
+            " instantiate-id <session-id> <hosts> <alloc-id|-> |"
+            " alloc-naming <alloc-id> | spawn-leave <usec> <cmd> [args...]\n",
             name);
 }
 
 int main(int argc, char **argv)
 {
     pmix_proc_t myproc, parent, member;
-    pmix_info_t iinfo[4], jinfo[1], dirs[5];
+    pmix_info_t iinfo[4], jinfo[1], dirs[6];
     pmix_app_t app;
     pmix_nspace_t child;
     pmix_status_t rc;
@@ -191,6 +200,8 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "alloc") && 3 != argc && 5 != argc && 6 != argc && 7 != argc) ||
         (0 == strcmp(op, "alloc-release") && 4 != argc) ||
         (0 == strcmp(op, "alloc-extend") && 5 != argc) ||
+        (0 == strcmp(op, "instantiate-id") && 6 != argc) ||
+        (0 == strcmp(op, "alloc-naming") && 4 != argc) ||
         (0 == strcmp(op, "spawn-leave") && 5 > argc)) {
         usage(argv[0]);
         return 1;
@@ -278,12 +289,17 @@ int main(int argc, char **argv)
 
     } else if (0 == strcmp(op, "instantiate") || 0 == strcmp(op, "instantiate-for") ||
                0 == strcmp(op, "instantiate-owned") || 0 == strcmp(op, "sched-instantiate")) {
-        size_t ndirs = 2;
+        size_t ndirs = 3;
         uint32_t id;
+        char allocid[64];
 
         sid = (uint32_t) strtoul(argv[3], NULL, 10);
+        /* the id a scheduler would give the allocation - an instantiation
+         * must carry one */
+        snprintf(allocid, sizeof(allocid), "roletool.%u", sid);
         PMIX_INFO_LOAD(&dirs[0], PMIX_SESSION_INSTANTIATE, &flag, PMIX_BOOL);
         PMIX_INFO_LOAD(&dirs[1], PMIX_ALLOC_NODE_LIST, argv[4], PMIX_STRING);
+        PMIX_INFO_LOAD(&dirs[2], PMIX_ALLOC_ID, allocid, PMIX_STRING);
         if (0 == strcmp(op, "instantiate-for")) {
             PMIX_LOAD_PROCID(&member, argv[5], (pmix_rank_t) strtoul(argv[6], NULL, 10));
             PMIX_INFO_LOAD(&dirs[ndirs], PMIX_REQUESTOR, &member, PMIX_PROC);
@@ -407,6 +423,41 @@ int main(int argc, char **argv)
             --ndirs;
             PMIX_INFO_DESTRUCT(&dirs[ndirs]);
         }
+
+    } else if (0 == strcmp(op, "instantiate-id")) {
+        size_t ndirs = 2;
+
+        sid = (uint32_t) strtoul(argv[3], NULL, 10);
+        PMIX_INFO_LOAD(&dirs[0], PMIX_SESSION_INSTANTIATE, &flag, PMIX_BOOL);
+        PMIX_INFO_LOAD(&dirs[1], PMIX_ALLOC_NODE_LIST, argv[4], PMIX_STRING);
+        if (0 != strcmp(argv[5], "-")) {
+            PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_ALLOC_ID, argv[5], PMIX_STRING);
+        }
+        lock_init(&lock);
+        rc = PMIx_Session_control(sid, dirs, ndirs, ctrl_cb, &lock);
+        if (PMIX_SUCCESS != rc) {
+            lock_wake(&lock, rc);
+        } else {
+            lock_wait(&lock);
+        }
+        rc = lock.status;
+        printf("ROLE SESSION %s\n", PMIx_Error_string(rc));
+        while (0 < ndirs) {
+            --ndirs;
+            PMIX_INFO_DESTRUCT(&dirs[ndirs]);
+        }
+
+    } else if (0 == strcmp(op, "alloc-naming")) {
+        pmix_info_t *results = NULL;
+        size_t nresults = 0;
+
+        PMIX_INFO_LOAD(&dirs[0], PMIX_ALLOC_ID, argv[3], PMIX_STRING);
+        rc = PMIx_Allocation_request(PMIX_ALLOC_NEW, dirs, 1, &results, &nresults);
+        printf("ROLE ALLOC %s\n", PMIx_Error_string(rc));
+        if (NULL != results) {
+            PMIX_INFO_FREE(results, nresults);
+        }
+        PMIX_INFO_DESTRUCT(&dirs[0]);
 
     } else if (0 == strcmp(op, "alloc-release")) {
         pmix_info_t *results = NULL;

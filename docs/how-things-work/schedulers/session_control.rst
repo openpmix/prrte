@@ -88,7 +88,11 @@ Instantiation
 session id. The resources it is to hold are named by ``PMIX_SESSION_RESOURCES``
 (an array that may carry ``PMIX_ALLOC_NODE_LIST``, ``PMIX_ALLOC_ID``,
 ``PMIX_ALLOC_REQ_ID``, ``PMIX_ALLOC_TIME`` and ``PMIX_ALLOC_INHERITANCE``), or
-by those same keys given directly on the request. Those nodes join the DVM's
+by those same keys given directly on the request. ``PMIX_ALLOC_ID`` is
+required: it is the id the scheduler assigned to the allocation, and the one
+the session is named by in allocation requests from then on. An
+instantiation without one is refused with ``PMIX_ERR_BAD_PARAM``, and one
+whose id already names a session with ``PMIX_ERR_EXISTS``. Those nodes join the DVM's
 node pool and are then withheld from general use: a job may map onto them only
 if it is running in this session.
 
@@ -99,8 +103,7 @@ instantiation). The job is launched into the new session. If the DVM had to
 be extended across newly-named nodes, the job waits until those daemons are
 up before it is mapped.
 
-The answer carries ``PMIX_SESSION_ID``, the ``PMIX_ALLOC_ID`` assigned to the
-session, and — when apps were given — the ``PMIX_NSPACE`` of the launched job.
+The answer carries ``PMIX_SESSION_ID``, the session's ``PMIX_ALLOC_ID``, and — when apps were given — the ``PMIX_NSPACE`` of the launched job.
 For a request that named apps, the answer is deferred until the launch
 completes, so a successful return means the job is running.
 

@@ -4815,6 +4815,32 @@ test_requesters() {
             RUN "timeout 60 $SESSCTL terminate 4272" >/dev/null 2>&1
         fi
 
+        banner "requesters: an allocation's id is the scheduler's to give"
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate-id 4279 node2:2 -" 2>&1)
+        if echo "$out" | grep -q "ROLE SESSION PMIX_ERR_BAD_PARAM"; then
+            ok "an instantiation with no allocation id is refused"
+        else
+            bad "an instantiation with no allocation id was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            RUN "timeout 60 $SESSCTL terminate 4279" >/dev/null 2>&1
+        fi
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate-id 4279 node2:2 swarm-dup-id" 2>&1)
+        if ! echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
+            bad "could not instantiate session 4279: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        else
+            out=$(RUN "timeout 60 $ROLETOOL '$uri' instantiate-id 4280 node3:2 swarm-dup-id" 2>&1)
+            if echo "$out" | grep -q "ROLE SESSION PMIX_ERR_EXISTS"; then
+                ok "an instantiation whose allocation id is in use is refused"
+            else
+                bad "a second session was given an allocation id in use: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                RUN "timeout 60 $SESSCTL terminate 4280" >/dev/null 2>&1
+            fi
+            RUN "timeout 60 $SESSCTL terminate 4279" >/dev/null 2>&1
+        fi
+        out=$(RUN "timeout 60 $ROLETOOL '$uri' alloc-naming swarm-own-id" 2>&1)
+        echo "$out" | grep -q "ROLE ALLOC PMIX_ERR_BAD_PARAM" \
+            && ok "a new allocation request naming its own allocation id is refused" \
+            || bad "a new allocation request named its own allocation id: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
         banner "requesters: a session is its requester's, whatever job it names"
         ON 1 'printf "#!/bin/sh\necho NS=\$PMIX_NAMESPACE\nexec sleep 60\n" > /tmp/rqowner.sh && chmod +x /tmp/rqowner.sh'
         PRUN_BG /tmp/rqowner.out '--host node1:1 -n 1 /tmp/rqowner.sh'
@@ -4831,13 +4857,14 @@ test_requesters() {
             if ! echo "$out" | grep -q "ROLE SESSION PMIX_SUCCESS"; then
                 bad "a listed user could not create session 4273: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
             else
-                out=$(RUN "timeout 60 $ROLETOOL '$uri' allocids" 2>&1 | tr -d '\r')
-                if echo "$out" | grep -q "ROLE ALLOCID $ons\.4273$"; then
-                    bad "a session another user created was recorded as root's job's"
-                elif echo "$out" | grep -q 'ROLE ALLOCID .*\.4273$'; then
+                # the allocation id is the one roletool gave as the
+                # scheduler would, so it says nothing of the requester: the
+                # session is its creator's if its creator is shown it
+                out=$(RUN "timeout 60 $rq allocids" 2>&1 | tr -d '\r')
+                if echo "$out" | grep -q 'ROLE ALLOCID roletool\.4273$'; then
                     ok "a session naming root's job as requester is its creator's"
                 else
-                    bad "session 4273 is not listed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                    bad "session 4273 is not listed to its creator: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
                 fi
                 RUN "timeout 60 $SESSCTL terminate 4273" >/dev/null 2>&1
             fi
