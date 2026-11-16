@@ -31,6 +31,7 @@
  *   roletool <uri> instantiate-id <session-id> <hosts> <alloc-id|->
  *   roletool <uri> alloc-naming <alloc-id>
  *   roletool <uri> allocprops <alloc-id>
+ *   roletool <uri> allocnodes [<alloc-id>]
  *   roletool <uri> alloc-reqid <req-id> <count> <seconds>
  *   roletool <uri> alloc-extend-reqid <req-id> <time>
  *
@@ -71,6 +72,8 @@
  *   alloc-naming  ask for a new allocation of no nodes, naming <alloc-id>
  *                as its PMIX_ALLOC_ID
  *   allocprops   ask for the properties of allocation <alloc-id>
+ *   allocnodes   ask for the nodes of allocation <alloc-id>, or of the
+ *                whole DVM (PMIX_QUERY_ALLOCATION)
  *   alloc-reqid  ask for <count> new allocations of no nodes, each under
  *                PMIX_ALLOC_REQ_ID <req-id>; then extend by <req-id> alone
  *                for 600 seconds, show the first one's properties, and
@@ -95,6 +98,8 @@
  *   ROLE RELEASE <status>
  *   ROLE ALLOCPROP <key> <value> (one per property shown)
  *   ROLE ALLOCPROPS <status>
+ *   ROLE ALLOCNODE <hostname>    (one per node told)
+ *   ROLE ALLOCNODES <status>
  *   ROLE REQID-EXTEND <status>
  *
  * Why this cannot be a unit test: what is being asked is whether the DVM
@@ -177,7 +182,7 @@ static void usage(const char *name)
             " alloc [<uid> <gid> [<seconds> [<time>]]] |"
             " alloc-release <alloc-id> | alloc-extend <alloc-id> <time> |"
             " instantiate-id <session-id> <hosts> <alloc-id|-> |"
-            " alloc-naming <alloc-id> | allocprops <alloc-id> |"
+            " alloc-naming <alloc-id> | allocprops <alloc-id> | allocnodes [<alloc-id>] |"
             " alloc-reqid <req-id> <count> <seconds> |"
             " alloc-extend-reqid <req-id> <time> | spawn-leave <usec> <cmd> [args...]\n",
             name);
@@ -306,6 +311,7 @@ int main(int argc, char **argv)
         (0 == strcmp(op, "instantiate-id") && 6 != argc) ||
         (0 == strcmp(op, "alloc-naming") && 4 != argc) ||
         (0 == strcmp(op, "allocprops") && 4 != argc) ||
+        (0 == strcmp(op, "allocnodes") && 3 != argc && 4 != argc) ||
         (0 == strcmp(op, "alloc-reqid") && 6 != argc) ||
         (0 == strcmp(op, "alloc-extend-reqid") && 5 != argc) ||
         (0 == strcmp(op, "spawn-leave") && 5 > argc)) {
@@ -552,6 +558,48 @@ int main(int argc, char **argv)
             --ndirs;
             PMIX_INFO_DESTRUCT(&dirs[ndirs]);
         }
+
+    } else if (0 == strcmp(op, "allocnodes")) {
+        pmix_query_t query;
+        pmix_info_t *results = NULL, *list, *ninfo;
+        size_t nresults = 0, n, k;
+
+        /* the nodes of the allocation named, or of the whole DVM */
+        PMIX_QUERY_CONSTRUCT(&query);
+        query.keys = (char **) calloc(2, sizeof(char *));
+        query.keys[0] = strdup(PMIX_QUERY_ALLOCATION);
+        if (4 == argc) {
+            PMIX_INFO_CREATE(query.qualifiers, 1);
+            query.nqual = 1;
+            PMIX_INFO_LOAD(&query.qualifiers[0], PMIX_ALLOC_ID, argv[3], PMIX_STRING);
+        }
+        rc = PMIx_Query_info(&query, 1, &results, &nresults);
+        for (n = 0; PMIX_SUCCESS == rc && n < nresults; n++) {
+            if (!PMIX_CHECK_KEY(&results[n], PMIX_QUERY_ALLOCATION) ||
+                PMIX_DATA_ARRAY != results[n].value.type ||
+                NULL == results[n].value.data.darray ||
+                PMIX_INFO != results[n].value.data.darray->type) {
+                continue;
+            }
+            list = (pmix_info_t *) results[n].value.data.darray->array;
+            for (k = 0; k < results[n].value.data.darray->size; k++) {
+                if (!PMIX_CHECK_KEY(&list[k], PMIX_NODE_INFO) ||
+                    PMIX_DATA_ARRAY != list[k].value.type ||
+                    NULL == list[k].value.data.darray ||
+                    0 == list[k].value.data.darray->size) {
+                    continue;
+                }
+                ninfo = (pmix_info_t *) list[k].value.data.darray->array;
+                if (PMIX_STRING == ninfo[0].value.type) {
+                    printf("ROLE ALLOCNODE %s\n", ninfo[0].value.data.string);
+                }
+            }
+        }
+        printf("ROLE ALLOCNODES %s\n", PMIx_Error_string(rc));
+        if (NULL != results) {
+            PMIX_INFO_FREE(results, nresults);
+        }
+        PMIX_QUERY_DESTRUCT(&query);
 
     } else if (0 == strcmp(op, "allocprops")) {
         rc = print_alloc_props(argv[3]);
