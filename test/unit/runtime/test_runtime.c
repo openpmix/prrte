@@ -292,7 +292,7 @@ static int test_job_catchup_skips_pending_launch(void)
 static int test_session_registry(void)
 {
     int failures = 0;
-    prte_session_t *s1, *s2, *dup;
+    prte_session_t *s1, *s2, *dup, *found;
 
     reset_globals();
 
@@ -300,10 +300,17 @@ static int test_session_registry(void)
     s1->session_id = 100;
     s1->alloc_refid = strdup("alloc-100");
     s1->user_refid = strdup("user-100");
+    /* a user refid names a session only to the job that requested it */
+    PMIX_LOAD_PROCID(&s1->requested_by, "ns-100", 0);
     CHECK("session: insert succeeds", PRTE_SUCCESS == prte_set_session_object(s1));
     CHECK("session: lookup by id", s1 == prte_get_session_object(100));
     CHECK("session: lookup by alloc refid", s1 == prte_get_session_object_from_id("alloc-100"));
-    CHECK("session: lookup by user refid", s1 == prte_get_session_object_from_refid("user-100"));
+    CHECK("session: lookup by user refid",
+          PRTE_SUCCESS == prte_get_session_object_from_refid("ns-100", "user-100", &found) &&
+              s1 == found);
+    CHECK("session: ...only for the job that requested it",
+          PRTE_ERR_NOT_FOUND == prte_get_session_object_from_refid("ns-200", "user-100", &found) &&
+              NULL == found);
 
     /* A reservation may carry an alloc id without a user reference id -
      * PMIX_ALLOC_REQ_ID is the requester's own optional label.  The refid
@@ -315,10 +322,13 @@ static int test_session_registry(void)
     s2->alloc_refid = strdup("alloc-200");
     /* user_refid deliberately left NULL */
     CHECK("session: second insert succeeds", PRTE_SUCCESS == prte_set_session_object(s2));
+    PMIX_LOAD_PROCID(&s2->requested_by, "ns-100", 0);
     CHECK("session: refid lookup survives a session with no user refid",
-          s1 == prte_get_session_object_from_refid("user-100"));
+          PRTE_SUCCESS == prte_get_session_object_from_refid("ns-100", "user-100", &found) &&
+              s1 == found);
     CHECK("session: refid lookup misses cleanly",
-          NULL == prte_get_session_object_from_refid("user-999"));
+          PRTE_ERR_NOT_FOUND == prte_get_session_object_from_refid("ns-100", "user-999", &found) &&
+              NULL == found);
     CHECK("session: alloc-id lookup still works alongside it",
           s2 == prte_get_session_object_from_id("alloc-200"));
     /* symmetrically, a session with no alloc_refid must not break that one */
@@ -326,7 +336,12 @@ static int test_session_registry(void)
 
     /* NULL keys are a miss, not a crash */
     CHECK("session: NULL alloc id misses", NULL == prte_get_session_object_from_id(NULL));
-    CHECK("session: NULL user refid misses", NULL == prte_get_session_object_from_refid(NULL));
+    CHECK("session: NULL user refid misses",
+          PRTE_ERR_NOT_FOUND == prte_get_session_object_from_refid("ns-100", NULL, &found) &&
+              NULL == found);
+    CHECK("session: NULL namespace misses",
+          PRTE_ERR_NOT_FOUND == prte_get_session_object_from_refid(NULL, "user-100", &found) &&
+              NULL == found);
     CHECK("session: unknown id misses", NULL == prte_get_session_object(4242));
 
     /* session ids are unique */

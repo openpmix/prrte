@@ -304,6 +304,18 @@ was given: it is how the allocation is named from then on, and without it
 nothing could extend or release the allocation. The request was treated as
 failed.
 #
+[ras-base:req-id-ambiguous]
+A request named an allocation by the request id it was made under
+(PMIX_ALLOC_REQ_ID), but the job making the request made more than one
+allocation request under that id:
+
+  Request id:  %s
+
+A request id need not be unique, so it cannot say which of them is meant.
+Name the allocation by its allocation id (PMIX_ALLOC_ID) instead, which was
+returned when the allocation was granted and which a query for
+PMIX_QUERY_ALLOC_IDS lists. The request was refused.
+#
 [ras-base:alloc-id-in-use]
 A new allocation was granted with an allocation id that already names
 another allocation:

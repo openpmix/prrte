@@ -1889,6 +1889,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         prte_session_t *session = prte_get_session_object_from_id(job_id);
         if (NULL != session) {
             PMIX_XFER_PROCID(&session->requestor, &req->tproc);
+            prte_session_set_requested_by(session, &req->tproc);
             requester_recorded = true;
         }
     }
@@ -1913,7 +1914,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     prte_num_allocated_nodes += added_node_count + reused_node_count;
     resources_added = true;
 
-    int pending_err = prte_ras_slurm_remove_pending_req(request_id);
+    int pending_err = prte_ras_slurm_remove_pending_req(trk->req->tproc.nspace, request_id);
     if(PRTE_SUCCESS != pending_err) {
         pmix_output(0, "ras:slurm:modify: failed to remove completed request %s "
                        "from the pending cancellation list: %s",
@@ -1926,9 +1927,9 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         /* Gone already, whether we asked or Slurm did. Drop the record rather
          * than cancel it, or the job id outlives the job and is scancelled
          * again later. */
-        prte_ras_slurm_remove_pending_req(request_id);
+        prte_ras_slurm_remove_pending_req(trk->req->tproc.nspace, request_id);
     } else if(PRTE_SUCCESS != err && !resources_added) {
-        prte_ras_slurm_cancel_pending_req(request_id);
+        prte_ras_slurm_cancel_pending_req(trk->req->tproc.nspace, request_id);
     }
 
     if(have_added_nodes) {
@@ -2068,7 +2069,7 @@ static void slurm_grant_check_cb(int fd, short args, void *cbdata)
  *
  * @param[in] request_id PMIx request identifier of the extend to answer.
  */
-void prte_ras_slurm_extend_abort_request(const char *request_id)
+void prte_ras_slurm_extend_abort_request(const char *nspace, const char *request_id)
 {
     struct timeval immediate = {0, 0};
 
@@ -2080,7 +2081,8 @@ void prte_ras_slurm_extend_abort_request(const char *request_id)
         prte_slurm_wait_tracker_t *trk =
             (prte_slurm_wait_tracker_t *) pmix_pointer_array_get_item(&prte_slurm_wait_trackers, i);
 
-        if (NULL == trk || NULL == trk->request_id
+        if (NULL == trk || NULL == trk->request_id || NULL == trk->req
+            || !PMIX_CHECK_NSPACE(trk->req->tproc.nspace, nspace)
             || 0 != strcmp(trk->request_id, request_id)) {
             continue;
         }
@@ -2322,7 +2324,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         if (!prte_pmix_server_requester_uid(req->info, req->ninfo, &owner)) {
             owner = prte_process_info.euid;
         }
-        err = prte_ras_slurm_add_pending_req(request_id, job_id, owner);
+        err = prte_ras_slurm_add_pending_req(req->tproc.nspace, request_id, job_id, owner);
     }
 
     if(PRTE_SUCCESS != err) {
@@ -2390,7 +2392,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     cleanup:
 
     if(PRTE_SUCCESS != err && PRTE_ERR_OP_IN_PROGRESS != err && pending_req_added) {
-        prte_ras_slurm_cancel_pending_req(request_id);
+        prte_ras_slurm_cancel_pending_req(req->tproc.nspace, request_id);
     }
 
     free(nodes_string);

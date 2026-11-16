@@ -13,11 +13,19 @@
 
 Direct that the application be executed using the resources of the
 allocation identified by the given reference ID, where that ID is the
-one *the user* attached to the allocation request at the time the
-allocation was made. This is the convenient counterpart to
-``--alloc-id``: it lets a script name an allocation using a label it
-chose itself, without having to capture the identifier the host
-environment later assigned to it.
+one the requester attached to the allocation request
+(``PMIX_ALLOC_REQ_ID``) at the time the allocation was made.
+
+A reference ID need not be unique, so it names an allocation only to
+the job that requested it: the job launching the application must be
+the one that made the allocation request, and must have made only one
+request under this ID. A tool such as ``prun`` makes no allocation
+request of its own, so any other job, or a later command, names the
+allocation by the ID the host environment assigned to it
+(``--alloc-id``). That ID is returned when the allocation is granted,
+and a query for ``PMIX_QUERY_ALLOC_IDS`` lists those of the user's
+allocations; ``PMIX_QUERY_ALLOC_PROPERTIES`` then gives each one's
+reference ID and the process and command line that requested it.
 
 The named allocation must be one the requester is entitled to use
 |mdash| a job can only be spawned onto resources its requester has been
@@ -29,9 +37,10 @@ earlier one created, since a tool's namespace lasts only as long as the
 command that made it.
 
 Naming an allocation the DVM does not know about is an unrecoverable
-error and reports ``PMIX_ERR_NOT_FOUND``; naming one the requester may
-not use is likewise unrecoverable and reports
-``PMIX_ERR_NO_PERMISSIONS``. In either case the job is not launched.
+error and reports ``PMIX_ERR_NOT_FOUND``; a reference ID the job used
+for more than one request reports ``PMIX_ERR_BAD_PARAM``; naming one the
+requester may not use is likewise unrecoverable and reports
+``PMIX_ERR_NO_PERMISSIONS``. In each case the job is not launched.
 
 If no allocation is named, the job is mapped onto the allocation of the
 session that requested it (the DVM's default session, in the case of a

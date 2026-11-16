@@ -682,6 +682,30 @@ alongside the `PMIX_ALLOC_ID`. So:
   `PMIX_ALLOC_ID` too (`session_instantiate()` in
   `src/prted/pmix/pmix_server_session.c`), with the same two refusals.
 
+**A `PMIX_ALLOC_REQ_ID` is turned into the `PMIX_ALLOC_ID` where it comes
+in, and everything past that point works by `PMIX_ALLOC_ID`.** A req_id need
+not be unique, so it names an allocation only to the job that requested it
+(`session->requested_by`, set by `prte_session_set_requested_by()` and,
+unlike `session->requestor`, never refreshed), and only if that job made
+one request under it: `prte_get_session_object_from_refid()` takes the
+requesting namespace and refuses more than one match with
+`PRTE_ERR_BAD_PARAM` (`ras-base:req-id-ambiguous`). The places that take
+one:
+
+- an EXTEND naming only a req_id has the `PMIX_ALLOC_ID` added in
+  `prte_ras_base_modify()` (`ras_base_resolve_req_id()`), before any module
+  or scheduler sees it. A req_id that names none of the requester's
+  allocations is left alone - `ras/slurm` reads an EXTEND's req_id as the
+  name of the new request - and the base then refuses it as not found;
+- a spawn's `PMIX_ALLOC_REQ_ID` (`--alloc-refid`, `PRTE_JOB_REF_ID`) is
+  resolved against the spawn's requester in `plm_base_receive.c`;
+- `ras/slurm`'s pending requests, which have no `PMIX_ALLOC_ID` yet, are
+  named by the requesting namespace together with the req_id.
+
+Any other job, or a later command, names the allocation by its
+`PMIX_ALLOC_ID`, which every response returns and `PMIX_QUERY_ALLOC_IDS`
+lists.
+
 ### The time an allocation is for
 
 With no scheduler (`!prte_ras_base.scheduler_owned`), the DVM serves a
