@@ -243,10 +243,6 @@ option to the help request as "--help <option>".
 | "--alloc-id <val>"   | ID assigned by the host environment to the    |
 |                      | allocation to be used for mapping the job     |
 +----------------------+-----------------------------------------------+
-| "--alloc-refid <val>"| Reference ID assigned by the user when the    |
-|                      | allocation to be used for mapping the job     |
-|                      | was requested                                 |
-+----------------------+-----------------------------------------------+
 | "--session-id <val>" | ID of the session whose allocation is to      |
 |                      | be used for mapping the job                   |
 +----------------------+-----------------------------------------------+
@@ -441,7 +437,10 @@ allocation identified by the given ID, where that ID is the one the host
 environment (e.g., the scheduler) assigned to the allocation when it was
 created. The DVM reports this value back to the requester when an
 allocation request completes, and it is the value returned by a query of
-the allocation.
+the allocation: "PMIX_QUERY_ALLOC_IDS" lists those of the user's
+allocations, and "PMIX_QUERY_ALLOC_PROPERTIES" gives each one's request
+ID ("PMIX_ALLOC_REQ_ID") and the process and command line that
+requested it.
 
 The named allocation must be one the requester is entitled to use — a
 job can only be spawned onto resources its requester has been granted.
@@ -462,54 +461,8 @@ tool such as "prun").
 
 Note:
 
-  The same allocation can be named in three different ways — by the
-  host-assigned ID given here, by the reference ID the user attached
-  to the allocation request ("--alloc-refid"), or by the numerical ID
-  of the session that holds it ("--session-id"). These are alternative
-  spellings of one directive and therefore cannot be combined on a
-  single command line.
-#
-[alloc-refid]
-
-Direct that the application be executed using the resources of the
-allocation identified by the given reference ID, where that ID is the
-one the requester attached to the allocation request
-("PMIX_ALLOC_REQ_ID") at the time the allocation was made.
-
-A reference ID need not be unique, so it names an allocation only to
-the job that requested it: the job launching the application must be
-the one that made the allocation request, and must have made only one
-request under this ID. A tool such as "prun" makes no allocation
-request of its own, so any other job, or a later command, names the
-allocation by the ID the host environment assigned to it ("--alloc-id").
-That ID is returned when the allocation is granted, and a query for
-"PMIX_QUERY_ALLOC_IDS" lists those of the user's allocations;
-"PMIX_QUERY_ALLOC_PROPERTIES" then gives each one's reference ID and the
-process and command line that requested it.
-
-The named allocation must be one the requester is entitled to use — a
-job can only be spawned onto resources its requester has been granted.
-Entitlement is by namespace and by user: the namespace that requested
-the allocation holds it, as does every job spawned into it, and so does
-any tool run by the user the allocation was granted to. That last part
-is what lets a later command reach an allocation an earlier one created,
-since a tool's namespace lasts only as long as the command that made it.
-
-Naming an allocation the DVM does not know about is an unrecoverable
-error and reports "PMIX_ERR_NOT_FOUND"; a reference ID the job used for
-more than one request reports "PMIX_ERR_BAD_PARAM"; naming one the
-requester may not use is likewise unrecoverable and reports
-"PMIX_ERR_NO_PERMISSIONS". In each case the job is not launched.
-
-If no allocation is named, the job is mapped onto the allocation of the
-session that requested it (the DVM's default session, in the case of a
-tool such as "prun").
-
-Note:
-
-  The same allocation can be named in three different ways — by the
-  reference ID given here, by the ID the host environment assigned to
-  the allocation ("--alloc-id"), or by the numerical ID of the session
+  The same allocation can be named in two different ways — by the
+  host-assigned ID given here, or by the numerical ID of the session
   that holds it ("--session-id"). These are alternative spellings of
   one directive and therefore cannot be combined on a single command
   line.
@@ -545,12 +498,11 @@ requested it (the DVM's default session, in the case of a tool such as
 
 Note:
 
-  The same allocation can be named in three different ways — by the
-  session ID given here, by the ID the host environment assigned to
-  the allocation ("--alloc-id"), or by the reference ID the user
-  attached to the allocation request ("--alloc-refid"). These are
-  alternative spellings of one directive and therefore cannot be
-  combined on a single command line.
+  The same allocation can be named in two different ways — by the
+  session ID given here, or by the ID the host environment assigned to
+  the allocation ("--alloc-id"). These are alternative spellings of
+  one directive and therefore cannot be combined on a single command
+  line.
 #
 [hostfile]
 

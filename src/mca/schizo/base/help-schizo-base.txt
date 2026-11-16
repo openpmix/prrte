@@ -172,7 +172,6 @@ that same target, and therefore cannot be combined:
 
   --%-12s the numeric ID of the session holding the allocation
   --%-12s the ID assigned to the allocation by the host environment
-  --%-12s the reference ID given when the allocation was requested
 
 Please specify only one of them and try again.
 #

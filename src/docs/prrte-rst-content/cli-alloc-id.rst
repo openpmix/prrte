@@ -16,7 +16,10 @@ allocation identified by the given ID, where that ID is the one the
 host environment (e.g., the scheduler) assigned to the allocation when
 it was created. The DVM reports this value back to the requester when
 an allocation request completes, and it is the value returned by a
-query of the allocation.
+query of the allocation: ``PMIX_QUERY_ALLOC_IDS`` lists those of the
+user's allocations, and ``PMIX_QUERY_ALLOC_PROPERTIES`` gives each one's
+request ID (``PMIX_ALLOC_REQ_ID``) and the process and command line that
+requested it.
 
 The named allocation must be one the requester is entitled to use
 |mdash| a job can only be spawned onto resources its requester has been
@@ -36,10 +39,9 @@ If no allocation is named, the job is mapped onto the allocation of the
 session that requested it (the DVM's default session, in the case of a
 tool such as ``prun``).
 
-.. note:: The same allocation can be named in three different ways
-          |mdash| by the host-assigned ID given here, by the reference
-          ID the user attached to the allocation request
-          (``--alloc-refid``), or by the numerical ID of the session
-          that holds it (``--session-id``). These are alternative
-          spellings of one directive and therefore cannot be combined
-          on a single command line.
+.. note:: The same allocation can be named in two different ways
+          |mdash| by the host-assigned ID given here, or by the
+          numerical ID of the session that holds it
+          (``--session-id``). These are alternative spellings of one
+          directive and therefore cannot be combined on a single
+          command line.
