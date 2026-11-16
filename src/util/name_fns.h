@@ -71,6 +71,12 @@ PRTE_EXPORT char *prte_util_print_local_jobid(const pmix_nspace_t job);
 
 PRTE_EXPORT char *prte_pretty_print_timing(int64_t secs, int64_t usecs);
 
+/* Is proc one of targets - a target naming its job and rank, or its job
+ * with PMIX_RANK_WILDCARD? An empty list names every proc. A target names
+ * its job exactly: an empty nspace in it matches nothing. */
+PRTE_EXPORT bool prte_util_proc_targeted(const pmix_proc_t *targets, size_t ntargets,
+                                         const pmix_proc_t *proc);
+
 #define PRTE_LOCAL_JOBID(n) prte_util_get_local_jobid(n)
 
 __prte_attribute_always_inline__ static inline int prte_util_get_local_jobid(pmix_nspace_t n)

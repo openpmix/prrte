@@ -308,7 +308,7 @@ a string in `get_prted_comm_cmd_str()`.
 | Command | Effect |
 |---------|--------|
 | `KILL_LOCAL_PROCS` | Kill the named procs, or all of them if the list is empty. |
-| `SIGNAL_LOCAL_PROCS` | Deliver a signal to the named **job**'s local procs. |
+| `SIGNAL_LOCAL_PROCS` | Deliver a signal to the local procs a list of targets names - each a job and rank, `PMIX_RANK_WILDCARD` for the whole job; an empty list is every local proc. Built by `prte_plm_base_prted_signal_targets()`; a job is marked suspended or resumed only when the whole of it was signalled. |
 | `ADD_LOCAL_PROCS` / `DVM_ADD_PROCS` | Hand the launch message to `odls.launch_local_procs`. |
 | `DEFINE_PSET` | Register a process set with the local PMIx server. |
 | `EXIT_CMD` | Orderly shutdown once our children and routing children are gone. |

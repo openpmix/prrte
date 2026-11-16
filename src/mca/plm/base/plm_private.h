@@ -134,6 +134,11 @@ PRTE_EXPORT int prte_plm_base_prted_exit_late(const pmix_proc_t *daemon);
 PRTE_EXPORT int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid);
 PRTE_EXPORT int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs);
 PRTE_EXPORT int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal);
+/* Signal the procs targets names - a job and rank each, PMIX_RANK_WILDCARD
+ * for the whole job - wherever they run, in one PRTE_DAEMON_SIGNAL_LOCAL_PROCS
+ * broadcast. No targets signals every proc of every job. */
+PRTE_EXPORT int prte_plm_base_prted_signal_targets(const pmix_proc_t *targets, size_t ntargets,
+                                                   int32_t signal);
 
 /*
  * communications utilities

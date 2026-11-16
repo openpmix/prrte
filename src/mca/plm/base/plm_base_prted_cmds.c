@@ -27,6 +27,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <stdint.h>
 #include <string.h>
 #ifdef HAVE_SYS_TIME_H
 #    include <sys/time.h>
@@ -201,55 +202,59 @@ int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs)
 
 int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
 {
+    pmix_proc_t target;
+
+    /* the whole of the job - or, named by an empty nspace, of every job */
+    if (NULL == job || '\0' == job[0]) {
+        return prte_plm_base_prted_signal_targets(NULL, 0, signal);
+    }
+    PMIX_LOAD_PROCID(&target, job, PMIX_RANK_WILDCARD);
+    return prte_plm_base_prted_signal_targets(&target, 1, signal);
+}
+
+/* The command names the procs to signal, each by job and rank, so a request
+ * naming several jobs, or one rank of a job, reaches exactly those. It used to
+ * carry a single job id: job control signalled only the job of its first
+ * target, and a target naming one rank signalled the whole of its job. */
+int prte_plm_base_prted_signal_targets(const pmix_proc_t *targets, size_t ntargets,
+                                       int32_t signal)
+{
     int rc;
     pmix_data_buffer_t cmd;
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-    /* A pmix_nspace_t is an array type, so as a PARAMETER it has decayed to a
-     * char* - and &job is therefore the address of that pointer variable, not
-     * of the name. Packing PMIX_PROC_NSPACE reads PMIX_MAX_NSLEN+1 bytes from
-     * whatever it is handed, so passing &job packed a stack fragment and the
-     * receiving daemon matched no job at all: every signal delivered through
-     * this entry point was silently dropped. Copy into real storage first. */
-    pmix_nspace_t jobid;
+    int32_t count;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:prted_cmd sending signal_local_procs cmds",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:base:prted_cmd sending signal_local_procs cmds for %lu targets",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) ntargets));
 
-    PMIX_LOAD_NSPACE(jobid, job);
+    if (INT32_MAX < ntargets || (0 < ntargets && NULL == targets)) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    count = (int32_t) ntargets;
 
     PMIX_DATA_BUFFER_CONSTRUCT(&cmd);
-
-    /* pack the command */
     rc = PMIx_Data_pack(NULL, &cmd, &command, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-        return rc;
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &cmd, &count, 1, PMIX_INT32);
     }
-
-    /* pack the jobid */
-    rc = PMIx_Data_pack(NULL, &cmd, &jobid, 1, PMIX_PROC_NSPACE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-        return rc;
+    if (PMIX_SUCCESS == rc && 0 < count) {
+        rc = PMIx_Data_pack(NULL, &cmd, (void *) targets, count, PMIX_PROC);
     }
-
-    /* pack the signal */
-    rc = PMIx_Data_pack(NULL, &cmd, &signal, 1, PMIX_INT32);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &cmd, &signal, 1, PMIX_INT32);
+    }
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-        return rc;
+        return prte_pmix_convert_status(rc);
     }
 
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
+    rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &cmd);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-
-    /* we're done! */
-    return PRTE_SUCCESS;
+    return rc;
 }
