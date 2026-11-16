@@ -216,10 +216,14 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
 9. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
    `execve` for a debugger to attach.
 10. **`execve(cd->cmd, cd->argv, cd->env)`.** On return (always an error) it
-   simply reports `PRTE_ODLS_CHILD_ERR_EXEC` plus `errno`; the *parent*
-   inspects `errno` and `stat`s the app to distinguish a bad interpreter
-   (`ENOENT` but the file exists) from a missing/failed executable and
-   renders `"execve error"`. (`cd->argv` is defaulted in the *parent*
+   `stat`s the program - async-signal-safe, and made as the owner, since
+   the identity changed at step 7 - and reports
+   `PRTE_ODLS_CHILD_ERR_EXEC_ISDIR` for a directory,
+   `PRTE_ODLS_CHILD_ERR_EXEC_INTERP` for `ENOENT` on a file that is there
+   (a missing `#!` interpreter), and `PRTE_ODLS_CHILD_ERR_EXEC` otherwise,
+   with `errno`; the parent renders `"execve error"` from the code. The
+   parent used to make the `stat` itself, as the daemon's user, which may
+   see what the owner cannot. (`cd->argv` is defaulted in the *parent*
    before the fork, so the child never allocates it.)
 
 Every fatal failure calls `prte_odls_base_child_fail()` (writes the fixed

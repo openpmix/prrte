@@ -428,10 +428,24 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd, int gate_fd)
     /* Exec the new executable */
     execve(cd->cmd, cd->argv, cd->env);
     /* If we get here, an error has occurred.  We cannot render the
-       diagnostic here (it would require stat/getcwd/strerror/allocation);
-       the parent inspects errno and the app to distinguish, e.g., a
-       missing executable from a bad interpreter line. */
-    prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_EXEC, errno);
+       diagnostic here (it would require getcwd/strerror/allocation), but
+       stat() is async-signal-safe, and made here it is made as the job's
+       owner: it tells a directory, and a script whose "#!" interpreter is
+       missing, from the rest. The parent used to make it - as the
+       daemon's user, which may see what the owner cannot. */
+    {
+        int err = errno;
+        struct stat sb;
+
+        if (0 == stat(cd->cmd, &sb)) {
+            if (S_ISDIR(sb.st_mode)) {
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_EXEC_ISDIR, err);
+            } else if (ENOENT == err) {
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_EXEC_INTERP, err);
+            }
+        }
+        prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_EXEC, err);
+    }
     /* Does not return */
 }
 
@@ -508,11 +522,12 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
                        prte_process_info.nodename, cd->app->app);
         break;
     case PRTE_ODLS_CHILD_ERR_EXEC:
+    case PRTE_ODLS_CHILD_ERR_EXEC_ISDIR:
+    case PRTE_ODLS_CHILD_ERR_EXEC_INTERP:
     default: {
         char dir[PRTE_PATH_MAX];
         const char *wdir;
         const char *errmsg;
-        struct stat statbuf;
 
         /* the child's working dir at exec time is the app's wdir if one
            was given, otherwise the daemon's cwd (it never chdir'd) */
@@ -524,20 +539,17 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
             wdir = "<unknown>";
         }
         /* strerror() alone is misleading for the two shapes that reach
-           execve() most often, so name them.  A directory is X_OK on most
-           systems - it means "searchable" - so it sails through the
-           check_context_app() test in the base and only fails here, as a
-           bare "Permission denied".  And ENOENT on a file that plainly
-           exists is not a missing executable at all: it is a script whose
-           "#!" line names an interpreter that is missing. */
-        if (0 == stat(cd->app->app, &statbuf)) {
-            if (S_ISDIR(statbuf.st_mode)) {
-                errmsg = "it is a directory, not an executable";
-            } else if (ENOENT == msg->errnum) {
-                errmsg = "the executable has a bad interpreter on its first line";
-            } else {
-                errmsg = strerror(msg->errnum);
-            }
+           execve() most often, so the child names them (it made the stat,
+           as the job's owner).  A directory is X_OK on most systems - it
+           means "searchable" - so it sails through the check_context_app()
+           test in the base and only fails here, as a bare "Permission
+           denied".  And ENOENT on a file that plainly exists is not a
+           missing executable at all: it is a script whose "#!" line names
+           an interpreter that is missing. */
+        if (PRTE_ODLS_CHILD_ERR_EXEC_ISDIR == msg->which) {
+            errmsg = "it is a directory, not an executable";
+        } else if (PRTE_ODLS_CHILD_ERR_EXEC_INTERP == msg->which) {
+            errmsg = "the executable has a bad interpreter on its first line";
         } else {
             errmsg = strerror(msg->errnum);
         }
