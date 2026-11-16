@@ -82,6 +82,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/plm/plm_types.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
@@ -1498,6 +1499,13 @@ static int test_filter_empty(void)
  * job's list - so the cost grew with the square of the file: 40000 lines
  * took 27 s. Both now index what they look up. The bound is loose enough
  * for any build, sanitized or not, and far below what the walk took.
+ *
+ * Filtering also caps each node at the file's "slots=" for the job, and
+ * records the count it had (prte_rmaps_base_record_resize) for the map to
+ * put back. That record was a list walked for every node it took, so a
+ * file capping every node was quadratic again - 40000 nodes took 5 s under
+ * ASan, and twice as many four times as long. Every node is recorded once,
+ * and the counts go back as a map would put them back.
  */
 static double elapsed(struct timeval *t0)
 {
@@ -1559,6 +1567,14 @@ static int test_hostfile_scale(void)
         fprintf(stderr, "FAIL [hostfile scale]: filtering %d nodes took %.1f s\n", n, secs);
         failures++;
     }
+    CHECK("each capped node's count is recorded once",
+          n == (int) pmix_list_get_size(&prte_rmaps_base.resized_nodes));
+    nd = (prte_node_t *) pmix_list_get_first(&nodes);
+    CHECK("...and the file's count is the job's", 2 == nd->slots);
+    /* as the map that filtered would, before the nodes go */
+    prte_rmaps_base_restore_resized();
+    CHECK("...and goes back afterwards", 4 == nd->slots &&
+          0 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(path);
 
