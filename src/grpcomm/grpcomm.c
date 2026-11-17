@@ -38,6 +38,7 @@
 
 #include "src/mca/base/pmix_base.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/util/prte_show_help.h"
 
@@ -303,6 +304,8 @@ int prte_grpcomm_init(void)
 
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_grp_release, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_EXPIRE,
+                  PRTE_RML_PERSISTENT, prte_grpcomm_grp_expire, NULL);
     return PRTE_SUCCESS;
 }
 
@@ -326,6 +329,7 @@ void prte_grpcomm_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_DEPARTED);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_EXPIRE);
     return;
 }
 
@@ -567,6 +571,325 @@ done:
         PMIX_PROC_FREE(sb, nb);
     }
     return same;
+}
+
+static pmix_status_t make_blob(const pmix_proc_t *procs, size_t nprocs, pmix_byte_object_t *bo)
+{
+    pmix_data_buffer_t buf;
+    pmix_rank_t me = PRTE_PROC_MY_NAME->rank;
+    pmix_status_t rc;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = PMIx_Data_pack(NULL, &buf, &me, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &buf, &nprocs, 1, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && 0 < nprocs) {
+        rc = PMIx_Data_pack(NULL, &buf, (void *) procs, nprocs, PMIX_PROC);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_unload(&buf, bo);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    return rc;
+}
+
+pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndirs,
+                                            pmix_byte_object_t *bo, bool *known)
+{
+    pmix_data_array_t *d;
+    const pmix_info_t *list = NULL;
+    pmix_status_t st = PMIX_SUCCESS;
+    size_t n;
+
+    PMIX_BYTE_OBJECT_CONSTRUCT(bo);
+    for (n = 0; NULL != dirs && n < ndirs; n++) {
+        if (PMIX_CHECK_KEY(&dirs[n], PMIX_LOCAL_PARTICIPANTS)) {
+            list = &dirs[n];
+        } else if (PMIX_CHECK_KEY(&dirs[n], PMIX_LOCAL_COLLECTIVE_STATUS) &&
+                   PMIX_STATUS == dirs[n].value.type) {
+            st = dirs[n].value.data.status;
+        }
+    }
+    /* A server hands an operation up with any other status only once every
+     * local member has called, so there is nothing to say: all of them took
+     * part. Only one that ran out of time is partial. */
+    *known = true;
+    if (PMIX_ERR_TIMEOUT != st) {
+        return PMIX_SUCCESS;
+    }
+    if (NULL == list) {
+        *known = false;
+        return PMIX_SUCCESS;
+    }
+    /* checked, not assumed: the array is sized in pmix_proc_t */
+    if (PMIX_DATA_ARRAY != list->value.type || NULL == (d = list->value.data.darray) ||
+        PMIX_PROC != d->type || (0 < d->size && NULL == d->array)) {
+        *known = false;
+        return PMIX_ERR_TYPE_MISMATCH;
+    }
+    return make_blob((const pmix_proc_t *) d->array, d->size, bo);
+}
+
+pmix_status_t prte_grpcomm_empty_participant_blob(pmix_byte_object_t *bo)
+{
+    PMIX_BYTE_OBJECT_CONSTRUCT(bo);
+    return make_blob(NULL, 0, bo);
+}
+
+/* What the blobs say took part, without expanding anything: the procs named
+ * by rank, and - for each namespace a daemon gave as PMIX_RANK_LOCAL_PEERS -
+ * the pair of that namespace and that daemon, held as a pmix_proc_t whose
+ * rank is the daemon's. A member took part if it is named, or if its
+ * namespace's pair with the daemon it runs under is there. Expanding the
+ * pairs through the job map instead would cost every daemon a walk of the
+ * whole job. */
+typedef struct {
+    pmix_proc_t *named;
+    size_t nnamed, snamed;
+    pmix_proc_t *covered;
+    size_t ncovered, scovered;
+    /* the daemons that sent a blob - only their members can be missing */
+    pmix_rank_t *daemons;
+    size_t ndaemons, sdaemons;
+} prte_grpcomm_parts_t;
+
+static int rank_order(const void *a, const void *b)
+{
+    pmix_rank_t ra = *(const pmix_rank_t *) a, rb = *(const pmix_rank_t *) b;
+
+    return (ra == rb) ? 0 : ((ra < rb) ? -1 : 1);
+}
+
+static pmix_status_t parts_add(pmix_proc_t **set, size_t *n, size_t *size,
+                               const char *nspace, pmix_rank_t rank)
+{
+    pmix_proc_t *tmp;
+
+    if (*n == *size) {
+        tmp = (pmix_proc_t *) realloc(*set, 2 * (*size + 8) * sizeof(pmix_proc_t));
+        if (NULL == tmp) {
+            return PMIX_ERR_NOMEM;
+        }
+        *set = tmp;
+        *size = 2 * (*size + 8);
+    }
+    PMIX_LOAD_PROCID(&(*set)[*n], nspace, rank);
+    (*n)++;
+    return PMIX_SUCCESS;
+}
+
+static pmix_status_t add_blob(pmix_byte_object_t *bo, prte_grpcomm_parts_t *parts)
+{
+    pmix_data_buffer_t buf;
+    pmix_rank_t vpid;
+    size_t n = 0, i;
+    int32_t cnt;
+    pmix_proc_t *procs = NULL;
+    pmix_status_t rc;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = PMIx_Data_load(&buf, bo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_DESTRUCT(&buf);
+        return rc;
+    }
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, &buf, &vpid, &cnt, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &buf, &n, &cnt, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && 0 < n) {
+        if (!prte_pmix_count_fits(&buf, n)) {
+            rc = PMIX_ERR_BAD_PARAM;
+        } else {
+            PMIX_PROC_CREATE(procs, n);
+            cnt = (int32_t) n;
+            rc = (NULL == procs) ? PMIX_ERR_NOMEM
+                                 : PMIx_Data_unpack(NULL, &buf, procs, &cnt, PMIX_PROC);
+        }
+    }
+    if (PMIX_SUCCESS == rc) {
+        if (parts->ndaemons == parts->sdaemons) {
+            pmix_rank_t *tmp = (pmix_rank_t *) realloc(parts->daemons,
+                                                       2 * (parts->sdaemons + 8) *
+                                                           sizeof(pmix_rank_t));
+            if (NULL == tmp) {
+                rc = PMIX_ERR_NOMEM;
+            } else {
+                parts->daemons = tmp;
+                parts->sdaemons = 2 * (parts->sdaemons + 8);
+            }
+        }
+        if (PMIX_SUCCESS == rc) {
+            parts->daemons[parts->ndaemons++] = vpid;
+        }
+    }
+    for (i = 0; PMIX_SUCCESS == rc && i < n; i++) {
+        if (PMIX_RANK_LOCAL_PEERS == procs[i].rank) {
+            rc = parts_add(&parts->covered, &parts->ncovered, &parts->scovered,
+                           procs[i].nspace, vpid);
+        } else {
+            rc = parts_add(&parts->named, &parts->nnamed, &parts->snamed,
+                           procs[i].nspace, procs[i].rank);
+        }
+    }
+    if (NULL != procs) {
+        PMIX_PROC_FREE(procs, n);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    return rc;
+}
+
+/* a member, alive and taking no part, is added to out */
+static pmix_status_t add_if_absent(const pmix_proc_t *m, prte_proc_t *p,
+                                   const prte_grpcomm_parts_t *parts, pmix_proc_t **out,
+                                   size_t *nout, size_t *size)
+{
+    pmix_proc_t pair;
+    pmix_rank_t d;
+
+    if (NULL == p) {
+        p = prte_get_proc_object(m);
+    }
+    /* not taking part is something only the living can do */
+    if (NULL == p || NULL == p->node || NULL == p->node->daemon ||
+        PRTE_PROC_STATE_UNTERMINATED < p->state || prte_grpcomm_proc_departed(m)) {
+        return PMIX_SUCCESS;
+    }
+    /* a daemon that sent no blob had every local member take part */
+    d = p->node->daemon->name.rank;
+    if (NULL == bsearch(&d, parts->daemons, parts->ndaemons, sizeof(pmix_rank_t), rank_order)) {
+        return PMIX_SUCCESS;
+    }
+    if (NULL != bsearch(m, parts->named, parts->nnamed, sizeof(pmix_proc_t), proc_order)) {
+        return PMIX_SUCCESS;
+    }
+    PMIX_LOAD_PROCID(&pair, m->nspace, d);
+    if (NULL != bsearch(&pair, parts->covered, parts->ncovered, sizeof(pmix_proc_t),
+                        proc_order)) {
+        return PMIX_SUCCESS;
+    }
+    return parts_add(out, nout, size, m->nspace, m->rank);
+}
+
+pmix_status_t prte_grpcomm_nonparticipants(const pmix_proc_t *members, size_t nmembers,
+                                           const pmix_proc_t *added, size_t nadded,
+                                           pmix_data_buffer_t *blobs, size_t nblobs,
+                                           pmix_proc_t **out, size_t *nout)
+{
+    prte_grpcomm_parts_t parts;
+    pmix_proc_t *res = NULL, cand;
+    size_t nres = 0, rsize = 0, i, k, nlist;
+    const pmix_proc_t *list;
+    pmix_data_buffer_t copy;
+    pmix_byte_object_t bo;
+    prte_job_t *jdata;
+    prte_proc_t *p;
+    int32_t cnt;
+    int r;
+    pmix_status_t rc = PMIX_SUCCESS;
+
+    *out = NULL;
+    *nout = 0;
+    memset(&parts, 0, sizeof(parts));
+    /* read the blobs from a copy, leaving the tracker's for a restart */
+    PMIX_DATA_BUFFER_CONSTRUCT(&copy);
+    if (NULL != blobs && 0 < nblobs) {
+        rc = PMIx_Data_copy_payload(&copy, blobs);
+    }
+    for (i = 0; PMIX_SUCCESS == rc && i < nblobs; i++) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &copy, &bo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            break;
+        }
+        rc = add_blob(&bo, &parts);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&copy);
+    if (PMIX_SUCCESS == rc) {
+        if (1 < parts.nnamed) {
+            qsort(parts.named, parts.nnamed, sizeof(pmix_proc_t), proc_order);
+        }
+        if (1 < parts.ncovered) {
+            qsort(parts.covered, parts.ncovered, sizeof(pmix_proc_t), proc_order);
+        }
+        if (1 < parts.ndaemons) {
+            qsort(parts.daemons, parts.ndaemons, sizeof(pmix_rank_t), rank_order);
+        }
+    }
+
+    for (k = 0; PMIX_SUCCESS == rc && k < 2; k++) {
+        list = (0 == k) ? members : added;
+        nlist = (0 == k) ? nmembers : nadded;
+        for (i = 0; PMIX_SUCCESS == rc && NULL != list && i < nlist; i++) {
+            if (PMIX_RANK_WILDCARD != list[i].rank) {
+                rc = add_if_absent(&list[i], NULL, &parts, &res, &nres, &rsize);
+                continue;
+            }
+            jdata = prte_get_job_data_object(list[i].nspace);
+            if (NULL == jdata) {
+                continue;
+            }
+            for (r = 0; PMIX_SUCCESS == rc && r < jdata->procs->size; r++) {
+                p = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, r);
+                if (NULL == p) {
+                    continue;
+                }
+                PMIX_LOAD_PROCID(&cand, p->name.nspace, p->name.rank);
+                rc = add_if_absent(&cand, p, &parts, &res, &nres, &rsize);
+            }
+        }
+    }
+    free(parts.named);
+    free(parts.covered);
+    free(parts.daemons);
+    if (PMIX_SUCCESS != rc) {
+        free(res);
+        return rc;
+    }
+    /* a member named twice - as itself and by its wildcard - once */
+    if (1 < nres) {
+        qsort(res, nres, sizeof(pmix_proc_t), proc_order);
+        for (i = 1, k = 1; i < nres; i++) {
+            if (0 != proc_order(&res[k - 1], &res[i])) {
+                memcpy(&res[k++], &res[i], sizeof(pmix_proc_t));
+            }
+        }
+        nres = k;
+    }
+    if (0 == nres) {
+        free(res);
+        return PMIX_SUCCESS;
+    }
+    *out = res;
+    *nout = nres;
+    return PMIX_SUCCESS;
+}
+
+char *prte_grpcomm_procs_string(const pmix_proc_t *procs, size_t nprocs, size_t max)
+{
+    char *s = NULL, *t;
+    size_t n;
+
+    for (n = 0; n < nprocs && n < max; n++) {
+        if (NULL == s) {
+            pmix_asprintf(&t, "%s:%u", procs[n].nspace, (unsigned) procs[n].rank);
+        } else {
+            pmix_asprintf(&t, "%s, %s:%u", s, procs[n].nspace, (unsigned) procs[n].rank);
+            free(s);
+        }
+        s = t;
+    }
+    if (nprocs > max) {
+        pmix_asprintf(&t, "%s and %lu more", (NULL == s) ? "" : s,
+                      (unsigned long) (nprocs - max));
+        free(s);
+        s = t;
+    }
+    return (NULL == s) ? strdup("") : s;
 }
 
 bool prte_grpcomm_group_members_differ(const char *grpid, const pmix_proc_t *members,

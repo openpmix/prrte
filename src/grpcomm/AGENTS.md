@@ -1204,6 +1204,61 @@ a group ID fails and another does not. Bootstrap, follower and add-members
 operations list only some of their members, or none, and are not compared;
 the PMIx server exempts the same three.
 
+**Who took part travels only when it says something.** A PMIx server hands
+an operation up with a success status only once every local member has
+called, so a contribution that succeeded says it all: everyone there took
+part. Only one handed up timed out - by its own timer, or by the expiry
+below - is partial, and its `PMIX_LOCAL_PARTICIPANTS` names the local procs
+that had called, a namespace all of whose procs on that node had given once
+as `PMIX_RANK_LOCAL_PEERS`. `prte_grpcomm_group()` packs that - on the PMIx
+thread, before the thread-shift, since nothing on this daemon reads it -
+into a blob carrying this daemon's rank, because "local" means its node
+(`prte_grpcomm_participant_blob()`). Every contribution and rollup ends
+with `[known][count][blobs]` (`pack_participants()`), which for an ordinary
+operation is "known, none" - this deliberately keeps per-proc lists off the
+collective paths, the fence's hottest among them. A relay copies its
+children's blobs into its own rollup unopened; `punknown` latches when a
+timed-out contribution arrived without a list. Only the controller reads
+the blobs, to name who did not take part (`prte_grpcomm_nonparticipants()`):
+a member did not if, and only if, its daemon sent a blob and the blob does
+not name it - directly, or as the pair of its namespace and that daemon, a
+`PMIX_RANK_LOCAL_PEERS` entry being kept as that pair rather than expanded
+through the job map, which would cost a walk of the whole job per daemon.
+
+**One deadline.** A PMIx server hands an operation up only once every local
+member has called, so the nodes holding a member that never calls send
+nothing, a relay above one holds its whole subtree back, and each server's
+own `PMIX_TIMEOUT` starts when its own first member calls. So the
+controller sets the deadline, once (`expire_group_op()`): on its own timer
+(`group_timeout`), or on the first word that a server ran out of time - a
+contribution carrying `PMIX_ERR_TIMEOUT`, which every daemon reports to the
+controller as soon as it sees one (`note_timed_out()`), on
+`PRTE_RML_TAG_GROUP_EXPIRE`, because its parent may hold that contribution
+back. The controller then broadcasts the expiry order on the same tag.
+Each daemon hosting a member whose own contribution is not yet in calls
+`PMIx_server_collective_expire()`; if its server held nothing - no member
+there called - it contributes an empty list with the timeout status itself
+(`contribute_nothing()`). A server that did hold something hands it up
+through the ordinary upcall, whose event is queued ahead of the expiry's
+completion, so `expire_done()` finds `my_contribution` already set. Every
+subtree then completes, and the controller computes the non-participants
+from what each node had when the order reached it, says them in the
+`collective-nonparticipants` help topic and the verbose output, and
+releases with `PMIX_ERR_TIMEOUT` and the list, which each daemon gives its
+participants as `PMIX_COLLECTIVE_NONPARTICIPANTS`. Ordering the expiry
+restarts the controller's timer from that moment, whatever ordered it: if
+the expiry does not complete either - a daemon lost meanwhile - the
+operation is aborted as it used to be. **The restart is the point.** When
+a server's own deadline came first and asked for the expiry, the
+controller's original timer, armed at the first contribution, is still
+pending, and left alone it fires while the expiry's rollup is on its way
+and aborts the operation with nobody named. A member that calls
+after the deadline opens a new round, its own server's timer hands it up
+timed out, and the same expiry ends it, so it is answered, not hung.
+Bootstrap and follower operations are not expired: their calls go to the
+host one at a time, so no server holds anything collecting, and they time
+out by abort as before.
+
 **A destruct must name the group's members.** A PMIx server holding a
 record of the group hands up its recorded members whatever its client
 named; one with no record - a node with no member, and a client older than

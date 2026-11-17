@@ -38,6 +38,8 @@ static void grpcon(prte_pmix_grp_caddy_t *p)
     p->ninfo = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->pbo);
+    p->pknown = false;
 }
 static void grpdes(prte_pmix_grp_caddy_t *p)
 {
@@ -45,6 +47,7 @@ static void grpdes(prte_pmix_grp_caddy_t *p)
     if (NULL != p->grpid) {
         free(p->grpid);
     }
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->pbo);
     if (NULL != p->info) {
         PMIX_INFO_FREE(p->info, p->ninfo);
     }
@@ -191,6 +194,10 @@ static void gccon(prte_grpcomm_group_t *p)
     p->converged = false;
     p->aborting = false;
     p->conflict = false;
+    PMIX_DATA_BUFFER_CREATE(p->pblobs);
+    p->npblobs = 0;
+    p->punknown = false;
+    p->expired = false;
     p->timeout = 0;
     p->tev_active = false;
     p->my_contribution = NULL;
@@ -218,6 +225,9 @@ static void gcdes(prte_grpcomm_group_t *p)
     }
     PMIx_Info_list_release(p->grpinfo);
     PMIx_Info_list_release(p->endpts);
+    if (NULL != p->pblobs) {
+        PMIX_DATA_BUFFER_RELEASE(p->pblobs);
+    }
     if (NULL != p->dmns) {
         free(p->dmns);
     }

@@ -439,6 +439,183 @@ static int test_group_members(void)
     return failures;
 }
 
+/*
+ * Who took part: each daemon packs its PMIx server's PMIX_LOCAL_PARTICIPANTS
+ * into a blob with its own rank, and the controller reads every blob to name
+ * the members that were alive and never called - expanding a namespace given
+ * as PMIX_RANK_LOCAL_PEERS to that job's procs on the daemon that sent it.
+ */
+static int add_blob(pmix_data_buffer_t *blobs, pmix_rank_t vpid, const pmix_proc_t *procs,
+                    size_t nprocs)
+{
+    pmix_info_t info[2];
+    pmix_data_array_t darray;
+    pmix_byte_object_t bo;
+    pmix_rank_t me = PRTE_PROC_MY_NAME->rank;
+    pmix_status_t st = PMIX_ERR_TIMEOUT;
+    bool known = false;
+    pmix_status_t rc;
+
+    /* only a server that ran out of time sends a partial list */
+    darray.type = PMIX_PROC;
+    darray.array = (void *) procs;
+    darray.size = nprocs;
+    PMIX_INFO_LOAD(&info[0], PMIX_LOCAL_PARTICIPANTS, &darray, PMIX_DATA_ARRAY);
+    PMIX_INFO_LOAD(&info[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
+    PRTE_PROC_MY_NAME->rank = vpid;
+    rc = prte_grpcomm_participant_blob(info, 2, &bo, &known);
+    PRTE_PROC_MY_NAME->rank = me;
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    if (PMIX_SUCCESS != rc || !known || NULL == bo.bytes) {
+        return 1;
+    }
+    rc = PMIx_Data_pack(NULL, blobs, &bo, 1, PMIX_BYTE_OBJECT);
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+    return (PMIX_SUCCESS == rc) ? 0 : 1;
+}
+
+static int test_group_participants(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_proc_t *proc, *dmn[2];
+    prte_node_t *node[2];
+    pmix_proc_t wild, peers, two, three, *np = NULL;
+    pmix_proc_t list[2];
+    pmix_data_buffer_t *blobs;
+    pmix_byte_object_t bo;
+    bool known = true;
+    size_t nnp = 0;
+    pmix_status_t rc;
+    char *s;
+    int r;
+
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+    /* four procs: 0 and 1 on daemon 1's node, 2 and 3 on daemon 2's */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "np-a");
+    prte_set_job_data_object(jdata);
+    for (r = 0; r < 2; r++) {
+        node[r] = PMIX_NEW(prte_node_t);
+        dmn[r] = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&dmn[r]->name, PRTE_PROC_MY_NAME->nspace, (pmix_rank_t) (r + 1));
+        node[r]->daemon = dmn[r];
+    }
+    for (r = 0; r < 4; r++) {
+        proc = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&proc->name, jdata->nspace, (pmix_rank_t) r);
+        proc->node = node[r / 2];
+        proc->state = PRTE_PROC_STATE_RUNNING;
+        pmix_pointer_array_set_item(jdata->procs, r, proc);
+    }
+    jdata->num_procs = 4;
+    PMIX_LOAD_PROCID(&wild, "np-a", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&peers, "np-a", PMIX_RANK_LOCAL_PEERS);
+    PMIX_LOAD_PROCID(&two, "np-a", 2);
+    PMIX_LOAD_PROCID(&three, "np-a", 3);
+
+    /* a daemon that sent no blob had all its members take part */
+    PMIX_DATA_BUFFER_CREATE(blobs);
+    rc = prte_grpcomm_nonparticipants(&wild, 1, NULL, 0, blobs, 0, &np, &nnp);
+    CHECK("participants: with no daemon short of members, nobody is missing",
+          PMIX_SUCCESS == rc && 0 == nnp && NULL == np);
+    CHECK("participants: daemon 2's blob alone", 0 == add_blob(blobs, 2, &two, 1));
+    rc = prte_grpcomm_nonparticipants(&wild, 1, NULL, 0, blobs, 1, &np, &nnp);
+    CHECK("participants: only the daemon that sent a blob can be short - daemon 1's took part",
+          PMIX_SUCCESS == rc && 1 == nnp && NULL != np && PMIX_CHECK_PROCID(&np[0], &three));
+    free(np);
+    np = NULL;
+    PMIX_DATA_BUFFER_RELEASE(blobs);
+
+    /* daemon 1: both its procs, as PMIX_RANK_LOCAL_PEERS; daemon 2: rank 2 */
+    PMIX_DATA_BUFFER_CREATE(blobs);
+    CHECK("participants: daemon 1's blob", 0 == add_blob(blobs, 1, &peers, 1));
+    CHECK("participants: daemon 2's blob", 0 == add_blob(blobs, 2, &two, 1));
+    rc = prte_grpcomm_nonparticipants(&wild, 1, NULL, 0, blobs, 2, &np, &nnp);
+    CHECK("participants: of the whole job, only the proc nobody named did not take part",
+          PMIX_SUCCESS == rc && 1 == nnp && NULL != np && PMIX_CHECK_PROCID(&np[0], &three));
+    free(np);
+    np = NULL;
+
+    /* a member listed by rank, named by nobody */
+    list[0].rank = 0;
+    PMIX_LOAD_NSPACE(list[0].nspace, "np-a");
+    memcpy(&list[1], &three, sizeof(pmix_proc_t));
+    rc = prte_grpcomm_nonparticipants(list, 2, NULL, 0, blobs, 2, &np, &nnp);
+    CHECK("participants: a listed member named by nobody did not take part",
+          PMIX_SUCCESS == rc && 1 == nnp && PMIX_CHECK_PROCID(&np[0], &three));
+    free(np);
+    np = NULL;
+
+    /* ...unless it has since ended - only the living fail to take part */
+    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, 3);
+    proc->state = PRTE_PROC_STATE_TERMINATED;
+    rc = prte_grpcomm_nonparticipants(&wild, 1, NULL, 0, blobs, 2, &np, &nnp);
+    CHECK("participants: a member that ended is not one that did not take part",
+          PMIX_SUCCESS == rc && 0 == nnp && NULL == np);
+    proc->state = PRTE_PROC_STATE_RUNNING;
+
+    /* an added member is a member */
+    rc = prte_grpcomm_nonparticipants(&two, 1, &three, 1, blobs, 2, &np, &nnp);
+    CHECK("participants: an added member that did not take part is named",
+          PMIX_SUCCESS == rc && 1 == nnp && PMIX_CHECK_PROCID(&np[0], &three));
+    free(np);
+    np = NULL;
+
+    /* everyone */
+    CHECK("participants: daemon 2's second blob", 0 == add_blob(blobs, 2, &three, 1));
+    rc = prte_grpcomm_nonparticipants(&wild, 1, NULL, 0, blobs, 3, &np, &nnp);
+    CHECK("participants: when every member took part, nobody is named",
+          PMIX_SUCCESS == rc && 0 == nnp && NULL == np);
+    PMIX_DATA_BUFFER_RELEASE(blobs);
+
+    /* an operation handed up complete has nothing to say; one that ran out
+     * of time without a list is not known; a list of the wrong type is
+     * refused */
+    {
+        pmix_info_t dirs[2];
+        pmix_status_t st = PMIX_SUCCESS;
+
+        PMIX_INFO_LOAD(&dirs[0], PMIX_LOCAL_PARTICIPANTS, "np-a", PMIX_STRING);
+        PMIX_INFO_LOAD(&dirs[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
+        rc = prte_grpcomm_participant_blob(dirs, 2, &bo, &known);
+        CHECK("participants: a complete operation carries no blob",
+              PMIX_SUCCESS == rc && known && NULL == bo.bytes);
+        st = PMIX_ERR_TIMEOUT;
+        PMIX_INFO_DESTRUCT(&dirs[1]);
+        PMIX_INFO_LOAD(&dirs[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
+        rc = prte_grpcomm_participant_blob(&dirs[1], 1, &bo, &known);
+        CHECK("participants: one that ran out of time with no list is not known",
+              PMIX_SUCCESS == rc && !known);
+        rc = prte_grpcomm_participant_blob(dirs, 2, &bo, &known);
+        CHECK("participants: a list of the wrong type is refused",
+              PMIX_ERR_TYPE_MISMATCH == rc && !known);
+        PMIX_INFO_DESTRUCT(&dirs[0]);
+        PMIX_INFO_DESTRUCT(&dirs[1]);
+    }
+
+    /* the message names a bounded few */
+    list[0].rank = 0;
+    s = prte_grpcomm_procs_string(list, 2, 1);
+    CHECK("participants: a list too long for a message is cut short",
+          NULL != s && 0 == strcmp(s, "np-a:0 and 1 more"));
+    free(s);
+
+    pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+    PMIX_RELEASE(jdata);
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_group_participants\n");
+    }
+    return failures;
+}
+
 static int test_member_departed(void)
 {
     int failures = 0;
@@ -2519,6 +2696,7 @@ int main(void)
 #endif
     failures += test_group_id_taken();
     failures += test_group_members();
+    failures += test_group_participants();
     failures += test_group_directives();
     failures += test_fence_operation();
     failures += test_fence_generation();
