@@ -1259,6 +1259,23 @@ Bootstrap and follower operations are not expired: their calls go to the
 host one at a time, so no server holds anything collecting, and they time
 out by abort as before.
 
+**Fence, connect and disconnect follow the same protocol**, on
+`PRTE_RML_TAG_FENCE_EXPIRE` (`expire_fence_op()`, `note_fence_timed_out()`,
+`prte_grpcomm_fence_expire()`), with two differences. A fence's payload is
+the rest of its message, so the participant blobs cannot follow it: they
+travel in the contribution's directives under `PRTE_GRPCOMM_PARTICIPANTS`,
+one byte object of `[known][count][blobs]` (`prte_grpcomm_parts_to_bo()`,
+`prte_grpcomm_parts_merge()`), which `tree_gather_answer()` puts back when
+it rebuilds the directives for its rollup; `pack_fence_info()` leaves the
+server's own `PMIX_LOCAL_PARTICIPANTS` out of the directives it forwards,
+with a shallow copy of the array so an ordinary fence pays no deep copy.
+And the order carries the operation, purpose and round, so a daemon whose
+server held nothing (`fence_contribute_nothing()`) contributes to the right
+tracker. These operations return nothing to their callers, so the
+controller names the members that did not take part only in the
+`collective-nonparticipants` help topic - which reaches the tool that
+launched the job - and the verbose output.
+
 **A destruct must name the group's members.** A PMIx server holding a
 record of the group hands up its recorded members whatever its client
 named; one with no record - a node with no member, and a client older than

@@ -403,6 +403,19 @@ PRTE_EXPORT bool prte_grpcomm_same_members(const pmix_proc_t *a, size_t na,
 PRTE_EXPORT pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndirs,
                                                         pmix_byte_object_t *bo, bool *known);
 
+/* A fence carries its participant blobs in its directives, under this key,
+ * as one byte object holding [known][count][blobs]: its payload is the rest
+ * of the message, so nothing can follow it. */
+#define PRTE_GRPCOMM_PARTICIPANTS "prte.coll.parts"
+
+/* Pack known and the blobs into one byte object, and merge one back into a
+ * tracker's blobs - a byte object that cannot be read leaves who took part
+ * unknown. */
+PRTE_EXPORT pmix_status_t prte_grpcomm_parts_to_bo(bool known, pmix_data_buffer_t *blobs,
+                                                   size_t nblobs, pmix_byte_object_t *bo);
+PRTE_EXPORT void prte_grpcomm_parts_merge(const pmix_value_t *val, pmix_data_buffer_t *blobs,
+                                          size_t *nblobs, bool *unknown);
+
 /* A blob for this daemon naming nobody - a daemon whose PMIx server held
  * no part of an operation that ran out of time. */
 PRTE_EXPORT pmix_status_t prte_grpcomm_empty_participant_blob(pmix_byte_object_t *bo);
@@ -616,6 +629,13 @@ typedef struct {
     // a late answer cannot come back to a tracker it already released.
     prte_event_t tev;
     bool tev_active;
+    /* who took part, from the contributions that ran out of time - see
+     * prte_grpcomm_participant_blob() - and whether the operation has been
+     * expired (on the controller) or the expiry asked for (elsewhere) */
+    pmix_data_buffer_t *pblobs;
+    size_t npblobs;
+    bool punknown;
+    bool expired;
     /* callback function */
     pmix_modex_cbfunc_t cbfunc;
     /* user-provided callback data */
@@ -743,6 +763,10 @@ typedef struct {
     prte_grpcomm_fence_purpose_t purpose;
     pmix_modex_cbfunc_t cbfunc;
     void *cbdata;
+    /* PMIX_LOCAL_PARTICIPANTS from the upcall, packed before the
+     * thread-shift - see prte_grpcomm_participant_blob() */
+    pmix_byte_object_t pbo;
+    bool pknown;
 } prte_pmix_fence_caddy_t;
 PMIX_CLASS_DECLARATION(prte_pmix_fence_caddy_t);
 
@@ -910,6 +934,11 @@ PRTE_EXPORT extern
 void prte_grpcomm_grp_release(int status, pmix_proc_t *sender,
                                 	 pmix_data_buffer_t *buffer,
                                 	 prte_rml_tag_t tag, void *cbdata);
+
+/* a fence, connect or disconnect that ran out of time - see "One deadline" */
+PRTE_EXPORT void prte_grpcomm_fence_expire(int status, pmix_proc_t *sender,
+                                           pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                           void *cbdata);
 
 /* a group operation that ran out of time - see "One deadline" in AGENTS.md */
 PRTE_EXPORT void prte_grpcomm_grp_expire(int status, pmix_proc_t *sender,

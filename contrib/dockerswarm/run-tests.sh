@@ -6908,6 +6908,31 @@ test_grpcomm_nonparticipants() {
 
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
+
+    banner "grpcomm: a fence that times out names the member that never called"
+    # The same layout, through PMIx_Fence - which connect and disconnect
+    # share in PRRTE. A fence returns nothing to its callers, so the members
+    # that never called are named by the controller, in the
+    # collective-nonparticipants help topic - which reaches the prun that
+    # launched the job.
+    if ! prted_dvm_start 'node1:1,node2:2,node3:1,node4:1,node5:1'; then
+        bad "could not start a DVM for the fence timeout test"
+        cleanup_swarm
+        return
+    fi
+    out=$(PRUN "--host node2:2,node3:1,node4:1,node5:1 -n 5 --map-by node $GC --fence --timeout 4 --delay 12 fencegrp 20" 2>&1)
+    n=$(echo "$out" | awk '$1=="GRP" && $2!="4" && $3=="FENCE" && $4=="PMIX_ERR_TIMEOUT"' | wc -l | tr -d ' ')
+    [ "$n" = 4 ] \
+        && ok "the four ranks that called the fence were failed with PMIX_ERR_TIMEOUT" \
+        || bad "$n of 4 ranks that called the fence timed out: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+    echo "$out" | grep 'did not take part (1)' | grep -q ':4$' \
+        && ok "...and the controller named rank 4, alone, as never taking part" \
+        || bad "the controller did not name rank 4: $(echo "$out" | grep -A1 'did not take part' | tr '\n' ' ' | tail -c 400)"
+    echo "$out" | awk '$1=="GRP" && $2=="4" && $3=="FENCE"' | grep -q 'PMIX_ERR_TIMEOUT' \
+        && ok "rank 4, calling the fence after the deadline, timed out rather than hanging" \
+        || bad "rank 4 did not time out of the fence: $(echo "$out" | awk '$2=="4"' | tr '\n' ' ')"
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
 }
 
 test_xcast_grow_new_parent() {
