@@ -6825,6 +6825,14 @@ test_grpcomm_collision() {
     [ "$n" = 2 ] \
         && ok "...and so did the first job's, on both its ranks" \
         || bad "$n of 2 of the first job's ranks failed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # A rank prints DONE before it exits, and the job's slots come back only
+    # once the DVM has finished ending it - so wait for its prun to exit
+    # before asking for those nodes again. The bracket keeps the pattern from
+    # matching the shell that runs pgrep.
+    for i in $(seq 1 30); do
+        RUN 'pgrep -f "[h]old-last 15 collidegrp" >/dev/null' || break
+        sleep 1
+    done
 
     # the ID is not left unusable: once neither is in flight, it constructs
     out=$(PRUN "--host node2:1,node3:1 -n 2 --map-by node $GC collidegrp" 2>&1)
