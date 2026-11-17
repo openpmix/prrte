@@ -319,7 +319,7 @@ static int test_generate_cpuset(void)
 
     /* a range expands, and the caller's list is rewritten to the expansion */
     list = strdup("0-3");
-    avail = prte_hwloc_base_generate_cpuset(topo, false, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, false, &list);
     CHECK("range yields a cpuset", NULL != avail);
     if (NULL != avail) {
         /* four cores, two hwthreads each */
@@ -331,7 +331,7 @@ static int test_generate_cpuset(void)
 
     /* hwthread ids address PUs, not cores */
     list = strdup("0-3");
-    avail = prte_hwloc_base_generate_cpuset(topo, true, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, true, &list);
     CHECK("hwthread range yields a cpuset", NULL != avail);
     if (NULL != avail) {
         CHECK("hwthread range covers four pus", 4 == hwloc_bitmap_weight(avail));
@@ -343,12 +343,12 @@ static int test_generate_cpuset(void)
      * "foo", which silently confined the DVM to cpu 0 - the most damaging
      * possible reading of a typo. */
     list = strdup("0,foo,2");
-    avail = prte_hwloc_base_generate_cpuset(topo, false, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, false, &list);
     CHECK("non-numeric cpu id is rejected", NULL == avail);
     free(list);
 
     list = strdup("2x");
-    avail = prte_hwloc_base_generate_cpuset(topo, false, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, false, &list);
     CHECK("trailing garbage is rejected", NULL == avail);
     free(list);
 
@@ -356,7 +356,7 @@ static int test_generate_cpuset(void)
      * so "-1" tokenizes to the single id 1. Pinned so the day someone gives
      * the grammar a sign, this says what changed. */
     list = strdup("-1");
-    avail = prte_hwloc_base_generate_cpuset(topo, false, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, false, &list);
     CHECK("a leading dash is a range delimiter, not a sign", NULL != avail);
     if (NULL != avail) {
         CHECK("\"-1\" resolves to core 1", 2 == hwloc_bitmap_weight(avail));
@@ -366,13 +366,13 @@ static int test_generate_cpuset(void)
 
     /* an id past the end of the topology is an error, not a silent drop */
     list = strdup("0-99");
-    avail = prte_hwloc_base_generate_cpuset(topo, false, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, false, &list);
     CHECK("out of range cpu id is rejected", NULL == avail);
     free(list);
 
     /* a backwards range is not a range */
     list = strdup("3-1");
-    avail = prte_hwloc_base_generate_cpuset(topo, false, &list);
+    avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo, false, &list);
     CHECK("backwards range is rejected", NULL == avail);
     free(list);
 
@@ -1659,7 +1659,7 @@ static int test_membind_parse(void)
         "",
         NULL
     };
-    const char *nspace = PRTE_PROC_MY_NAME->nspace;
+    const prte_job_t *jdata = NULL; /* the DVM's own, as a tool's command line is */
     prte_hwloc_base_memattr_t attr;
     int failures = 0;
     size_t n;
@@ -1668,7 +1668,7 @@ static int test_membind_parse(void)
     for (n = 0; n < sizeof(good) / sizeof(good[0]); n++) {
         attr = PRTE_HWLOC_BASE_MEMATTR_MAX;
         snprintf(label, sizeof(label), "\"%s\" parses", good[n].spec);
-        CHECK(label, PRTE_SUCCESS == prte_hwloc_base_parse_membind(nspace, "--membind",
+        CHECK(label, PRTE_SUCCESS == prte_hwloc_base_parse_membind(jdata, "--membind",
                                                                    good[n].spec, &attr));
         snprintf(label, sizeof(label), "\"%s\" maps", good[n].spec);
         CHECK(label, good[n].want == attr);
@@ -1678,17 +1678,17 @@ static int test_membind_parse(void)
     for (n = 0; NULL != bad[n]; n++) {
         attr = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
         snprintf(label, sizeof(label), "\"%s\" is refused", bad[n]);
-        CHECK(label, PRTE_SUCCESS != prte_hwloc_base_parse_membind(nspace, "--membind",
+        CHECK(label, PRTE_SUCCESS != prte_hwloc_base_parse_membind(jdata, "--membind",
                                                                    bad[n], &attr));
         snprintf(label, sizeof(label), "\"%s\" leaves the value alone", bad[n]);
         CHECK(label, PRTE_HWLOC_BASE_MEMATTR_CAPACITY == attr);
     }
     attr = PRTE_HWLOC_BASE_MEMATTR_CAPACITY;
     CHECK("a NULL spec is refused",
-          PRTE_SUCCESS != prte_hwloc_base_parse_membind(nspace, "--membind", NULL, &attr));
+          PRTE_SUCCESS != prte_hwloc_base_parse_membind(jdata, "--membind", NULL, &attr));
     CHECK("a NULL spec leaves the value alone", PRTE_HWLOC_BASE_MEMATTR_CAPACITY == attr);
     CHECK("a NULL result is refused",
-          PRTE_SUCCESS != prte_hwloc_base_parse_membind(nspace, "--membind", "none", NULL));
+          PRTE_SUCCESS != prte_hwloc_base_parse_membind(jdata, "--membind", "none", NULL));
 
     /* what the printer writes, the parser reads back as the same value */
     for (attr = PRTE_HWLOC_BASE_MEMATTR_DISABLED; attr < PRTE_HWLOC_BASE_MEMATTR_MAX; attr++) {
@@ -1696,7 +1696,7 @@ static int test_membind_parse(void)
         const char *s = prte_hwloc_base_print_membind(attr);
 
         snprintf(label, sizeof(label), "\"%s\" reads back", s);
-        CHECK(label, PRTE_SUCCESS == prte_hwloc_base_parse_membind(nspace, "--membind", s, &back) &&
+        CHECK(label, PRTE_SUCCESS == prte_hwloc_base_parse_membind(jdata, "--membind", s, &back) &&
                      attr == back);
     }
 

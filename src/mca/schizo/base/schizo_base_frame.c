@@ -212,7 +212,7 @@ bool prte_schizo_base_check_qualifiers(const char *directive,
      * unrecognized.  Walking it anyway indexed the NULL: "--rtos :anything"
      * crashed the tool. */
     if (NULL != valid) {
-        rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, option_label(directive), qual, valid, &tag);
+        rc = prte_cli_match(NULL, option_label(directive), qual, valid, &tag);
         if (PRTE_SUCCESS == rc) {
             return true;
         }
@@ -297,7 +297,7 @@ bool prte_schizo_base_check_directives(const char *directive,
     /* The directive, with any value it carries - the vocabulary says
      * whether it may have one, and a value given to a directive that takes
      * none is refused rather than dropped. */
-    rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, option_label(directive), args[0], valid, &tag);
+    rc = prte_cli_match(NULL, option_label(directive), args[0], valid, &tag);
     if (PRTE_ERR_NOT_FOUND == rc) {
         v = pmix_cli_match_list(NULL, valid, ':');
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-rmaps-base.txt",
@@ -347,7 +347,7 @@ bool prte_schizo_base_check_directives(const char *directive,
         }
         /* the object - held to the same vocabulary the mapper reads it
          * with, so the two cannot disagree about what is one */
-        rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, option_label(directive), args[2],
+        rc = prte_cli_match(NULL, option_label(directive), args[2],
                             prte_cli_ppr_objects, &tag);
         if (PRTE_ERR_NOT_FOUND == rc) {
             v = pmix_cli_match_list(NULL, prte_cli_ppr_objects, ':');
@@ -865,7 +865,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     if (NULL != opt) {
         prte_hwloc_base_memattr_t memattr;
 
-        rc = prte_hwloc_base_parse_membind(PRTE_PROC_MY_NAME->nspace, "--membind",
+        rc = prte_hwloc_base_parse_membind(NULL, "--membind",
                                            first_value(opt), &memattr);
         if (PRTE_SUCCESS != rc) {
             return rc;
@@ -1085,7 +1085,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 quals = PMIx_Argv_split(cptr, ':');
                 /* check qualifiers */
                 for (m=0; NULL != quals && NULL != quals[m]; m++) {
-                    rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--display", quals[m],
+                    rc = prte_cli_match(NULL, "--display", quals[m],
                                         prte_cli_display_quals, &tag);
                     if (PRTE_ERR_NOT_FOUND == rc) {
                         valid = pmix_cli_match_list(NULL, prte_cli_display_quals, ',');
@@ -1118,7 +1118,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
              * parser without passing through it - so a misspelling there
              * used to be honored as silence: the job ran, displayed
              * nothing, and exited 0. */
-            rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--display", targv[idx],
+            rc = prte_cli_match(NULL, "--display", targv[idx],
                                 prte_cli_display_directives, &tag);
             if (PRTE_ERR_NOT_FOUND == rc) {
                 valid = pmix_cli_match_list(NULL, prte_cli_display_directives, ':');
@@ -1251,7 +1251,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 for (m=0; NULL != options && NULL != options[m]; m++) {
                     /* see the directive below - the same refusal, for a
                      * qualifier */
-                    rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--output", options[m],
+                    rc = prte_cli_match(NULL, "--output", options[m],
                                         prte_cli_output_quals, &tag);
                     if (PRTE_ERR_NOT_FOUND == rc) {
                         valid = pmix_cli_match_list(NULL, prte_cli_output_quals, ':');
@@ -1323,7 +1323,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
              * used to be honored as silence: the job ran with no tagging,
              * no file, and an exit status of 0, while the identical word
              * written on the command line was reported. */
-            rc = prte_cli_match(PRTE_PROC_MY_NAME->nspace, "--output", targv[idx],
+            rc = prte_cli_match(NULL, "--output", targv[idx],
                                 prte_cli_output_directives, &tag);
             if (PRTE_ERR_NOT_FOUND == rc) {
                 valid = pmix_cli_match_list(NULL, prte_cli_output_directives, ':');

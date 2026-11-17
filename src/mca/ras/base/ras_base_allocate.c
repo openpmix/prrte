@@ -409,7 +409,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (prte_allocation_required) {
             /* an allocation is required, so this is fatal */
             PMIX_LIST_DESTRUCT(&nodes);
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt", "ras-base:no-allocation", true);
+            prte_show_help_job(jdata, "help-ras-base.txt", "ras-base:no-allocation", true);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PMIX_RELEASE(caddy);
             return;
@@ -736,6 +736,8 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
     size_t n;
     uid_t uid;
     gid_t gid;
+    pmix_info_t *rq;
+    size_t nrq;
 
     for (n = 0; n < req->ninfo; n++) {
         if (PMIx_Check_key(req->info[n].key, PMIX_HOST)) {
@@ -764,14 +766,22 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
 
     if ((NULL == hosts || '\0' == *hosts) &&
         (NULL == hostfile || '\0' == *hostfile)) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-nothing-named", true);
+        prte_show_help_proc(&req->tproc, "help-ras-base.txt", "ras-base:activate-nothing-named",
+                            true);
         req->pstatus = PMIX_ERR_BAD_PARAM;
         return;
     }
 
-    /* a hostfile it names is read as whoever asked */
+    /* a hostfile it names is read as whoever asked, and what is wrong
+     * with the request is told to them */
     prte_pmix_server_request_user(req->info, req->ninfo, &uid, &gid);
-    rc = prte_ras_base_activate_nodes(hosts, hostfile, uid, gid, &nactivated);
+    rc = prte_requester_info_proc(&req->tproc, uid, gid, &rq, &nrq);
+    if (PRTE_SUCCESS != rc) {
+        req->pstatus = prte_pmix_convert_rc(rc);
+        return;
+    }
+    rc = prte_ras_base_activate_nodes(hosts, hostfile, rq, nrq, &nactivated);
+    PMIX_INFO_FREE(rq, nrq);
     if (PRTE_SUCCESS != rc) {
         /* the resolver reports what it refused, and why, through show_help;
          * a refusal is always the specification's fault (a host this DVM
@@ -827,13 +837,20 @@ static void ras_base_activate_request(prte_pmix_server_req_t *req)
  * every later launch that needed a new daemon.  Refuse them instead, before
  * anything is inserted, launched, or asked of a scheduler.
  */
-static bool ras_base_resize_allowed(const char *request)
+static bool ras_base_resize_allowed(const char *request, const prte_job_t *jdata,
+                                    const pmix_proc_t *requester)
 {
     if (prte_elastic_mode) {
         return true;
     }
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:dvm-not-elastic",
-                   true, request);
+    /* told to whoever asked: the job's requester, or the one that made the
+     * allocation request */
+    if (NULL != jdata) {
+        prte_show_help_job(jdata, "help-ras-base.txt", "ras-base:dvm-not-elastic", true, request);
+    } else {
+        prte_show_help_proc(requester, "help-ras-base.txt", "ras-base:dvm-not-elastic", true,
+                            request);
+    }
     return false;
 }
 
@@ -1166,8 +1183,8 @@ static pmix_status_t ras_base_resolve_req_id(prte_pmix_server_req_t *req)
     }
     rc = prte_get_session_object_from_refid(req->tproc.nspace, req_id, &session);
     if (PRTE_ERR_BAD_PARAM == rc) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                       "ras-base:req-id-ambiguous", true, req_id);
+        prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                            "ras-base:req-id-ambiguous", true, req_id);
         return PMIX_ERR_BAD_PARAM;
     }
     if (PRTE_SUCCESS != rc || NULL == session->alloc_refid) {
@@ -1246,7 +1263,8 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
             break;
         }
         if (resize &&
-            !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+            !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir), NULL,
+                                     &req->tproc)) {
             goto respond;
         }
     }
@@ -1267,18 +1285,18 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
 #endif
         named = ras_base_names_hosts(req, &files, &user);
         if (user) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                           "ras-base:user-host", true,
-                           PMIx_Alloc_directive_string(req->allocdir));
+            prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                "ras-base:user-host", true,
+                                PMIx_Alloc_directive_string(req->allocdir));
             req->pstatus = PMIX_ERR_BAD_PARAM;
             goto respond;
         }
         if (named && (activate || !ras_base_scheduler_decides()) &&
             !prte_pmix_server_grow_permitted(&req->tproc, req->info, req->ninfo)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                           "ras-base:grow-not-permitted", true,
-                           PMIx_Alloc_directive_string(req->allocdir),
-                           files ? "a file of hosts" : "hosts");
+            prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                "ras-base:grow-not-permitted", true,
+                                PMIx_Alloc_directive_string(req->allocdir),
+                                files ? "a file of hosts" : "hosts");
             req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }
@@ -1290,8 +1308,8 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         const char *what = "nodes";
 
         if (!ras_base_release_permitted(req, &what)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                           "ras-base:release-not-permitted", true, what);
+            prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                "ras-base:release-not-permitted", true, what);
             req->pstatus = PMIX_ERR_NO_PERMISSIONS;
             goto respond;
         }
@@ -1306,8 +1324,8 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     if (PMIX_ALLOC_NEW == req->allocdir) {
         for (size_t n = 0; n < req->ninfo; n++) {
             if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                               "ras-base:alloc-id-requested", true);
+                prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                    "ras-base:alloc-id-requested", true);
                 req->pstatus = PMIX_ERR_BAD_PARAM;
                 goto respond;
             }
@@ -2236,9 +2254,9 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
              * who decide what the DVM's sessions hold */
             if (0 <= limit && PRTE_FLAG_TEST(dest, PRTE_SESSION_FLAG_LIMIT_HELD) &&
                 !prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                               "ras-base:limit-not-permitted", true,
-                               (NULL != dest->alloc_refid) ? dest->alloc_refid : "(none)");
+                prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                    "ras-base:limit-not-permitted", true,
+                                    (NULL != dest->alloc_refid) ? dest->alloc_refid : "(none)");
                 return PMIX_ERR_NO_PERMISSIONS;
             }
         }
@@ -2258,13 +2276,13 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
          * responsible for keeping its ids unique, but one already naming
          * another reservation would make both unreachable by it. */
         if (NULL == alloc_id) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                           "ras-base:alloc-id-missing", true);
+            prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                "ras-base:alloc-id-missing", true);
             return PMIX_ERR_BAD_PARAM;
         }
         if (NULL != prte_get_session_object_from_id(alloc_id)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                           "ras-base:alloc-id-in-use", true, alloc_id);
+            prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                "ras-base:alloc-id-in-use", true, alloc_id);
             return PMIX_ERR_EXISTS;
         }
         dest = create_reservation(owner_nspace, inherit, &req->tproc,
@@ -2279,16 +2297,27 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
     return PMIX_SUCCESS;
 }
 
-int prte_ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
+int prte_ras_base_insert_node_string(char *ndstring, prte_session_t *dest,
+                                     const pmix_proc_t *requester)
 {
     pmix_list_t ndlist;
     prte_node_t *snap;
     char **rsv_names = NULL;
+    pmix_info_t *rq;
+    size_t nrq;
     int ret;
 
-    /* add these nodes to our node pool */
+    /* add these nodes to our node pool - what is wrong with the list is
+     * told to whoever asked. It names no file, so whose permissions to use
+     * does not come into it */
+    ret = prte_requester_info_proc(requester, prte_process_info.euid, prte_process_info.egid,
+                                   &rq, &nrq);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
     PMIX_CONSTRUCT(&ndlist, pmix_list_t);
-    ret = prte_util_add_dash_host_nodes(&ndlist, ndstring);
+    ret = prte_util_add_dash_host_nodes(&ndlist, ndstring, rq, nrq);
+    PMIX_INFO_FREE(rq, nrq);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         PMIX_LIST_DESTRUCT(&ndlist);
@@ -2305,7 +2334,7 @@ int prte_ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
             char *why = NULL;
 
             pmix_asprintf(&why, "add node %s", snap->name);
-            if (!ras_base_resize_allowed((NULL == why) ? snap->name : why)) {
+            if (!ras_base_resize_allowed((NULL == why) ? snap->name : why, NULL, requester)) {
                 free(why);
                 PMIX_LIST_DESTRUCT(&ndlist);
                 return PRTE_ERR_SILENT;
@@ -2316,9 +2345,8 @@ int prte_ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
          * taking it would leave its jobs placed on a node it no longer has */
         if (NULL != gnode && NULL != gnode->session && gnode->session != dest &&
             gnode->session != prte_default_session) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                           "ras-base:node-in-session", true, snap->name,
-                           (unsigned) gnode->session->session_id);
+            prte_show_help_proc(requester, "help-ras-base.txt", "ras-base:node-in-session", true,
+                                snap->name, (unsigned) gnode->session->session_id);
             PMIX_LIST_DESTRUCT(&ndlist);
             return PRTE_ERR_SILENT;
         }
@@ -2436,9 +2464,9 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
      * record, and guessing one could be wrong */
     rc = ras_base_get_alloc_owner(req->info, req->ninfo, &auid, &have_uid, &agid, &have_gid);
     if (PMIX_SUCCESS != rc || !have_uid || !have_gid) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                       "ras-base:alloc-owner-missing", true,
-                       PMIx_Alloc_directive_string(req->allocdir));
+        prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                            "ras-base:alloc-owner-missing", true,
+                            PMIx_Alloc_directive_string(req->allocdir));
         req->pstatus = (PMIX_SUCCESS != rc) ? rc : PMIX_ERROR;
         return;
     }
@@ -2469,7 +2497,7 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
             goto unwind;
         }
 
-        ret = prte_ras_base_insert_node_string(ndstring, dest);
+        ret = prte_ras_base_insert_node_string(ndstring, dest, &req->tproc);
         free(ndstring);
         if (PRTE_SUCCESS != ret) {
             req->pstatus = prte_pmix_convert_rc(ret);
@@ -2835,7 +2863,7 @@ static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
     /* returning the nodes to a scheduler shrinks their daemons out of the
      * DVM; with none, nothing shrinks */
     if (prte_ras_base.scheduler_owned && ras_base_session_has_daemons(rsession) &&
-        !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+        !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir), NULL, &req->tproc)) {
         req->pstatus = PMIX_ERR_NOT_SUPPORTED;
         return true;
     }
@@ -2885,7 +2913,8 @@ static void ras_base_complete_release_request(prte_pmix_server_req_t *req)
         req->pstatus = prte_pmix_convert_rc(ret);
         return;
     }
-    if (0 < nranks && !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir))) {
+    if (0 < nranks && !ras_base_resize_allowed(PMIx_Alloc_directive_string(req->allocdir), NULL,
+                                               &req->tproc)) {
         free(ranks);
         req->pstatus = PMIX_ERR_NOT_SUPPORTED;
         return;
@@ -2922,16 +2951,16 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
  * is the case that reaches this: its membership comes from a configuration
  * file every daemon reads, and ras/bootstrap outranks ras/hosts.
  */
-static int ras_base_add_hosts_allowed(void)
+static int ras_base_add_hosts_allowed(prte_job_t *jdata)
 {
     prte_ras_base_selected_module_t *mod;
 
-    if (!ras_base_resize_allowed("--add-host / --add-hostfile")) {
+    if (!ras_base_resize_allowed("--add-host / --add-hostfile", jdata, NULL)) {
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
     if (prte_ras_base.scheduler_owned) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:add-host-managed", true);
+        prte_show_help_job(jdata, "help-ras-base.txt", "ras-base:add-host-managed", true);
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
@@ -2941,7 +2970,7 @@ static int ras_base_add_hosts_allowed(void)
         }
     }
 
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:add-host-unsupported", true);
+    prte_show_help_job(jdata, "help-ras-base.txt", "ras-base:add-host-unsupported", true);
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
@@ -2987,7 +3016,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
      * DVM not-ready and the caller parks the job in the cache, and only the
      * grow's VM_READY re-entry releases it.  A request no module serves would
      * leave the job waiting on a DVM that never becomes ready again. */
-    rc = ras_base_add_hosts_allowed();
+    rc = ras_base_add_hosts_allowed(jdata);
     if (PRTE_SUCCESS != rc) {
         PMIx_Argv_free(hostfiles);
         PMIx_Argv_free(addhosts);
@@ -3177,7 +3206,7 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
     if (!have_directive) {
         /* the one element that cannot be defaulted: a request whose directive
          * we had to guess would ask for something nobody asked for */
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt", "ras-base:spawn-alloc-nodirective", true);
+        prte_show_help_job(jdata, "help-ras-base.txt", "ras-base:spawn-alloc-nodirective", true);
         PMIX_INFO_FREE(info, nalloc + 1);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -3417,7 +3446,7 @@ static bool ras_base_activate_selected(pmix_pointer_array_t *sel, prte_node_t *n
 }
 
 static int ras_base_activate_select(pmix_pointer_array_t *sel, prte_node_t *node,
-                                    const char *token)
+                                    const char *token, const pmix_info_t *req, size_t nreq)
 {
     if (ras_base_in_dvm(node)) {
         /* already in the DVM.  Not an error: --activate states what the DVM's
@@ -3428,8 +3457,8 @@ static int ras_base_activate_select(pmix_pointer_array_t *sel, prte_node_t *node
         return PRTE_SUCCESS;
     }
     if (!ras_base_activatable(node)) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-unavailable", true,
-                       node->name, prte_node_state_to_str(node->state), token);
+        prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-unavailable", true,
+                            node->name, prte_node_state_to_str(node->state), token);
         return PRTE_ERR_SILENT;
     }
     if (!ras_base_activate_selected(sel, node)) {
@@ -3444,22 +3473,22 @@ static int ras_base_activate_select(pmix_pointer_array_t *sel, prte_node_t *node
  * what the file said; what goes into the selection is the pool's own entry
  * for each, which is the only thing a grow can act on.
  */
-static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t *sel, uid_t uid,
-                                      gid_t gid)
+static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t *sel,
+                                      const pmix_info_t *req, size_t nreq)
 {
     pmix_list_t nodes;
     prte_node_t *nd, *node;
     int rc;
 
     if ('\0' == *hostfile) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-nofile", true);
+        prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-nofile", true);
         return PRTE_ERR_SILENT;
     }
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     /* the parser reports its own failures - a file it cannot open, a bad
      * line, relative syntax inside a file - through show_help */
-    rc = prte_util_add_hostfile_nodes(&nodes, (char *) hostfile, uid, gid);
+    rc = prte_util_add_hostfile_nodes(&nodes, (char *) hostfile, req, nreq);
     if (PRTE_SUCCESS != rc) {
         PMIX_LIST_DESTRUCT(&nodes);
         return (PRTE_ERR_SILENT == rc) ? rc : PRTE_ERR_SILENT;
@@ -3468,12 +3497,12 @@ static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t
     PMIX_LIST_FOREACH(nd, &nodes, prte_node_t) {
         node = prte_node_match(NULL, nd->name);
         if (NULL == node) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-unknown-in-file", true,
-                           nd->name, hostfile);
+            prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-unknown-in-file",
+                                true, nd->name, hostfile);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_SILENT;
         }
-        rc = ras_base_activate_select(sel, node, nd->name);
+        rc = ras_base_activate_select(sel, node, nd->name, req, nreq);
         if (PRTE_SUCCESS != rc) {
             PMIX_LIST_DESTRUCT(&nodes);
             return rc;
@@ -3498,8 +3527,8 @@ static int ras_base_activate_hostfile(const char *hostfile, pmix_pointer_array_t
  * A ":<slots>" modifier is refused rather than ignored (see below), and so
  * is "+e" - see there for why it cannot mean anything useful here.
  */
-static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, uid_t uid,
-                                  gid_t gid)
+static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel,
+                                  const pmix_info_t *req, size_t nreq)
 {
     char **tokens;
     int rc = PRTE_SUCCESS;
@@ -3523,7 +3552,7 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, u
              *
              * The parser is the real one, so ^exclusion, aliases and its
              * refusal of relative syntax inside a file all come along. */
-            rc = ras_base_activate_hostfile(&tokens[k][5], sel, uid, gid);
+            rc = ras_base_activate_hostfile(&tokens[k][5], sel, req, nreq);
             if (PRTE_SUCCESS != rc) {
                 goto done;
             }
@@ -3536,17 +3565,19 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, u
              * --add-host where PRRTE owns the allocation and the slot count
              * really is PRRTE's to change. */
             if (NULL != strchr(tokens[k], ':')) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-slots", true, tokens[k]);
+                prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-slots", true,
+                                    tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
             node = prte_node_match(NULL, tokens[k]);
             if (NULL == node) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-unknown", true, tokens[k]);
+                prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-unknown",
+                                    true, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
-            rc = ras_base_activate_select(sel, node, tokens[k]);
+            rc = ras_base_activate_select(sel, node, tokens[k], req, nreq);
             if (PRTE_SUCCESS != rc) {
                 goto done;
             }
@@ -3569,7 +3600,7 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, u
         } else if ('n' == tokens[k][1] || 'N' == tokens[k][1]) {
             /* a specific node of the allocation, by index */
             if (!ras_base_read_count(&tokens[k][2], &nodeidx)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                prte_show_help_info(req, nreq, "help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                true, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
@@ -3581,19 +3612,19 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, u
                 ++nodeidx;
             }
             if (nodeidx >= prte_node_pool->size) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
+                prte_show_help_info(req, nreq, "help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
                                true, nodeidx, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
             node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
             if (NULL == node) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:relative-node-not-found",
+                prte_show_help_info(req, nreq, "help-dash-host.txt", "dash-host:relative-node-not-found",
                                true, nodeidx, tokens[k]);
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
-            rc = ras_base_activate_select(sel, node, tokens[k]);
+            rc = ras_base_activate_select(sel, node, tokens[k], req, nreq);
             if (PRTE_SUCCESS != rc) {
                 goto done;
             }
@@ -3605,12 +3636,12 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel, u
              * not a question about DVM membership at all: the nodes it picks
              * are mostly ones the DVM is already on, so honoring it here
              * would launch nothing and report success. */
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:activate-empty", true, tokens[k]);
+            prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-empty", true, tokens[k]);
             rc = PRTE_ERR_SILENT;
             goto done;
 
         } else {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+            prte_show_help_info(req, nreq, "help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                            true, tokens[k]);
             rc = PRTE_ERR_SILENT;
             goto done;
@@ -3632,13 +3663,13 @@ done:
  * every other hostfile attribute may.
  */
 static int ras_base_activate_resolve(const char *hosts, const char *hostfile,
-                                     pmix_pointer_array_t *sel, uid_t uid, gid_t gid)
+                                     pmix_pointer_array_t *sel, const pmix_info_t *req, size_t nreq)
 {
     char **files;
     int k, rc = PRTE_SUCCESS;
 
     if (NULL != hosts && '\0' != *hosts) {
-        rc = ras_base_activate_spec(hosts, sel, uid, gid);
+        rc = ras_base_activate_spec(hosts, sel, req, nreq);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -3652,7 +3683,7 @@ static int ras_base_activate_resolve(const char *hosts, const char *hostfile,
         return PRTE_SUCCESS;
     }
     for (k = 0; NULL != files[k]; k++) {
-        rc = ras_base_activate_hostfile(files[k], sel, uid, gid);
+        rc = ras_base_activate_hostfile(files[k], sel, req, nreq);
         if (PRTE_SUCCESS != rc) {
             break;
         }
@@ -3693,8 +3724,8 @@ static int ras_base_activate_commit(pmix_pointer_array_t *sel)
     return nactivated;
 }
 
-int prte_ras_base_activate_nodes(const char *hosts, const char *hostfile, uid_t uid, gid_t gid,
-                                 int *nactivated)
+int prte_ras_base_activate_nodes(const char *hosts, const char *hostfile,
+                                 const pmix_info_t *req, size_t nreq, int *nactivated)
 {
     pmix_pointer_array_t sel;
     int rc;
@@ -3710,7 +3741,7 @@ int prte_ras_base_activate_nodes(const char *hosts, const char *hostfile, uid_t 
     PMIX_CONSTRUCT(&sel, pmix_pointer_array_t);
     pmix_pointer_array_init(&sel, 8, INT_MAX, 8);
 
-    rc = ras_base_activate_resolve(hosts, hostfile, &sel, uid, gid);
+    rc = ras_base_activate_resolve(hosts, hostfile, &sel, req, nreq);
     if (PRTE_SUCCESS == rc) {
         *nactivated = ras_base_activate_commit(&sel);
     }
@@ -3726,11 +3757,15 @@ int prte_ras_base_activate_hosts(prte_job_t *jdata)
     char *spec;
     pmix_pointer_array_t sel;
     bool found = false, adding = false;
-    uid_t uid;
-    gid_t gid;
+    pmix_info_t *req;
+    size_t nreq;
 
-    /* a "file=" the spec names is read as the job's owner */
-    prte_pmix_server_job_user(jdata, &uid, &gid);
+    /* a "file=" the spec names is read as the job's owner, and what is
+     * refused is told to whoever asked for the job */
+    rc = prte_requester_info_job(jdata, &req, &nreq);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
     PMIX_CONSTRUCT(&sel, pmix_pointer_array_t);
     pmix_pointer_array_init(&sel, 8, INT_MAX, 8);
 
@@ -3752,20 +3787,22 @@ int prte_ras_base_activate_hosts(prte_job_t *jdata)
             continue;
         }
         found = true;
-        rc = ras_base_activate_resolve(spec, NULL, &sel, uid, gid);
+        rc = ras_base_activate_resolve(spec, NULL, &sel, req, nreq);
         free(spec);
         if (PRTE_SUCCESS != rc) {
+            PMIX_INFO_FREE(req, nreq);
             PMIX_DESTRUCT(&sel);
             return rc;
         }
     }
+    PMIX_INFO_FREE(req, nreq);
 
     if (!found) {
         PMIX_DESTRUCT(&sel);
         return PRTE_SUCCESS;
     }
 
-    if (!ras_base_resize_allowed("--activate")) {
+    if (!ras_base_resize_allowed("--activate", jdata, NULL)) {
         PMIX_DESTRUCT(&sel);
         return PRTE_ERR_NOT_SUPPORTED;
     }

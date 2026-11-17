@@ -1127,8 +1127,8 @@ void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
 
                 /* the user is about to lose a job they did not ask about, so say
                  * why - "connected" is not a property they can see in ps */
-                prte_show_help(PRTE_JOB_NSPACE(jptr), "help-prted.txt", "connected-term", true,
-                               cause, jptr->nspace);
+                prte_show_help_job(jptr, "help-prted.txt", "connected-term", true,
+                                   cause, jptr->nspace);
 
                 pmix_pointer_array_add(&told, cptr);
 

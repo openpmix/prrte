@@ -172,7 +172,7 @@ int prte_hwloc_base_register(void)
         return ret;
     }
     if (NULL != default_membind &&
-        PRTE_SUCCESS != prte_hwloc_base_parse_membind(PRTE_PROC_MY_NAME->nspace,
+        PRTE_SUCCESS != prte_hwloc_base_parse_membind(NULL,
                                                       "hwloc_default_membind",
                                                       default_membind, &prte_hwloc_base_memattr)) {
         /* the parser has already said what is wrong with the value */
@@ -621,11 +621,11 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
      * PRTE_SET_DEFAULT_BINDING_POLICY() later fills the policy in while
      * preserving the qualifier half of the word. */
     if ('\0' != myspec[0]) {
-        rc = prte_cli_match(PRTE_JOB_NSPACE(jdata), "--bind-to", myspec,
+        rc = prte_cli_match(jdata, "--bind-to", myspec,
                             prte_cli_binders, &tag);
         if (PRTE_ERR_NOT_FOUND == rc) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
-                           spec);
+            prte_show_help_job(jdata, "help-prte-hwloc-base.txt", "invalid binding_policy", true,
+                               "binding", spec);
             free(myspec);
             return PRTE_ERR_BAD_PARAM;
         } else if (PRTE_SUCCESS != rc) {
@@ -673,10 +673,11 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
          * the spawn path that process is the DVM's controller. */
         quals = PMIx_Argv_split(ptr, ':');
         for (i = 0; NULL != quals && NULL != quals[i]; i++) {
-            rc = prte_cli_match(PRTE_JOB_NSPACE(jdata), "--bind-to", quals[i],
+            rc = prte_cli_match(jdata, "--bind-to", quals[i],
                                 prte_cli_bindquals, &tag);
             if (PRTE_ERR_NOT_FOUND == rc) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                prte_show_help_job(jdata, "help-prte-hwloc-base.txt", "unrecognized-modifier", true,
+                                   spec);
                 PMIx_Argv_free(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;
@@ -698,8 +699,9 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 
             } else if (PRTE_BINDQUAL_REPORT == tag) {
                 if (NULL == jdata) {
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                                   "binding policy", quals[i]);
+                    prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                                       "unsupported-default-modifier", true, "binding policy",
+                                       quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
@@ -708,8 +710,9 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 
             } else if (PRTE_BINDQUAL_LIMIT == tag) {
                 if (NULL == jdata) {
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                                   "binding policy", quals[i]);
+                    prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                                       "unsupported-default-modifier", true, "binding policy",
+                                       quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
@@ -720,8 +723,8 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {
                     /* missing the value */
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true,
-                                   "binding limit", "LIMIT", quals[i]);
+                    prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "invalid-value", true,
+                                       "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
@@ -735,8 +738,8 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     0 >= lval || UINT16_MAX < lval) {
                     /* value is not a number, has trailing garbage, or is out
                      * of range (a limit of zero is meaningless) */
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "invalid-value", true,
-                                   "binding limit", "LIMIT", quals[i]);
+                    prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "invalid-value", true,
+                                       "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
@@ -759,7 +762,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     return PRTE_SUCCESS;
 }
 
-int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
+int prte_hwloc_base_parse_membind(const struct prte_job_t *jdata, const char *option,
                                   const char *spec, prte_hwloc_base_memattr_t *memattr)
 {
     prte_hwloc_base_memattr_t result;
@@ -774,7 +777,7 @@ int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
         goto bad;
     }
 
-    rc = prte_cli_match(nspace, option, spec, prte_cli_membinders, &tag);
+    rc = prte_cli_match(jdata, option, spec, prte_cli_membinders, &tag);
     if (PRTE_ERR_NOT_FOUND == rc) {
         goto bad;
     } else if (PRTE_SUCCESS != rc) {
@@ -808,7 +811,7 @@ int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
     return PRTE_SUCCESS;
 
 bad:
-    prte_show_help(nspace, "help-prte-hwloc-base.txt", "invalid binding_policy", true,
+    prte_show_help_job(jdata, "help-prte-hwloc-base.txt", "invalid binding_policy", true,
                    "memory binding", (NULL == spec) ? "" : spec);
     return PRTE_ERR_SILENT;
 }

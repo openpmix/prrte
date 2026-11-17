@@ -177,9 +177,8 @@ static bool parse_cpu_id(const char *str, int *id)
     return true;
 }
 
-hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
-                                               bool use_hwthread_cpus,
-                                               char **cpulist)
+hwloc_cpuset_t prte_hwloc_base_generate_cpuset(const pmix_nspace_t nspace, hwloc_topology_t topo,
+                                               bool use_hwthread_cpus, char **cpulist)
 {
     hwloc_cpuset_t avail = NULL, pucpus, res;
     char **ranges = NULL, **range = NULL;
@@ -244,7 +243,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
             break;
         }
         if (bad) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-hwloc-base.txt", "unfound-cpu", true,
+            prte_show_help(nspace, "help-prte-hwloc-base.txt", "unfound-cpu", true,
                            *cpulist, ranges[idx],
                            use_hwthread_cpus ? "hwthread" : "core");
             PMIx_Argv_free(ranges);
@@ -417,7 +416,8 @@ hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
 
     } else {
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base: filtering cpuset"));
-        avail = prte_hwloc_base_generate_cpuset(topo, prte_hwloc_default_use_hwthread_cpus,
+        avail = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo,
+                                                prte_hwloc_default_use_hwthread_cpus,
                                                 &prte_hwloc_default_cpu_list);
         if (NULL == avail) {
             avail = hwloc_bitmap_alloc();

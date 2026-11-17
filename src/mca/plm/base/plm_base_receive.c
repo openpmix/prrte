@@ -881,7 +881,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         tmp = PMIx_Argv_join(jdata->personality, ',');
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
+            prte_show_help_job(jdata, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
+                               tmp);
             free(tmp);
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
@@ -901,8 +902,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
          * hold has no owner to run as, and must not run as us instead. */
         rc = prte_plm_base_job_owner(jdata, sender, nptr);
         if (PRTE_SUCCESS != rc) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-plm-base.txt", "requester-unknown",
-                           true, PRTE_JOB_NSPACE(jdata), PRTE_NAME_PRINT(nptr));
+            prte_show_help_job(jdata, "help-plm-base.txt", "requester-unknown",
+                               true, PRTE_JOB_NSPACE(jdata), PRTE_NAME_PRINT(nptr));
             goto ANSWER_LAUNCH;
         }
         /* and every daemon tells its PMIx server who owns the job when it
@@ -930,34 +931,34 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
 
             rc = prte_pmix_server_job_run_as(jdata, &ruid, &rgid, &change);
             if (PRTE_ERR_PERM == rc) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-odls-base.txt",
-                               "run-as-refused", true, prte_process_info.nodename,
-                               PRTE_JOB_NSPACE(jdata),
-                               (unsigned long) prte_pmix_server_job_owner(jdata),
-                               (unsigned long) prte_process_info.euid);
+                prte_show_help_job(jdata, "help-prte-odls-base.txt",
+                                   "run-as-refused", true, prte_process_info.nodename,
+                                   PRTE_JOB_NSPACE(jdata),
+                                   (unsigned long) prte_pmix_server_job_owner(jdata),
+                                   (unsigned long) prte_process_info.euid);
                 goto ANSWER_LAUNCH;
             }
             if (PRTE_SUCCESS != rc) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-odls-base.txt",
-                               "run-as-no-group", true, prte_process_info.nodename,
-                               PRTE_JOB_NSPACE(jdata),
-                               (unsigned long) prte_pmix_server_job_owner(jdata));
+                prte_show_help_job(jdata, "help-prte-odls-base.txt",
+                                   "run-as-no-group", true, prte_process_info.nodename,
+                                   PRTE_JOB_NSPACE(jdata),
+                                   (unsigned long) prte_pmix_server_job_owner(jdata));
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
             /* and what the master would do for it as itself */
             if (!prte_pmix_server_privileged(prte_pmix_server_job_owner(jdata)) &&
                 NULL != (what = foreign_directive(jdata))) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-plm-base.txt", "foreign-directive",
-                               true, PRTE_JOB_NSPACE(jdata),
-                               (unsigned long) prte_pmix_server_job_owner(jdata), what);
+                prte_show_help_job(jdata, "help-plm-base.txt", "foreign-directive",
+                                   true, PRTE_JOB_NSPACE(jdata),
+                                   (unsigned long) prte_pmix_server_job_owner(jdata), what);
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
             /* and the hosts it would have the DVM bring in */
             if (NULL != (what = grow_directive(jdata, prte_pmix_server_job_owner(jdata)))) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt",
-                               "ras-base:grow-not-permitted", true, "spawn", what);
+                prte_show_help_job(jdata, "help-ras-base.txt",
+                                   "ras-base:grow-not-permitted", true, "spawn", what);
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
@@ -1017,8 +1018,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             NULL != tmp) {
             rc = prte_get_session_object_from_refid(nptr->nspace, tmp, &session);
             if (PRTE_ERR_BAD_PARAM == rc) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-base.txt",
-                               "ras-base:req-id-ambiguous", true, tmp);
+                prte_show_help_job(jdata, "help-ras-base.txt",
+                                   "ras-base:req-id-ambiguous", true, tmp);
             }
             free(tmp);
             if (PRTE_SUCCESS != rc) {

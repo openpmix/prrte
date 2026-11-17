@@ -101,7 +101,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      * is an unrecoverable error - report it
      */
     if (pmix_list_is_empty(nodes)) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-pbs.txt", "no-nodes-found", true, filename);
+        prte_show_help_job(jdata, "help-ras-pbs.txt", "no-nodes-found", true, filename);
         return PRTE_ERR_NOT_FOUND;
     }
 

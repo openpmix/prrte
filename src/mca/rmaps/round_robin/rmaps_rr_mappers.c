@@ -85,8 +85,8 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
     /* check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                               true, app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -211,13 +211,13 @@ pass:
         rc = (PRTE_SUCCESS == rc) ? PRTE_ERR_OUT_OF_RESOURCE : rc;
     errout:
         if (PRTE_ERR_SILENT != rc) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
-                           "failed-map", true,
-                           PRTE_ERROR_NAME(rc),
-                           (NULL == app) ? "N/A" : app->app,
-                           (NULL == app) ? -1 : app->num_procs,
-                           prte_rmaps_base_print_mapping(options->map),
-                           prte_hwloc_base_print_binding(options->bind));
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                               "failed-map", true,
+                               PRTE_ERROR_NAME(rc),
+                               (NULL == app) ? "N/A" : app->app,
+                               (NULL == app) ? -1 : app->num_procs,
+                               prte_rmaps_base_print_mapping(options->map),
+                               prte_hwloc_base_print_binding(options->bind));
         }
         return PRTE_ERR_SILENT;
     }
@@ -277,8 +277,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
     /* quick check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                               true, app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -399,13 +399,13 @@ pass:
     errout:
         /* unable to do it */
         if (PRTE_ERR_SILENT != rc) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
-                           "failed-map", true,
-                           PRTE_ERROR_NAME(rc),
-                           (NULL == app) ? "N/A" : app->app,
-                           (NULL == app) ? -1 : app->num_procs,
-                           prte_rmaps_base_print_mapping(options->map),
-                           prte_hwloc_base_print_binding(options->bind));
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                               "failed-map", true,
+                               PRTE_ERROR_NAME(rc),
+                               (NULL == app) ? "N/A" : app->app,
+                               (NULL == app) ? -1 : app->num_procs,
+                               prte_rmaps_base_print_mapping(options->map),
+                               prte_hwloc_base_print_binding(options->bind));
         }
         return PRTE_ERR_SILENT;
     }
@@ -467,8 +467,8 @@ int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
             return rc;
         }
         if (0 < ndevs && ndevs < (size_t) app->num_procs) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:too-few-devices", true,
-                           (int) app->num_procs, options->map_device, (int) ndevs);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:too-few-devices", true,
+                               (int) app->num_procs, options->map_device, (int) ndevs);
             return PRTE_ERR_SILENT;
         }
     }
@@ -502,8 +502,8 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     /* check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                               true, app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -676,9 +676,9 @@ pass:
 errout:
     /* if we get here, then we were unable to map all the procs */
     if (PRTE_ERR_SILENT != rc) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-rr.txt",
-                       "prte-rmaps-rr:not-enough-cpus", true,
-                       app->app, app->num_procs, savecpuset);
+        prte_show_help_job(jdata, "help-prte-rmaps-rr.txt",
+                           "prte-rmaps-rr:not-enough-cpus", true,
+                           app->app, app->num_procs, savecpuset);
     }
     if (NULL != savecpuset) {
         free(savecpuset);
@@ -752,8 +752,8 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
     /* quick check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                           app->num_procs, app->app);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                               true, app->num_procs, app->app);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
         } else {
@@ -879,8 +879,8 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                  * them, and quietly falling back to by-slot (which the
                  * caller used to do) placed the job by a rule they never
                  * asked for. */
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
-                               true, tgts->name, node->name);
+                prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                                   "rmaps:mapping-target-not-found", true, tgts->name, node->name);
                 rc = PRTE_ERR_SILENT;
                 goto errout;
             }
@@ -1105,18 +1105,18 @@ errout:
     }
     if (outofcpus) {
         /* ran out of cpus */
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
-                       "allocation-overload", true,
+        prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                           "allocation-overload", true,
+                           app->app, app->num_procs,
+                           prte_rmaps_base_print_mapping(options->map),
+                           prte_hwloc_base_print_binding(options->bind));
+        return PRTE_ERR_SILENT;
+    }
+    prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                       "failed-map", true,
+                       PRTE_ERROR_NAME(rc),
                        app->app, app->num_procs,
                        prte_rmaps_base_print_mapping(options->map),
                        prte_hwloc_base_print_binding(options->bind));
-        return PRTE_ERR_SILENT;
-    }
-    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
-                   "failed-map", true,
-                   PRTE_ERROR_NAME(rc),
-                   app->app, app->num_procs,
-                   prte_rmaps_base_print_mapping(options->map),
-                   prte_hwloc_base_print_binding(options->bind));
     return PRTE_ERR_SILENT;
 }

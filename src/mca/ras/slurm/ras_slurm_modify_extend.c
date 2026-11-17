@@ -2143,8 +2143,8 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     }
 
     if (NULL != extra_bad_entry) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-slurm.txt", "propagate-extra-refused", true,
-                       extra_bad_entry, extra_bad_reason);
+        prte_show_help_proc(&req->tproc, "help-ras-slurm.txt", "propagate-extra-refused", true,
+                            extra_bad_entry, extra_bad_reason);
         return PRTE_ERR_BAD_PARAM;
     }
 

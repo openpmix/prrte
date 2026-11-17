@@ -1041,8 +1041,8 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
             goto REPORT_ERROR;
         }
         if (NULL == jdata->schizo) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true,
-                           prte_tool_basename, "NULL");
+            prte_show_help_job(jdata, "help-schizo-base.txt", "no-proxy", true,
+                               prte_tool_basename, "NULL");
             rc = PRTE_ERR_NOT_FOUND;
             goto REPORT_ERROR;
         }
@@ -1072,8 +1072,8 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
         }
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "no-proxy", true,
-                           prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
+            prte_show_help_job(jdata, "help-schizo-base.txt", "no-proxy", true,
+                               prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
             if (NULL != tmp) {
                 free(tmp);
             }
@@ -1899,8 +1899,9 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
         cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
-            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
-                           prte_process_info.nodename, ptr);
+            prte_show_help_job(jobdat, "help-prte-odls-base.txt",
+                               "prte-odls-base:fork-agent-not-found", true,
+                               prte_process_info.nodename, ptr);
             rc = PRTE_ERR_NOT_FOUND;
             state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
             goto errorout;
@@ -1914,8 +1915,9 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
         cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
-            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
-                           prte_process_info.nodename, cd->argv[0]);
+            prte_show_help_job(jobdat, "help-prte-odls-base.txt",
+                               "prte-odls-base:fork-agent-not-found", true,
+                               prte_process_info.nodename, cd->argv[0]);
             rc = PRTE_ERR_NOT_FOUND;
             state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
             goto errorout;
@@ -2268,16 +2270,16 @@ static int spawn_caddy_credentials(prte_odls_spawn_caddy_t *cd, prte_job_t *jobd
     cd->cred_switch = false;
     rc = prte_pmix_server_job_run_as(jobdat, &cd->cred_uid, &cd->cred_gid, &change);
     if (PRTE_ERR_PERM == rc) {
-        prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "run-as-refused",
-                       true, prte_process_info.nodename, PRTE_JOB_NSPACE(jobdat),
-                       (unsigned long) prte_pmix_server_job_owner(jobdat),
-                       (unsigned long) prte_process_info.euid);
+        prte_show_help_job(jobdat, "help-prte-odls-base.txt", "run-as-refused",
+                           true, prte_process_info.nodename, PRTE_JOB_NSPACE(jobdat),
+                           (unsigned long) prte_pmix_server_job_owner(jobdat),
+                           (unsigned long) prte_process_info.euid);
         return PRTE_ERR_SILENT;
     }
     if (PRTE_SUCCESS != rc) {
-        prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt", "run-as-no-group",
-                       true, prte_process_info.nodename, PRTE_JOB_NSPACE(jobdat),
-                       (unsigned long) prte_pmix_server_job_owner(jobdat));
+        prte_show_help_job(jobdat, "help-prte-odls-base.txt", "run-as-no-group",
+                           true, prte_process_info.nodename, PRTE_JOB_NSPACE(jobdat),
+                           (unsigned long) prte_pmix_server_job_owner(jobdat));
         return PRTE_ERR_SILENT;
     }
     if (!change) {
@@ -2349,8 +2351,8 @@ static int xterm_select(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat, prte_pr
     }
     rc = prte_parse_xterm_option(cd->xterm_spec, &ranges, &nranges, &all, &hold, &badrank);
     if (PRTE_ERR_VALUE_OUT_OF_BOUNDS == rc) {
-        prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt",
-                       "prte-odls-base:xterm-neg-rank", true, (int) badrank);
+        prte_show_help_job(jobdat, "help-prte-odls-base.txt",
+                           "prte-odls-base:xterm-neg-rank", true, (int) badrank);
         return PRTE_ERR_BAD_PARAM;
     } else if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
@@ -2358,10 +2360,10 @@ static int xterm_select(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat, prte_pr
     }
     for (n = 0; n < nranges; n++) {
         if (jobdat->num_procs <= ranges[n].hi) {
-            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt",
-                           "prte-odls-base:xterm-rank-out-of-bounds", true,
-                           prte_process_info.nodename, (int) ranges[n].hi,
-                           (int) jobdat->num_procs);
+            prte_show_help_job(jobdat, "help-prte-odls-base.txt",
+                               "prte-odls-base:xterm-rank-out-of-bounds", true,
+                               prte_process_info.nodename, (int) ranges[n].hi,
+                               (int) jobdat->num_procs);
             free(ranges);
             return PRTE_ERR_BAD_PARAM;
         }
@@ -2374,8 +2376,8 @@ static int xterm_select(prte_odls_spawn_caddy_t *cd, prte_job_t *jobdat, prte_pr
 
     path = pmix_find_absolute_path("xterm");
     if (NULL == path) {
-        prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-base.txt",
-                       "prte-odls-base:xterm-not-found", true, prte_process_info.nodename);
+        prte_show_help_job(jobdat, "help-prte-odls-base.txt",
+                           "prte-odls-base:xterm-not-found", true, prte_process_info.nodename);
         return PRTE_ERR_NOT_FOUND;
     }
     PMIx_Argv_append_nosize(&cd->xterm_argv, path);
@@ -2678,8 +2680,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_util_init_sys_limits(&msg))) {
             /* the "Application name" field is a %s - pass the app's
              * executable, not the app_context object itself */
-            prte_show_help(PRTE_JOB_NSPACE(jobdat), "help-prte-odls-default.txt", "set limit", true,
-                           prte_process_info.nodename, app->app, __FILE__, __LINE__, msg);
+            prte_show_help_job(jobdat, "help-prte-odls-default.txt", "set limit", true,
+                               prte_process_info.nodename, app->app, __FILE__, __LINE__, msg);
             /* flag this app's procs and abort the whole job (see setup_fork) */
             PRTE_ODLS_SET_ERROR(job, rc, j);
             PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);

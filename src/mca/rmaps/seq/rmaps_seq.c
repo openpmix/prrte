@@ -88,7 +88,7 @@ static void sn_des(seq_node_t *p)
 }
 PMIX_CLASS_INSTANCE(seq_node_t, pmix_list_item_t, sn_con, sn_des);
 
-static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid);
+static int process_file(char *path, pmix_list_t *list, const pmix_info_t *req, size_t nreq);
 
 /*
  * Bind a proc to the cpu list its sequence entry named.
@@ -116,7 +116,8 @@ static int bind_to_entry_cpuset(prte_job_t *jdata, prte_proc_t *proc,
 
     if (NULL == node->topology || NULL == node->topology->topo) {
         /* without a topology there is nothing to resolve the list against */
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-topology", true, node->name);
+        prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                           node->name);
         return PRTE_ERR_SILENT;
     }
 
@@ -126,8 +127,8 @@ static int bind_to_entry_cpuset(prte_job_t *jdata, prte_proc_t *proc,
     if (PRTE_SUCCESS != rc) {
         char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                              false, false, node->topology->topo);
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-seq.txt", "seq:bad-cpuset", true,
-                       cpuset, node->name, tmp);
+        prte_show_help_job(jdata, "help-prte-rmaps-seq.txt", "seq:bad-cpuset", true,
+                           cpuset, node->name, tmp);
         free(tmp);
         hwloc_bitmap_free(bits);
         return PRTE_ERR_SILENT;
@@ -148,10 +149,10 @@ static int bind_to_entry_cpuset(prte_job_t *jdata, prte_proc_t *proc,
                                               options->use_hwthreads, false);
         overlap = prte_hwloc_base_cpuset2ranges(node->topology->topo, missing,
                                                 options->use_hwthreads, false);
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-seq.txt", "seq:cpuset-not-available", true,
-                       PRTE_NAME_PRINT(&proc->name), node->name, cpuset,
-                       (NULL == avail) ? "NONE" : avail,
-                       (NULL == overlap) ? "NONE" : overlap);
+        prte_show_help_job(jdata, "help-prte-rmaps-seq.txt", "seq:cpuset-not-available", true,
+                           PRTE_NAME_PRINT(&proc->name), node->name, cpuset,
+                           (NULL == avail) ? "NONE" : avail,
+                           (NULL == overlap) ? "NONE" : overlap);
         free(avail);
         free(overlap);
         hwloc_bitmap_free(missing);
@@ -177,8 +178,29 @@ static int bind_to_entry_cpuset(prte_job_t *jdata, prte_proc_t *proc,
  * Sequentially map the ranks according to the placement in the
  * specified hostfile
  */
+static int seq_map_for(prte_job_t *jdata, prte_rmaps_options_t *options,
+                       const pmix_info_t *freq, size_t nfreq);
+
+/* The files and host lists the job names are read for its owner, and what
+ * is wrong with them is told to whoever asked for the job. */
 static int prte_rmaps_seq_map(prte_job_t *jdata,
                               prte_rmaps_options_t *options)
+{
+    pmix_info_t *freq;
+    size_t nfreq;
+    int rc;
+
+    rc = prte_requester_info_job(jdata, &freq, &nfreq);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = seq_map_for(jdata, options, freq, nfreq);
+    PMIX_INFO_FREE(freq, nfreq);
+    return rc;
+}
+
+static int seq_map_for(prte_job_t *jdata, prte_rmaps_options_t *options,
+                       const pmix_info_t *freq, size_t nfreq)
 {
     prte_job_map_t *map;
     prte_app_context_t *app;
@@ -199,8 +221,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     bool match;
     prte_binding_policy_t savebind;
     char *savecpuset;
-    uid_t fuid;
-    gid_t fgid;
 
     PMIX_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -235,15 +255,12 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
 
     /* convenience def */
     map = jdata->map;
-    /* the files the job names are read as its owner */
-    prte_pmix_server_job_user(jdata, &fuid, &fgid);
 
     /* if there is a default hostfile, go and get its ordered list of nodes */
     PMIX_CONSTRUCT(&default_seq_list, pmix_list_t);
     if (NULL != prte_default_hostfile) {
         /* the DVM's own configuration, so read as ourselves */
-        rc = process_file(prte_default_hostfile, &default_seq_list, prte_process_info.euid,
-                          prte_process_info.egid);
+        rc = process_file(prte_default_hostfile, &default_seq_list, NULL, 0);
         if (PRTE_SUCCESS != rc) {
             PMIX_LIST_DESTRUCT(&default_seq_list);
             return rc;
@@ -285,7 +302,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
-            rc = process_file(hosts, &sq_list, fuid, fgid);
+            rc = process_file(hosts, &sq_list, freq, nfreq);
             free(hosts);
             hosts = NULL;
             if (PRTE_SUCCESS != rc) {
@@ -307,7 +324,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             PMIX_CONSTRUCT(&node_list, pmix_list_t);
             /* dash host entries cannot specify cpusets, so used the std function to retrieve the
              * list */
-            rc = prte_util_get_ordered_dash_host_list(&node_list, hosts);
+            rc = prte_util_get_ordered_dash_host_list(&node_list, hosts, freq, nfreq);
             free(hosts);
             hosts = NULL;
             if (PRTE_SUCCESS != rc) {
@@ -338,7 +355,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
-            rc = process_file(hosts, &sq_list, fuid, fgid);
+            rc = process_file(hosts, &sq_list, freq, nfreq);
             free(hosts);
             hosts = NULL;
             if (PRTE_SUCCESS != rc) {
@@ -358,8 +375,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             seq_list = &default_seq_list;
         } else {
             /* can't do anything - no nodes available! */
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
-                           true);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                               "prte-rmaps-base:no-available-resources", true);
             rc = PRTE_ERR_SILENT;
             goto error;
         }
@@ -382,8 +399,8 @@ process:
         }
 
         if (NULL == seq_list || 0 == (num_nodes = (int32_t) pmix_list_get_size(seq_list))) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
-                           true);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                               "prte-rmaps-base:no-available-resources", true);
             rc = PRTE_ERR_SILENT;
             goto error;
         }
@@ -395,8 +412,8 @@ process:
                                 "mca:rmaps:seq: setting num procs to %s for app %s",
                                 PRTE_VPID_PRINT(app->num_procs), app->app);
         } else if (num_nodes < app->num_procs) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
-                           app->num_procs, num_nodes);
+            prte_show_help_job(jdata, "help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
+                               app->num_procs, num_nodes);
             rc = PRTE_ERR_SILENT;
             goto error;
         }
@@ -422,8 +439,8 @@ process:
             if (NULL == sq || pmix_list_get_end(seq_list) == &sq->super) {
                 /* "n" entries were consumed getting this far, so that is how
                  * many the sequence turned out to be worth to this app */
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
-                               (int) app->num_procs, n);
+                prte_show_help_job(jdata, "help-prte-rmaps-seq.txt", "seq:not-enough-resources",
+                                   true, (int) app->num_procs, n);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -444,8 +461,8 @@ process:
             }
             if (!match) {
                 /* wasn't found - that is an error */
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-seq.txt", "prte-rmaps-seq:resource-not-found", true,
-                               sq->hostname);
+                prte_show_help_job(jdata, "help-prte-rmaps-seq.txt",
+                                   "prte-rmaps-seq:resource-not-found", true, sq->hostname);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -487,8 +504,8 @@ process:
             options->bind = savebind;
             options->cpuset = savecpuset;
             if (NULL == proc) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-seq.txt", "proc-failed-to-map", true,
-                               sq->hostname, app->app);
+                prte_show_help_job(jdata, "help-prte-rmaps-seq.txt", "proc-failed-to-map", true,
+                                   sq->hostname, app->app);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -555,19 +572,21 @@ error:
         free(hosts);
     }
     if (PRTE_ERR_SILENT != rc) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt",
-                       "failed-map", true,
-                       PRTE_ERROR_NAME(rc),
-                       (NULL == app) ? "N/A" : app->app,
-                       (NULL == app) ? -1 : app->num_procs,
-                       prte_rmaps_base_print_mapping(options->map),
-                       prte_hwloc_base_print_binding(options->bind));
+        prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                           "failed-map", true,
+                           PRTE_ERROR_NAME(rc),
+                           (NULL == app) ? "N/A" : app->app,
+                           (NULL == app) ? -1 : app->num_procs,
+                           prte_rmaps_base_print_mapping(options->map),
+                           prte_hwloc_base_print_binding(options->bind));
     }
     return PRTE_ERR_SILENT;
 }
 
-static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid)
+static int process_file(char *path, pmix_list_t *list, const pmix_info_t *req, size_t nreq)
 {
+    uid_t uid;
+    gid_t gid;
     prte_textfile_t tf;
     seq_node_t *sq;
     char **fields;
@@ -589,6 +608,8 @@ static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid)
      * The reader splits on any run of whitespace rather than at the first
      * space, so a tab between the host and its cpuset now separates them
      * instead of becoming part of the hostname. */
+    /* read as whoever named it */
+    prte_requester_ids(req, nreq, &uid, &gid);
     if (PRTE_SUCCESS != prte_textfile_open(&tf, path, uid, gid)) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
@@ -604,8 +625,8 @@ static int process_file(char *path, pmix_list_t *list, uid_t uid, gid_t gid)
     failed = tf.failed;
     prte_textfile_close(&tf);
     if (failed) {
-        if (!prte_textfile_report_limit(&tf, PRTE_PROC_MY_NAME->nspace, path)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-util.txt", "file-read-failed",
+        if (!prte_textfile_report_limit(&tf, req, nreq, path)) {
+            prte_show_help_info(req, nreq, "help-prte-util.txt", "file-read-failed",
                            true, path);
         }
         return PRTE_ERR_SILENT;
