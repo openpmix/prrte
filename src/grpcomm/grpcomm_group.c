@@ -375,8 +375,19 @@ int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
      * daemon reads the list, so it goes straight into the blob our
      * contribution will carry (prte_grpcomm_participant_blob). Packing
      * touches no PRRTE object, so it is safe on the PMIx thread. */
-    if (PMIX_SUCCESS != prte_grpcomm_participant_blob(directives, ndirs, &cd->pbo, &cd->pknown)) {
-        cd->pknown = false;
+    {
+        /* a bootstrap leader's or a follower's call is one proc, counted by
+         * who it is - so its list always goes */
+        bool solo = (NULL == procs);
+        size_t n;
+
+        for (n = 0; !solo && NULL != directives && n < ndirs; n++) {
+            solo = PMIX_CHECK_KEY(&directives[n], PMIX_GROUP_BOOTSTRAP);
+        }
+        if (PMIX_SUCCESS != prte_grpcomm_participant_blob(directives, ndirs, solo, &cd->pbo,
+                                                          &cd->pknown)) {
+            cd->pknown = false;
+        }
     }
 
     /* must push this into the event library to ensure we can
@@ -1211,13 +1222,54 @@ static pmix_status_t pack_own_participants(pmix_data_buffer_t *buf, bool known,
     return rc;
 }
 
+/* Is any proc this bootstrap leader's or follower's blob names one not yet
+ * counted? Then note them, and count the contribution. A blob that names
+ * nobody, or cannot be read, is counted as before: a server that sent no
+ * list cannot have its calls told apart. */
+static bool solo_is_new(prte_grpcomm_group_t *coll, pmix_byte_object_t *bo)
+{
+    pmix_proc_t *procs = NULL, *tmp;
+    size_t n = 0, i, k;
+    bool isnew = false, seen;
+
+    if (PMIX_SUCCESS != prte_grpcomm_blob_procs(bo, &procs, &n) || 0 == n) {
+        return true;
+    }
+    for (i = 0; i < n; i++) {
+        seen = false;
+        for (k = 0; k < coll->nsolo_seen; k++) {
+            if (PMIX_CHECK_PROCID(&procs[i], &coll->solo_seen[k])) {
+                seen = true;
+                break;
+            }
+        }
+        if (seen) {
+            continue;
+        }
+        tmp = (pmix_proc_t *) realloc(coll->solo_seen,
+                                      (coll->nsolo_seen + 1) * sizeof(pmix_proc_t));
+        if (NULL == tmp) {
+            isnew = true;
+            break;
+        }
+        coll->solo_seen = tmp;
+        memcpy(&coll->solo_seen[coll->nsolo_seen++], &procs[i], sizeof(pmix_proc_t));
+        isnew = true;
+    }
+    PMIX_PROC_FREE(procs, n);
+    return isnew;
+}
+
 /* add a contribution's blobs to the tracker's. A contribution without them
  * - or one they cannot be read from - leaves who took part unknown, and
- * the operation goes on without the list. */
-static void unpack_participants(pmix_data_buffer_t *buf, prte_grpcomm_group_t *coll)
+ * the operation goes on without the list. For a bootstrap leader's or a
+ * follower's contribution, *counts says whether it names a proc not yet
+ * counted (solo_is_new()). */
+static void unpack_participants(pmix_data_buffer_t *buf, prte_grpcomm_group_t *coll,
+                                bool solo, bool *counts)
 {
     pmix_byte_object_t bo;
-    bool known = false;
+    bool known = false, any = false, isnew = false;
     size_t n = 0, i;
     int32_t cnt;
     pmix_status_t rc;
@@ -1237,6 +1289,12 @@ static void unpack_participants(pmix_data_buffer_t *buf, prte_grpcomm_group_t *c
         if (PMIX_SUCCESS != rc) {
             break;
         }
+        if (solo) {
+            any = true;
+            if (solo_is_new(coll, &bo)) {
+                isnew = true;
+            }
+        }
         rc = PMIx_Data_pack(NULL, coll->pblobs, &bo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&bo);
         if (PMIX_SUCCESS == rc) {
@@ -1249,6 +1307,10 @@ static void unpack_participants(pmix_data_buffer_t *buf, prte_grpcomm_group_t *c
     }
     if (!known) {
         coll->punknown = true;
+    }
+    if (NULL != counts) {
+        /* nothing to tell calls apart by - count it, as before */
+        *counts = (!any || isnew);
     }
 }
 
@@ -1560,6 +1622,7 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
                                   pmix_data_buffer_t *buffer,
                                   prte_rml_tag_t tag, void *cbdata)
 {
+    bool counts = true;
     int32_t cnt;
     int rc, timeout, slot;
     uint32_t stamp;
@@ -1881,10 +1944,16 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
     }
 
     /* who took part below - see pack_participants() */
-    unpack_participants(buffer, coll);
+    unpack_participants(buffer, coll, (0 < sig->bootstrap || sig->follower), &counts);
 
     /* track procs reported for collective */
-    if (0 < sig->bootstrap) {
+    if ((0 < sig->bootstrap || sig->follower) && !counts) {
+        /* a leader or follower already counted, calling again: it must not
+         * stand in for one that has not called */
+        pmix_output_verbose(1, prte_grpcomm_globals.output,
+                            "%s grpcomm group recv repeat bootstrap contribution - not counted",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+    } else if (0 < sig->bootstrap) {
         // this came from a bootstrap leader
         coll->nleaders_reported++;
         pmix_output_verbose(1, prte_grpcomm_globals.output,

@@ -440,7 +440,7 @@ int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
     cd->cbdata = cbdata;
     /* who took part here, if this server ran out of time - packed now,
      * since nothing on this daemon reads it (prte_grpcomm_participant_blob) */
-    if (PMIX_SUCCESS != prte_grpcomm_participant_blob(info, ninfo, &cd->pbo, &cd->pknown)) {
+    if (PMIX_SUCCESS != prte_grpcomm_participant_blob(info, ninfo, false, &cd->pbo, &cd->pknown)) {
         cd->pknown = false;
     }
 

@@ -205,6 +205,8 @@ static void gccon(prte_grpcomm_group_t *p)
     p->npblobs = 0;
     p->punknown = false;
     p->expired = false;
+    p->solo_seen = NULL;
+    p->nsolo_seen = 0;
     p->timeout = 0;
     p->tev_active = false;
     p->my_contribution = NULL;
@@ -235,6 +237,7 @@ static void gcdes(prte_grpcomm_group_t *p)
     if (NULL != p->pblobs) {
         PMIX_DATA_BUFFER_RELEASE(p->pblobs);
     }
+    free(p->solo_seen);
     if (NULL != p->dmns) {
         free(p->dmns);
     }
