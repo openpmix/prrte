@@ -10652,6 +10652,41 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         EXEC_SH "$n" 'rm -rf /root/pfsym /root/pfsym.tar /root/pfsym-target' >/dev/null 2>&1
     done
 
+    banner "filem: a refused archive is reported to the tool that sent it, and only that tool"
+    # The refusal is made on each receiving daemon and relayed to the master,
+    # which logs it as its own output - and every tool connected to a
+    # persistent DVM is registered for that. The archive's first chunk names
+    # the job it was sent for, so the master tells only whoever asked for
+    # that job. Here one prun sits idle while another preloads an archive the
+    # daemons on node2 and node3 refuse.
+    EXEC_SH 1 'rm -rf /root/pfdot /root/pfdot.tar && mkdir -p /root/pfdot/a \
+        && echo OUTSIDE > /root/pfdot/x.txt \
+        && tar cf /root/pfdot.tar -C /root/pfdot/a -P ../x.txt' >/dev/null 2>&1
+    if ! RUN 'tar tf /root/pfdot.tar | grep -qx ../x.txt'; then
+        bad "could not build an archive with a .. member on node1"
+    elif prted_dvm_start node1:1,node2:1,node3:1; then
+        PRUN_BG /tmp/pfdot-idle.out -n 1 --host node1 sleep 20
+        sleep 3
+        out=$(RUN "cd /root && timeout -k 5 60 prun --dvm-uri file:$PRTED_URI --host node2:1,node3:1 \
+                     -np 2 --map-by node --preload-files /root/pfdot.tar -- hostname" 2>&1); rc=$?
+        [ "$rc" != 0 ] \
+            && ok "the archive was refused" \
+            || bad "the archive was accepted (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'x.txt' \
+            && ok "the tool that sent it was told, naming the member" \
+            || bad "the sending tool was not told: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 20
+        idle=$(RUN 'cat /tmp/pfdot-idle.out 2>/dev/null')
+        echo "$idle" | grep -q 'x.txt\|not unpacked' \
+            && bad "the idle tool was told about another's archive: $(echo "$idle" | tr '\n' ' ' | tail -c 250)" \
+            || ok "the idle tool was not told"
+        RUN "rm -f /tmp/pfdot-idle.out; timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the archive-refusal report"
+    fi
+    cleanup_swarm
+    EXEC_SH 1 'rm -rf /root/pfdot /root/pfdot.tar' >/dev/null 2>&1
+
     fi   # FS_SHARED
     _fl="filem: --preload-files refuses a name that steps out of the directory"
     if [ "$FS_SHARED" != 0 ]; then skp "${_fl}: $WORKDIR is shared, so staging cannot be proved"; else

@@ -64,6 +64,9 @@ typedef struct {
     char *file;
     int32_t type;
     uint32_t mode;
+    /* the job whose transfer this is - sent with the first chunk, so a
+     * daemon that refuses the file can say whose request it refused */
+    pmix_nspace_t nspace;
     int32_t nchunk;
     int status;
     /* Flow control for the chunk pump.
@@ -133,6 +136,8 @@ typedef struct {
     char *fullpath;
     int32_t type;
     uint32_t mode;
+    /* the job that sent it, from the first chunk */
+    pmix_nspace_t nspace;
     char **link_pts;
     pmix_list_t outputs;
 } prte_filem_raw_incoming_t;
