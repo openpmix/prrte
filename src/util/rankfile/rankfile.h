@@ -41,6 +41,7 @@
 
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_object.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -63,8 +64,10 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rankfile_map_t);
 
 /*
  * Read a rankfile into "rankmap", which the caller supplies already
- * constructed and initialized, as user uid and group gid - whoever named it
- * (see prte_textfile_open): each line's record is filed under the rank
+ * constructed and initialized, for the requester req describes - whoever
+ * named it: the file is read as their user and group (see
+ * prte_textfile_open), and what is wrong with it is told to them
+ * (prte_show_help_info): each line's record is filed under the rank
  * it describes, as a uint32 key.  "num_ranks" is incremented once per rank
  * the file names, so a caller reusing a map across calls sees the running
  * total.
@@ -80,8 +83,8 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rankfile_map_t);
  * read before the bad line; reclaiming it is the caller's, since the caller
  * is what owns it.
  */
-PRTE_EXPORT int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid,
-                                         pmix_hash_table_t *rankmap,
+PRTE_EXPORT int prte_util_parse_rankfile(const char *rankfile, const pmix_info_t *req,
+                                         size_t nreq, pmix_hash_table_t *rankmap,
                                          int *num_ranks);
 
 /* Release every record filed in "rankmap" and leave it empty, still

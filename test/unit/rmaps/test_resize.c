@@ -164,7 +164,7 @@ int test_hostfile_cap(void)
      * the job, and is recorded so the node goes back to its own size */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     nd = one_node(&nodes, "hostA", 4);
-    rc = prte_util_filter_hostfile_nodes(&nodes, path, true, prte_process_info.euid, prte_process_info.egid);
+    rc = prte_util_filter_hostfile_nodes(&nodes, path, true, NULL, 0);
     CHECK("cap: filter succeeded", PRTE_SUCCESS == rc);
     CHECK("cap: node capped for this job", 1 == nd->slots);
     CHECK("cap: the shrink was recorded",
@@ -178,7 +178,7 @@ int test_hostfile_cap(void)
      * because it runs before the map that would have restored it */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     nd = one_node(&nodes, "hostA", 4);
-    rc = prte_util_filter_hostfile_nodes(&nodes, path, false, prte_process_info.euid, prte_process_info.egid);
+    rc = prte_util_filter_hostfile_nodes(&nodes, path, false, NULL, 0);
     CHECK("mark: filter succeeded", PRTE_SUCCESS == rc);
     CHECK("mark: node left alone", 4 == nd->slots);
     CHECK("mark: nothing recorded",
@@ -193,7 +193,7 @@ int test_hostfile_cap(void)
     }
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
     nd = one_node(&nodes, "hostA", 4);
-    rc = prte_util_filter_hostfile_nodes(&nodes, path, true, prte_process_info.euid, prte_process_info.egid);
+    rc = prte_util_filter_hostfile_nodes(&nodes, path, true, NULL, 0);
     CHECK("grow: filter succeeded", PRTE_SUCCESS == rc);
     CHECK("grow: node not enlarged", 4 == nd->slots);
     CHECK("grow: nothing recorded",
@@ -228,7 +228,7 @@ int test_hostfile_cap(void)
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
         PMIX_RETAIN(pool[1]);
         pmix_list_append(&nodes, &pool[1]->super);
-        rc = prte_util_filter_hostfile_nodes(&nodes, path, true, prte_process_info.euid, prte_process_info.egid);
+        rc = prte_util_filter_hostfile_nodes(&nodes, path, true, NULL, 0);
         CHECK("relative: filter succeeded", PRTE_SUCCESS == rc);
         CHECK("relative: node capped for this job", 1 == pool[1]->slots);
         CHECK("relative: the shrink was recorded",
@@ -246,7 +246,7 @@ int test_hostfile_cap(void)
         pmix_list_append(&nodes, &pool[1]->super);
         PMIX_RETAIN(pool[2]);
         pmix_list_append(&nodes, &pool[2]->super);
-        rc = prte_util_filter_hostfile_nodes(&nodes, path, true, prte_process_info.euid, prte_process_info.egid);
+        rc = prte_util_filter_hostfile_nodes(&nodes, path, true, NULL, 0);
         CHECK("empty: filter succeeded", PRTE_SUCCESS == rc);
         CHECK("empty: every node it took is capped",
               2 == pool[1]->slots && 2 == pool[2]->slots);
@@ -283,7 +283,7 @@ int test_hostfile_cap(void)
                 pmix_list_append(&nodes, &pool[1]->super);
                 PMIX_RETAIN(pool[2]);
                 pmix_list_append(&nodes, &pool[2]->super);
-                rc = prte_util_filter_hostfile_nodes(&nodes, path, true, prte_process_info.euid, prte_process_info.egid);
+                rc = prte_util_filter_hostfile_nodes(&nodes, path, true, NULL, 0);
                 if (rel[r].rc != rc) {
                     fprintf(stderr, "FAIL [hostfile-cap]: \"%s\" returned %d, expected %d\n",
                             rel[r].body, rc, rel[r].rc);
@@ -308,7 +308,7 @@ int test_hostfile_cap(void)
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
         PMIX_RETAIN(pool[1]);
         pmix_list_append(&nodes, &pool[1]->super);
-        rc = prte_util_filter_hostfile_nodes(&nodes, path, true, prte_process_info.euid, prte_process_info.egid);
+        rc = prte_util_filter_hostfile_nodes(&nodes, path, true, NULL, 0);
         CHECK("empty: an over-large count is refused", PRTE_ERR_SILENT == rc);
         PMIX_LIST_DESTRUCT(&nodes);
 

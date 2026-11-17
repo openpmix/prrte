@@ -194,7 +194,8 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     regexp = getenv("SLURM_NODELIST");
     if (NULL == regexp) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
+        prte_show_help_job(jdata, "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+                           "SLURM_NODELIST");
         return PRTE_ERR_NOT_FOUND;
     }
     // check for length violation - untaint the envar value
@@ -212,8 +213,8 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         tasks_per_node = getenv("SLURM_JOB_CPUS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
-                           "SLURM_JOB_CPUS_PER_NODE");
+            prte_show_help_job(jdata, "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+                               "SLURM_JOB_CPUS_PER_NODE");
             return PRTE_ERR_NOT_FOUND;
         }
         if (check_taint("SLURM_JOB_CPUS_PER_NODE", tasks_per_node)) {
@@ -232,8 +233,8 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         tasks_per_node = getenv("SLURM_TASKS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
-                           "SLURM_TASKS_PER_NODE");
+            prte_show_help_job(jdata, "help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+                               "SLURM_TASKS_PER_NODE");
             return PRTE_ERR_NOT_FOUND;
         }
         if (check_taint("SLURM_TASKS_PER_NODE", tasks_per_node)) {

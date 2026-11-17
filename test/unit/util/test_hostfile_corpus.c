@@ -153,7 +153,7 @@ static int run_case(const corpus_case_t *c, bool regen)
     fclose(fp);
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
-    rc = prte_util_add_hostfile_nodes(&nodes, path, prte_process_info.euid, prte_process_info.egid);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, NULL, 0);
     got = render(rc, &nodes);
     PMIX_LIST_DESTRUCT(&nodes);
     unlink(path);

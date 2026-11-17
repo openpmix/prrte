@@ -3234,7 +3234,7 @@ process:
         }
         if (PMIX_RANK_VALID - 1 <= vpid) {
             /* no more daemons available */
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "out-of-vpids", true);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "out-of-vpids", true);
             PMIX_RELEASE(proc);
             free(new_vpids);
             PMIX_LIST_DESTRUCT(&nodes);

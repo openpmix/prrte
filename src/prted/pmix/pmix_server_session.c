@@ -579,8 +579,8 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
         /* A host naming an account to reach it as: the DVM reaches every
          * node as its own user and runs no daemon as another, so this is
          * refused from anyone, as it is in every other list of hosts */
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt", "ras-base:user-host",
-                       true, "SESSION CONTROL");
+        prte_show_help_proc(&req->tproc, "help-ras-base.txt", "ras-base:user-host",
+                            true, "SESSION CONTROL");
         return PMIX_ERR_BAD_PARAM;
     }
     if (1 < ctl->nops) {
@@ -859,7 +859,7 @@ static pmix_status_t session_extend(prte_session_t *session, prte_sessctrl_t *ct
     if (NULL != ctl->nodelists) {
         pmix_status_t prc = PMIX_SUCCESS;
         for (i = 0; NULL != ctl->nodelists[i]; i++) {
-            ret = prte_ras_base_insert_node_string(ctl->nodelists[i], session);
+            ret = prte_ras_base_insert_node_string(ctl->nodelists[i], session, &ctl->requestor);
             if (PRTE_SUCCESS != ret) {
                 PRTE_ERROR_LOG(ret);
                 prc = prte_pmix_convert_rc(ret);
@@ -933,9 +933,9 @@ static prte_job_t *build_session_job(prte_sessctrl_t *ctl, prte_session_t *sessi
         /* no component claims the requested personality. Every later use of
          * jdata->schizo is an unchecked dereference, so refuse here rather
          * than dereference a NULL module later */
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
-                       (NULL == ctl->personality) ? "NULL"
-                                                  : ctl->personality->value.data.string);
+        prte_show_help_proc(&ctl->requestor, "help-schizo-base.txt", "no-proxy", true,
+                            prte_tool_basename,
+                            (NULL == ctl->personality) ? "NULL" : ctl->personality->value.data.string);
         *status = PMIX_ERR_NOT_FOUND;
         goto error;
     }
@@ -1307,7 +1307,7 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
      * withheld from general use by their session backpointer. */
     if (NULL != ctl->nodelists) {
         for (i = 0; NULL != ctl->nodelists[i]; i++) {
-            ret = prte_ras_base_insert_node_string(ctl->nodelists[i], session);
+            ret = prte_ras_base_insert_node_string(ctl->nodelists[i], session, &ctl->requestor);
             if (PRTE_SUCCESS != ret) {
                 PRTE_ERROR_LOG(ret);
                 rc = prte_pmix_convert_rc(ret);
@@ -1533,11 +1533,11 @@ static bool grant_permitted(prte_pmix_server_req_t *req, prte_sessctrl_t *ctl)
 
     ok = prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo);
     if (!ok && NULL != ctl->nodelists) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                       "ras-base:grow-not-permitted", true,
-                       (PRTE_SESSCTRL_INSTANTIATE == ctl->op) ? "SESSION INSTANTIATE"
+        prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                            "ras-base:grow-not-permitted", true,
+                            (PRTE_SESSCTRL_INSTANTIATE == ctl->op) ? "SESSION INSTANTIATE"
                                                          : "SESSION EXTEND",
-                       "hosts");
+                            "hosts");
     }
     return ok;
 }

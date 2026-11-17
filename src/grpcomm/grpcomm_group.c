@@ -454,10 +454,11 @@ static void report_nonparticipants(prte_grpcomm_group_t *coll, pmix_proc_t **non
                         "%s grpcomm:group \"%s\" timed out - %lu member(s) did not take part: %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID,
                         (unsigned long) *nnonpart, list);
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt",
-                   "collective-nonparticipants", true,
-                   (PMIX_GROUP_CONSTRUCT == coll->sig->op) ? "group construct" : "group destruct",
-                   coll->sig->groupID, (unsigned long) *nnonpart, list);
+    prte_show_help_procs(coll->sig->members, coll->sig->nmembers, "help-prte-grpcomm.txt",
+                         "collective-nonparticipants", true,
+                         (PMIX_GROUP_CONSTRUCT == coll->sig->op) ? "group construct"
+                                                                 : "group destruct",
+                         coll->sig->groupID, (unsigned long) *nnonpart, list);
     free(list);
 }
 

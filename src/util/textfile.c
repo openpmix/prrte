@@ -363,20 +363,21 @@ char *prte_textfile_getline(prte_textfile_t *tf)
     return line;
 }
 
-bool prte_textfile_report_limit(prte_textfile_t *tf, const char *nspace, const char *path)
+bool prte_textfile_report_limit(prte_textfile_t *tf, const pmix_info_t *req, size_t nreq,
+                                const char *path)
 {
     switch (tf->limit) {
     case PRTE_TEXTFILE_LIMIT_SIZE:
-        prte_show_help(nspace, "help-prte-util.txt", "file-too-large", true, path,
-                       PRTE_TEXTFILE_MAX_BYTES / (1024 * 1024));
+        prte_show_help_info(req, nreq, "help-prte-util.txt", "file-too-large", true, path,
+                            PRTE_TEXTFILE_MAX_BYTES / (1024 * 1024));
         return true;
     case PRTE_TEXTFILE_LIMIT_LINE:
-        prte_show_help(nspace, "help-prte-util.txt", "file-line-too-long", true, path,
-                       tf->lineno, PRTE_TEXTFILE_MAX_LINE / 1024);
+        prte_show_help_info(req, nreq, "help-prte-util.txt", "file-line-too-long", true, path,
+                            tf->lineno, PRTE_TEXTFILE_MAX_LINE / 1024);
         return true;
     case PRTE_TEXTFILE_LIMIT_TIME:
-        prte_show_help(nspace, "help-prte-util.txt", "file-not-answered", true, path,
-                       pmix_util_runas_timeout);
+        prte_show_help_info(req, nreq, "help-prte-util.txt", "file-not-answered", true, path,
+                            pmix_util_runas_timeout);
         return true;
     default:
         return false;

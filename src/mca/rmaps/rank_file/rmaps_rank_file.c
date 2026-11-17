@@ -90,8 +90,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     int rc;
     prte_proc_t *proc;
     char *slots = NULL;
-    uid_t fuid;
-    gid_t fgid;
+    pmix_info_t *freq;
+    size_t nfreq;
     /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
      * first mapping pass so per-app dispatch (one entry per app) does not
      * re-add nodes a previous app already placed in the job map */
@@ -200,11 +200,15 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         return PRTE_ERROR;
     }
 
-    /* parse the rankfile, storing its results in the rankmap - read as the
+    /* parse the rankfile, storing its results in the rankmap - for the
      * job's owner, who named it */
-    prte_pmix_server_job_user(jdata, &fuid, &fgid);
-    if (PRTE_SUCCESS != (rc = prte_util_parse_rankfile(rankfile, fuid, fgid, &rankmap,
-                                                       &num_ranks))) {
+    rc = prte_requester_info_job(jdata, &freq, &nfreq);
+    if (PRTE_SUCCESS != rc) {
+        goto error;
+    }
+    rc = prte_util_parse_rankfile(rankfile, freq, nfreq, &rankmap, &num_ranks);
+    PMIX_INFO_FREE(freq, nfreq);
+    if (PRTE_SUCCESS != rc) {
         rc = PRTE_ERR_SILENT;
         goto error;
     }
@@ -236,7 +240,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_COMPUTED)) {
             app->num_procs = num_ranks;
             if (0 == app->num_procs) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "no-ranks", true, rankfile);
+                prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "no-ranks", true, rankfile);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -259,8 +263,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     slots = prte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "missing-rank", true, entry,
-                                   rankfile);
+                    prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "missing-rank", true,
+                                       entry, rankfile);
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
@@ -328,8 +332,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                         lval = strtol(rfmap->node_name + 2, NULL, 10);
                         if (0 != errno || lval >= (long) pmix_list_get_size(&node_list)
                             || 0 > lval) {
-                            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-index", true,
-                                           rfmap->node_name);
+                            prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "bad-index", true,
+                                               rfmap->node_name);
                             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                             rc = PRTE_ERR_BAD_PARAM;
                             goto error;
@@ -348,8 +352,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 /* only a rank the file listed can get here - the fallback
                  * for an unlisted one fails on its own above - but its
                  * entry need not have named a node */
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-host", true,
-                               (NULL == rfmap->node_name) ? "N/A" : rfmap->node_name);
+                prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "bad-host", true,
+                                   (NULL == rfmap->node_name) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -368,8 +372,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, NULL, options)) {
                 /* rfmap is NULL for a rank the file did not list, which the
                  * fallback above placed on a node of its own choosing */
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-host", true,
-                               (NULL == rfmap) ? "N/A" : rfmap->node_name);
+                prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "bad-host", true,
+                                   (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -410,8 +414,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 (PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding) || options->overload) ) {
                 if (NULL == node->topology || NULL == node->topology->topo) {
                     // Not allowed - for rank-file, we must have the topology
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-topology", true,
-                                   node->name);
+                    prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                                       node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
@@ -422,15 +426,15 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 if (PRTE_ERR_NOT_FOUND == rc) {
                     char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                                          false, physical, node->topology->topo);
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "missing-cpu", true,
-                                   prte_tool_basename, slots, tmp);
+                    prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "missing-cpu", true,
+                                       prte_tool_basename, slots, tmp);
                     free(tmp);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
                 } else if (PRTE_ERROR == rc) {
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "bad-slot-list", true,
-                                   rankfile, (int) entry, slots);
+                    prte_show_help_job(jdata, "help-rmaps_rank_file.txt", "bad-slot-list", true,
+                                       rankfile, (int) entry, slots);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
@@ -471,12 +475,12 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     overlap_bitmap = prte_hwloc_base_cpuset2ranges(node->topology->topo, bitmap,
                                                                    options->use_hwthreads, false);
 
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-rmaps_rank_file.txt", "rmaps:proc-slots-overloaded", true,
-                                   PRTE_NAME_PRINT(&proc->name),
-                                   node->name,
-                                   (NULL == req_bitmap) ? "NONE" : req_bitmap,
-                                   (NULL == avail_bitmap) ? "NONE" : avail_bitmap,
-                                   (NULL == overlap_bitmap) ? "NONE" : overlap_bitmap);
+                    prte_show_help_job(jdata, "help-rmaps_rank_file.txt",
+                                       "rmaps:proc-slots-overloaded", true,
+                                       PRTE_NAME_PRINT(&proc->name), node->name,
+                                       (NULL == req_bitmap) ? "NONE" : req_bitmap,
+                                       (NULL == avail_bitmap) ? "NONE" : avail_bitmap,
+                                       (NULL == overlap_bitmap) ? "NONE" : overlap_bitmap);
                     /* these three were never released - the error label
                      * below does not know about them */
                     free(req_bitmap);

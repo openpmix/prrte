@@ -224,7 +224,9 @@ def parse_src_files(source_files, citations, verbose=False):
                             sys.stderr.write("ERROR: Missing end of filename")
                             continue
 
-                if "pmix_show_help(" in line or "prte_show_help(" in line or "pmix_show_help_string(" in line or "send_error_show_help" in line:
+                if "pmix_show_help(" in line or "prte_show_help(" in line or "pmix_show_help_string(" in line or "send_error_show_help" in line or \
+                   "prte_show_help_job(" in line or "prte_show_help_proc(" in line or \
+                   "prte_show_help_procs(" in line or "prte_show_help_info(" in line:
                     cont_topic = False
                     cont_filename = False
                     # line contains call to show-help - try to extract
@@ -584,7 +586,9 @@ def check_call_arguments(parsed_data, source_files, verbose=False):
             topics[(base, topic)] = count_specs(lines)
 
     # (function name, index of the filename argument)
-    calls = (('prte_show_help', 1), ('pmix_show_help', 0))
+    calls = (('prte_show_help', 1), ('pmix_show_help', 0),
+             ('prte_show_help_job', 1), ('prte_show_help_proc', 1),
+             ('prte_show_help_procs', 2), ('prte_show_help_info', 2))
     bad = 0
     for src in source_files:
         with open(src) as f:

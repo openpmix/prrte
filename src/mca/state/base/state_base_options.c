@@ -201,11 +201,11 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
              * directives carry a value - so a value missing from one that
              * needs it ("timeout", "timeout="), or promised by an '=' and
              * not given, is refused here with the directive named. */
-            rc = prte_cli_match(PRTE_JOB_NSPACE(jdata), "--rtos", options[n],
+            rc = prte_cli_match(jdata, "--rtos", options[n],
                                 prte_cli_rtos_directives, &tag);
             if (PRTE_ERR_NOT_FOUND == rc) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "unrecognized-policy", true,
-                               "runtime options", spec);
+                prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "unrecognized-policy", true,
+                                   "runtime options", spec);
                 PMIx_Argv_free(options);
                 return PRTE_ERR_SILENT;
             } else if (PRTE_SUCCESS != rc) {
@@ -224,8 +224,9 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 !prte_schizo_base_directive_is_valued(prte_cli_name(prte_cli_rtos_directives, tag)) &&
                 PRTE_RTOS_STOP_IN_APP != tag &&
                 PRTE_SUCCESS != prte_cli_bool_value(ptr, &flag)) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-schizo-base.txt", "non-boolean-value", true,
-                               PRTE_CLI_RTOS, prte_cli_name(prte_cli_rtos_directives, tag), ptr);
+                prte_show_help_job(jdata, "help-schizo-base.txt", "non-boolean-value", true,
+                                   PRTE_CLI_RTOS, prte_cli_name(prte_cli_rtos_directives,
+                                                                tag), ptr);
                 PMIX_VALUE_DESTRUCT(&value);
                 PMIx_Argv_free(options);
                 return PRTE_ERR_SILENT;
@@ -423,8 +424,8 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                  * vocabulary requires the value, a ':'-separated list */
                 rc = prte_pmix_server_access_parse(jdata, PRTE_RTOS_ACCESS_GROUPS == tag, ptr);
                 if (PRTE_SUCCESS != rc) {
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "access-bad-list",
-                                   true, prte_cli_name(prte_cli_rtos_directives, tag), ptr);
+                    prte_show_help_job(jdata, "help-state-base.txt", "access-bad-list",
+                                       true, prte_cli_name(prte_cli_rtos_directives, tag), ptr);
                 }
                 if (PRTE_SUCCESS != rc) {
                     PMIX_VALUE_DESTRUCT(&value);
@@ -445,7 +446,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
     if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS) &&
         !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_RECOVERABLE) &&
         !PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_CONTINUOUS)) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-state-base.txt", "bad-combination", true);
+        prte_show_help_job(jdata, "help-state-base.txt", "bad-combination", true);
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;

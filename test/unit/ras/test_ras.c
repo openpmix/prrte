@@ -2234,21 +2234,21 @@ static int test_activate_nodes(void)
     /* naming nothing at all is a bad request, not an empty success: a
      * requester that meant "everything" says so with "+all" */
     CHECK("activate_nodes: nothing named is refused",
-          PRTE_ERR_BAD_PARAM == prte_ras_base_activate_nodes(NULL, NULL, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_ERR_BAD_PARAM == prte_ras_base_activate_nodes(NULL, NULL, NULL, 0, &n));
     CHECK("activate_nodes: refusal reports no activation", 0 == n);
     CHECK("activate_nodes: an empty spec is the same as none",
-          PRTE_ERR_BAD_PARAM == prte_ras_base_activate_nodes("", "", prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_ERR_BAD_PARAM == prte_ras_base_activate_nodes("", "", NULL, 0, &n));
 
     /* the host specification alone */
     CHECK("activate_nodes: host spec accepted",
-          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle1", NULL, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle1", NULL, NULL, 0, &n));
     CHECK("activate_nodes: it marked the node", PRTE_NODE_STATE_ADDED == idle1->state);
     CHECK("activate_nodes: and counted it", 1 == n);
 
     /* a node already marked is met, and counts for nothing: there is no
      * second daemon to launch, so no completion to wait for */
     CHECK("activate_nodes: re-naming a marked node succeeds",
-          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle1", NULL, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle1", NULL, NULL, 0, &n));
     CHECK("activate_nodes: with nothing left to activate", 0 == n);
 
     /* the hostfile as its own argument - the form only the PMIx directive
@@ -2259,7 +2259,7 @@ static int test_activate_nodes(void)
         return failures + 1;
     }
     CHECK("activate_nodes: hostfile argument accepted",
-          PRTE_SUCCESS == prte_ras_base_activate_nodes(NULL, hf1, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_SUCCESS == prte_ras_base_activate_nodes(NULL, hf1, NULL, 0, &n));
     CHECK("activate_nodes: the file's node was marked",
           PRTE_NODE_STATE_ADDED == idle1->state);
     CHECK("activate_nodes: and counted", 1 == n);
@@ -2267,7 +2267,7 @@ static int test_activate_nodes(void)
     /* both arguments together, each naming a different node */
     idle1->state = PRTE_NODE_STATE_UP;
     CHECK("activate_nodes: host spec and hostfile together",
-          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle2", hf1, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle2", hf1, NULL, 0, &n));
     CHECK("activate_nodes: both nodes marked",
           PRTE_NODE_STATE_ADDED == idle1->state &&
           PRTE_NODE_STATE_ADDED == idle2->state);
@@ -2283,7 +2283,7 @@ static int test_activate_nodes(void)
     }
     pmix_asprintf(&both, "%s,%s", hf1, hf2);
     CHECK("activate_nodes: a comma-delimited hostfile list",
-          PRTE_SUCCESS == prte_ras_base_activate_nodes(NULL, both, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_SUCCESS == prte_ras_base_activate_nodes(NULL, both, NULL, 0, &n));
     CHECK("activate_nodes: every file's node marked",
           PRTE_NODE_STATE_ADDED == idle1->state &&
           PRTE_NODE_STATE_ADDED == idle2->state);
@@ -2295,8 +2295,7 @@ static int test_activate_nodes(void)
     idle2->state = PRTE_NODE_STATE_UP;
     CHECK("activate_nodes: an unknown host is refused",
           PRTE_ERR_SILENT == prte_ras_base_activate_nodes("actn-idle1,actn-nosuch", NULL,
-                                                          prte_process_info.euid,
-                                                          prte_process_info.egid, &n));
+                                                          NULL, 0, &n));
     CHECK("activate_nodes: nothing was marked by the refused spec",
           PRTE_NODE_STATE_UP == idle1->state);
     CHECK("activate_nodes: and nothing counted", 0 == n);
@@ -2307,7 +2306,7 @@ static int test_activate_nodes(void)
         return failures + 1;
     }
     CHECK("activate_nodes: an unknown host in the hostfile is refused",
-          PRTE_ERR_SILENT == prte_ras_base_activate_nodes("actn-idle1", hf2, prte_process_info.euid, prte_process_info.egid, &n));
+          PRTE_ERR_SILENT == prte_ras_base_activate_nodes("actn-idle1", hf2, NULL, 0, &n));
     CHECK("activate_nodes: the host spec's node was not marked either",
           PRTE_NODE_STATE_UP == idle1->state);
 

@@ -228,10 +228,10 @@ bool prte_ds_park(prte_data_req_t *req)
         prte_data_store.max_waiting <= w->count) {
         if (!w->warned) {
             w->warned = true;
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-data-server.txt",
-                           "datastore:max-waiting", true,
-                           prte_process_info.nodename, PMIX_NAME_PRINT(&req->requestor),
-                           prte_data_store.max_waiting);
+            prte_show_help_proc(&req->requestor, "help-prte-data-server.txt",
+                                "datastore:max-waiting", true,
+                                prte_process_info.nodename, PMIX_NAME_PRINT(&req->requestor),
+                                prte_data_store.max_waiting);
         }
         return false;
     }
@@ -915,9 +915,9 @@ bool prte_ds_make_room(prte_data_object_t *data)
         }
         if (!u->warned) {
             u->warned = true;
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-data-server.txt", "datastore:evicting", true,
-                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) data->uid,
-                           (unsigned long) prte_data_store.max_size);
+            prte_show_help_proc(&data->owner, "help-prte-data-server.txt", "datastore:evicting",
+                                true, PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) data->uid,
+                                (unsigned long) prte_data_store.max_size);
         }
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: evicting %s data from %s to stay within %lu bytes",

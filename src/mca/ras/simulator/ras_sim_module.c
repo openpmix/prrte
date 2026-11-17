@@ -130,7 +130,8 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
     topo = t->topo;
     if (NULL != job_cpuset) {
-        available = prte_hwloc_base_generate_cpuset(topo, use_hwthread_cpus, &job_cpuset);
+        available = prte_hwloc_base_generate_cpuset(PRTE_PROC_MY_NAME->nspace, topo,
+                                                    use_hwthread_cpus, &job_cpuset);
         if (NULL == available) {
             /* the cpu-set did not resolve - generate_cpuset() said which
              * entry failed. Every simulated node dups this, and the mapper

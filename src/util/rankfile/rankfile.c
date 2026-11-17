@@ -64,9 +64,9 @@ PMIX_CLASS_INSTANCE(prte_rankfile_map_t, pmix_object_t, rf_map_construct, rf_map
 static const char *cur_rankfile_name = NULL;
 static int cur_rankfile_line = 0;
 
-static void rankfile_syntax_error(const char *offender)
+static void rankfile_syntax_error(const pmix_info_t *req, size_t nreq, const char *offender)
 {
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-syntax", true,
+    prte_show_help_info(req, nreq, "help-rmaps_rank_file.txt", "bad-syntax", true,
                    cur_rankfile_name, cur_rankfile_line, offender);
 }
 
@@ -137,9 +137,11 @@ void prte_util_rankfile_clear(pmix_hash_table_t *rankmap)
     pmix_hash_table_remove_all(rankmap);
 }
 
-int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_hash_table_t *rankmap,
-                             int *num_ranks)
+int prte_util_parse_rankfile(const char *rankfile, const pmix_info_t *req, size_t nreq,
+                             pmix_hash_table_t *rankmap, int *num_ranks)
 {
+    uid_t uid;
+    gid_t gid;
     prte_textfile_t tf;
     prte_node_t *hnp_node;
     prte_rankfile_map_t *rfmap;
@@ -151,9 +153,11 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
     cur_rankfile_name = rankfile;
     cur_rankfile_line = 0;
 
+    /* read as whoever named it */
+    prte_requester_ids(req, nreq, &uid, &gid);
     rc = prte_textfile_open(&tf, rankfile, uid, gid);
     if (PRTE_SUCCESS != rc) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "no-rankfile", true,
+        prte_show_help_info(req, nreq, "help-rmaps_rank_file.txt", "no-rankfile", true,
                        prte_tool_basename, rankfile, prte_tool_basename);
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
@@ -176,19 +180,19 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
         rc = PRTE_ERR_BAD_PARAM;
 
         if (0 != strcmp("rank", fields[0])) {
-            rankfile_syntax_error(fields[0]);
+            rankfile_syntax_error(req, nreq, fields[0]);
             goto cleanup;
         }
         if (NULL == fields[1] || PRTE_SUCCESS != parse_rank(fields[1], &rank)) {
-            rankfile_syntax_error((NULL == fields[1]) ? fields[0] : fields[1]);
+            rankfile_syntax_error(req, nreq, (NULL == fields[1]) ? fields[0] : fields[1]);
             goto cleanup;
         }
         if (NULL == fields[2] || 0 != strcmp("=", fields[2])) {
-            rankfile_syntax_error((NULL == fields[2]) ? fields[1] : fields[2]);
+            rankfile_syntax_error(req, nreq, (NULL == fields[2]) ? fields[1] : fields[2]);
             goto cleanup;
         }
         if (NULL == fields[3] || !valid_nodename(fields[3])) {
-            rankfile_syntax_error((NULL == fields[3]) ? fields[2] : fields[3]);
+            rankfile_syntax_error(req, nreq, (NULL == fields[3]) ? fields[2] : fields[3]);
             goto cleanup;
         }
 
@@ -205,7 +209,7 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
          */
         if (PMIX_SUCCESS == pmix_hash_table_get_value_uint32(rankmap, (uint32_t) rank,
                                                              (void **) &rfmap)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "bad-assign",
+            prte_show_help_info(req, nreq, "help-rmaps_rank_file.txt", "bad-assign",
                            true, rank, rfmap->node_name, rankfile);
             goto cleanup;
         }
@@ -215,7 +219,7 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
          * file asked for; the DVM reaches every node as its own user, so the
          * entry is refused, as "username=" below and as a hostfile's are. */
         if (NULL != strchr(fields[3], '@')) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt",
+            prte_show_help_info(req, nreq, "help-rmaps_rank_file.txt",
                            "not-supported-rankfile", true, "user@host", rankfile);
             goto cleanup;
         }
@@ -244,7 +248,7 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
         if (NULL != fields[i]) {
             if (0 == strcmp("username", fields[i]) || 0 == strcmp("user-name", fields[i])
                 || 0 == strcmp("user_name", fields[i])) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt",
+                prte_show_help_info(req, nreq, "help-rmaps_rank_file.txt",
                                "not-supported-rankfile", true, "USERNAME", rankfile);
                 PMIX_RELEASE(rfmap);
                 goto cleanup;
@@ -252,14 +256,14 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
             if ((0 != strcmp("slot", fields[i]) && 0 != strcmp("slots", fields[i]))
                 || NULL == fields[i + 1] || 0 != strcmp("=", fields[i + 1])
                 || NULL == fields[i + 2]) {
-                rankfile_syntax_error(fields[i]);
+                rankfile_syntax_error(req, nreq, fields[i]);
                 PMIX_RELEASE(rfmap);
                 goto cleanup;
             }
             rfmap->slot_list = strdup(fields[i + 2]);
             i += 3;
             if (NULL != fields[i]) {
-                rankfile_syntax_error(fields[i]);
+                rankfile_syntax_error(req, nreq, fields[i]);
                 PMIX_RELEASE(rfmap);
                 goto cleanup;
             }
@@ -274,8 +278,8 @@ int prte_util_parse_rankfile(const char *rankfile, uid_t uid, gid_t gid, pmix_ha
         (*num_ranks)++;
     }
     if (tf.failed) {
-        if (!prte_textfile_report_limit(&tf, PRTE_PROC_MY_NAME->nspace, rankfile)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-rmaps_rank_file.txt", "read-error",
+        if (!prte_textfile_report_limit(&tf, req, nreq, rankfile)) {
+            prte_show_help_info(req, nreq, "help-rmaps_rank_file.txt", "read-error",
                            true, prte_tool_basename, rankfile, tf.lineno);
         }
         rc = PRTE_ERR_FILE_READ_FAILURE;

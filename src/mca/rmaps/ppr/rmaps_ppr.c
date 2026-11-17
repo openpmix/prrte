@@ -173,9 +173,9 @@ static int ppr_mapper(prte_job_t *jdata,
         PRTE_RANK_BY_FILL == options->rank) {
         if (options->map < PRTE_MAPPING_BYNUMA ||
             options->map > PRTE_MAPPING_BYHWTHREAD) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "must-map-by-obj",
-                           true, prte_rmaps_base_print_mapping(options->map),
-                           prte_rmaps_base_print_ranking(options->rank));
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "must-map-by-obj",
+                               true, prte_rmaps_base_print_mapping(options->map),
+                               prte_rmaps_base_print_ranking(options->rank));
             free(jobppr);
             return PRTE_ERR_SILENT;
         }
@@ -293,8 +293,8 @@ static int ppr_mapper(prte_job_t *jdata,
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
             num_slots < (int) app->num_procs) {
             if (!options->oversubscribe) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                               app->num_procs, app->app);
+                prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                                   true, app->num_procs, app->app);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             } else {
@@ -393,11 +393,10 @@ static int ppr_mapper(prte_job_t *jdata,
                      * the pattern means: "2 per L3cache" over nodes that
                      * have no L3cache placed nothing there while reporting
                      * success. Same rule as round_robin's object mapper. */
-                    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
-                                   true,
-                                   bydev ? options->map_device
-                                         : hwloc_obj_type_string(options->maptype),
-                                   node->name);
+                    prte_show_help_job(jdata, "help-prte-rmaps-base.txt",
+                                       "rmaps:mapping-target-not-found", true,
+                                       bydev ? options->map_device : hwloc_obj_type_string(options->maptype),
+                                       node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
@@ -490,8 +489,8 @@ static int ppr_mapper(prte_job_t *jdata,
         }
         if (nprocs_mapped < app->num_procs) {
             /* couldn't map them all */
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true, app->app,
-                           app->num_procs, nprocs_mapped, options->nprocs, jobppr);
+            prte_show_help_job(jdata, "help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true,
+                               app->app, app->num_procs, nprocs_mapped, options->nprocs, jobppr);
             rc = PRTE_ERR_SILENT;
             goto error;
         }
@@ -516,9 +515,9 @@ static int ppr_mapper(prte_job_t *jdata,
     return rc;
 
 too_many:
-    prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:ppr-too-many-procs",
-                   true, options->pprn,
-                   bydev ? options->map_device : hwloc_obj_type_string(options->maptype));
+    prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:ppr-too-many-procs",
+                       true, options->pprn,
+                       bydev ? options->map_device : hwloc_obj_type_string(options->maptype));
     rc = PRTE_ERR_SILENT;
 
 error:

@@ -66,10 +66,10 @@ static int cur_hostfile_line = 0;
  * the text -- a lexer's internal numbering, which told a user nothing
  * they could act on and no longer exists.
  */
-static void hostfile_parse_error(const char *offender)
+static void hostfile_parse_error(const pmix_info_t *req, size_t nreq, const char *offender)
 {
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "parse_error", true,
-                   cur_hostfile_name, cur_hostfile_line, offender);
+    prte_show_help_info(req, nreq, "help-hostfile.txt", "parse_error", true,
+                        cur_hostfile_name, cur_hostfile_line, offender);
 }
 
 /*
@@ -225,11 +225,12 @@ static bool valid_relative(const char *s)
  * and line, rather than having its account dropped and the host reached as
  * our own user, which is not what the file asked for.
  */
-static int hostfile_parse_host(const char *value, char **node_name)
+static int hostfile_parse_host(const pmix_info_t *req, size_t nreq, const char *value,
+                               char **node_name)
 {
     if (NULL != strchr(value, '@')) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "user-host", true,
-                       cur_hostfile_name, cur_hostfile_line, value);
+        prte_show_help_info(req, nreq, "help-hostfile.txt", "user-host", true,
+                            cur_hostfile_name, cur_hostfile_line, value);
         return PRTE_ERR_SILENT;
     }
     *node_name = strdup(value);
@@ -265,7 +266,8 @@ static void hostfile_exclude(const char *node_name, pmix_list_t *exclude,
  * groups.  Also accepts a rankfile's "rank <N>=<host> ..." line, from
  * which it takes only the host.
  */
-static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t *exclude,
+static int hostfile_parse_line(const pmix_info_t *req, size_t nreq, char **fields,
+                               pmix_list_t *updates, pmix_list_t *exclude,
                                prte_node_index_t *uidx, prte_node_index_t *eidx)
 {
     prte_node_t *node;
@@ -294,7 +296,7 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
         if (NULL == fields[i] || NULL == fields[i + 1]) {
             /* the line ended before the "=" that must follow a rank, or
              * before the name that must follow the "=" */
-            hostfile_parse_error(fields[0]);
+            hostfile_parse_error(req, nreq, fields[0]);
             return PRTE_ERR_SILENT;
         }
         entry = fields[i + 1];
@@ -315,7 +317,7 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
     }
 
     if (!valid_nodename(entry)) {
-        hostfile_parse_error(entry);
+        hostfile_parse_error(req, nreq, entry);
         return PRTE_ERR_SILENT;
     }
 
@@ -325,7 +327,7 @@ static int hostfile_parse_line(char **fields, pmix_list_t *updates, pmix_list_t 
      * there was no user, and otherwise gave the user a name starting with
      * "^" and counted the host as one more slot of a node to use. */
     excluded = ('^' == entry[0]);
-    rc = hostfile_parse_host(excluded ? entry + 1 : entry, &node_name);
+    rc = hostfile_parse_host(req, nreq, excluded ? entry + 1 : entry, &node_name);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
@@ -386,7 +388,7 @@ options:
         key = hostfile_keyword(fields[i]);
         if (HKEY_UNKNOWN == key || NULL == fields[i + 1] || 0 != strcmp("=", fields[i + 1])
             || NULL == fields[i + 2]) {
-            hostfile_parse_error(fields[i]);
+            hostfile_parse_error(req, nreq, fields[i]);
             goto refuse;
         }
 
@@ -398,7 +400,7 @@ options:
                 char *given = NULL;
 
                 pmix_asprintf(&given, "%s=%s", fields[i], fields[i + 2]);
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "user-host",
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "user-host",
                                true, cur_hostfile_name, cur_hostfile_line,
                                (NULL == given) ? fields[i] : given);
                 free(given);
@@ -407,7 +409,7 @@ options:
 
         case HKEY_PORT:
             if (PRTE_SUCCESS != parse_count(fields[i + 2], &count)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "port", true,
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "port", true,
                                cur_hostfile_name, fields[i + 2]);
                 goto refuse;
             }
@@ -417,13 +419,13 @@ options:
 
         case HKEY_SLOTS:
             if (PRTE_SUCCESS != parse_count(fields[i + 2], &count)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "slots", true,
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "slots", true,
                                cur_hostfile_name, fields[i + 2]);
                 goto refuse;
             }
             if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 /* multiple definitions were given for the slot count */
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "slots-given", true,
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "slots-given", true,
                                cur_hostfile_name, node->name);
                 goto refuse;
             }
@@ -437,12 +439,12 @@ options:
 
         case HKEY_SLOTS_MAX:
             if (PRTE_SUCCESS != parse_count(fields[i + 2], &count)) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "max_slots", true,
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "max_slots", true,
                                cur_hostfile_name, fields[i + 2]);
                 goto refuse;
             }
             if (count < node->slots) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "max_slots_lt", true,
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "max_slots_lt", true,
                                cur_hostfile_name, node->slots, count);
                 goto refuse;
             }
@@ -453,7 +455,7 @@ options:
             break;
 
         default:
-            hostfile_parse_error(fields[i]);
+            hostfile_parse_error(req, nreq, fields[i]);
             goto refuse;
         }
         i += 3;
@@ -477,8 +479,10 @@ refuse:
  * Parse the specified file into a node list.
  */
 static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_t *exclude,
-                          uid_t uid, gid_t gid)
+                          const pmix_info_t *req, size_t nreq)
 {
+    uid_t uid;
+    gid_t gid;
     prte_textfile_t tf;
     prte_node_index_t uidx, eidx;
     char **fields;
@@ -499,12 +503,14 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
         return rc;
     }
 
+    /* read as whoever named the file */
+    prte_requester_ids(req, nreq, &uid, &gid);
     rc = prte_textfile_open(&tf, hostfile, uid, gid);
     if (PRTE_ERR_BAD_PARAM == rc) {
         /* the path exists but is not a regular file -- a directory, most
          * likely, which a user reaches by naming one ("--hostfile /tmp")
          * or through a path variable that expanded to one */
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "not-a-file", true,
+        prte_show_help_info(req, nreq, "help-hostfile.txt", "not-a-file", true,
                        hostfile);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
@@ -512,14 +518,14 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
     if (PRTE_SUCCESS != rc) {
         if (NULL == prte_default_hostfile || 0 != strcmp(prte_default_hostfile, hostfile)) {
             /* not the default hostfile, so not finding it is an error */
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "no-hostfile", true,
+            prte_show_help_info(req, nreq, "help-hostfile.txt", "no-hostfile", true,
                            hostfile);
             rc = PRTE_ERR_SILENT;
             goto cleanup;
         }
         if (prte_default_hostfile_given) {
             /* it is the default hostfile, but it was asked for by name */
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "no-hostfile", true,
+            prte_show_help_info(req, nreq, "help-hostfile.txt", "no-hostfile", true,
                            hostfile);
             rc = PRTE_ERR_SILENT;
             goto cleanup;
@@ -531,7 +537,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
 
     while (NULL != (fields = prte_textfile_next(&tf))) {
         cur_hostfile_line = tf.lineno;
-        rc = hostfile_parse_line(fields, updates, exclude, &uidx, &eidx);
+        rc = hostfile_parse_line(req, nreq, fields, updates, exclude, &uidx, &eidx);
         if (PRTE_SUCCESS != rc) {
             goto cleanup;
         }
@@ -539,8 +545,8 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
     if (tf.failed) {
         /* the nodes read so far stay on the caller's lists, and the caller
          * disposes of them as it does after any other refusal */
-        if (!prte_textfile_report_limit(&tf, PRTE_PROC_MY_NAME->nspace, hostfile)) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "read-error", true,
+        if (!prte_textfile_report_limit(&tf, req, nreq, hostfile)) {
+            prte_show_help_info(req, nreq, "help-hostfile.txt", "read-error", true,
                            hostfile, tf.lineno);
         }
         rc = PRTE_ERR_SILENT;
@@ -561,7 +567,8 @@ cleanup:
  * Parse the provided hostfile and add the nodes to the list.
  */
 
-int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile, uid_t uid, gid_t gid)
+int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile, const pmix_info_t *req,
+                                 size_t nreq)
 {
     pmix_list_t exclude, adds;
     pmix_list_item_t *item;
@@ -579,14 +586,15 @@ int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile, uid_t uid, 
     prte_node_index_construct(&nidx);
 
     /* parse the hostfile and add any new contents to the list */
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &adds, &exclude, uid, gid))) {
+    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &adds, &exclude, req, nreq))) {
         goto cleanup;
     }
 
     /* check for any relative node directives */
     PMIX_LIST_FOREACH(node, &adds, prte_node_t) {
         if ('+' == node->name[0]) {
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:relative-syntax", true, node->name);
+            prte_show_help_info(req, nreq, "help-hostfile.txt", "hostfile:relative-syntax", true,
+                                node->name);
             rc = PRTE_ERR_SILENT;
             goto cleanup;
         }
@@ -701,8 +709,8 @@ static void hostfile_drop_empty(pmix_hash_table_t *where, pmix_pointer_array_t *
  * on the input list, removing those that
  * are not found in the hostfile
  */
-int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove, uid_t uid,
-                                    gid_t gid)
+int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove,
+                                    const pmix_info_t *req, size_t nreq)
 {
     pmix_list_t newnodes, exclude;
     pmix_list_item_t *item1, *item2 = NULL, *next;
@@ -743,7 +751,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     prte_node_index_construct(&nidx);
     prte_node_index_construct(&fidx);
     prte_node_index_construct(&xidx);
-    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude, uid, gid))) {
+    if (PRTE_SUCCESS != (rc = hostfile_parse(hostfile, &newnodes, &exclude, req, nreq))) {
         goto cleanup;
     }
     if (PRTE_SUCCESS != (rc = prte_node_index_add_list(&nidx, nodes)) ||
@@ -889,8 +897,8 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                 }
                 /* did they get everything they wanted? */
                 if (!want_all_empty && 0 < num_empty) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:not-enough-empty", true,
-                                   num_empty);
+                    prte_show_help_info(req, nreq, "help-hostfile.txt", "hostfile:not-enough-empty",
+                                        true, num_empty);
                     rc = PRTE_ERR_SILENT;
                     goto cleanup;
                 }
@@ -913,8 +921,9 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                 node_from_pool = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
                 if (NULL == node_from_pool) {
                     /* this is an error */
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:relative-node-not-found", true,
-                                   nodeidx, node_from_file->name);
+                    prte_show_help_info(req, nreq, "help-hostfile.txt",
+                                        "hostfile:relative-node-not-found", true, nodeidx,
+                                        node_from_file->name);
                     rc = PRTE_ERR_SILENT;
                     goto cleanup;
                 }
@@ -941,15 +950,17 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                  * without a word, so a hostfile of "+n1" and "+n2" mapped a
                  * job onto one node if the other was not available to it. */
                 if (!found) {
-                    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:extra-node-not-found", true, hostfile,
-                                   node_from_pool->name);
+                    prte_show_help_info(req, nreq, "help-hostfile.txt",
+                                        "hostfile:extra-node-not-found", true, hostfile,
+                                        node_from_pool->name);
                     rc = PRTE_ERR_SILENT;
                     goto cleanup;
                 }
             } else {
                 /* invalid relative node syntax */
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:invalid-relative-node-syntax", true,
-                               node_from_file->name);
+                prte_show_help_info(req, nreq, "help-hostfile.txt",
+                                    "hostfile:invalid-relative-node-syntax", true,
+                                    node_from_file->name);
                 rc = PRTE_ERR_SILENT;
                 goto cleanup;
             }
@@ -981,8 +992,8 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
              * user and abort
              */
             if (!found) {
-                prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "hostfile:extra-node-not-found", true, hostfile,
-                               node_from_file->name);
+                prte_show_help_info(req, nreq, "help-hostfile.txt", "hostfile:extra-node-not-found",
+                                    true, hostfile, node_from_file->name);
                 rc = PRTE_ERR_SILENT;
                 goto cleanup;
             }
@@ -997,7 +1008,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
      * This is an error - report it to the user and return an error
      */
     if (0 != pmix_list_get_size(&newnodes)) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-hostfile.txt", "not-all-mapped-alloc", true, hostfile);
+        prte_show_help_info(req, nreq, "help-hostfile.txt", "not-all-mapped-alloc", true, hostfile);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
     }

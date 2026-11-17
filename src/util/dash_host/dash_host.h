@@ -33,11 +33,17 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts);
+/* What is wrong with the host list is told to the requester req describes
+ * (prte_requester_info_job()/_proc(), see prte_show_help_info) - whoever
+ * named it; NULL, 0 for the DVM's own, which tells everyone. */
+PRTE_EXPORT int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts,
+                                              const pmix_info_t *req, size_t nreq);
 
-PRTE_EXPORT int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remove);
+PRTE_EXPORT int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remove,
+                                                 const pmix_info_t *req, size_t nreq);
 
-PRTE_EXPORT int prte_util_get_ordered_dash_host_list(pmix_list_t *nodes, char *hosts);
+PRTE_EXPORT int prte_util_get_ordered_dash_host_list(pmix_list_t *nodes, char *hosts,
+                                                     const pmix_info_t *req, size_t nreq);
 
 PRTE_EXPORT int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts);
 
