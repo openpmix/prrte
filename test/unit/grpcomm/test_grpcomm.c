@@ -353,6 +353,92 @@ static int test_group_id_taken(void)
     return failures;
 }
 
+/*
+ * Two contributions of one group ID must name the same members - one job's
+ * group and another's that happen to share an ID are two groups, not one
+ * (prte_grpcomm_same_members()) - and a destruct must name the members of
+ * the group it ends (prte_grpcomm_group_members_differ()).
+ */
+static int test_group_members(void)
+{
+    int failures = 0;
+    prte_job_t *ja, *jb;
+    pmix_proc_t a[4], b[4];
+
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+    ja = add_job("sm-a", PRTE_JOB_STATE_RUNNING);
+    ja->num_procs = 3;
+    jb = add_job("sm-b", PRTE_JOB_STATE_RUNNING);
+    jb->num_procs = 2;
+
+    PMIX_LOAD_PROCID(&a[0], "sm-a", 0);
+    PMIX_LOAD_PROCID(&a[1], "sm-a", 1);
+    PMIX_LOAD_PROCID(&a[2], "sm-a", 2);
+    CHECK("members: the same array matches", prte_grpcomm_same_members(a, 3, a, 3));
+    PMIX_LOAD_PROCID(&b[0], "sm-a", 2);
+    PMIX_LOAD_PROCID(&b[1], "sm-a", 0);
+    PMIX_LOAD_PROCID(&b[2], "sm-a", 1);
+    PMIX_LOAD_PROCID(&b[3], "sm-a", 0);
+    CHECK("members: order and repeats do not matter", prte_grpcomm_same_members(a, 3, b, 4));
+    CHECK("members: a subset does not match", !prte_grpcomm_same_members(a, 3, b, 2));
+    CHECK("members: nobody matches nobody only", !prte_grpcomm_same_members(a, 3, NULL, 0));
+
+    /* a wildcard is the whole job - every rank listed, and only that */
+    PMIX_LOAD_PROCID(&b[0], "sm-a", PMIX_RANK_WILDCARD);
+    CHECK("members: a job's wildcard matches all its ranks",
+          prte_grpcomm_same_members(a, 3, b, 1));
+    CHECK("members: ...and they the wildcard", prte_grpcomm_same_members(b, 1, a, 3));
+    CHECK("members: ...but not some of them", !prte_grpcomm_same_members(a, 2, b, 1));
+
+    /* another job's procs are other members, whatever the ID */
+    PMIX_LOAD_PROCID(&b[0], "sm-b", 0);
+    PMIX_LOAD_PROCID(&b[1], "sm-b", 1);
+    CHECK("members: another job's procs do not match", !prte_grpcomm_same_members(a, 2, b, 2));
+    PMIX_LOAD_PROCID(&b[2], "sm-a", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&a[3], "sm-b", PMIX_RANK_WILDCARD);
+    CHECK("members: two jobs, each named either way, match",
+          prte_grpcomm_same_members(a, 4, b, 3));
+    CHECK("members: ...not when one names only one of them",
+          !prte_grpcomm_same_members(a, 3, b, 3));
+
+    /* a job we do not know: a wildcard is only itself */
+    PMIX_LOAD_PROCID(&a[0], "sm-unknown", PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&b[0], "sm-unknown", 0);
+    CHECK("members: an unknown job's wildcard matches its wildcard",
+          prte_grpcomm_same_members(a, 1, a, 1));
+    CHECK("members: ...but not a list it cannot check", !prte_grpcomm_same_members(a, 1, b, 1));
+
+    /* a destruct must name the group's members */
+    PMIX_LOAD_PROCID(&a[0], "sm-a", PMIX_RANK_WILDCARD);
+    prte_grpcomm_group_formed("sm-group", a, 1);
+    PMIX_LOAD_PROCID(&b[0], "sm-a", 0);
+    PMIX_LOAD_PROCID(&b[1], "sm-a", 1);
+    PMIX_LOAD_PROCID(&b[2], "sm-a", 2);
+    CHECK("members: a destruct naming the group's members may end it",
+          !prte_grpcomm_group_members_differ("sm-group", b, 3));
+    PMIX_LOAD_PROCID(&b[0], "sm-b", 0);
+    CHECK("members: one naming other procs may not",
+          prte_grpcomm_group_members_differ("sm-group", b, 1));
+    CHECK("members: ...nor one naming some of them",
+          prte_grpcomm_group_members_differ("sm-group", &b[1], 2));
+    CHECK("members: a group the controller does not hold is not checked here",
+          !prte_grpcomm_group_members_differ("sm-nogroup", b, 1));
+
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.live_groups);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.live_groups, pmix_list_t);
+    pmix_pointer_array_set_item(prte_job_data, ja->index, NULL);
+    pmix_pointer_array_set_item(prte_job_data, jb->index, NULL);
+    PMIX_RELEASE(ja);
+    PMIX_RELEASE(jb);
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_group_members\n");
+    }
+    return failures;
+}
+
 static int test_member_departed(void)
 {
     int failures = 0;
@@ -2432,6 +2518,7 @@ int main(void)
     failures += test_member_departed();
 #endif
     failures += test_group_id_taken();
+    failures += test_group_members();
     failures += test_group_directives();
     failures += test_fence_operation();
     failures += test_fence_generation();

@@ -21,6 +21,7 @@
 #include "constants.h"
 #include "types.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "src/class/pmix_list.h"
@@ -440,6 +441,148 @@ void prte_grpcomm_group_formed(const char *grpid, const pmix_proc_t *members, si
         grp->nmembers = nmembers;
     }
     pmix_list_append(&prte_grpcomm_globals.live_groups, &grp->super);
+}
+
+static int proc_order(const void *a, const void *b)
+{
+    const pmix_proc_t *pa = (const pmix_proc_t *) a;
+    const pmix_proc_t *pb = (const pmix_proc_t *) b;
+    int rc;
+
+    rc = strncmp(pa->nspace, pb->nspace, PMIX_MAX_NSLEN);
+    if (0 != rc) {
+        return rc;
+    }
+    if (pa->rank == pb->rank) {
+        return 0;
+    }
+    return (pa->rank < pb->rank) ? -1 : 1;
+}
+
+/* a sorted copy of procs, without repeats */
+static pmix_proc_t *sorted_set(const pmix_proc_t *procs, size_t n, size_t *nout)
+{
+    pmix_proc_t *s;
+    size_t i, k;
+
+    *nout = 0;
+    PMIX_PROC_CREATE(s, n);
+    if (NULL == s) {
+        return NULL;
+    }
+    memcpy(s, procs, n * sizeof(pmix_proc_t));
+    qsort(s, n, sizeof(pmix_proc_t), proc_order);
+    for (i = 0, k = 0; i < n; i++) {
+        if (0 == k || 0 != proc_order(&s[k - 1], &s[i])) {
+            if (k != i) {
+                memcpy(&s[k], &s[i], sizeof(pmix_proc_t));
+            }
+            ++k;
+        }
+    }
+    *nout = k;
+    return s;
+}
+
+/* Is a sorted run of one namespace's procs that whole job - its wildcard,
+ * or every rank of it? */
+static bool names_whole_job(const pmix_proc_t *seg, size_t n)
+{
+    prte_job_t *jdata;
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        if (PMIX_RANK_WILDCARD == seg[i].rank) {
+            return true;
+        }
+    }
+    jdata = prte_get_job_data_object(seg[0].nspace);
+    if (NULL == jdata || n != (size_t) jdata->num_procs) {
+        return false;
+    }
+    for (i = 0; i < n; i++) {
+        if (seg[i].rank != (pmix_rank_t) i) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool prte_grpcomm_same_members(const pmix_proc_t *a, size_t na,
+                               const pmix_proc_t *b, size_t nb)
+{
+    pmix_proc_t *sa = NULL, *sb = NULL;
+    size_t nsa = 0, nsb = 0, i = 0, j = 0, ie, je, k;
+    bool wa, wb, same = true;
+
+    /* the usual case: every participant passed the same array */
+    if (na == nb && (0 == na || 0 == memcmp(a, b, na * sizeof(pmix_proc_t)))) {
+        return true;
+    }
+    if (0 == na || 0 == nb || NULL == a || NULL == b) {
+        return false;
+    }
+    sa = sorted_set(a, na, &nsa);
+    sb = sorted_set(b, nb, &nsb);
+    if (NULL == sa || NULL == sb) {
+        /* nothing to compare with - not a match we can vouch for */
+        same = false;
+        goto done;
+    }
+    while (same && i < nsa && j < nsb) {
+        if (0 != strncmp(sa[i].nspace, sb[j].nspace, PMIX_MAX_NSLEN)) {
+            same = false;
+            break;
+        }
+        for (ie = i; ie < nsa && 0 == strncmp(sa[ie].nspace, sa[i].nspace, PMIX_MAX_NSLEN); ie++) {
+        }
+        for (je = j; je < nsb && 0 == strncmp(sb[je].nspace, sb[j].nspace, PMIX_MAX_NSLEN); je++) {
+        }
+        wa = names_whole_job(&sa[i], ie - i);
+        wb = names_whole_job(&sb[j], je - j);
+        if (wa || wb) {
+            same = (wa && wb);
+        } else if ((ie - i) != (je - j)) {
+            same = false;
+        } else {
+            for (k = 0; k < ie - i; k++) {
+                if (sa[i + k].rank != sb[j + k].rank) {
+                    same = false;
+                    break;
+                }
+            }
+        }
+        i = ie;
+        j = je;
+    }
+    if (same && (i != nsa || j != nsb)) {
+        same = false;
+    }
+
+done:
+    if (NULL != sa) {
+        PMIX_PROC_FREE(sa, na);
+    }
+    if (NULL != sb) {
+        PMIX_PROC_FREE(sb, nb);
+    }
+    return same;
+}
+
+bool prte_grpcomm_group_members_differ(const char *grpid, const pmix_proc_t *members,
+                                       size_t nmembers)
+{
+    prte_grpcomm_live_group_t *grp;
+
+    if (NULL == grpid) {
+        return false;
+    }
+    PMIX_LIST_FOREACH(grp, &prte_grpcomm_globals.live_groups, prte_grpcomm_live_group_t) {
+        if (0 == strcmp(grp->groupID, grpid) && group_lives(grp)) {
+            return !prte_grpcomm_same_members(grp->members, grp->nmembers, members, nmembers);
+        }
+    }
+    return false;
 }
 
 void prte_grpcomm_group_ended(const char *grpid)

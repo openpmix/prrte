@@ -190,6 +190,7 @@ static void gccon(prte_grpcomm_group_t *p)
     p->self_reported = false;
     p->converged = false;
     p->aborting = false;
+    p->conflict = false;
     p->timeout = 0;
     p->tev_active = false;
     p->my_contribution = NULL;
@@ -236,6 +237,7 @@ static void pendcon(prte_grpcomm_grp_pending_t *p)
 {
     p->cbfunc = NULL;
     p->cbdata = NULL;
+    p->conflict = false;
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_grp_pending_t,
                     pmix_list_item_t,

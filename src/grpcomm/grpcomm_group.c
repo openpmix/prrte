@@ -232,6 +232,120 @@ static int pack_signature(pmix_data_buffer_t *buf,
 static int unpack_signature(pmix_data_buffer_t *buf,
                             prte_grpcomm_group_signature_t **sig);
 
+/*
+ * One group ID, two memberships.
+ *
+ * A tracker is keyed by group ID, op and generation, and every contribution
+ * of that key joins it. The PMIx server makes sure the calls it collects on
+ * one node name the same members (grp_lists_match), but each daemon's PMIx
+ * server sees only its own node's calls: two jobs on different nodes naming
+ * one ID, each a group of its own procs, pass both of those checks and met
+ * here, on one tracker. The first contribution decided which daemons were
+ * expected, the other's was still counted, and the two sets of procs were
+ * released into one group, each handed the other's group info and
+ * endpoints.
+ *
+ * So a contribution must name the tracker's members. When it does not, the
+ * tracker is marked: it waits for the daemons of both memberships, so that
+ * every subtree is accounted for exactly once, and it then fails for every
+ * participant of either - PMIX_ERR_BAD_PARAM, which is what the PMIx server
+ * answers a local call that names the members differently. A call that
+ * arrives after the tracker has converged is too late to fail it; it is
+ * answered on its own, and never with the group the others form.
+ *
+ * All of them fail, not all but the first: which call is "first" depends
+ * on where you look from - each daemon sees its own order - and an outcome
+ * that depended on it would be one nobody could reconstruct afterwards.
+ *
+ * This closes the window only while the calls overlap. Once the colliding
+ * operation has been failed and its trackers are gone, a construct of the
+ * same ID that arrives afterwards finds nothing to collide with and goes
+ * ahead normally: whether a late call fails or succeeds depends on how late
+ * it is. Refusing the ID for good instead would leave it unusable for every
+ * later, legitimate group, so this is accepted as is - and is the thing to
+ * suspect when one of several runs reusing a group ID fails and another
+ * does not.
+ *
+ * A bootstrap, a follower or an "add members" call lists only some of its
+ * members, or none, and builds its membership up as calls arrive, so there
+ * is nothing to compare - the PMIx server exempts the same three.
+ */
+static bool membership_listed(const prte_grpcomm_group_signature_t *sig)
+{
+    return 0 == sig->bootstrap && !sig->follower && 0 == sig->naddmembers;
+}
+
+static bool members_conflict(const prte_grpcomm_group_t *coll,
+                             const prte_grpcomm_group_signature_t *sig)
+{
+    if (coll->bootstrap || !membership_listed(coll->sig) || !membership_listed(sig)) {
+        return false;
+    }
+    return !prte_grpcomm_same_members(coll->sig->members, coll->sig->nmembers,
+                                      sig->members, sig->nmembers);
+}
+
+/* A destruct refused - for naming other members than the group's, or for
+ * meeting another of the same ID that did - ends no group: not in the
+ * controller's record, nor in any daemon's. Every other outcome ends it, as
+ * a destruct always has. */
+static bool destruct_refused(pmix_status_t st)
+{
+    return PMIX_ERR_NOT_A_MEMBER == st || PMIX_ERR_BAD_PARAM == st;
+}
+
+/* mark the tracker, and expect the other membership's daemons as well */
+static int add_conflict(prte_grpcomm_group_t *coll, prte_grpcomm_group_signature_t *sig)
+{
+    pmix_rank_t *dmns = NULL, *all;
+    size_t ndmns = 0, n, m, nall;
+    bool found;
+    int rc;
+
+    coll->conflict = true;
+    if (PMIX_SUCCESS == coll->status) {
+        coll->status = PMIX_ERR_BAD_PARAM;
+    }
+    rc = create_dmns(sig, &dmns, &ndmns);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    all = (pmix_rank_t *) malloc((coll->ndmns + ndmns) * sizeof(pmix_rank_t));
+    if (NULL == all) {
+        free(dmns);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (0 < coll->ndmns) {
+        memcpy(all, coll->dmns, coll->ndmns * sizeof(pmix_rank_t));
+    }
+    nall = coll->ndmns;
+    for (n = 0; n < ndmns; n++) {
+        found = false;
+        for (m = 0; m < nall; m++) {
+            if (all[m] == dmns[n]) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            all[nall++] = dmns[n];
+        }
+    }
+    free(dmns);
+    free(coll->dmns);
+    coll->dmns = all;
+    coll->ndmns = nall;
+    /* as get_tracker() counts them */
+    coll->nexpected = prte_rml_get_num_contributors(coll->dmns, coll->ndmns);
+    for (n = 0; n < coll->ndmns; n++) {
+        if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
+            coll->nexpected++;
+            break;
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
 int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
                               const pmix_proc_t procs[], size_t nprocs,
                               const pmix_info_t directives[], size_t ndirs,
@@ -749,6 +863,10 @@ static void group(int sd, short args, void *cbdata)
         }
         pnd->cbfunc = cd->cbfunc;
         pnd->cbdata = cd->cbdata;
+        /* another node's call opened this tracker naming other members:
+         * this one is answered PMIX_ERR_BAD_PARAM whatever else happens -
+         * see members_conflict() */
+        pnd->conflict = members_conflict(coll, &sig);
         pmix_list_append(&coll->pending, &pnd->super);
     }
 
@@ -1099,6 +1217,29 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
         return;
     }
 
+    /* the same ID, other members - see members_conflict() */
+    if (members_conflict(coll, sig)) {
+        if (coll->converged) {
+            /* too late to fail the operation: the participants behind
+             * this contribution are answered by the release, which
+             * compares the members it names with theirs */
+            pmix_output_verbose(1, prte_grpcomm_globals.output,
+                                "%s grpcomm:group \"%s\" contribution naming other "
+                                "members arrived after the operation converged - dropped",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID);
+            PMIX_RELEASE(sig);
+            return;
+        }
+        pmix_output_verbose(1, prte_grpcomm_globals.output,
+                            "%s grpcomm:group \"%s\" contributions name different members "
+                            "- the operation fails for all of them",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID);
+        rc = add_conflict(coll, sig);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
+    }
+
     /* Account for this contribution by *which* child subtree it came from
      * rather than simply counting it, and drop it whole if that subtree has
      * already been heard from. This has to happen before anything is merged
@@ -1336,6 +1477,11 @@ static void check_complete(prte_grpcomm_group_t *coll)
         return;
     }
     coll->converged = true;
+    /* contributions that named different members fail it - set again here,
+     * since a recovery restart clears the status the conflict set */
+    if (coll->conflict && PMIX_SUCCESS == coll->status) {
+        coll->status = PMIX_ERR_BAD_PARAM;
+    }
     /* the collective resolved, so the guard timer has done its job */
     if (coll->tev_active) {
         prte_event_del(&coll->tev);
@@ -1349,6 +1495,26 @@ static void check_complete(prte_grpcomm_group_t *coll)
                              (unsigned) coll->sig->generation);
 
         /* the allgather is complete - send the xcast */
+        if (coll->conflict) {
+            /* no group is formed, so there is nothing more to decide */
+            goto answer;
+        }
+        /* A destruct must name the group's own members. The PMIx server
+         * that holds a record of the group hands us its recorded members,
+         * whatever its client named; one with no record of it - a node on
+         * which the group has no member - hands us the caller's list, and
+         * a destruct of that would end the group everywhere for procs that
+         * never asked. */
+        if (PMIX_GROUP_DESTRUCT == coll->sig->op && PMIX_SUCCESS == coll->status &&
+            prte_grpcomm_group_members_differ(coll->sig->groupID, coll->sig->members,
+                                              coll->sig->nmembers)) {
+            pmix_output_verbose(1, prte_grpcomm_globals.output,
+                                "%s grpcomm:group destruct of \"%s\" refused - it does not "
+                                "name the group's members",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
+            coll->status = PMIX_ERR_NOT_A_MEMBER;
+            goto answer;
+        }
         if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
             /* An ID that names a job, or a group still in use, is refused
              * to every participant. Formed again, a group would take over
@@ -1579,10 +1745,11 @@ answer:
         /* what the controller holds of the DVM's groups - here, as the
          * release leaves, not when the master processes its own copy: see
          * prte_grpcomm_globals.live_groups. A destruct ends the group
-         * whatever it reports, as it does on each daemon */
+         * whatever it reports, as it does on each daemon - unless it was
+         * refused, which ends nothing (destruct_refused()) */
         if (PMIX_GROUP_CONSTRUCT == coll->sig->op && PMIX_SUCCESS == coll->status) {
             prte_grpcomm_group_formed(coll->sig->groupID, finalmembership, nfinal);
-        } else if (PMIX_GROUP_DESTRUCT == coll->sig->op) {
+        } else if (PMIX_GROUP_DESTRUCT == coll->sig->op && !destruct_refused(coll->status)) {
             prte_grpcomm_group_ended(coll->sig->groupID);
         }
         if (NULL != finalmembership) {
@@ -2139,25 +2306,36 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
     /* if this was a destruct operation, then there is nothing
      * further to unpack */
     if (PMIX_GROUP_DESTRUCT == sig->op) {
+        bool other;
+
         /* check for the tracker - okay if not found, it just
          * means that we had no local participants */
         coll = find_released_tracker(sig);
-        /* find this group ID on our list of groups */
-        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
-        {
-            if (0 == strcmp(pset->name, sig->groupID)) {
-                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
-                PMIX_RELEASE(pset);
-                break;
+        /* find this group ID on our list of groups - a refused destruct
+         * leaves it there */
+        if (!destruct_refused(st)) {
+            PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
+            {
+                if (0 == strcmp(pset->name, sig->groupID)) {
+                    pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
+                    PMIX_RELEASE(pset);
+                    break;
+                }
             }
         }
         if (NULL != coll) {
             /* return to the local procs in the collective - every up-call
-             * this tracker absorbed is owed its own completion */
+             * this tracker absorbed is owed its own completion. Ours named
+             * other members than the operation released, if the tracker
+             * here was opened by a call of ours that never reached it in
+             * time: that is not our destruct - see members_conflict() */
+            other = members_conflict(coll, sig);
             PMIX_LIST_FOREACH_SAFE(pnd, pnext, &coll->pending,
                                    prte_grpcomm_grp_pending_t) {
                 pmix_list_remove_item(&coll->pending, &pnd->super);
-                pnd->cbfunc(st, NULL, 0, pnd->cbdata, NULL, NULL);
+                pnd->cbfunc((PMIX_SUCCESS == st && (other || pnd->conflict)) ? PMIX_ERR_BAD_PARAM
+                                                                            : st,
+                            NULL, 0, pnd->cbdata, NULL, NULL);
                 PMIX_RELEASE(pnd);
             }
         }
@@ -2539,6 +2717,11 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
     // so they don't hang
 
     if (NULL != coll && 0 < pmix_list_get_size(&coll->pending)) {
+        /* ours named other members than the group released, if the tracker
+         * here was opened by a call of ours that never reached it in time -
+         * that is not our group (members_conflict()) */
+        bool other = members_conflict(coll, cd->sig);
+
         // service the procs that are part of the collective
 
         /* One completion per up-call the PMIx server made for this
@@ -2549,6 +2732,13 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
          * entry is what produces independent arrays. */
         PMIX_LIST_FOREACH_SAFE(pnd, pnext, &coll->pending,
                                prte_grpcomm_grp_pending_t) {
+            if (PMIX_SUCCESS == cd->st && (other || pnd->conflict)) {
+                /* a group of other members - answered without it */
+                pmix_list_remove_item(&coll->pending, &pnd->super);
+                pnd->cbfunc(PMIX_ERR_BAD_PARAM, NULL, 0, pnd->cbdata, NULL, NULL);
+                PMIX_RELEASE(pnd);
+                continue;
+            }
             // convert for returning to PMIx server library
             ccd = PMIX_NEW(prte_pmix_grp_caddy_t);
             if (NULL == ccd) {
