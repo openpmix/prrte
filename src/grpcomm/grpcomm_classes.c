@@ -143,6 +143,10 @@ static void ccon(prte_grpcomm_fence_t *p)
     pmix_bitmap_init(&p->reported_slots, 1);
     p->self_reported = false;
     p->converged = false;
+    p->pblobs = NULL;
+    p->npblobs = 0;
+    p->punknown = false;
+    p->expired = false;
     p->aborting = false;
     p->my_contribution = NULL;
     p->timeout = 0;
@@ -160,6 +164,9 @@ static void cdes(prte_grpcomm_fence_t *p)
         PMIX_RELEASE(p->sig);
     }
     PMIX_DESTRUCT(&p->reported_slots);
+    if (NULL != p->pblobs) {
+        PMIX_DATA_BUFFER_RELEASE(p->pblobs);
+    }
     if (NULL != p->my_contribution) {
         PMIX_DATA_BUFFER_RELEASE(p->my_contribution);
     }
@@ -312,9 +319,12 @@ static void mdcon(prte_pmix_fence_caddy_t *p)
     p->purpose = PRTE_GRPCOMM_FENCE_FOR_UNKNOWN;
     p->cbfunc = NULL;
     p->cbdata = NULL;
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->pbo);
+    p->pknown = false;
 }
 static void mddes(prte_pmix_fence_caddy_t *p)
 {
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->pbo);
     /* The modex bucket PMIx handed up with the fence.  Ownership transfers on
      * that call and cannot not: PMIx unloads the buffer into a bare pointer
      * and returns, while we park it here and read it later from another

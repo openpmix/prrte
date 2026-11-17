@@ -306,6 +306,8 @@ int prte_grpcomm_init(void)
                   PRTE_RML_PERSISTENT, prte_grpcomm_grp_release, NULL);
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_EXPIRE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_grp_expire, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXPIRE,
+                  PRTE_RML_PERSISTENT, prte_grpcomm_fence_expire, NULL);
     return PRTE_SUCCESS;
 }
 
@@ -330,6 +332,7 @@ void prte_grpcomm_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_EXPIRE);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXPIRE);
     return;
 }
 
@@ -629,6 +632,82 @@ pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndir
         return PMIX_ERR_TYPE_MISMATCH;
     }
     return make_blob((const pmix_proc_t *) d->array, d->size, bo);
+}
+
+pmix_status_t prte_grpcomm_parts_to_bo(bool known, pmix_data_buffer_t *blobs, size_t nblobs,
+                                       pmix_byte_object_t *bo)
+{
+    pmix_data_buffer_t buf;
+    pmix_status_t rc;
+
+    PMIX_BYTE_OBJECT_CONSTRUCT(bo);
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = PMIx_Data_pack(NULL, &buf, &known, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &buf, &nblobs, 1, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && 0 < nblobs && NULL != blobs) {
+        rc = PMIx_Data_copy_payload(&buf, blobs);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_unload(&buf, bo);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    return rc;
+}
+
+void prte_grpcomm_parts_merge(const pmix_value_t *val, pmix_data_buffer_t *blobs, size_t *nblobs,
+                              bool *unknown)
+{
+    pmix_data_buffer_t buf;
+    pmix_byte_object_t bo, blob;
+    bool known = false;
+    size_t n = 0, i;
+    int32_t cnt;
+    pmix_status_t rc;
+
+    if (PMIX_BYTE_OBJECT != val->type || NULL == val->data.bo.bytes) {
+        *unknown = true;
+        return;
+    }
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    /* load copies nothing and takes the bytes - so hand it a copy */
+    bo.size = val->data.bo.size;
+    bo.bytes = (char *) malloc(bo.size);
+    if (NULL == bo.bytes) {
+        *unknown = true;
+        PMIX_DATA_BUFFER_DESTRUCT(&buf);
+        return;
+    }
+    memcpy(bo.bytes, val->data.bo.bytes, bo.size);
+    rc = PMIx_Data_load(&buf, &bo);
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &buf, &known, &cnt, PMIX_BOOL);
+    }
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &buf, &n, &cnt, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && !prte_pmix_count_fits(&buf, n)) {
+        rc = PMIX_ERR_BAD_PARAM;
+    }
+    for (i = 0; PMIX_SUCCESS == rc && i < n; i++) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &buf, &blob, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            break;
+        }
+        rc = PMIx_Data_pack(NULL, blobs, &blob, 1, PMIX_BYTE_OBJECT);
+        PMIX_BYTE_OBJECT_DESTRUCT(&blob);
+        if (PMIX_SUCCESS == rc) {
+            (*nblobs)++;
+        }
+    }
+    if (PMIX_SUCCESS != rc || !known) {
+        *unknown = true;
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
 }
 
 pmix_status_t prte_grpcomm_empty_participant_blob(pmix_byte_object_t *bo)

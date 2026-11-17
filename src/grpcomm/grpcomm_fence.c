@@ -41,6 +41,9 @@
 
 /* internal functions */
 static void fence(int sd, short args, void *cbdata);
+static void fence_timeout(int sd, short args, void *cbdata);
+static void note_fence_timed_out(prte_grpcomm_fence_t *coll);
+static void report_fence_nonparticipants(prte_grpcomm_fence_t *coll);
 static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig,
                                          uint32_t generation, uint32_t step,
                                          bool create);
@@ -435,6 +438,11 @@ int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
                                                               : purpose;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
+    /* who took part here, if this server ran out of time - packed now,
+     * since nothing on this daemon reads it (prte_grpcomm_participant_blob) */
+    if (PMIX_SUCCESS != prte_grpcomm_participant_blob(info, ninfo, &cd->pbo, &cd->pknown)) {
+        cd->pknown = false;
+    }
 
     /* must push this into the event library to ensure we can
      * access framework-global data safely */
@@ -511,6 +519,366 @@ static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
     coll->aborting = true;
 }
 
+/*
+ * One deadline, for a fence, connect or disconnect - the same protocol as a
+ * group operation's (see "One deadline" in src/grpcomm/AGENTS.md). The order
+ * also carries the operation, its purpose and its round, so that a daemon
+ * whose PMIx server held nothing can contribute to the right tracker.
+ */
+#define PRTE_FENCE_EXPIRE_REQUEST 0
+#define PRTE_FENCE_EXPIRE_ORDER   1
+
+static pmix_status_t send_fence_expire(uint8_t kind, prte_grpcomm_fence_t *coll)
+{
+    pmix_data_buffer_t *buf;
+    pmix_status_t rc;
+    int rrc;
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &kind, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, &coll->timeout, 1, PMIX_INT);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rrc = fence_sig_pack(buf, coll->sig);
+        if (PRTE_SUCCESS == rrc) {
+            rrc = fence_op_pack(buf, coll->op, coll->purpose);
+        }
+        if (PRTE_SUCCESS == rrc) {
+            rrc = fence_gen_pack(buf, coll->generation);
+        }
+        rc = (PRTE_SUCCESS == rrc) ? PMIX_SUCCESS : prte_pmix_convert_rc(rrc);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return rc;
+    }
+    if (PRTE_FENCE_EXPIRE_ORDER == kind) {
+        (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_FENCE_EXPIRE, buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return PMIX_SUCCESS;
+    }
+    PRTE_RML_SEND(rrc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_FENCE_EXPIRE);
+    if (PRTE_SUCCESS != rrc) {
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return prte_pmix_convert_rc(rrc);
+    }
+    return PMIX_SUCCESS;
+}
+
+/* on the controller: order the expiry once, and restart the backstop from
+ * now - see the group's expire_group_op() for why the restart matters */
+static void expire_fence_op(prte_grpcomm_fence_t *coll)
+{
+    pmix_status_t rc;
+
+    if (coll->expired || coll->converged || coll->aborting) {
+        return;
+    }
+    coll->expired = true;
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:fence ran out of time - expiring it on every daemon",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    rc = send_fence_expire(PRTE_FENCE_EXPIRE_ORDER, coll);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    if (coll->tev_active) {
+        prte_event_del(&coll->tev);
+        coll->tev_active = false;
+    }
+    if (0 < coll->timeout) {
+        struct timeval tv = {coll->timeout, 0};
+
+        prte_event_evtimer_set(prte_event_base, &coll->tev, fence_timeout, coll);
+        coll->tev_active = true;
+        PMIX_POST_OBJECT(coll);
+        prte_event_evtimer_add(&coll->tev, &tv);
+    }
+}
+
+static void note_fence_timed_out(prte_grpcomm_fence_t *coll)
+{
+    pmix_status_t rc;
+
+    if (PRTE_PROC_IS_MASTER) {
+        expire_fence_op(coll);
+        return;
+    }
+    if (coll->expired) {
+        return;
+    }
+    coll->expired = true;
+    rc = send_fence_expire(PRTE_FENCE_EXPIRE_REQUEST, coll);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+}
+
+static void report_fence_nonparticipants(prte_grpcomm_fence_t *coll)
+{
+    pmix_proc_t *np = NULL;
+    size_t nnp = 0;
+    pmix_status_t rc;
+    char *list;
+    const char *what = (PRTE_GRPCOMM_FENCE_FOR_CONNECT == coll->purpose)      ? "connect"
+                       : (PRTE_GRPCOMM_FENCE_FOR_DISCONNECT == coll->purpose) ? "disconnect"
+                                                                             : "fence";
+
+    if (coll->punknown) {
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:%s timed out - which members took part is not known",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), what));
+        return;
+    }
+    rc = prte_grpcomm_nonparticipants(coll->sig->signature, coll->sig->sz, NULL, 0,
+                                      coll->pblobs, coll->npblobs, &np, &nnp);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (0 == nnp) {
+        return;
+    }
+    list = prte_grpcomm_procs_string(np, nnp, 32);
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:%s timed out - %lu member(s) did not take part: %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), what, (unsigned long) nnp, list));
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt",
+                   "collective-nonparticipants", true, what, "(none)", (unsigned long) nnp, list);
+    free(list);
+    free(np);
+}
+
+/* contribute for a daemon whose PMIx server held nothing of an operation
+ * that ran out of time: no member here called */
+static void fence_contribute_nothing(prte_grpcomm_fence_signature_t *sig,
+                                     prte_grpcomm_fence_op_t op,
+                                     prte_grpcomm_fence_purpose_t purpose, uint32_t gen)
+{
+    prte_grpcomm_fence_t *coll;
+    pmix_data_buffer_t *relay, *framed, bkt;
+    pmix_byte_object_t blob, pbo, empty;
+    pmix_data_buffer_t one;
+    pmix_info_t info[2];
+    pmix_status_t rc, st = PMIX_ERR_TIMEOUT;
+    size_t ninfo = 2;
+    int rrc;
+
+    coll = get_tracker(sig, gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true);
+    if (NULL == coll || NULL != coll->my_contribution) {
+        return;
+    }
+    (void) prte_grpcomm_fence_op_merge(coll, op);
+    (void) prte_grpcomm_fence_purpose_merge(coll, purpose);
+    rc = prte_grpcomm_empty_participant_blob(&blob);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    PMIX_DATA_BUFFER_CONSTRUCT(&one);
+    rc = PMIx_Data_pack(NULL, &one, &blob, 1, PMIX_BYTE_OBJECT);
+    PMIX_BYTE_OBJECT_DESTRUCT(&blob);
+    if (PMIX_SUCCESS == rc) {
+        rc = prte_grpcomm_parts_to_bo(true, &one, 1, &pbo);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&one);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    PMIX_INFO_LOAD(&info[0], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
+    PMIX_INFO_LOAD(&info[1], PRTE_GRPCOMM_PARTICIPANTS, &pbo, PMIX_BYTE_OBJECT);
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+
+    PMIX_DATA_BUFFER_CREATE(relay);
+    rrc = fence_sig_pack(relay, coll->sig);
+    if (PRTE_SUCCESS == rrc) {
+        rrc = fence_op_pack(relay, coll->op, coll->purpose);
+    }
+    if (PRTE_SUCCESS == rrc) {
+        rrc = fence_gen_pack(relay, coll->generation);
+    }
+    rc = (PRTE_SUCCESS == rrc) ? PMIX_SUCCESS : prte_pmix_convert_rc(rrc);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, relay, &ninfo, 1, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, relay, info, ninfo, PMIX_INFO);
+    }
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    if (PMIX_SUCCESS == rc && PRTE_GRPCOMM_FENCE_OP_ALLGATHER == coll->op) {
+        /* nothing to contribute is still a contribution */
+        PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
+        empty.bytes = NULL;
+        empty.size = 0;
+        rc = PMIx_Data_embed(&bkt, &empty);
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_copy_payload(relay, &bkt);
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&bkt);
+    }
+    if (PMIX_SUCCESS == rc) {
+        PMIX_DATA_BUFFER_CREATE(coll->my_contribution);
+        rc = PMIx_Data_copy_payload(coll->my_contribution, relay);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        return;
+    }
+    PMIX_DATA_BUFFER_CREATE(framed);
+    rrc = pack_epoch_frame(framed, relay);
+    PMIX_DATA_BUFFER_RELEASE(relay);
+    if (PRTE_SUCCESS != rrc) {
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        return;
+    }
+    PRTE_RML_SEND(rrc, PRTE_PROC_MY_NAME->rank, framed, PRTE_RML_TAG_FENCE);
+    if (PRTE_SUCCESS != rrc) {
+        PRTE_ERROR_LOG(rrc);
+        PMIX_DATA_BUFFER_RELEASE(framed);
+    }
+}
+
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_grpcomm_fence_signature_t *sig;
+    prte_grpcomm_fence_op_t op;
+    prte_grpcomm_fence_purpose_t purpose;
+    uint32_t gen;
+    pmix_status_t status;
+} prte_fence_expire_caddy_t;
+static void fecdes(prte_fence_expire_caddy_t *p)
+{
+    if (NULL != p->sig) {
+        PMIX_RELEASE(p->sig);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_fence_expire_caddy_t, pmix_object_t, NULL, fecdes);
+
+static void fence_expire_done(int sd, short args, void *cbdata)
+{
+    prte_fence_expire_caddy_t *cd = (prte_fence_expire_caddy_t *) cbdata;
+    prte_grpcomm_fence_t *coll;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+    if (PMIX_SUCCESS != cd->status) {
+        coll = get_tracker(cd->sig, cd->gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, false);
+        if (NULL == coll || NULL == coll->my_contribution) {
+            fence_contribute_nothing(cd->sig, cd->op, cd->purpose, cd->gen);
+        }
+    }
+    PMIX_RELEASE(cd);
+}
+
+/* PMIx thread: capture and shift, nothing more */
+static void fence_expire_cbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_fence_expire_caddy_t *cd = (prte_fence_expire_caddy_t *) cbdata;
+
+    cd->status = status;
+    PRTE_PMIX_THREADSHIFT(cd, prte_event_base, fence_expire_done);
+}
+
+void prte_grpcomm_fence_expire(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                               prte_rml_tag_t tag, void *cbdata)
+{
+    prte_grpcomm_fence_signature_t *sig = NULL;
+    prte_grpcomm_fence_t *coll;
+    prte_fence_expire_caddy_t *cd;
+    prte_grpcomm_fence_op_t op = PRTE_GRPCOMM_FENCE_OP_BARRIER;
+    prte_grpcomm_fence_purpose_t purpose = PRTE_GRPCOMM_FENCE_FOR_UNKNOWN;
+    pmix_collective_op_t pop;
+    pmix_rank_t *dmns = NULL;
+    size_t ndmns = 0, n;
+    bool mine = false;
+    uint32_t gen = 0;
+    uint8_t kind = 0;
+    int timeout = 0, rrc;
+    int32_t cnt;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &kind, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &timeout, &cnt, PMIX_INT);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    rrc = fence_sig_unpack(buffer, &sig);
+    if (PRTE_SUCCESS == rrc) {
+        rrc = fence_op_unpack(buffer, &op, &purpose);
+    }
+    if (PRTE_SUCCESS == rrc) {
+        rrc = fence_gen_unpack(buffer, &gen);
+    }
+    if (PRTE_SUCCESS != rrc) {
+        PRTE_ERROR_LOG(rrc);
+        if (NULL != sig) {
+            PMIX_RELEASE(sig);
+        }
+        return;
+    }
+
+    if (PRTE_FENCE_EXPIRE_REQUEST == kind) {
+        if (!PRTE_PROC_IS_MASTER || prte_grpcomm_fence_gen_is_stale(sig, gen) ||
+            NULL == (coll = get_tracker(sig, gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, true))) {
+            PMIX_RELEASE(sig);
+            return;
+        }
+        (void) prte_grpcomm_fence_op_merge(coll, op);
+        (void) prte_grpcomm_fence_purpose_merge(coll, purpose);
+        if (coll->timeout < timeout) {
+            coll->timeout = timeout;
+        }
+        expire_fence_op(coll);
+        PMIX_RELEASE(sig);
+        return;
+    }
+
+    /* the order: hand up what our server holds, or say it holds nothing */
+    coll = get_tracker(sig, gen, PRTE_GRPCOMM_FENCE_STEP_ROLLUP, false);
+    if (NULL != coll && NULL != coll->my_contribution) {
+        PMIX_RELEASE(sig);
+        return;
+    }
+    if (PRTE_SUCCESS == create_dmns(sig, &dmns, &ndmns)) {
+        for (n = 0; n < ndmns; n++) {
+            if (PRTE_PROC_MY_NAME->rank == dmns[n]) {
+                mine = true;
+                break;
+            }
+        }
+        free(dmns);
+    }
+    if (!mine) {
+        PMIX_RELEASE(sig);
+        return;
+    }
+    pop = (PRTE_GRPCOMM_FENCE_FOR_CONNECT == purpose)      ? PMIX_COLLECTIVE_CONNECT
+          : (PRTE_GRPCOMM_FENCE_FOR_DISCONNECT == purpose) ? PMIX_COLLECTIVE_DISCONNECT
+                                                           : PMIX_COLLECTIVE_FENCE;
+    cd = PMIX_NEW(prte_fence_expire_caddy_t);
+    cd->sig = sig;
+    cd->op = op;
+    cd->purpose = purpose;
+    cd->gen = gen;
+    rc = PMIx_server_collective_expire(pop, NULL, sig->signature, sig->sz, NULL, 0,
+                                       fence_expire_cbfunc, cd);
+    if (PMIX_SUCCESS != rc) {
+        fence_contribute_nothing(sig, op, purpose, gen);
+        PMIX_RELEASE(cd);
+    }
+}
+
 /* The controller's guard timer for a fence a participant put a deadline on.
  * Firing it completes every participant with PMIX_ERR_TIMEOUT rather than
  * leaving them blocked in PMIx_Fence forever.
@@ -533,6 +901,12 @@ static void fence_timeout(int sd, short args, void *cbdata)
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
                          "%s grpcomm:fence timeout after %d seconds",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->timeout));
+    /* the deadline: have every daemon hand up what it has (and arm the
+     * backstop) - or, the expiry having failed to complete, abort */
+    if (!coll->expired) {
+        expire_fence_op(coll);
+        return;
+    }
     coll->status = PMIX_ERR_TIMEOUT;
     abort_fence_op(coll, PMIX_ERR_TIMEOUT);
 }
@@ -570,6 +944,11 @@ void prte_grpcomm_fence_restart(void)
         coll->converged = false;
         PMIX_DATA_BUFFER_DESTRUCT(&coll->bucket);
         PMIX_DATA_BUFFER_CONSTRUCT(&coll->bucket);
+        if (NULL != coll->pblobs) {
+            PMIX_DATA_BUFFER_RELEASE(coll->pblobs);
+        }
+        coll->npblobs = 0;
+        coll->punknown = false;
 
         /* recompute what the repaired tree owes us - dmns stays the full
          * pre-fault set, and get_num_contributors() already skips the daemons
@@ -705,6 +1084,60 @@ static bool fence_should_delay(void)
             == PRTE_PROC_MY_NAME->rank);
 }
 
+/* Our participants' directives, as the contribution carries them: the
+ * server's own PMIX_LOCAL_PARTICIPANTS is left out - nothing upstream reads
+ * it, and it names "local" procs without saying which node - and, when this
+ * server ran out of time, our blob goes in under PRTE_GRPCOMM_PARTICIPANTS.
+ * The array is a shallow copy, so the ordinary fence pays for one small
+ * allocation of pointers' worth and no deep copy. */
+static pmix_status_t pack_fence_info(pmix_data_buffer_t *relay, prte_pmix_fence_caddy_t *cd)
+{
+    pmix_info_t *arr = NULL;
+    pmix_byte_object_t bo;
+    pmix_data_buffer_t one;
+    size_t n, k = 0;
+    bool partial = (!cd->pknown || (NULL != cd->pbo.bytes && 0 < cd->pbo.size));
+    pmix_status_t rc = PMIX_SUCCESS;
+
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    arr = (pmix_info_t *) calloc(cd->ninfo + 1, sizeof(pmix_info_t));
+    if (NULL == arr) {
+        return PMIX_ERR_NOMEM;
+    }
+    for (n = 0; NULL != cd->info && n < cd->ninfo; n++) {
+        if (!PMIX_CHECK_KEY(&cd->info[n], PMIX_LOCAL_PARTICIPANTS)) {
+            memcpy(&arr[k++], &cd->info[n], sizeof(pmix_info_t));
+        }
+    }
+    if (partial) {
+        PMIX_DATA_BUFFER_CONSTRUCT(&one);
+        if (cd->pknown) {
+            rc = PMIx_Data_pack(NULL, &one, &cd->pbo, 1, PMIX_BYTE_OBJECT);
+        }
+        if (PMIX_SUCCESS == rc) {
+            rc = prte_grpcomm_parts_to_bo(cd->pknown, &one, cd->pknown ? 1 : 0, &bo);
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&one);
+        if (PMIX_SUCCESS == rc) {
+            PMIX_INFO_LOAD(&arr[k], PRTE_GRPCOMM_PARTICIPANTS, &bo, PMIX_BYTE_OBJECT);
+            ++k;
+        }
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, relay, &k, 1, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && 0 < k) {
+        rc = PMIx_Data_pack(NULL, relay, arr, k, PMIX_INFO);
+    }
+    /* only the entry we loaded is ours to destruct - the rest are borrowed */
+    if (partial && 0 < k && PMIX_CHECK_KEY(&arr[k - 1], PRTE_GRPCOMM_PARTICIPANTS)) {
+        PMIX_INFO_DESTRUCT(&arr[k - 1]);
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+    free(arr);
+    return rc;
+}
+
 static void fence(int sd, short args, void *cbdata)
 {
     prte_pmix_fence_caddy_t *cd = (prte_pmix_fence_caddy_t *) cbdata;
@@ -789,21 +1222,12 @@ static void fence(int sd, short args, void *cbdata)
     }
 
     // pack the info structs
-    rc = PMIx_Data_pack(NULL, relay, &cd->ninfo, 1, PMIX_SIZE);
+    rc = pack_fence_info(relay, cd);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
         st = rc;
         goto done;
-    }
-    if (0 < cd->ninfo) {
-        rc = PMIx_Data_pack(NULL, relay, cd->info, cd->ninfo, PMIX_INFO);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(relay);
-            st = rc;
-            goto done;
-        }
     }
 
     /* Pass along the payload - for an allgather, and only for one.
@@ -1151,7 +1575,20 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
                 PMIX_SUCCESS == coll->status) {
                 coll->status = st;
             }
+
+        } else if (PMIX_CHECK_KEY(&info[n], PRTE_GRPCOMM_PARTICIPANTS)) {
+            /* who took part below, from the servers that ran out of time */
+            if (NULL == coll->pblobs) {
+                PMIX_DATA_BUFFER_CREATE(coll->pblobs);
+            }
+            prte_grpcomm_parts_merge(&info[n].value, coll->pblobs, &coll->npblobs,
+                                     &coll->punknown);
         }
+    }
+    /* a server ran out of time: the controller sets one deadline for all
+     * of them - see "One deadline" in AGENTS.md */
+    if (PMIX_ERR_TIMEOUT == st) {
+        note_fence_timed_out(coll);
     }
 
     /* Arm the deadline, if a participant asked for one.  Only the controller
@@ -1402,6 +1839,12 @@ static int tree_gather_answer(prte_grpcomm_fence_t *coll)
         PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
                              "%s grpcomm fence HNP reports complete",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        /* ran out of time: say who never took part. A fence, connect or
+         * disconnect returns nothing to its callers, so this is where they
+         * are named */
+        if (PMIX_ERR_TIMEOUT == coll->status) {
+            report_fence_nonparticipants(coll);
+        }
         PMIX_DATA_BUFFER_CREATE(reply);
         rc = fence_sig_pack(reply, coll->sig);
         if (PRTE_SUCCESS != rc) {
@@ -1497,6 +1940,9 @@ static int tree_gather_answer(prte_grpcomm_fence_t *coll)
     if (PMIX_SUCCESS != coll->status) {
         ++ninfo;
     }
+    if (0 < coll->npblobs || coll->punknown) {
+        ++ninfo;
+    }
     if (0 < ninfo) {
         size_t idx = 0;
         PMIX_INFO_CREATE(info, ninfo);
@@ -1506,6 +1952,18 @@ static int tree_gather_answer(prte_grpcomm_fence_t *coll)
         if (PMIX_SUCCESS != coll->status) {
             PMIX_INFO_LOAD(&info[idx++], PMIX_LOCAL_COLLECTIVE_STATUS,
                            &coll->status, PMIX_STATUS);
+        }
+        if (0 < coll->npblobs || coll->punknown) {
+            pmix_byte_object_t pbo;
+
+            /* who took part below, carried up unopened */
+            if (PMIX_SUCCESS == prte_grpcomm_parts_to_bo(!coll->punknown, coll->pblobs,
+                                                         coll->npblobs, &pbo)) {
+                PMIX_INFO_LOAD(&info[idx++], PRTE_GRPCOMM_PARTICIPANTS, &pbo, PMIX_BYTE_OBJECT);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            } else {
+                ninfo = idx;
+            }
         }
     }
     rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
