@@ -72,8 +72,8 @@ how much of a staged file the daemons hold at once.
 | Class | Lives on | Role |
 |-------|----------|------|
 | `prte_filem_raw_outbound_t` | HNP | One preposition request. Holds the list of `xfers`, the aggregate `status`, and the caller's `cbfunc`/`cbdata`. When its `xfers` list drains, the callback fires. |
-| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nchunk` (next chunk index), the flow-control state (`inflight`, `paused`, `retired`) described under *flow control*, and the delivery accounting (`nexpected`, `nrecvd`, the `acked` bitmap, `horizon`) described under *completion accounting*. |
-| `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, `mode`, the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
+| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nspace` (the job whose transfer it is), `nchunk` (next chunk index), the flow-control state (`inflight`, `paused`, `retired`) described under *flow control*, and the delivery accounting (`nexpected`, `nrecvd`, the `acked` bitmap, `horizon`) described under *completion accounting*. |
+| `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, `mode`, `nspace` (the job that sent it), the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
 | `prte_filem_raw_output_t` | daemon | One received chunk: `numbytes` + a `PRTE_FILEM_RAW_CHUNK_MAX` data buffer, queued on an incoming file's `outputs` list for the write handler. |
 
 `xfer` and `incoming` both embed `ev` and use `PRTE_PMIX_THREADSHIFT` /
@@ -181,11 +181,15 @@ Runs on the progress thread, re-arming itself until EOF:
    place that knows the bytes never left.
 2. If `prte_dvm_abort_ordered`, retire the xfer and stop.
 3. Pack a buffer `{file(string), nchunk(int32), data(numbytes bytes)}`;
-   on the **first chunk** (`nchunk == 0`) also append the `type` and the
-   source file's `mode`, which is everything the receiver is told about
-   the file. The mode matters: without it the receiver had to guess, and
-   it guessed `0600` for anything not flagged as the job's executable, so
+   on the **first chunk** (`nchunk == 0`) also append the `type`, the
+   source file's `mode` and the `nspace` of the job whose transfer it is,
+   which is everything the receiver is told about the file. The mode
+   matters: without it the receiver had to guess, and it guessed `0600`
+   for anything not flagged as the job's executable, so
    `--preload-files helper.sh` delivered a script the ranks could not run.
+   The job is what lets a daemon that refuses the file say whose request it
+   refused (below). A file is broadcast once, by the first job to name it,
+   so it is that job's.
 4. `prte_grpcomm.xcast(PRTE_RML_TAG_FILEM_BASE, &chunk)` — broadcast to
    **all daemons at once**. Increment `nchunk`.
 5. If `numbytes == 0` this was the EOF chunk: close the fd and stop.
@@ -327,7 +331,8 @@ walking freed memory.
 Fires on `PRTE_RML_TAG_FILEM_BASE` for each broadcast chunk:
 
 1. Unpack `{file, nchunk}`; if `nchunk < 0` treat as EOF (`nbytes = 0`),
-   else unpack the byte payload; on chunk 0 also unpack `type` and `mode`.
+   else unpack the byte payload; on chunk 0 also unpack `type`, `mode` and
+   `nspace`, in that order - the packer and unpacker change together.
    A name carrying a `..` component is refused here too, even though the
    sender is supposed to have refused it already — this is the side that
    would do the `O_TRUNC`.
@@ -376,8 +381,10 @@ level up from where the files actually were.)
 `list_archive` runs `tar tf <fullpath>` via `popen` and returns every
 member as listed; a non-zero `pclose` status means the listing failed, and
 the archive is then not extracted at all. **The archive is listed before it
-is unpacked, and refused outright** (help topic `preload-archive-refused`)
-if any member has an absolute name, a `..` component, or lies beneath a
+is unpacked, and refused outright** (help topic `preload-archive-refused`,
+shown for the job that sent the archive, so the master tells only the tool
+that asked for that job - see `src/util/AGENTS.md`, "Who a message is
+for") if any member has an absolute name, a `..` component, or lies beneath a
 member that is not a directory - the shape of a member written through a
 symbolic link the same archive made. Whether the system's `tar` keeps
 every member inside the directory is otherwise up to that `tar`, which is
