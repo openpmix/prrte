@@ -398,10 +398,17 @@ PRTE_EXPORT bool prte_grpcomm_same_members(const pmix_proc_t *a, size_t na,
  * its daemon sent a blob and the blob does not name it. */
 
 /* The blob for this daemon from an upcall's directives. bo is left empty
- * unless the local status is PMIX_ERR_TIMEOUT; *known is false when it is
- * and the server sent no list. */
+ * unless the local status is PMIX_ERR_TIMEOUT - or the call is a bootstrap
+ * leader's or a follower's (solo), each one proc, which the controller
+ * counts by who it is; *known is false when a blob was wanted and the
+ * server sent no list. */
 PRTE_EXPORT pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndirs,
-                                                        pmix_byte_object_t *bo, bool *known);
+                                                        bool solo, pmix_byte_object_t *bo,
+                                                        bool *known);
+
+/* the procs a blob names, as given - the caller frees *procs */
+PRTE_EXPORT pmix_status_t prte_grpcomm_blob_procs(const pmix_byte_object_t *bo,
+                                                  pmix_proc_t **procs, size_t *nprocs);
 
 /* A fence carries its participant blobs in its directives, under this key,
  * as one byte object holding [known][count][blobs]: its payload is the rest
@@ -689,6 +696,10 @@ typedef struct {
     // the operation ran out of time: on the controller, the expiry has been
     // ordered; elsewhere, the controller has been asked for it - each once
     bool expired;
+    // the bootstrap leaders and followers counted so far, by who they are,
+    // so a repeated call does not count twice
+    pmix_proc_t *solo_seen;
+    size_t nsolo_seen;
 
     /*** BOOTSTRAP TRACKERS ***/
     // "leaders" are group members reporting as

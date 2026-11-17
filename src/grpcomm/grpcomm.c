@@ -597,7 +597,7 @@ static pmix_status_t make_blob(const pmix_proc_t *procs, size_t nprocs, pmix_byt
     return rc;
 }
 
-pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndirs,
+pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndirs, bool solo,
                                             pmix_byte_object_t *bo, bool *known)
 {
     pmix_data_array_t *d;
@@ -618,7 +618,7 @@ pmix_status_t prte_grpcomm_participant_blob(const pmix_info_t *dirs, size_t ndir
      * local member has called, so there is nothing to say: all of them took
      * part. Only one that ran out of time is partial. */
     *known = true;
-    if (PMIX_ERR_TIMEOUT != st) {
+    if (PMIX_ERR_TIMEOUT != st && !solo) {
         return PMIX_SUCCESS;
     }
     if (NULL == list) {
@@ -816,6 +816,57 @@ static pmix_status_t add_blob(pmix_byte_object_t *bo, prte_grpcomm_parts_t *part
     }
     if (NULL != procs) {
         PMIX_PROC_FREE(procs, n);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    return rc;
+}
+
+pmix_status_t prte_grpcomm_blob_procs(const pmix_byte_object_t *bo, pmix_proc_t **procs,
+                                      size_t *nprocs)
+{
+    pmix_data_buffer_t buf;
+    pmix_byte_object_t copy;
+    pmix_rank_t vpid;
+    size_t n = 0;
+    int32_t cnt;
+    pmix_status_t rc;
+
+    *procs = NULL;
+    *nprocs = 0;
+    if (NULL == bo->bytes || 0 == bo->size) {
+        return PMIX_SUCCESS;
+    }
+    copy.size = bo->size;
+    copy.bytes = (char *) malloc(copy.size);
+    if (NULL == copy.bytes) {
+        return PMIX_ERR_NOMEM;
+    }
+    memcpy(copy.bytes, bo->bytes, copy.size);
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = PMIx_Data_load(&buf, &copy);
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &buf, &vpid, &cnt, PMIX_PROC_RANK);
+    }
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &buf, &n, &cnt, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && 0 < n) {
+        if (!prte_pmix_count_fits(&buf, n)) {
+            rc = PMIX_ERR_BAD_PARAM;
+        } else {
+            PMIX_PROC_CREATE(*procs, n);
+            cnt = (int32_t) n;
+            rc = (NULL == *procs) ? PMIX_ERR_NOMEM
+                                  : PMIx_Data_unpack(NULL, &buf, *procs, &cnt, PMIX_PROC);
+            if (PMIX_SUCCESS == rc) {
+                *nprocs = n;
+            } else if (NULL != *procs) {
+                PMIX_PROC_FREE(*procs, n);
+                *procs = NULL;
+            }
+        }
     }
     PMIX_DATA_BUFFER_DESTRUCT(&buf);
     return rc;
