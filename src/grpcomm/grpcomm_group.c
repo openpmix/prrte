@@ -40,6 +40,10 @@
 #include "src/grpcomm/grpcomm.h"
 
 static void group(int sd, short args, void *cbdata);
+static void expire_group_op(prte_grpcomm_group_t *coll);
+static void note_timed_out(prte_grpcomm_group_t *coll);
+static pmix_status_t pack_own_participants(pmix_data_buffer_t *buf, bool known,
+                                           pmix_byte_object_t *bo);
 static void check_complete(prte_grpcomm_group_t *coll);
 static void group_timeout(int sd, short args, void *cbdata);
 #if PRTE_PMIX_HAVE_GROUP_FT
@@ -367,6 +371,13 @@ int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
     cd->ndirs = ndirs;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
+    /* Who took part here, packed now rather than copied: nothing on this
+     * daemon reads the list, so it goes straight into the blob our
+     * contribution will carry (prte_grpcomm_participant_blob). Packing
+     * touches no PRRTE object, so it is safe on the PMIx thread. */
+    if (PMIX_SUCCESS != prte_grpcomm_participant_blob(directives, ndirs, &cd->pbo, &cd->pknown)) {
+        cd->pknown = false;
+    }
 
     /* must push this into the event library to ensure we can
      * access framework-global data safely */
@@ -384,6 +395,61 @@ int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
  * with that status and delete the tracker (see the PMIX_SUCCESS != st path
  * there). No membership/grpinfo/endpts payload is needed: the release reader
  * skips all of that for a non-success construct, and a destruct never reads it. */
+/* the members that never took part, in a construct's release */
+static pmix_status_t pack_nonparticipants(pmix_data_buffer_t *buf, const pmix_proc_t *procs,
+                                          size_t nprocs)
+{
+    pmix_status_t rc;
+
+    rc = PMIx_Data_pack(NULL, buf, &nprocs, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS == rc && 0 < nprocs) {
+        rc = PMIx_Data_pack(NULL, buf, (void *) procs, nprocs, PMIX_PROC);
+    }
+    return rc;
+}
+
+/* On the controller, for an operation that ran out of time: the members
+ * that never took part - alive, and named by no daemon's participant list -
+ * said in a show_help and the verbose output, and returned for the release.
+ * Only when every daemon sent its list: without one, who took part on that
+ * node is not known, and a guess would name members that did. */
+static void report_nonparticipants(prte_grpcomm_group_t *coll, pmix_proc_t **nonpart,
+                                   size_t *nnonpart)
+{
+    pmix_status_t rc;
+    char *list;
+
+    *nonpart = NULL;
+    *nnonpart = 0;
+    if (coll->punknown) {
+        pmix_output_verbose(1, prte_grpcomm_globals.output,
+                            "%s grpcomm:group \"%s\" timed out - which members took part "
+                            "is not known",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
+        return;
+    }
+    rc = prte_grpcomm_nonparticipants(coll->sig->members, coll->sig->nmembers,
+                                      coll->sig->addmembers, coll->sig->naddmembers,
+                                      coll->pblobs, coll->npblobs, nonpart, nnonpart);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (0 == *nnonpart) {
+        return;
+    }
+    list = prte_grpcomm_procs_string(*nonpart, *nnonpart, 32);
+    pmix_output_verbose(1, prte_grpcomm_globals.output,
+                        "%s grpcomm:group \"%s\" timed out - %lu member(s) did not take part: %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID,
+                        (unsigned long) *nnonpart, list);
+    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt",
+                   "collective-nonparticipants", true,
+                   (PMIX_GROUP_CONSTRUCT == coll->sig->op) ? "group construct" : "group destruct",
+                   coll->sig->groupID, (unsigned long) *nnonpart, list);
+    free(list);
+}
+
 static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
 {
     pmix_data_buffer_t *reply;
@@ -404,6 +470,16 @@ static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
+    /* a construct's release always names its non-participants - none
+     * known, here */
+    if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
+        rc = pack_nonparticipants(reply, NULL, 0);
+        if (PMIX_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+    }
     /* send the release via xcast to all daemons (ourselves included).
      * xcast copies the payload, so the buffer is still ours to free */
     (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
@@ -412,6 +488,311 @@ static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
      * broadcast comes back around - so mark it, both to keep the rollup from
      * being driven any further and to keep a second abort from broadcasting */
     coll->aborting = true;
+}
+
+/*
+ * One deadline.
+ *
+ * A PMIx server hands an operation up only once every local member has
+ * called, so the nodes holding a member that never calls send nothing, and
+ * a relay above one holds its whole subtree back. Each server's own
+ * PMIX_TIMEOUT starts when its first local member calls, so they disagree
+ * about when the deadline is. So the controller decides, once: on its own
+ * timer, or on the first word that a server ran out of time - a
+ * contribution carrying PMIX_ERR_TIMEOUT, or a daemon's request, which a
+ * daemon sends the moment it sees one, since its parent may hold it back.
+ * It then orders every daemon to expire the operation: each one hosting a
+ * member whose own contribution is not yet in asks its PMIx server to hand
+ * up what it has (PMIx_server_collective_expire), or, if the server holds
+ * nothing - no member there called - contributes an empty list itself.
+ * Every subtree then completes, and the controller hears from every node
+ * who had called by the time the order reached it.
+ */
+#define PRTE_GRP_EXPIRE_REQUEST 0
+#define PRTE_GRP_EXPIRE_ORDER   1
+
+static pmix_status_t send_expire(uint8_t kind, prte_grpcomm_group_t *coll)
+{
+    pmix_data_buffer_t *buf;
+    pmix_status_t rc;
+    int rrc;
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &kind, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, &coll->timeout, 1, PMIX_INT);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rrc = pack_signature(buf, coll->sig);
+        rc = (PRTE_SUCCESS == rrc) ? PMIX_SUCCESS : prte_pmix_convert_rc(rrc);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return rc;
+    }
+    if (PRTE_GRP_EXPIRE_ORDER == kind) {
+        /* xcast copies the payload */
+        (void) prte_grpcomm_release_bcast(PRTE_RML_TAG_GROUP_EXPIRE, buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return PMIX_SUCCESS;
+    }
+    PRTE_RML_SEND(rrc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_GROUP_EXPIRE);
+    if (PRTE_SUCCESS != rrc) {
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return prte_pmix_convert_rc(rrc);
+    }
+    return PMIX_SUCCESS;
+}
+
+/* on the controller: order the expiry, once */
+static void expire_group_op(prte_grpcomm_group_t *coll)
+{
+    pmix_status_t rc;
+
+    if (coll->expired || coll->converged || coll->aborting || coll->bootstrap) {
+        return;
+    }
+    coll->expired = true;
+    pmix_output_verbose(1, prte_grpcomm_globals.output,
+                        "%s grpcomm:group \"%s\" ran out of time - expiring it on every daemon",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
+    rc = send_expire(PRTE_GRP_EXPIRE_ORDER, coll);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    /* The backstop starts now, whatever ordered the expiry. A timer still
+     * pending from the first contribution - when a server's own deadline
+     * came first and asked for this - would otherwise fire while the
+     * expiry's rollup is on its way, and abort the operation with nobody
+     * named. */
+    if (coll->tev_active) {
+        prte_event_del(&coll->tev);
+        coll->tev_active = false;
+    }
+    if (0 < coll->timeout) {
+        struct timeval tv = {coll->timeout, 0};
+
+        prte_event_evtimer_set(prte_event_base, &coll->tev, group_timeout, coll);
+        coll->tev_active = true;
+        PMIX_POST_OBJECT(coll);
+        prte_event_evtimer_add(&coll->tev, &tv);
+    }
+}
+
+/* anywhere: a contribution has said a server ran out of time */
+static void note_timed_out(prte_grpcomm_group_t *coll)
+{
+    pmix_status_t rc;
+
+    if (coll->bootstrap) {
+        return;
+    }
+    if (PRTE_PROC_IS_MASTER) {
+        expire_group_op(coll);
+        return;
+    }
+    if (coll->expired) {
+        return;
+    }
+    /* latched here as "asked": the controller decides, and orders */
+    coll->expired = true;
+    rc = send_expire(PRTE_GRP_EXPIRE_REQUEST, coll);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+}
+
+/* Contribute for a daemon whose PMIx server held nothing of an operation
+ * that ran out of time: no member here called, so none took part. */
+static void contribute_nothing(prte_grpcomm_group_signature_t *sig)
+{
+    prte_grpcomm_group_t *coll;
+    pmix_data_buffer_t *relay, *framed;
+    pmix_byte_object_t bo;
+    pmix_status_t rc, st = PMIX_ERR_TIMEOUT;
+    size_t zero = 0;
+    int timeout = 0, rrc;
+
+    coll = get_tracker(sig, true);
+    if (NULL == coll || NULL != coll->my_contribution) {
+        return;
+    }
+    PMIX_DATA_BUFFER_CREATE(relay);
+    rrc = pack_signature(relay, sig);
+    rc = (PRTE_SUCCESS == rrc) ? PMIX_SUCCESS : prte_pmix_convert_rc(rrc);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, relay, &st, 1, PMIX_STATUS);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, relay, &timeout, 1, PMIX_INT);
+    }
+    if (PMIX_SUCCESS == rc && PMIX_GROUP_CONSTRUCT == sig->op) {
+        /* no group info, no endpoints */
+        rc = PMIx_Data_pack(NULL, relay, &zero, 1, PMIX_SIZE);
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_pack(NULL, relay, &zero, 1, PMIX_SIZE);
+        }
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = prte_grpcomm_empty_participant_blob(&bo);
+        if (PMIX_SUCCESS == rc) {
+            rc = pack_own_participants(relay, true, &bo);
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        }
+    }
+    if (PMIX_SUCCESS == rc) {
+        PMIX_DATA_BUFFER_CREATE(coll->my_contribution);
+        rc = PMIx_Data_copy_payload(coll->my_contribution, relay);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        return;
+    }
+    PMIX_DATA_BUFFER_CREATE(framed);
+    rrc = pack_epoch_frame(framed, relay);
+    PMIX_DATA_BUFFER_RELEASE(relay);
+    if (PRTE_SUCCESS != rrc) {
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        return;
+    }
+    PRTE_RML_SEND(rrc, PRTE_PROC_MY_NAME->rank, framed, PRTE_RML_TAG_GROUP);
+    if (PRTE_SUCCESS != rrc) {
+        PRTE_ERROR_LOG(rrc);
+        PMIX_DATA_BUFFER_RELEASE(framed);
+    }
+}
+
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_grpcomm_group_signature_t *sig;
+    pmix_status_t status;
+} prte_grp_expire_caddy_t;
+static void ecdes(prte_grp_expire_caddy_t *p)
+{
+    if (NULL != p->sig) {
+        PMIX_RELEASE(p->sig);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_grp_expire_caddy_t, pmix_object_t, NULL, ecdes);
+
+/* back on our progress thread: if the server handed nothing up, nobody here
+ * called - unless what it holds was already handed up, in which case our
+ * contribution went before this did */
+static void expire_done(int sd, short args, void *cbdata)
+{
+    prte_grp_expire_caddy_t *cd = (prte_grp_expire_caddy_t *) cbdata;
+    prte_grpcomm_group_t *coll;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+    if (PMIX_SUCCESS != cd->status) {
+        coll = get_tracker(cd->sig, false);
+        if (NULL == coll || NULL == coll->my_contribution) {
+            contribute_nothing(cd->sig);
+        }
+    }
+    PMIX_RELEASE(cd);
+}
+
+/* PMIx thread: capture and shift, nothing more */
+static void expire_cbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_grp_expire_caddy_t *cd = (prte_grp_expire_caddy_t *) cbdata;
+
+    cd->status = status;
+    PRTE_PMIX_THREADSHIFT(cd, prte_event_base, expire_done);
+}
+
+/* does a member of this operation run here? */
+static bool hosts_member(prte_grpcomm_group_signature_t *sig)
+{
+    pmix_rank_t *dmns = NULL;
+    size_t ndmns = 0, n;
+    bool found = false;
+
+    if (PRTE_SUCCESS != create_dmns(sig, &dmns, &ndmns)) {
+        return false;
+    }
+    for (n = 0; n < ndmns; n++) {
+        if (PRTE_PROC_MY_NAME->rank == dmns[n]) {
+            found = true;
+            break;
+        }
+    }
+    free(dmns);
+    return found;
+}
+
+void prte_grpcomm_grp_expire(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                             prte_rml_tag_t tag, void *cbdata)
+{
+    prte_grpcomm_group_signature_t *sig = NULL;
+    prte_grpcomm_group_t *coll;
+    prte_grp_expire_caddy_t *cd;
+    uint8_t kind = 0;
+    int timeout = 0, rrc;
+    int32_t cnt;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &kind, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &timeout, &cnt, PMIX_INT);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    rrc = unpack_signature(buffer, &sig);
+    if (PRTE_SUCCESS != rrc) {
+        PRTE_ERROR_LOG(rrc);
+        return;
+    }
+    if (0 < sig->bootstrap || sig->follower) {
+        PMIX_RELEASE(sig);
+        return;
+    }
+
+    if (PRTE_GRP_EXPIRE_REQUEST == kind) {
+        /* the controller, asked: it may have heard nothing of the operation
+         * yet - its subtrees are still waiting - so it may need the tracker
+         * the rollup will land on, and the backstop the timer would have
+         * armed */
+        if (!PRTE_PROC_IS_MASTER || prte_grpcomm_group_gen_is_stale(sig, sig->generation) ||
+            NULL == (coll = get_tracker(sig, true))) {
+            PMIX_RELEASE(sig);
+            return;
+        }
+        if (coll->timeout < timeout) {
+            coll->timeout = timeout;
+        }
+        /* which arms the backstop, from now */
+        expire_group_op(coll);
+        PMIX_RELEASE(sig);
+        return;
+    }
+
+    /* the order: hand up what our server holds, or say it holds nothing */
+    coll = get_tracker(sig, false);
+    if ((NULL != coll && NULL != coll->my_contribution) || !hosts_member(sig)) {
+        PMIX_RELEASE(sig);
+        return;
+    }
+    cd = PMIX_NEW(prte_grp_expire_caddy_t);
+    cd->sig = sig;
+    rc = PMIx_server_collective_expire((PMIX_GROUP_CONSTRUCT == sig->op)
+                                           ? PMIX_COLLECTIVE_GROUP_CONSTRUCT
+                                           : PMIX_COLLECTIVE_GROUP_DESTRUCT,
+                                       sig->groupID, NULL, 0, NULL, 0, expire_cbfunc, cd);
+    if (PMIX_SUCCESS != rc) {
+        /* no callback is coming */
+        contribute_nothing(sig);
+        PMIX_RELEASE(cd);
+    }
 }
 
 /* The controller's guard timer for a collective a participant put a deadline
@@ -431,6 +812,15 @@ static void group_timeout(int sd, short args, void *cbdata)
                         "%s grpcomm:group timeout on \"%s\" after %d seconds",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID,
                         coll->timeout);
+    /* The deadline: have every daemon hand up what it has, so the rollup
+     * completes and says who took part - and keep the timer as a backstop,
+     * in case it cannot (a daemon lost meanwhile, or a bootstrap, whose
+     * calls go up one at a time and have nothing collecting to expire) */
+    if (!coll->bootstrap && !coll->expired) {
+        /* arms the backstop too */
+        expire_group_op(coll);
+        return;
+    }
     coll->status = PMIX_ERR_TIMEOUT;
     abort_group_op(coll, PMIX_ERR_TIMEOUT);
 }
@@ -581,6 +971,10 @@ void prte_grpcomm_group_restart(void)
         PMIx_Info_list_release(coll->endpts);
         coll->grpinfo = PMIx_Info_list_start();
         coll->endpts = PMIx_Info_list_start();
+        PMIX_DATA_BUFFER_RELEASE(coll->pblobs);
+        PMIX_DATA_BUFFER_CREATE(coll->pblobs);
+        coll->npblobs = 0;
+        coll->punknown = false;
 
         /* recompute what the repaired tree owes us. dmns deliberately stays
          * the full pre-fault set - it is the record of who was supposed to
@@ -777,6 +1171,87 @@ static bool group_delay_send(pmix_data_buffer_t *framed, pmix_rank_t dest)
     return true;
 }
 
+/* The participant blobs that end every contribution and rollup: whether
+ * every daemon below sent its list, how many blobs there are, and the
+ * blobs, as packed byte objects - see prte_grpcomm_participant_blob(). A
+ * relay copies the ones it received into its own rollup without opening
+ * them; only the controller reads them. */
+static pmix_status_t pack_participants(pmix_data_buffer_t *buf, bool known,
+                                       pmix_data_buffer_t *blobs, size_t nblobs)
+{
+    pmix_status_t rc;
+
+    rc = PMIx_Data_pack(NULL, buf, &known, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, &nblobs, 1, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && 0 < nblobs && NULL != blobs) {
+        rc = PMIx_Data_copy_payload(buf, blobs);
+    }
+    return rc;
+}
+
+/* this daemon's own: its one blob, if it has one - see
+ * prte_grpcomm_participant_blob() */
+static pmix_status_t pack_own_participants(pmix_data_buffer_t *buf, bool known,
+                                           pmix_byte_object_t *bo)
+{
+    pmix_data_buffer_t one;
+    bool have = (known && NULL != bo->bytes && 0 < bo->size);
+    pmix_status_t rc = PMIX_SUCCESS;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&one);
+    if (have) {
+        rc = PMIx_Data_pack(NULL, &one, bo, 1, PMIX_BYTE_OBJECT);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = pack_participants(buf, known, &one, have ? 1 : 0);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&one);
+    return rc;
+}
+
+/* add a contribution's blobs to the tracker's. A contribution without them
+ * - or one they cannot be read from - leaves who took part unknown, and
+ * the operation goes on without the list. */
+static void unpack_participants(pmix_data_buffer_t *buf, prte_grpcomm_group_t *coll)
+{
+    pmix_byte_object_t bo;
+    bool known = false;
+    size_t n = 0, i;
+    int32_t cnt;
+    pmix_status_t rc;
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buf, &known, &cnt, PMIX_BOOL);
+    if (PMIX_SUCCESS == rc) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buf, &n, &cnt, PMIX_SIZE);
+    }
+    if (PMIX_SUCCESS == rc && !prte_pmix_count_fits(buf, n)) {
+        rc = PMIX_ERR_BAD_PARAM;
+    }
+    for (i = 0; PMIX_SUCCESS == rc && i < n; i++) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            break;
+        }
+        rc = PMIx_Data_pack(NULL, coll->pblobs, &bo, 1, PMIX_BYTE_OBJECT);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        if (PMIX_SUCCESS == rc) {
+            coll->npblobs++;
+        }
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        known = false;
+    }
+    if (!known) {
+        coll->punknown = true;
+    }
+}
+
 static void group(int sd, short args, void *cbdata)
 {
     prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t*)cbdata;
@@ -954,6 +1429,15 @@ static void group(int sd, short args, void *cbdata)
      * if a send fails past this point */
     grpinfo = NULL;
     endpts = NULL;
+
+    /* who took part here - see pack_participants() */
+    rc = pack_own_participants(relay, cd->pknown, &cd->pbo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        PMIX_DESTRUCT(&sig);
+        goto error;
+    }
 
     /* Keep our own contribution so a fault can replay it. Recovery resets
      * every tracker and has each daemon re-inject what it originally
@@ -1286,6 +1770,11 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
         PMIX_SUCCESS == coll->status) {
         coll->status = st;
     }
+    /* a server ran out of time: the controller sets one deadline for all
+     * of them - see "One deadline" */
+    if (PMIX_ERR_TIMEOUT == st) {
+        note_timed_out(coll);
+    }
 
     // unpack any timeout directive
     cnt = 1;
@@ -1391,6 +1880,9 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
         }
     }
 
+    /* who took part below - see pack_participants() */
+    unpack_participants(buffer, coll);
+
     /* track procs reported for collective */
     if (0 < sig->bootstrap) {
         // this came from a bootstrap leader
@@ -1454,7 +1946,8 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
 static void check_complete(prte_grpcomm_group_t *coll)
 {
     int rc;
-    size_t m, ninfo, nfinal = 0;
+    size_t m, ninfo, nfinal = 0, nnonpart = 0;
+    pmix_proc_t *nonpart = NULL;
     pmix_proc_t *finalmembership = NULL;
     bool found;
     pmix_list_t nmlist;
@@ -1640,6 +2133,12 @@ static void check_complete(prte_grpcomm_group_t *coll)
         }
 
 answer:
+        /* run out of time: say who never took part, if every daemon told us
+         * who did - see report_nonparticipants() */
+        if (PMIX_ERR_TIMEOUT == coll->status) {
+            report_nonparticipants(coll, &nonpart, &nnonpart);
+        }
+
         // CONSTRUCT THE RELEASE MESSAGE
         PMIX_DATA_BUFFER_CREATE(reply);
 
@@ -1660,6 +2159,16 @@ answer:
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
             goto failed;
+        }
+        /* a construct's release names the members that never took part,
+         * first, so a daemon reads them whatever the outcome */
+        if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
+            rc = pack_nonparticipants(reply, nonpart, nnonpart);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                goto failed;
+            }
         }
 
         if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
@@ -1755,6 +2264,7 @@ answer:
         if (NULL != finalmembership) {
             PMIX_PROC_FREE(finalmembership, nfinal);
         }
+        free(nonpart);
         return;
 
 failed:
@@ -1768,6 +2278,7 @@ failed:
          * we could still manage to build, and it drives each daemon's release
          * path to complete its own clients and retire the tracker. */
         PMIX_PROC_FREE(finalmembership, nfinal);
+        free(nonpart);
         abort_group_op(coll, (PMIX_SUCCESS == rc) ? PMIX_ERROR : rc);
         return;
 
@@ -1847,6 +2358,14 @@ failed:
             PMIX_DATA_ARRAY_DESTRUCT(&darray);
         }
 
+        /* who took part in our subtree, carried up unopened */
+        rc = pack_participants(reply, !coll->punknown, coll->pblobs, coll->npblobs);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+
         /* stamp our aggregate with the epoch it belongs to, so a parent
          * that has already recovered past it can tell it is stale */
         PMIX_DATA_BUFFER_CREATE(framed);
@@ -1907,6 +2426,9 @@ typedef struct {
     size_t ngrpinfo;
     pmix_info_t *endpts;
     size_t nendpts;
+    /* nlist names the members that never took part, so the participants
+     * are given it whatever the outcome */
+    bool nonpart;
 } prte_grpcomm_release_caddy_t;
 
 static void rlcon(prte_grpcomm_release_caddy_t *p)
@@ -1924,6 +2446,7 @@ static void rlcon(prte_grpcomm_release_caddy_t *p)
     p->ngrpinfo = 0;
     p->endpts = NULL;
     p->nendpts = 0;
+    p->nonpart = false;
 }
 static void rldes(prte_grpcomm_release_caddy_t *p)
 {
@@ -2357,6 +2880,45 @@ static void grp_release_process(pmix_data_buffer_t *buffer)
     cd->st = st;
     cd->nlist = PMIx_Info_list_start();
 
+    /* the members that never took part - read whatever the outcome, and
+     * handed to our participants with it */
+    {
+        size_t nnp = 0;
+        pmix_proc_t *np = NULL;
+
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &nnp, &cnt, PMIX_SIZE);
+        if (PMIX_SUCCESS == rc && 0 < nnp) {
+            if (!prte_pmix_count_fits(buffer, nnp)) {
+                rc = PMIX_ERR_BAD_PARAM;
+            } else {
+                PMIX_PROC_CREATE(np, nnp);
+                cnt = (int32_t) nnp;
+                rc = (NULL == np) ? PMIX_ERR_NOMEM
+                                  : PMIx_Data_unpack(NULL, buffer, np, &cnt, PMIX_PROC);
+            }
+            if (PMIX_SUCCESS == rc) {
+                darray.type = PMIX_PROC;
+                darray.array = np;
+                darray.size = nnp;
+                PMIX_INFO_LIST_ADD(rc, cd->nlist, PMIX_COLLECTIVE_NONPARTICIPANTS, &darray,
+                                   PMIX_DATA_ARRAY);
+                cd->nonpart = (PMIX_SUCCESS == rc);
+            }
+            if (NULL != np) {
+                PMIX_PROC_FREE(np, nnp);
+            }
+        }
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            if (PMIX_SUCCESS == cd->st) {
+                cd->st = rc;
+            }
+            PMIX_INFO_LIST_RELEASE(ilist);
+            goto notify;
+        }
+    }
+
     // must be a construct operation - continue unpacking
     if (PMIX_SUCCESS != cd->st) {
         PMIX_INFO_LIST_RELEASE(ilist);
@@ -2753,7 +3315,7 @@ static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
                 PMIX_RELEASE(pnd);
                 continue;
             }
-            if (PMIX_SUCCESS == cd->st) {
+            if (PMIX_SUCCESS == cd->st || cd->nonpart) {
                 PMIX_INFO_LIST_CONVERT(rc, cd->nlist, &darray);
                 if (PMIX_SUCCESS != rc) {
                     if (PMIX_ERR_EMPTY != rc) {

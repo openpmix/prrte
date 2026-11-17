@@ -75,6 +75,11 @@ typedef struct {
     size_t ninfo;
     pmix_info_cbfunc_t cbfunc;
     void *cbdata;
+    /* PMIX_LOCAL_PARTICIPANTS from the upcall, packed - with this daemon's
+     * rank, since PMIX_RANK_LOCAL_PEERS means this node - before the
+     * thread-shift; pknown is false when the server sent no list */
+    pmix_byte_object_t pbo;
+    bool pknown;
 } prte_pmix_grp_caddy_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_pmix_grp_caddy_t);
 

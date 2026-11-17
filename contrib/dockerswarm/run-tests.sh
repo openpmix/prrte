@@ -6762,6 +6762,7 @@ test_grpcomm() {
     test_grpcomm_ft
     test_grpcomm_reuse
     test_grpcomm_collision
+    test_grpcomm_nonparticipants
     test_fence_straggler
     test_fence_early_arrival
     test_low_radix_release
@@ -6839,6 +6840,72 @@ test_grpcomm_collision() {
         || bad "the DVM could not run a follow-on job after the collision ($n of 5)"
 
     RUN 'rm -f /tmp/grp-collide-a.out' >/dev/null 2>&1
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+}
+
+test_grpcomm_nonparticipants() {
+    local out n early
+
+    if ! have_nodes 5; then
+        skp "group construct timeout: needs 5 nodes, this run has $NNODES"
+        return
+    fi
+
+    banner "grpcomm: a construct that times out names the member that never called"
+    # Five ranks, two on node2; the last (rank 4, on node2) holds back well
+    # past the construct's PMIX_TIMEOUT. A PMIx server hands an operation up
+    # only once every local member has called, so node2's server - with rank
+    # 0 in and rank 4 not - used to send nothing, and the construct could
+    # only be aborted, saying nothing of who was missing. Now the deadline
+    # makes every server hand up what it has (PMIx_server_collective_expire),
+    # node2's says rank 0 took part, and the ranks that called are told the
+    # one that did not. Rank 4, calling after the deadline, times out on its
+    # own rather than hanging. Every rank lingers 20s after its answer
+    # (groupcon's "seconds"): a rank whose construct failed exits non-zero,
+    # which ends the job, and rank 4 has to get its own answer first.
+    cleanup_swarm
+    if ! RUN "test -x $GC"; then
+        skp "groupcon client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:1,node2:2,node3:1,node4:1,node5:1'; then
+        bad "could not start a DVM for the group timeout test"
+        cleanup_swarm
+        return
+    fi
+
+    # Run twice: once with every rank but the last calling at once, so the
+    # controller's own timer sets the deadline; once with ranks 1-3 calling
+    # 3s late, so node2's PMIx timer - started by rank 0 - runs out before
+    # the controller has armed its own, and node2's server asks for the
+    # expiry. Either way it is one deadline and the same answer.
+    for mode in "" "--delay-others 3"; do
+        out=$(PRUN "--host node2:2,node3:1,node4:1,node5:1 -n 5 --map-by node $GC --timeout 4 $mode --hold-last 12 tmogrp 20" 2>&1)
+        early=$(echo "$out" | awk '$1=="GRP" && $3=="CONSTRUCT" && $4=="PMIX_ERR_TIMEOUT" && $2!="4"' | wc -l | tr -d ' ')
+        [ "$early" = 4 ] \
+            && ok "the four ranks that called were failed with PMIX_ERR_TIMEOUT" \
+            || bad "$early of 4 ranks that called timed out: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+        n=$(echo "$out" | awk '$1=="GRP" && $2!="4" && $3=="NONPART" && $4=="1" && $5 ~ /:4$/' | wc -l | tr -d ' ')
+        [ "$n" = 4 ] \
+            && ok "...and each was told rank 4, and only rank 4, never took part" \
+            || bad "$n of 4 were told rank 4 alone did not take part: $(echo "$out" | grep NONPART | tr '\n' ' ')"
+        # node2 held rank 0, which called, and rank 4, which did not: what makes
+        # the list exact is that node2 still reported rank 0
+        echo "$out" | awk '$1=="GRP" && $2!="4" && $3=="NONPART"' | grep -q ':0\b' \
+            && bad "rank 0, which called, was reported as not taking part" \
+            || ok "...not rank 0, which shares its node and did call"
+        echo "$out" | awk '$1=="GRP" && $2=="4" && $3=="CONSTRUCT"' | grep -q 'PMIX_ERR_TIMEOUT' \
+            && ok "rank 4, calling after the deadline, timed out rather than hanging" \
+            || bad "rank 4 did not time out: $(echo "$out" | awk '$2=="4"' | tr '\n' ' ')"
+    done
+
+    out=$(PRUN "--host node2:2,node3:1,node4:1,node5:1 -n 5 --map-by node $GC tmogrp-after" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 5 ] \
+        && ok "...and the DVM constructs groups normally afterwards" \
+        || bad "$n of 5 ranks constructed a group afterwards: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 }

@@ -57,3 +57,21 @@ Set rml_base_radix2 to the radix you actually want for the release - it
 defaults to 4, which is where the cost model puts the optimum for a
 payload the size of a modex - or turn grpcomm_low_radix_release off. The
 runtime is continuing with the settings as given.
+#
+[collective-nonparticipants]
+
+A collective operation ran out of time before every member took part:
+
+   Operation:  %s
+   Identifier: %s
+   Members that did not take part (%lu): %s
+
+These members were alive when the deadline passed but never called the
+operation, so it has been failed for every member that did. That is
+usually a member that is hung, or still busy with earlier work, or a
+program in which not every member reaches the call. A member that calls
+it after the deadline is told the operation timed out.
+
+The deadline is the PMIX_TIMEOUT one of the participants gave. It is
+measured from when the operation reached the DVM controller, and when
+it passes, every node reports which of its members had called by then.
