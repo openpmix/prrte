@@ -463,7 +463,7 @@ static int add_blob(pmix_data_buffer_t *blobs, pmix_rank_t vpid, const pmix_proc
     PMIX_INFO_LOAD(&info[0], PMIX_LOCAL_PARTICIPANTS, &darray, PMIX_DATA_ARRAY);
     PMIX_INFO_LOAD(&info[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
     PRTE_PROC_MY_NAME->rank = vpid;
-    rc = prte_grpcomm_participant_blob(info, 2, &bo, &known);
+    rc = prte_grpcomm_participant_blob(info, 2, false, &bo, &known);
     PRTE_PROC_MY_NAME->rank = me;
     PMIX_INFO_DESTRUCT(&info[0]);
     PMIX_INFO_DESTRUCT(&info[1]);
@@ -584,18 +584,46 @@ static int test_group_participants(void)
 
         PMIX_INFO_LOAD(&dirs[0], PMIX_LOCAL_PARTICIPANTS, "np-a", PMIX_STRING);
         PMIX_INFO_LOAD(&dirs[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
-        rc = prte_grpcomm_participant_blob(dirs, 2, &bo, &known);
+        rc = prte_grpcomm_participant_blob(dirs, 2, false, &bo, &known);
         CHECK("participants: a complete operation carries no blob",
               PMIX_SUCCESS == rc && known && NULL == bo.bytes);
         st = PMIX_ERR_TIMEOUT;
         PMIX_INFO_DESTRUCT(&dirs[1]);
         PMIX_INFO_LOAD(&dirs[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
-        rc = prte_grpcomm_participant_blob(&dirs[1], 1, &bo, &known);
+        rc = prte_grpcomm_participant_blob(&dirs[1], 1, false, &bo, &known);
         CHECK("participants: one that ran out of time with no list is not known",
               PMIX_SUCCESS == rc && !known);
-        rc = prte_grpcomm_participant_blob(dirs, 2, &bo, &known);
+        rc = prte_grpcomm_participant_blob(dirs, 2, false, &bo, &known);
         CHECK("participants: a list of the wrong type is refused",
               PMIX_ERR_TYPE_MISMATCH == rc && !known);
+        PMIX_INFO_DESTRUCT(&dirs[0]);
+        PMIX_INFO_DESTRUCT(&dirs[1]);
+    }
+
+    /* a bootstrap leader's or a follower's call names its one proc whatever
+     * the status, and the blob reads back to it */
+    {
+        pmix_info_t dirs[2];
+        pmix_data_array_t one;
+        pmix_status_t st = PMIX_SUCCESS;
+        pmix_proc_t *got = NULL;
+        size_t ngot = 0;
+
+        one.type = PMIX_PROC;
+        one.array = &two;
+        one.size = 1;
+        PMIX_INFO_LOAD(&dirs[0], PMIX_LOCAL_PARTICIPANTS, &one, PMIX_DATA_ARRAY);
+        PMIX_INFO_LOAD(&dirs[1], PMIX_LOCAL_COLLECTIVE_STATUS, &st, PMIX_STATUS);
+        rc = prte_grpcomm_participant_blob(dirs, 2, true, &bo, &known);
+        CHECK("participants: a solo call carries its proc whatever the status",
+              PMIX_SUCCESS == rc && known && NULL != bo.bytes);
+        rc = prte_grpcomm_blob_procs(&bo, &got, &ngot);
+        CHECK("participants: ...which reads back from the blob",
+              PMIX_SUCCESS == rc && 1 == ngot && NULL != got && PMIX_CHECK_PROCID(&got[0], &two));
+        if (NULL != got) {
+            PMIX_PROC_FREE(got, ngot);
+        }
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
         PMIX_INFO_DESTRUCT(&dirs[0]);
         PMIX_INFO_DESTRUCT(&dirs[1]);
     }
