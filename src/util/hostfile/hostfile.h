@@ -31,18 +31,21 @@
 #include <sys/types.h>
 
 #include "src/class/pmix_list.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
-/* Both read the hostfile as user uid, group gid - whoever named it: a
- * job's owner (prte_pmix_server_job_user), an allocation's requester
- * (prte_pmix_server_request_user), or our own user for the DVM's own
- * configuration. See prte_textfile_open. */
-PRTE_EXPORT int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile, uid_t uid,
-                                             gid_t gid);
+/* Both read the hostfile, and report what is wrong with it, for whoever
+ * named it: req describes the requester (prte_requester_info_job() for a
+ * job's owner, prte_requester_info_proc() for an allocation's requester),
+ * whose user and group the file is opened as and to whom the messages go.
+ * NULL, 0 is the DVM's own configuration - read as our own user, and the
+ * messages go to everyone. See prte_textfile_open and prte_show_help_info. */
+PRTE_EXPORT int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile,
+                                             const pmix_info_t *req, size_t nreq);
 
 PRTE_EXPORT int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove,
-                                                uid_t uid, gid_t gid);
+                                                const pmix_info_t *req, size_t nreq);
 
 END_C_DECLS
 

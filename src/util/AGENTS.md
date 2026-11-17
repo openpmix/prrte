@@ -39,7 +39,7 @@ linked into `libprrte`. There are no MCA components here.
 | **Bootstrap** | `prte_bootstrap.[ch]` | Reading `prte.conf` for a launcher-less DVM. It and a `DVMNodes=file:` list are opened with `prte_open_config_file()`; a refusal stops the daemon (`bootstrap-file-refused`). |
 | **DVM key** | `prte_dvm_key.[ch]`, `prte_hmac.[ch]`, `prte_poly1305.[ch]` | The per-DVM key daemons prove they hold before the OOB treats them as daemons, how each launcher delivers it, and the SHA-256/HMAC that proof is made with. See "The DVM key" below. |
 | **Process plumbing** | `daemon_init.c`, `sys_limits.[ch]`, `stacktrace.[ch]` | Daemonizing, `setrlimit`, and the crash handler. |
-| **Help delivery** | `prte_show_help.[ch]` | `prte_show_help()` — a drop-in for `pmix_show_help()` that works on a **daemon**. See below. |
+| **Help delivery** | `prte_show_help.[ch]` | `prte_show_help()` — a drop-in for `pmix_show_help()` that works on a **daemon**, and delivers a message about a request only to the tool that made it. See below. |
 | **Generated** | `prte_show_help_content.c`, `prte-convert-help.py` | Every `help-*.txt` in the tree, compiled in. **Never edit the generated file.** |
 
 ---
@@ -461,20 +461,21 @@ submitted — command-line parsing, startup failures, daemon launch — and
 those pass `PRTE_PROC_MY_NAME->nspace`, which *is* that job. It is a
 global reachable from anywhere, so no call site is unable to answer.
 
-A message that stems from a particular job names it, through
-`PRTE_JOB_NSPACE(jdata)`: all of `rmaps`, because a mapping failure is a
-failure to map one job; the binding-policy parsing in `src/hwloc` for the
-same reason; spawn, allocation, file pre-positioning, the `odls` binding
-and launch paths, and the `state`/`errmgr` reports of a job ending.
-
-**Use the macro, not `jdata->nspace`.** Policy parsing takes NULL for
-"set the DVM-wide default rather than this job's value" and branches on
-it, so a bare dereference at those sites is a crash on the error path —
-the one path nobody exercises. `PRTE_JOB_NSPACE()`
-([`src/runtime/prte_globals.h`](../runtime/prte_globals.h)) answers our
-own job for a NULL. Where the job object is *gone* rather than absent —
-`prte_state_base_orphaned_proc()` exists precisely for that case — pass
-the proc's own `nspace`; the report is still about that job.
+A message that stems from a particular job says so with
+`prte_show_help_job(jdata, ...)`: all of `rmaps`, because a mapping
+failure is a failure to map one job; the binding-policy parsing in
+`src/hwloc` for the same reason; spawn, allocation, file pre-positioning,
+the `odls` binding and launch paths, and the `state`/`errmgr` reports of a
+job ending. It takes NULL for "the DVM's own" - policy parsing passes NULL
+to set the DVM-wide default rather than one job's value, and branches on
+it - so there is no dereference to get wrong on the error path. Pass the
+job, not its namespace: a spawn whose request is still being parsed has no
+namespace yet, and is not in the registry the namespace would be looked up
+in (see "Who a message is for", below). Where the job object is *gone*
+rather than absent - `prte_state_base_orphaned_proc()` exists precisely
+for that case - `prte_show_help()` with the proc's own `nspace` is all
+there is; the report is still about that job, and it goes to everyone,
+since there is no longer anything to say who asked for it.
 
 **The whole tree is converted** — every one of the ~420 call sites that
 used to say `pmix_show_help(` now says `prte_show_help(`, so a plain
@@ -490,9 +491,86 @@ functions with different signatures; `prte_show_help()` is built on top
 of them. `pmix_show_help_norender()` takes the nspace too — that is how
 the job reaches PMIx's suppression.)
 
-`prte-convert-help.py` recognizes both spellings when it scans for help
-citations, so converting a call site does not remove it from the
-help-file cross-check.
+`prte-convert-help.py` recognizes every spelling - the PMIx one and the
+`prte_show_help*()` variants below, each with its file and topic in their
+own positions - when it scans for help citations and counts arguments, so
+converting a call site does not remove it from the help-file cross-check.
+A new variant has to be added there too, or every topic it shows is
+reported as unused and the build stops.
+
+### Who a message is for
+
+On the master, `prte_show_help()` is logged as the PMIx server's own
+output, and PMIx sends the server's own output to **every tool connected
+to the DVM** - each one is registered for it when it connects. That is
+right for a message about the DVM, and wrong for one about a request: a
+hostfile that would not parse, quoting the line it stopped at, is the
+business of the tool that named the file, not of every other user's
+`prun`. So a message about a request carries `PMIX_LOG_TARGET`, and PMIx
+delivers it only to the tools it names - to nobody else, and not cached
+for a later connection; when none of them is connected any more it goes to
+the master's own stream.
+
+The target is **the tool at the top of the request**, found on the master
+from its own data (`top_requester()`):
+
+- a job's requester is its `PRTE_JOB_LAUNCH_PROXY` - or, while a spawn's
+  request is still being parsed and the proxy is not yet set, its
+  `originator`;
+- when that is a process of another job - an application that spawned
+  this one - that job's requester is taken, and so on up to the tool that
+  started the tree (bounded, so two jobs that name each other cannot spin
+  it);
+- a tool's own job is that tool, and our own namespace is the DVM - under
+  `prterun`, the HNP *is* the tool, so its messages stay on its terminal;
+- a requester with no job here - neither a connected tool nor one of our
+  jobs - made its request through the scheduler, so the message goes to the
+  scheduler with `PMIX_REQUESTOR` naming whom it is for. Without a
+  scheduler it is targeted at the requester itself, which, not being
+  connected, sends it to the master's stream.
+
+A job with no requester at all - the DVM's own daemon job - is the DVM,
+and its messages still go to everyone.
+
+The call says which request it was:
+
+| Call | Use it for |
+|------|-----------|
+| `prte_show_help(nspace, ...)` | The DVM itself (`PRTE_PROC_MY_NAME->nspace`), or a registered job by namespace - the job's requester is looked up from it. |
+| `prte_show_help_job(jdata, ...)` | A job's request, including one still being parsed. NULL is the DVM. |
+| `prte_show_help_proc(requester, ...)` | A request with no job: an allocation, a session, a publish - `&req->tproc`, `&ctl->requestor`. |
+| `prte_show_help_procs(procs, n, ...)` | A collective - a fence, a group - whose members may come from several jobs and so several tools. Each is told. |
+| `prte_show_help_info(req, nreq, ...)` | Code handed a *requester info array* rather than the request (below). NULL, 0 is the DVM. |
+
+On a `prted`, the relay to the master carries which of these it was and
+the job or procs it named, and the master resolves the target from its own
+data - a daemon does not know which tools are connected. Each form scopes
+duplicate suppression to the job the request is about, or to the
+requester's own: two tools that make the same mistake are each told.
+
+#### The requester info array
+
+The leaf parsers - `prte_util_add_hostfile_nodes()`,
+`prte_util_filter_hostfile_nodes()`, the three `dash_host` entry points,
+`prte_util_parse_rankfile()`, `prte_textfile_report_limit()`, and the ras
+and rmaps readers built on them - act *for* a request without holding it.
+They take one `const pmix_info_t *req, size_t nreq` describing whoever
+named the file or list: `PMIX_USERID` and `PMIX_GRPID`, whose permissions
+a file is opened with (read back by `prte_requester_ids()`, which answers
+our own for an array that names none or names them with the wrong type);
+`PMIX_NSPACE`, the job the request is about, for duplicate suppression;
+and the `PMIX_LOG_TARGET` (and any `PMIX_REQUESTOR`) its messages go to.
+Build it with `prte_requester_info_job(jdata, ...)` - the owner
+`prte_pmix_server_job_user()` names, and the job's requester - or
+`prte_requester_info_proc(requester, uid, gid, ...)`, and release it with
+`PMIX_INFO_FREE`. `NULL, 0` is the DVM's own configuration: read as our
+own user, and its messages go to everyone. This replaces the `uid, gid`
+pair those functions used to take, so "who asked" is one argument that
+answers both questions.
+
+The routing is checked in `test/unit/runtime/test_runtime.c`
+(`test_show_help_target`); the delivery, in PMIx's
+`test/unit/iof_log_target.c`.
 
 ---
 

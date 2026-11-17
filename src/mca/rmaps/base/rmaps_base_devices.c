@@ -567,9 +567,9 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
      * device may be named rather than classed. */
     for (m = 0; m < ngpu; m++) {
         if (0 == (dc->devs[m].dev.type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:nic-needs-gpu",
-                           true, opts->map_device, node->name,
-                           (NULL == dc->devs[m].dev.osname) ? "(unnamed)" : dc->devs[m].dev.osname);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:nic-needs-gpu",
+                               true, opts->map_device, node->name,
+                               (NULL == dc->devs[m].dev.osname) ? "(unnamed)" : dc->devs[m].dev.osname);
             return PRTE_ERR_SILENT;
         }
     }
@@ -641,9 +641,9 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
         }
         if (0 == nany) {
             if (!warned) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:no-nic-near-gpu",
-                               true, node->name,
-                               (NULL == dc->devs[g * dc->per].dev.osname) ? "(unnamed)"
+                prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:no-nic-near-gpu",
+                                   true, node->name,
+                                   (NULL == dc->devs[g * dc->per].dev.osname) ? "(unnamed)"
                                    : dc->devs[g * dc->per].dev.osname);
                 warned = true;
             }
@@ -716,11 +716,11 @@ static int assign_nics(prte_job_t *jdata, prte_node_t *node,
     free(chosen);
 
     if (shortfall) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:too-few-nics-near-gpu",
-                       true, (int) dc->nicper, (int) most, node->name,
-                       (NULL == dc->devs[mostg * dc->per].dev.osname) ? "(unnamed)"
+        prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:too-few-nics-near-gpu",
+                           true, (int) dc->nicper, (int) most, node->name,
+                           (NULL == dc->devs[mostg * dc->per].dev.osname) ? "(unnamed)"
                            : dc->devs[mostg * dc->per].dev.osname,
-                       (int) most);
+                           (int) most);
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;
@@ -790,9 +790,9 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
     for (n = 0; n < dc->ndevs; n++) {
         if (0 != (dc->devs[n].dev.type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))
             && NULL == dc->devs[n].vendor_id) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
-                           true, opts->map_device, node->name,
-                           dc->devs[n].dev.osname);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
+                               true, opts->map_device, node->name,
+                               dc->devs[n].dev.osname);
             pmix_hwloc_release_devices(dc->devs, dc->ndevs);
             free(dc);
             return PRTE_ERR_SILENT;
@@ -863,9 +863,9 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
      * binding matching it is then legitimate. */
     for (n = 0; n < dc->ngroups; n++) {
         if (!binding_fits(node, dc->grouploc[n], opts)) {
-            prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
-                           prte_hwloc_base_print_binding(opts->bind),
-                           opts->map_device, node->name);
+            prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
+                               prte_hwloc_base_print_binding(opts->bind),
+                               opts->map_device, node->name);
             prte_rmaps_base_devices_end(dc);
             return PRTE_ERR_SILENT;
         }
@@ -888,8 +888,8 @@ int prte_rmaps_base_devices_begin(prte_job_t *jdata, prte_node_t *node,
         }
     }
     if (degenerate && 1 < dc->ngroups) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
-                       true, opts->map_device, node->name, (int) (dc->ngroups * dc->per));
+        prte_show_help_job(jdata, "help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
+                           true, opts->map_device, node->name, (int) (dc->ngroups * dc->per));
     }
 
     /* and the NICs to go with the GPUs, if asked for */

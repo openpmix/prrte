@@ -191,11 +191,13 @@ PRTE_EXPORT extern prte_hwloc_base_memattr_t prte_hwloc_base_memattr;
  * prte_cli_match(): case insensitive, and any unique abbreviation will do.
  * None takes a qualifier, so a ':' anywhere is refused.
  *
- * Reports what is wrong itself, under "nspace" and naming "option" - the
+ * Reports what is wrong itself, for the job jdata (NULL for a tool's own
+ * command line or the DVM's) and naming "option" - the
  * spelling the user wrote - and then returns PRTE_ERR_SILENT, leaving
  * *memattr untouched. Returns PRTE_SUCCESS with *memattr set otherwise.
  */
-PRTE_EXPORT int prte_hwloc_base_parse_membind(const char *nspace, const char *option,
+struct prte_job_t;
+PRTE_EXPORT int prte_hwloc_base_parse_membind(const struct prte_job_t *jdata, const char *option,
                                               const char *spec,
                                               prte_hwloc_base_memattr_t *memattr);
 
@@ -289,7 +291,10 @@ PRTE_EXPORT int prte_hwloc_base_get_topology(void);
  */
 PRTE_EXPORT void prte_hwloc_base_setup_summary(hwloc_topology_t topo);
 
-PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
+/* A cpu the list names that topo lacks is reported for the job nspace
+ * names (see prte_show_help) - our own for the DVM's default list */
+PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(const pmix_nspace_t nspace,
+                                                           hwloc_topology_t topo,
                                                            bool use_hwthread_cpus,
                                                            char **cpulist);
 

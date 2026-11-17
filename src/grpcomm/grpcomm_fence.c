@@ -644,8 +644,9 @@ static void report_fence_nonparticipants(prte_grpcomm_fence_t *coll)
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
                          "%s grpcomm:%s timed out - %lu member(s) did not take part: %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), what, (unsigned long) nnp, list));
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt",
-                   "collective-nonparticipants", true, what, "(none)", (unsigned long) nnp, list);
+    prte_show_help_procs(coll->sig->signature, coll->sig->sz, "help-prte-grpcomm.txt",
+                         "collective-nonparticipants", true, what, "(none)",
+                         (unsigned long) nnp, list);
     free(list);
     free(np);
 }
@@ -1185,8 +1186,8 @@ static void fence(int sd, short args, void *cbdata)
     if (!prte_grpcomm_fence_op_merge(coll,
                                      prte_grpcomm_fence_op_from_info(cd->info, cd->ninfo)) ||
         !prte_grpcomm_fence_purpose_merge(coll, cd->purpose)) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt", "fence-op-mismatch", true,
-                       prte_process_info.nodename);
+        prte_show_help_procs(coll->sig->signature, coll->sig->sz, "help-prte-grpcomm.txt",
+                             "fence-op-mismatch", true, prte_process_info.nodename);
         if (PMIX_SUCCESS == coll->status) {
             coll->status = PMIX_ERR_INVALID_ARG;
         }
@@ -1505,8 +1506,8 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
          * same treatment a non-success PMIX_LOCAL_COLLECTIVE_STATUS gets, and
          * the status is deliberately the one PMIx answers for the local form
          * of the same disagreement. */
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-grpcomm.txt", "fence-op-mismatch", true,
-                       prte_process_info.nodename);
+        prte_show_help_procs(coll->sig->signature, coll->sig->sz, "help-prte-grpcomm.txt",
+                             "fence-op-mismatch", true, prte_process_info.nodename);
         if (PMIX_SUCCESS == coll->status) {
             coll->status = PMIX_ERR_INVALID_ARG;
         }

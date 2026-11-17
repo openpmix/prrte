@@ -160,7 +160,7 @@ static int run_case(const corpus_case_t *c, bool regen)
     PMIX_CONSTRUCT(&rankmap, pmix_hash_table_t);
     pmix_hash_table_init(&rankmap, 8);
 
-    rc = prte_util_parse_rankfile(path, prte_process_info.euid, prte_process_info.egid, &rankmap, &num_ranks);
+    rc = prte_util_parse_rankfile(path, NULL, 0, &rankmap, &num_ranks);
     got = render(rc, &rankmap, num_ranks);
 
     /* the map is the caller's, on the failure paths as much as the clean one */

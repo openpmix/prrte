@@ -695,9 +695,9 @@ static void _toolconn(int sd, short args, void *cbdata)
              * allocation request, so it has to run as root, as the user
              * this DVM runs as, or as one prte_pmix_scheduler_uids names.
              * (cd->uid is the one PMIx authenticated for the connection.) */
-            prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-prte-runtime.txt",
-                           "scheduler-refused", true, cd->target.nspace,
-                           uid_given ? (unsigned) cd->uid : 0, uid_given ? "" : " (not given)");
+            prte_show_help_proc(&cd->target, "help-prte-runtime.txt",
+                                "scheduler-refused", true, cd->target.nspace,
+                                uid_given ? (unsigned) cd->uid : 0, uid_given ? "" : " (not given)");
             if (NULL != cd->toolcbfunc) {
                 cd->toolcbfunc(PMIX_ERR_NO_PERMISSIONS, NULL, cd->cbdata);
             }

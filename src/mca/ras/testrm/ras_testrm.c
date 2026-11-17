@@ -43,8 +43,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* the component's own configuration, so read as ourselves */
-    rc = prte_util_add_hostfile_nodes(nodes, prte_mca_ras_testrm_component.hostfile,
-                                      prte_process_info.euid, prte_process_info.egid);
+    rc = prte_util_add_hostfile_nodes(nodes, prte_mca_ras_testrm_component.hostfile, NULL, 0);
     return rc;
 }
 

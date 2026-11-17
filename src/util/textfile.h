@@ -49,6 +49,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+#include "src/pmix/pmix-internal.h"
+
 BEGIN_C_DECLS
 
 /*
@@ -132,13 +134,14 @@ PRTE_EXPORT char **prte_textfile_next(prte_textfile_t *tf);
 PRTE_EXPORT char *prte_textfile_getline(prte_textfile_t *tf);
 
 /*
- * If the read stopped at one of the limits above, say so to nspace for the
- * file at path and return true; otherwise say nothing and return false, for
+ * If the read stopped at one of the limits above, say so for the file at
+ * path to the requester req describes (prte_show_help_info) and return
+ * true; otherwise say nothing and return false, for
  * the caller to report the failure as it reports any other.  Usable after
  * prte_textfile_close().
  */
-PRTE_EXPORT bool prte_textfile_report_limit(prte_textfile_t *tf, const char *nspace,
-                                            const char *path);
+PRTE_EXPORT bool prte_textfile_report_limit(prte_textfile_t *tf, const pmix_info_t *req,
+                                            size_t nreq, const char *path);
 
 /* Close the file and release everything it is holding.  Safe to call on a
  * file that was never opened, and safe to call twice. */

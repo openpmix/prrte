@@ -95,8 +95,8 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     /* check the PE_HOSTFILE before continuing on */
     fp = fopen(pe_hostfile, "r");
     if (NULL == fp) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "cannot-read-pe-hostfile", true, pe_hostfile,
-                       strerror(errno));
+        prte_show_help_job(jdata, "help-ras-gridengine.txt", "cannot-read-pe-hostfile", true,
+                           pe_hostfile, strerror(errno));
         rc = PRTE_ERROR;
         PRTE_ERROR_LOG(rc);
         /* return the open failure: falling through to the shared cleanup
@@ -134,8 +134,8 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             errno = 0;
             v = strtol(num, &end, 10);
             if (end == num || '\0' != *end || 0 != errno || 0 > v || INT_MAX < v) {
-                prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "bad-slots", true,
-                               pe_hostfile, ptr, num);
+                prte_show_help_job(jdata, "help-ras-gridengine.txt", "bad-slots", true,
+                                   pe_hostfile, ptr, num);
                 free(line);
                 fclose(fp);
                 return PRTE_ERR_SILENT;
@@ -178,8 +178,8 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
 
     fclose(fp);
     if (failed) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-prte-util.txt", "file-read-failed", true,
-                       pe_hostfile);
+        prte_show_help_job(jdata, "help-prte-util.txt", "file-read-failed", true,
+                           pe_hostfile);
         return PRTE_ERR_SILENT;
     }
 
@@ -189,7 +189,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
      * is considered an unrecoverable error and we need to report it
      */
     if (pmix_list_is_empty(nodelist)) {
-        prte_show_help(PRTE_JOB_NSPACE(jdata), "help-ras-gridengine.txt", "no-nodes-found", true);
+        prte_show_help_job(jdata, "help-ras-gridengine.txt", "no-nodes-found", true);
         return PRTE_ERR_NOT_FOUND;
     }
 

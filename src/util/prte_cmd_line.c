@@ -237,7 +237,7 @@ const char *prte_cli_name(const pmix_cli_choice_t *choices, int tag)
     return NULL;
 }
 
-int prte_cli_match(const pmix_nspace_t nspace, const char *option,
+int prte_cli_match(const struct prte_job_t *jdata, const char *option,
                    const char *input, const pmix_cli_choice_t *choices,
                    int *tag)
 {
@@ -252,7 +252,7 @@ int prte_cli_match(const pmix_nspace_t nspace, const char *option,
             return PRTE_ERR_NOT_FOUND;
         case PMIX_CLI_MATCH_AMBIGUOUS:
             list = pmix_cli_match_list(input, choices, ',');
-            prte_show_help(nspace, "help-prte-util.txt", "cli-ambiguous", true,
+            prte_show_help_job(jdata, "help-prte-util.txt", "cli-ambiguous", true,
                            option, input, (NULL == list) ? "" : list);
             free(list);
             return PRTE_ERR_SILENT;
@@ -279,10 +279,10 @@ int prte_cli_match(const pmix_nspace_t nspace, const char *option,
         }
     }
     if (NULL != entry && PMIX_CLI_VALUE_NONE == entry->value) {
-        prte_show_help(nspace, "help-prte-util.txt", "cli-unexpected-value", true,
+        prte_show_help_job(jdata, "help-prte-util.txt", "cli-unexpected-value", true,
                        option, (NULL == name) ? input : name, input);
     } else {
-        prte_show_help(nspace, "help-prte-util.txt", "cli-missing-value", true,
+        prte_show_help_job(jdata, "help-prte-util.txt", "cli-missing-value", true,
                        option, (NULL == name) ? input : name, input,
                        (NULL == name) ? input : name);
     }

@@ -437,9 +437,9 @@ static bool owner_answered(prte_pmix_server_req_t *req, const pmix_info_t *ans, 
     } else {
         snprintf(answered, sizeof(answered), "no user and group");
     }
-    prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-ras-base.txt",
-                   "ras-base:alloc-owner-mismatch", true,
-                   PMIx_Alloc_directive_string(req->allocdir), suid, sgid, answered);
+    prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                        "ras-base:alloc-owner-mismatch", true,
+                        PMIx_Alloc_directive_string(req->allocdir), suid, sgid, answered);
     return false;
 }
 
