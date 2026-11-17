@@ -247,6 +247,11 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
  * have all departed stops being waited for.  See grpcomm_departed.c. */
 #define PRTE_RML_TAG_FENCE_DEPARTED       87
 
+/* A group operation that has run out of time: a daemon asks the controller
+ * to expire it, and the controller tells every daemon to hand up what its
+ * PMIx server holds. See "One deadline" in src/grpcomm/AGENTS.md. */
+#define PRTE_RML_TAG_GROUP_EXPIRE         88
+
 #define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)
