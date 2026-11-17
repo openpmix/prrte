@@ -60,11 +60,17 @@
  */
 
 #include "prte_config.h"
+#include <limits.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef HAVE_DLFCN_H
+#    include <dlfcn.h>
+#endif
 
 #include "constants.h"
 #include "src/class/pmix_pointer_array.h"
@@ -74,6 +80,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/prte_bootstrap.h"
+#include "src/util/prte_config_file.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/base/pmix_mca_base_var.h"
@@ -385,6 +392,63 @@ static int boot_nodes(const char *dir, const char *nodes, prte_bootstrap_config_
  */
 static bool nodes_are(prte_bootstrap_config_t *cfg, const char *expected);
 
+/* The first owner, from the file holding the PRRTE library this test runs
+ * upward, who is not root - found the way prte_open_config_file() finds
+ * it - or 0 if there is none or the library cannot be found. */
+static uid_t library_owner(void)
+{
+    char lib[PATH_MAX];
+    struct stat st;
+    char *slash;
+    uid_t owner = 0;
+    bool found = false;
+#if defined(__linux__)
+    FILE *fp = fopen("/proc/self/maps", "r");
+    char line[PATH_MAX + 128];
+    unsigned long start, end, inode;
+    uintptr_t addr = (uintptr_t) &prte_open_config_file;
+    char *name, *nl;
+    int n;
+
+    if (NULL == fp) {
+        return 0;
+    }
+    while (NULL != fgets(line, sizeof(line), fp)) {
+        n = 0;
+        if (3 != sscanf(line, "%lx-%lx %*s %*s %*s %lu %n", &start, &end, &inode, &n) ||
+            0 == n || addr < start || addr >= end) {
+            continue;
+        }
+        name = line + n;
+        if (NULL != (nl = strchr(name, '\n'))) {
+            *nl = '\0';
+        }
+        if (0 != inode && '/' == name[0] && sizeof(lib) > strlen(name)) {
+            strcpy(lib, name);
+            found = true;
+        }
+        break;
+    }
+    fclose(fp);
+#elif defined(HAVE_DLFCN_H) && defined(HAVE_DLADDR)
+    Dl_info info;
+
+    found = 0 != dladdr((const void *) (uintptr_t) &prte_open_config_file, &info) &&
+            NULL != info.dli_fname && NULL != realpath(info.dli_fname, lib);
+#endif
+    if (!found) {
+        return 0;
+    }
+    while (0 == owner && 0 == lstat(lib, &st)) {
+        owner = st.st_uid;
+        if (NULL == (slash = strrchr(lib, '/')) || slash == lib) {
+            break;
+        }
+        *slash = '\0';
+    }
+    return owner;
+}
+
 static int test_bootstrap_file_refused(void)
 {
     int failures = 0;
@@ -485,6 +549,26 @@ static int test_bootstrap_file_refused(void)
               0 == chown(dir, 1, 1) && PRTE_SUCCESS != prte_bootstrap_parse(&cfg));
         prte_bootstrap_config_free(&cfg);
         CHECK("bootfile: the directory given back", 0 == chown(dir, 0, 0));
+        /* the owner of the library we run, or of a directory above it,
+         * could have replaced it: an install one user made for others, a
+         * build tree root runs */
+        {
+            uid_t lowner = library_owner();
+
+            if (0 != lowner) {
+                CHECK("bootfile: as root, prte.conf and its directory owned by the library's "
+                      "owner are read",
+                      0 == chown(conf, lowner, (gid_t) -1) &&
+                          0 == chown(dir, lowner, (gid_t) -1) &&
+                          PRTE_SUCCESS == prte_bootstrap_parse(&cfg));
+                prte_bootstrap_config_free(&cfg);
+                CHECK("bootfile: given back to root",
+                      0 == chown(conf, 0, 0) && 0 == chown(dir, 0, 0));
+            } else {
+                fprintf(stdout, "  SKIP bootfile: the library owner's files (everything above "
+                                "the library is root's)\n");
+            }
+        }
     } else {
         fprintf(stdout, "  SKIP bootfile: another user's files (needs root)\n");
     }

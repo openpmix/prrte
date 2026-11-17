@@ -541,7 +541,7 @@ AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf fork setsid strsignal sysl
 # test can succeed against a libc that ships the symbol without a
 # prototype, and an implicit declaration is a hard error under
 # --enable-devel-check.
-AC_CHECK_FUNCS([close_range closefrom])
+AC_CHECK_FUNCS([close_range closefrom dladdr])
 AC_CHECK_DECLS([close_range, closefrom], [], [], [[
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

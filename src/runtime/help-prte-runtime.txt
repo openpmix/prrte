@@ -112,14 +112,14 @@ refused on at least one node:
    reason: %s
 
 These files name the DVM's key, its controller and its nodes, so they are
-read only if nobody but root, the user the daemon runs as and the
-members of that user's groups could have written them: a regular file,
-not a symbolic link and with no other names, owned by root or that user,
-that nobody else can write but a group the user is in, in a directory
-held to the same rule (or one with the sticky bit) owned by root or that
-user. A daemon running as root admits no group write. Correct the file's
-ownership or permissions, or those of its directory, and start the
-daemon again.
+read only if nobody could have written them but root, the user the
+daemon runs as, the members of that user's groups, and the owner of the
+PRRTE library the daemon runs or of a directory above it: a regular
+file, not a symbolic link and with no other names, owned by one of those
+users, that nobody else can write but a group the user is in, in a
+directory held to the same rule (or one with the sticky bit). A daemon
+running as root admits no group write. Correct the file's ownership or
+permissions, or those of its directory, and start the daemon again.
 #
 [bootstrap-missing-field-name]
 
