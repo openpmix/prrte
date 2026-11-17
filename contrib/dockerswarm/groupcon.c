@@ -277,11 +277,14 @@ int main(int argc, char **argv)
         }
         printf("GRP %u FENCING\n", myproc.rank);
         fflush(stdout);
-        PMIX_INFO_CREATE(info, 1);
-        ninfo = 1;
+        ninfo = (0 < tmo) ? 2 : 1;
+        PMIX_INFO_CREATE(info, ninfo);
         /* collect the data each rank put, so this is a real allgather and
          * not just a barrier */
         PMIX_INFO_LOAD(&info[0], PMIX_COLLECT_DATA, &dofence, PMIX_BOOL);
+        if (0 < tmo) {
+            PMIX_INFO_LOAD(&info[1], PMIX_TIMEOUT, &tmo, PMIX_INT);
+        }
         rc = PMIx_Fence(procs, nprocs, info, ninfo);
         PMIX_INFO_FREE(info, ninfo);
         info = NULL;

@@ -251,6 +251,8 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
  * to expire it, and the controller tells every daemon to hand up what its
  * PMIx server holds. See "One deadline" in src/grpcomm/AGENTS.md. */
 #define PRTE_RML_TAG_GROUP_EXPIRE         88
+/* the same, for a fence, connect or disconnect */
+#define PRTE_RML_TAG_FENCE_EXPIRE         89
 
 #define PRTE_RML_TAG_MAX                 100
 
