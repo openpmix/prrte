@@ -1178,6 +1178,42 @@ than appending a second, so the destruct after a reuse finds the group
 that is. The PMIx servers screen their own clients' requests against what
 they hold; this is the DVM-wide half (N07).
 
+**One group ID, two memberships: every participant fails.** The PMIx
+server checks that the calls *it* collects for one ID name the same
+members, but it sees only its own node. Two jobs on different nodes, each
+constructing a group of its own procs under one ID, pass that check and
+used to meet on one tracker here - counted together, and released into one
+group with each other's group info and endpoints. A contribution must now
+name the tracker's members (`prte_grpcomm_same_members()`: order and
+repeats ignored, a namespace wildcard is that whole job). One that does not
+marks the tracker (`conflict`, `add_conflict()`): it then waits for the
+daemons of *both* memberships, so each subtree is still counted once, and
+resolves as `PMIX_ERR_BAD_PARAM` for every participant of either. A call
+that arrives after the tracker converged is too late to fail it and is
+answered on its own (`pnd->conflict`, and the release's own comparison),
+never with the group. **All fail, deliberately not "all but the first"**:
+which call came first depends on which daemon you ask, and an outcome that
+turned on it could not be reconstructed by anyone debugging it.
+
+That leaves a window, accepted knowingly: once a colliding operation has
+been failed and its trackers are gone, a construct of the same ID arriving
+afterwards collides with nothing and succeeds. Whether a late caller fails
+depends on how late it is. Refusing the ID for good would be worse - it
+could never be used again - so suspect this when one of several runs reusing
+a group ID fails and another does not. Bootstrap, follower and add-members
+operations list only some of their members, or none, and are not compared;
+the PMIx server exempts the same three.
+
+**A destruct must name the group's members.** A PMIx server holding a
+record of the group hands up its recorded members whatever its client
+named; one with no record - a node with no member, and a client older than
+PMIx v7.0, which still names a list - hands up the caller's list, and that
+destruct used to end the group on every daemon. The master now refuses a
+destruct whose members differ from its `live_groups` record
+(`prte_grpcomm_group_members_differ()`, `PMIX_ERR_NOT_A_MEMBER`), and a
+refused destruct (`destruct_refused()`) ends nothing - not the master's
+record, not any daemon's `prte_pmix_server_globals.groups` entry.
+
 **`ft_collective` means "some *surviving* participant asked for it."** It
 is accumulated by sticky-OR as contributions merge, so a participant that
 requested it and then died before rolling up is not visible. This is a

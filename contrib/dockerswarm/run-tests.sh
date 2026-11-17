@@ -6761,6 +6761,7 @@ test_grpcomm() {
     test_grpcomm_invite
     test_grpcomm_ft
     test_grpcomm_reuse
+    test_grpcomm_collision
     test_fence_straggler
     test_fence_early_arrival
     test_low_radix_release
@@ -6768,6 +6769,78 @@ test_grpcomm() {
     test_xcast_grow_new_parent
     test_xcast_grow_known_parent
     test_grow_window_broadcast
+}
+
+test_grpcomm_collision() {
+    local out n i
+
+    if ! have_nodes 5; then
+        skp "group ID collision: needs 5 nodes, this run has $NNODES"
+        return
+    fi
+
+    banner "grpcomm: two jobs constructing one group ID fail, both of them"
+    # Each job constructs a group of its own procs under the same ID, on
+    # nodes of its own. Each node's PMIx server sees only its own job's
+    # calls, which agree, so the two only meet in grpcomm - where they used
+    # to land on one tracker: whichever arrived first decided which daemons
+    # were expected, the other was counted anyway, and the construct could
+    # complete early and hand B's ranks a group of A's members. Now a
+    # contribution naming other members marks the tracker, which waits for
+    # both jobs' daemons and fails every participant - deliberately not "all
+    # but the first", since which one is first depends on where you look.
+    #
+    # A's last rank holds its construct back, so A's is in flight - its
+    # first rank's contribution already in - when B's arrives. B therefore
+    # cannot finish before A's last rank contributes.
+    cleanup_swarm
+    if ! RUN "test -x $GC"; then
+        skp "groupcon client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:1,node2:1,node3:1,node4:1,node5:1'; then
+        bad "could not start a DVM for the group ID collision test"
+        cleanup_swarm
+        return
+    fi
+
+    RUN 'rm -f /tmp/grp-collide-a.out' >/dev/null 2>&1
+    PRUN_BG /tmp/grp-collide-a.out "--host node2:1,node3:1 -n 2 --map-by node $GC --hold-last 15 collidegrp"
+    sleep 5
+    out=$(PRUN "--host node4:1,node5:1 -n 2 --map-by node $GC collidegrp" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_ERR_BAD_PARAM')
+    [ "$n" = 2 ] \
+        && ok "the second job's construct of the same ID failed on both its ranks" \
+        || bad "$n of 2 of the second job's ranks failed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    echo "$out" | grep -q 'CONSTRUCT PMIX_SUCCESS' \
+        && bad "...but one of them was handed a group" \
+        || ok "...and neither was handed a group"
+    for i in $(seq 1 30); do
+        [ "$(RUN 'grep -c " DONE " /tmp/grp-collide-a.out' 2>/dev/null | tr -d '\r')" = 2 ] && break
+        sleep 1
+    done
+    out=$(RUN 'cat /tmp/grp-collide-a.out' 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_ERR_BAD_PARAM')
+    [ "$n" = 2 ] \
+        && ok "...and so did the first job's, on both its ranks" \
+        || bad "$n of 2 of the first job's ranks failed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # the ID is not left unusable: once neither is in flight, it constructs
+    out=$(PRUN "--host node2:1,node3:1 -n 2 --map-by node $GC collidegrp" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 2 ] \
+        && ok "...and the ID constructs normally once neither is in flight" \
+        || bad "$n of 2 ranks constructed the ID afterwards: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1,node5:1 -n 5 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c '^node')
+    [ "$n" = 5 ] \
+        && ok "...and the DVM still runs a follow-on job on every node" \
+        || bad "the DVM could not run a follow-on job after the collision ($n of 5)"
+
+    RUN 'rm -f /tmp/grp-collide-a.out' >/dev/null 2>&1
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
 }
 
 test_xcast_grow_new_parent() {

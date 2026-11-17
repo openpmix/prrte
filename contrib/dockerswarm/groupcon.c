@@ -149,6 +149,8 @@ int main(int argc, char **argv)
     const char *grpid;
     int seconds = 0;
     int delay = 0;
+    int holdlast = 0;
+
     int failures = 0;
     int i, npos = 0;
     bool idassigned = false;
@@ -171,6 +173,13 @@ int main(int argc, char **argv)
             dofence = true;
         } else if (0 == strcmp(argv[i], "--delay") && (i + 1) < argc) {
             delay = atoi(argv[++i]);
+        } else if (0 == strcmp(argv[i], "--hold-last") && (i + 1) < argc) {
+            /* only the last rank waits before constructing, so the
+             * construct is in flight - its other members already in - for
+             * that long */
+            holdlast = atoi(argv[++i]);
+
+
         } else if (0 == npos) {
             grpid = argv[i];
             ++npos;
@@ -181,7 +190,8 @@ int main(int argc, char **argv)
     }
     if (NULL == grpid) {
         fprintf(stderr,
-                "usage: %s [--ft] [--fence] [--reverse] [--delay <s>] <groupID> [seconds]\n",
+                "usage: %s [--ft] [--fence] [--reverse] [--delay <s>] [--hold-last <s>] "
+                "<groupID> [seconds]\n",
                 argv[0]);
         return 2;
     }
@@ -326,6 +336,11 @@ int main(int argc, char **argv)
         printf("GRP %u DELAYING %d\n", myproc.rank, delay);
         fflush(stdout);
         sleep(delay);
+    }
+    if (0 < holdlast && myproc.rank == (nprocs - 1)) {
+        printf("GRP %u DELAYING %d\n", myproc.rank, holdlast);
+        fflush(stdout);
+        sleep(holdlast);
     }
 
     rc = PMIx_Group_construct(grpid, procs, nprocs, info, ninfo, &results, &nresults);

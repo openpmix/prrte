@@ -374,6 +374,20 @@ PRTE_EXPORT void prte_grpcomm_group_formed(const char *grpid, const pmix_proc_t 
 /* The controller completed a destruct of this ID (master only) */
 PRTE_EXPORT void prte_grpcomm_group_ended(const char *grpid);
 
+/* Do two lists name the same procs? Order and repeats do not matter, and a
+ * namespace's wildcard rank stands for every proc of that job, so it
+ * matches a list of each of them - the comparison the PMIx server makes
+ * between two local calls of one group ID (grp_lists_match). Exported for
+ * the unit test. */
+PRTE_EXPORT bool prte_grpcomm_same_members(const pmix_proc_t *a, size_t na,
+                                           const pmix_proc_t *b, size_t nb);
+
+/* Does the controller hold a live group of this ID whose members are not
+ * these? A destruct must name the group's own members. */
+PRTE_EXPORT bool prte_grpcomm_group_members_differ(const char *grpid,
+                                                   const pmix_proc_t *members,
+                                                   size_t nmembers);
+
 /* Did this set of participants lose anyone to a failed daemon? Unlike the
  * single-process test, a wildcard entry is expanded through the job map, so
  * a collective whose membership is written as a whole namespace is answered
@@ -602,6 +616,10 @@ typedef struct {
     // set when an abort has been broadcast for this op but the tracker has
     // not yet been deleted by the returning release
     bool aborting;
+    // set when contributions naming different members reached this tracker
+    // under one ID - see prte_grpcomm_same_members(). The operation then
+    // fails for every participant of either membership
+    bool conflict;
 
     /*** BOOTSTRAP TRACKERS ***/
     // "leaders" are group members reporting as
@@ -657,6 +675,10 @@ typedef struct {
     pmix_list_item_t super;
     pmix_info_cbfunc_t cbfunc;
     void *cbdata;
+    // this call named members other than the tracker's, and reached it too
+    // late to fail the operation: it is answered PMIX_ERR_BAD_PARAM, and
+    // never with the group the tracker forms
+    bool conflict;
 } prte_grpcomm_grp_pending_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_grp_pending_t);
 
