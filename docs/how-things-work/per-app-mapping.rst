@@ -4,11 +4,11 @@ Per-App-Context Mapping
 =======================
 
 By default, every application context (``prte_app_context_t``) within a job
-is placed using the same mapping, ranking, and binding policy — the one
-specified at the job level via ``--map-by``, ``--rank-by``, and ``--bind-to``.
-Per-app-context mapping allows each application context in a multi-program
-multiple-data (MPMD) job to carry its own independent set of placement
-directives.
+is placed using the same mapping, ranking, binding, and memory-binding
+policy — the one specified at the job level via ``--map-by``, ``--rank-by``,
+``--bind-to``, and ``--membind``.  Per-app-context mapping allows each
+application context in a multi-program multiple-data (MPMD) job to carry its
+own independent set of placement directives.
 
 
 When to Use It
@@ -24,6 +24,9 @@ example:
   unbound.
 * A utility process that must not run on the head node (``NOLOCAL``), while
   the rest of the job can use all nodes.
+* A bandwidth-bound solver whose memory belongs on high-bandwidth memory,
+  next to a component whose memory belongs on the node with the most
+  capacity.
 
 Without per-app mapping, satisfying these requirements would require launching
 multiple separate jobs with separate ``prun`` invocations, losing the ability
@@ -34,8 +37,8 @@ Command-Line Syntax
 -------------------
 
 Per-app directives are specified using the standard MPMD separator (``:``) on
-the ``prun`` command line.  Which app a ``--map-by``, ``--rank-by`` or
-``--bind-to`` describes follows one rule:
+the ``prun`` command line.  Which app a ``--map-by``, ``--rank-by``,
+``--bind-to`` or ``--membind`` describes follows one rule:
 
 **The first app segment is where the command line speaks for the job.**  A
 directive written there and nowhere else applies to the whole job, however
@@ -65,9 +68,14 @@ resolution.
    # app2 is placed by a rankfile of its own; app1 takes the default mapping
    prun -n 3 app1 : --map-by rankfile:file=/path/to/rfile -n 2 app2
 
-The three classes are decided independently: a ``--map-by`` on the first app
-can describe the job while a ``--rank-by`` on the third app describes only
-that app.
+   # app1's memory on the highest-bandwidth node near its core, app2's on
+   # the node with the most memory
+   prun --bind-to core --membind bandwidth -n 4 app1 : \
+        --bind-to core --membind capacity -n 2 app2
+
+The four classes are decided independently: a ``--map-by`` on the first app
+can describe the job while a ``--rank-by`` or ``--membind`` on the third app
+describes only that app.
 
 Any ``--map-by`` qualifier that is valid at the job level is also valid per
 app, and every mapping policy is — ``seq``, ``rankfile``, ``ppr:N:obj`` and
@@ -154,6 +162,7 @@ keys are:
 * ``PMIX_MAPBY`` — equivalent to ``--map-by``
 * ``PMIX_RANKBY`` — equivalent to ``--rank-by``
 * ``PMIX_BINDTO`` — equivalent to ``--bind-to``
+* ``PMIX_MEMBIND`` — equivalent to ``--membind``
 
 ``PMIX_PPR`` may also be given per app.
 
@@ -189,6 +198,12 @@ The inheritance chain for each field is:
 
 This resolution is performed by ``prte_rmaps_base_resolve_app_options()``
 immediately before each app context is dispatched to a mapping component.
+
+``--membind`` follows the same chain, but is resolved elsewhere:
+``prte_hwloc_base_membind_resolve()`` takes the app's ``PRTE_APP_MEMBIND``,
+else the job's ``PRTE_JOB_MEMBIND``, else the ``hwloc_default_membind`` MCA
+parameter.  The daemon calls it as it starts each process, and the HNP calls
+it once the job is mapped (see below).
 
 
 How the Dispatch Works
@@ -240,6 +255,16 @@ The complete job map is the union of nodes used by all app contexts.
 ``prte_rmaps_base_display_map()`` is called once at the end, after all app
 contexts have been placed, and displays this complete map.
 
+A per-app ``PRTE_APP_MEMBIND`` does not switch the mapper to the per-app loop,
+and no mapping component reads it: memory binding does not change where a
+process is placed.  The daemon applies it when it starts each process,
+computing the memory nodes from the cpuset the mapper gave that process.
+After mapping, the HNP checks each app whose memory binding resolves to
+something other than ``none``, and warns once per app about any of its
+processes that were left without a cpuset (``--bind-to none``, or a default
+binding dropped on an oversubscribed node).  The daemons skip those
+processes on the same test.
+
 
 Attribute Storage
 -----------------
@@ -285,6 +310,10 @@ the following keys (defined in ``src/util/attr.h``):
      - ``PMIX_UINT16``
      - Maximum number of processes to bind to a single target object before
        moving to the next
+   * - ``PRTE_APP_MEMBIND`` (43)
+     - ``PMIX_UINT16``
+     - Parsed memory-binding attribute (a ``prte_hwloc_base_memattr_t``);
+       takes precedence over the job-level ``PRTE_JOB_MEMBIND``
 
 ``PRTE_APP_PPR`` (25) holds this app's whole ``N:object`` pattern, in the
 same spelling as the job-level ``PRTE_JOB_PPR`` — the object is as much a
