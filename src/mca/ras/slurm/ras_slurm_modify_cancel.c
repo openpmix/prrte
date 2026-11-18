@@ -21,6 +21,7 @@
 #include "ras_slurm.h"
 #include "src/mca/ras/base/base.h"
 #include "src/prted/pmix/pmix_server_internal.h"
+#include "src/util/prte_show_help.h"
 
 static pmix_pointer_array_t pending_reqs;
 static bool initialized = false;
@@ -41,14 +42,19 @@ static int prte_ras_slurm_find_pending_req(const char *nspace, const char *reque
 static int prte_ras_slurm_find_pending_job(const char *slurm_job_id, int *idx);
 static void prte_ras_slurm_cancel_req_at(int idx);
 static int serve_cancel_by_alloc_id(const char *alloc_id, uid_t uid);
+static int answer_granted(prte_pmix_server_req_t *req, prte_session_t *session);
 
 /**
- * @brief Process a PMIx pending resource cancellation request.
+ * @brief Serve a PMIX_ALLOC_REQ_CANCEL.
  *
- * Cancels a previously registered pending Slurm request identified by
- * PMIX_ALLOC_REQ_ID.
+ * Cancels the pending extend named by PMIX_ALLOC_ID, or by PMIX_ALLOC_REQ_ID
+ * from the job that made it. For an extend Slurm has already granted, answers
+ * PRTE_EXISTS with its PMIX_ALLOC_ID if the requester may release it, else
+ * PRTE_ERR_NOT_FOUND. A req_id the job used for several requests is refused
+ * with PRTE_ERR_BAD_PARAM.
  *
- * @param[in] req PMIx server request containing PMIX_ALLOC_REQ_ID.
+ * @param[in,out] req PMIx server request; req->info is replaced by the
+ *                    PMIX_ALLOC_ID on PRTE_EXISTS.
  */
 int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 {
@@ -108,9 +114,33 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
      * job; it takes precedence over a req_id given with it. */
     if (have_alloc_id) {
         err = serve_cancel_by_alloc_id(alloc_id, uid);
+        if (PRTE_ERR_NOT_FOUND == err) {
+            /* granted already, perhaps - see answer_granted */
+            err = answer_granted(req, prte_get_session_object_from_id(alloc_id));
+        }
         goto cleanup;
     }
     err = prte_ras_slurm_pending_req_permitted(req->tproc.nspace, request_id, uid);
+    if (PRTE_ERR_NOT_FOUND == err) {
+        prte_session_t *session;
+        int rc;
+
+        /* the requester's own allocation of that name, if it made just one;
+         * matched case-sensitively, as the pending lookup is */
+        rc = prte_get_session_object_from_refid(req->tproc.nspace, request_id, &session);
+        if (PRTE_ERR_BAD_PARAM == rc) {
+            /* several: refused, as for an extend, so it names one by
+             * PMIX_ALLOC_ID */
+            prte_show_help_proc(&req->tproc, "help-ras-base.txt",
+                                "ras-base:req-id-ambiguous", true, request_id);
+            err = PRTE_ERR_BAD_PARAM;
+        } else if (PRTE_SUCCESS == rc &&
+                   !PMIX_NSPACE_INVALID(session->requested_by.nspace) &&
+                   0 == strcmp(session->user_refid, request_id)) {
+            err = answer_granted(req, session);
+        }
+        goto cleanup;
+    }
     if (PRTE_SUCCESS != err) {
         goto cleanup;
     }
@@ -127,6 +157,41 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 cleanup:
 
     return err;
+}
+
+/**
+ * @brief Answer a cancel that names an extend Slurm has already granted.
+ *
+ * The grant removed the pending record, so there is nothing to cancel; the
+ * requester is told the allocation exists (PRTE_EXISTS, PMIX_ERR_EXISTS to
+ * it) and its PMIX_ALLOC_ID, to release it. Only for an extend's allocation
+ * (dynamic, and not a reservation, which ras/slurm never makes) and a
+ * requester that may release it; anything else is not found, as before.
+ *
+ * The id replaces req->info, which the answer carries back.
+ */
+static int answer_granted(prte_pmix_server_req_t *req, prte_session_t *session)
+{
+    pmix_info_t *result_info;
+
+    if (NULL == session || NULL == session->alloc_refid ||
+        !PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC) ||
+        PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_RESERVED) ||
+        !prte_pmix_server_session_permitted(session, &req->tproc, req->info, req->ninfo)) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    PMIX_INFO_CREATE(result_info, 1);
+    if (NULL == result_info) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    PMIX_INFO_LOAD(&result_info[0], PMIX_ALLOC_ID, session->alloc_refid, PMIX_STRING);
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+    req->info = result_info;
+    req->ninfo = 1;
+    req->copy = true;
+    return PRTE_EXISTS;
 }
 
 static int serve_cancel_by_alloc_id(const char *alloc_id, uid_t uid)

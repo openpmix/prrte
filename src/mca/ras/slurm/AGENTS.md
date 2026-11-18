@@ -105,9 +105,15 @@ deviation* and the framework guide.
   under the same req_id. Either way the record's user decides who may: it
   records the user the PMIx server named for the extend that made it, and
   only that user, root and the DVM's own user may cancel it
-  (`prte_ras_slurm_pending_req_permitted()`). An id naming a granted
-  allocation is not found - that is a release. The extend path's own
-  cleanup calls `prte_ras_slurm_cancel_pending_req()` directly.
+  (`prte_ras_slurm_pending_req_permitted()`). A cancel naming an extend
+  Slurm has already granted, by id or by the requesting job's req_id, has
+  nothing to cancel. `answer_granted()` answers `PMIX_ERR_EXISTS` with the
+  `PMIX_ALLOC_ID` if the requester may release it
+  (`prte_pmix_server_session_permitted()`, the release rule), else not
+  found, so it reveals nothing the requester could not already list or
+  release. A req_id used for more than one granted extend is refused as
+  ambiguous (`ras-base:req-id-ambiguous`). The extend path's own cleanup
+  calls `prte_ras_slurm_cancel_pending_req()` directly.
 
 ### Whom an extend is for: the DVM's own user, for now
 
