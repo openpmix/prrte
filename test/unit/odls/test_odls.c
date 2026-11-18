@@ -1137,7 +1137,7 @@ static int test_slice_discard(void)
 /*
  * A job's working directory and executable are checked as the job's owner
  * when that is not the daemon's own user (prte_odls_base_check_as_owner):
- * the daemon made both checks as itself, which for another user's job is
+ * the daemon made both checks as itself, which for a job of a different user is
  * root - so a directory or program only root could reach passed, a naked
  * name resolved to one the owner may not run, and a working directory the
  * user had not asked for fell back to root's home rather than the owner's.

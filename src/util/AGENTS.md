@@ -202,7 +202,7 @@ writable, inspecting it through an `O_NOFOLLOW` descriptor - cheap, and it
 keeps the rule should a directory ever be composed elsewhere.
 
 **A job whose processes run as its owner has directories that are the
-owner's.** A root daemon starts another user's job as that user
+owner's.** A root daemon starts a job owned by a different user as that user
 (`prte_pmix_server_job_run_as`, see `src/mca/odls/AGENTS.md`), and those
 processes are handed their job and rank directories as `PMIX_NSDIR` and
 `PMIX_PROCDIR` - where an MPI library keeps its shared-memory files. So
