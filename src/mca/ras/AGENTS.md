@@ -186,8 +186,8 @@ answers `PMIX_ERR_NOT_SUPPORTED` to anything that is not EXTEND/RELEASE/CANCEL
 and the driver reads that as "ask the next module", so a `PMIX_ALLOC_NEW`
 naming hostnames inside a Slurm allocation was served by `ras/hosts` — answered
 `PMIX_SUCCESS` with an allocation id minted, while Slurm was never asked and
-had granted nothing. The daemon launch on the un-allocated node then failed
-and took the DVM down. `docs/todo.rst` records what supporting mixed
+had granted nothing. The daemon launch on the un-allocated node then failed,
+and the DVM terminated. `docs/todo.rst` records what supporting mixed
 allocators would actually take.
 
 ## Who may add a node
