@@ -41,6 +41,11 @@
  *                   phase one as soon as Slurm has QUEUED the job, so the
  *                   wait includes however long it stays queued - which is
  *                   why contrib/slurmswarm sets the variable
+ *   --cancel-after-grant
+ *                   once phase two reports the grow done, cancel the request
+ *                   by its own req-id from this same job. There is nothing
+ *                   left to cancel, and the answer says so: PMIX_ERR_EXISTS
+ *                   with the PMIX_ALLOC_ID to release instead
  *
  * A req_id names a request only to the job that made it, and every run of
  * this tool is a job of its own - so "cancel <req-id>" from a second run
@@ -407,7 +412,8 @@ static void usage(const char *me) {
             "\n"
             "Every op but the cancels waits for the phase-two completion event,\n"
             "for --wait-secs <n> (default 60); --no-wait is what a DVM outside\n"
-            "elastic mode needs.\n", me);
+            "elastic mode needs. --cancel-after-grant then cancels the request\n"
+            "by its own req-id.\n", me);
 }
 
 int main(int argc, char **argv) {
@@ -428,6 +434,7 @@ int main(int argc, char **argv) {
     int wait_opt = -1;          /* an explicit --wait/--no-wait, if given */
     long wait_secs = 60;
     bool send_req_id = true;
+    bool cancel_after_grant = false;
     const char *wait_env = getenv("ELASTIC_WAIT_SECS");
     int rcexit = 0, i;
 
@@ -464,6 +471,8 @@ int main(int argc, char **argv) {
             wait_opt = 1;
         } else if (0 == strcmp(argv[i], "--no-wait")) {
             wait_opt = 0;
+        } else if (0 == strcmp(argv[i], "--cancel-after-grant")) {
+            cancel_after_grant = true;
         } else if (0 == strcmp(argv[i], "--wait-secs") && i + 1 < argc) {
             char *end;
             wait_secs = strtol(argv[++i], &end, 10);
@@ -644,6 +653,27 @@ int main(int argc, char **argv) {
             }
         }
         pthread_mutex_unlock(&complete_lock.mtx);
+    }
+
+    /* cancel by req-id after the grant, from the requesting job */
+    if (cancel_after_grant && PMIX_DVM_IS_READY == complete_lock.status) {
+        pmix_info_t cinfo;
+
+        PMIX_INFO_LOAD(&cinfo, PMIX_ALLOC_REQ_ID, req_id, PMIX_STRING);
+        fprintf(stderr, "requesting cancel-after-grant (req-id %s) ...\n", req_id);
+        lock_init(&alloclock);
+        rc = PMIx_Allocation_request_nb(PMIX_ALLOC_REQ_CANCEL, &cinfo, 1, alloc_cb, &alloclock);
+        /* PMIX_OPERATION_SUCCEEDED: done already, and no callback follows */
+        if (PMIX_SUCCESS == rc) {
+            lock_wait(&alloclock);
+            rc = alloclock.status;
+        }
+        PMIX_INFO_DESTRUCT(&cinfo);
+        if (PMIX_SUCCESS == rc || PMIX_OPERATION_SUCCEEDED == rc) {
+            fprintf(stderr, ">>> CANCEL AFTER GRANT ACCEPTED\n");
+        } else {
+            fprintf(stderr, ">>> CANCEL AFTER GRANT REJECTED: %s\n", PMIx_Error_string(rc));
+        }
     }
 
     /* only meaningful once the DVM actually reflects the new nodes */
