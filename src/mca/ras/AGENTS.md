@@ -699,12 +699,28 @@ one:
   name of the new request - and the base then refuses it as not found;
 - a spawn's `PMIX_ALLOC_REQ_ID` (`PRTE_JOB_REF_ID`) is
   resolved against the spawn's requester in `plm_base_receive.c`;
-- `ras/slurm`'s pending requests, which have no `PMIX_ALLOC_ID` yet, are
-  named by the requesting namespace together with the req_id.
+- `ras/slurm`'s pending requests are named by the requesting namespace
+  together with the req_id, and also by their `PMIX_ALLOC_ID`.
 
 Any other job, or a later command, names the allocation by its
 `PMIX_ALLOC_ID`, which every response returns and `PMIX_QUERY_ALLOC_IDS`
 lists.
+
+**An allocation a scheduler has queued but not granted has an id too.**
+`ras/slurm`'s id is the Slurm job id, which exists from the moment the job
+is queued, so a queued extend is answered with it at once and is registered
+as a session flagged `PRTE_SESSION_FLAG_PENDING` - no nodes, but listed by
+`PMIX_QUERY_ALLOC_IDS`, reported by `PMIX_QUERY_ALLOC_PROPERTIES` with a
+`PMIX_ALLOC_STATUS` of `PMIX_OPERATION_IN_PROGRESS`, and named by a
+`PMIX_ALLOC_REQ_CANCEL` that carries the id. Every other lookup skips it
+(`src/runtime/AGENTS.md`), so a spawn, extend, release or session directive
+naming it is "not found" until it is granted; the checks that an id is free
+count it (`prte_session_id_in_use()`, `prte_session_alloc_id_in_use()`).
+The early answer goes only to a request from a PMIx client
+(`prte_pmix_server_req_t.answer_when_queued`): `PMIX_SPAWN_ALLOC` reads
+`PMIX_OPERATION_IN_PROGRESS` as the grant (`spawn_alloc_complete()`), so a
+spawn's allocation is still answered when it is granted. See
+[`slurm/AGENTS.md`](slurm/AGENTS.md).
 
 ### The time an allocation is for
 

@@ -332,7 +332,7 @@ build_linux() {
             make -j"$jobs"
             make install
 
-            # The elastic and slotinfo clients, borrowed from the sibling
+            # The elastic, slotinfo and roletool clients, borrowed from the sibling
             # harness rather than copied: they are the same programs, and the
             # alternative is two of them drifting apart.  They are the only
             # probes this suite needs that PRRTE does not install --
@@ -355,6 +355,14 @@ build_linux() {
             echo ">>>> slotinfo test client (from ../dockerswarm)"
             gcc -O0 -g -o /opt/prte/prte/bin/slotinfo \
                 /prrte-src/contrib/dockerswarm/slotinfo.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+            # roletool, for its allocation queries: an extend Slurm has queued
+            # is an allocation of its own, and PMIX_QUERY_ALLOC_IDS and
+            # PMIX_QUERY_ALLOC_PROPERTIES are how anyone but its requester
+            # finds it
+            echo ">>>> roletool test client (from ../dockerswarm)"
+            gcc -O0 -g -o /opt/prte/prte/bin/roletool \
+                /prrte-src/contrib/dockerswarm/roletool.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # The recording wrapper around salloc/scontrol/scancel/srun.  It goes

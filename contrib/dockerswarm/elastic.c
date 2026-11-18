@@ -21,7 +21,8 @@
  *   elastic new        <num-nodes|node,...> # PMIX_ALLOC_NEW     + NUM_NODES/NODE_LIST
  *   elastic release    <num-nodes>          # PMIX_ALLOC_RELEASE + NUM_NODES
  *   elastic release-id <alloc-id>           # PMIX_ALLOC_RELEASE + ALLOC_ID
- *   elastic cancel     <req-id>             # PMIX_ALLOC_REQ_CANCEL
+ *   elastic cancel     <req-id>             # PMIX_ALLOC_REQ_CANCEL + ALLOC_REQ_ID
+ *   elastic cancel-id  <alloc-id>           # PMIX_ALLOC_REQ_CANCEL + ALLOC_ID
  *   elastic activate   <host-spec>          # PMIX_ALLOC_ACTIVATE + HOST
  *   elastic spawnalloc <node[:slots],...> -- <cmd>
  *                                          # PMIx_Spawn carrying PMIX_SPAWN_ALLOC
@@ -35,6 +36,17 @@
  *                   leave the directive out and see the request refused
  *   --wait          wait for the phase-two completion event
  *   --no-wait       do not
+ *   --wait-secs <n> how long to wait for it (default 60, or
+ *                   $ELASTIC_WAIT_SECS). Under ras/slurm an extend answers
+ *                   phase one as soon as Slurm has QUEUED the job, so the
+ *                   wait includes however long it stays queued - which is
+ *                   why contrib/slurmswarm sets the variable
+ *
+ * A req_id names a request only to the job that made it, and every run of
+ * this tool is a job of its own - so "cancel <req-id>" from a second run
+ * finds nothing. "cancel-id" names the request by the PMIX_ALLOC_ID its
+ * phase one returned (">>> ALLOC_ID <id>"), which any process allowed to
+ * may use.
  *
  * The last five forms exist for the resource managers that serve a size
  * change by talking to a scheduler -- ras/slurm is the one in tree.  A grow
@@ -387,13 +399,15 @@ static void usage(const char *me) {
             "  new        <num-nodes|node,...> PMIX_ALLOC_NEW     + NUM_NODES/NODE_LIST\n"
             "  release    <num-nodes>          PMIX_ALLOC_RELEASE + NUM_NODES\n"
             "  release-id <alloc-id>           PMIX_ALLOC_RELEASE + ALLOC_ID\n"
-            "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n"
+            "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL + ALLOC_REQ_ID\n"
+            "  cancel-id  <alloc-id>           PMIX_ALLOC_REQ_CANCEL + ALLOC_ID\n"
             "  activate   <host-spec>          PMIX_ALLOC_ACTIVATE + HOST\n"
             "  spawnalloc <node[:slots],...>   PMIx_Spawn + PMIX_SPAWN_ALLOC\n"
             "                                  (needs \"-- <cmd>\")\n"
             "\n"
-            "Every op but 'cancel' waits for the phase-two completion event;\n"
-            "--no-wait is what a DVM outside elastic mode needs.\n", me);
+            "Every op but the cancels waits for the phase-two completion event,\n"
+            "for --wait-secs <n> (default 60); --no-wait is what a DVM outside\n"
+            "elastic mode needs.\n", me);
 }
 
 int main(int argc, char **argv) {
@@ -412,6 +426,9 @@ int main(int argc, char **argv) {
     bool by_count = false;
     bool wait_phase2 = true;
     int wait_opt = -1;          /* an explicit --wait/--no-wait, if given */
+    long wait_secs = 60;
+    bool send_req_id = true;
+    const char *wait_env = getenv("ELASTIC_WAIT_SECS");
     int rcexit = 0, i;
 
     if (argc < 3) {
@@ -420,6 +437,15 @@ int main(int argc, char **argv) {
     }
     op = argv[1];
     arg = argv[2];
+    if (NULL != wait_env) {
+        char *end;
+        long w = strtol(wait_env, &end, 10);
+        if ('\0' != *end || 0 >= w) {
+            fprintf(stderr, "ELASTIC_WAIT_SECS must be a positive number of seconds\n");
+            return 1;
+        }
+        wait_secs = w;
+    }
     for (i = 3; i < argc; i++) {
         /* anything after "--" is a command to run on the grown nodes */
         if (0 == strcmp(argv[i], "--")) {
@@ -438,6 +464,13 @@ int main(int argc, char **argv) {
             wait_opt = 1;
         } else if (0 == strcmp(argv[i], "--no-wait")) {
             wait_opt = 0;
+        } else if (0 == strcmp(argv[i], "--wait-secs") && i + 1 < argc) {
+            char *end;
+            wait_secs = strtol(argv[++i], &end, 10);
+            if ('\0' != *end || 0 >= wait_secs) {
+                fprintf(stderr, "--wait-secs takes a positive number of seconds\n");
+                return 1;
+            }
         } else {
             fprintf(stderr, "unknown option '%s'\n", argv[i]);
             usage(argv[0]);
@@ -468,6 +501,12 @@ int main(int argc, char **argv) {
     } else if (0 == strcmp(op, "cancel")) {
         directive = PMIX_ALLOC_REQ_CANCEL;
         req_id = arg;
+        wait_phase2 = false;
+    } else if (0 == strcmp(op, "cancel-id")) {
+        /* the allocation id alone: a req_id beside it would name a request
+         * of this run's own job, which has none */
+        directive = PMIX_ALLOC_REQ_CANCEL;
+        send_req_id = false;
         wait_phase2 = false;
     } else if (0 == strcmp(op, "activate")) {
         directive = PMIX_ALLOC_ACTIVATE;
@@ -550,6 +589,10 @@ int main(int argc, char **argv) {
     } else if (0 == strcmp(op, "cancel")) {
         ninfo = 1;
         PMIX_INFO_CREATE(info, ninfo);
+    } else if (0 == strcmp(op, "cancel-id")) {
+        ninfo = 1;
+        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, arg, PMIX_STRING);
     } else {
         PMIX_INFO_CREATE(info, ninfo);
         if (0 == strcmp(op, "release-id")) {
@@ -560,8 +603,12 @@ int main(int argc, char **argv) {
             PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NODE_LIST, arg, PMIX_STRING);
         }
     }
-    PMIX_INFO_LOAD(&info[ninfo - 1], PMIX_ALLOC_REQ_ID, req_id, PMIX_STRING);
-    fprintf(stderr, "requesting %s [%s] (req-id %s) ...\n", op, arg, req_id);
+    if (send_req_id) {
+        PMIX_INFO_LOAD(&info[ninfo - 1], PMIX_ALLOC_REQ_ID, req_id, PMIX_STRING);
+        fprintf(stderr, "requesting %s [%s] (req-id %s) ...\n", op, arg, req_id);
+    } else {
+        fprintf(stderr, "requesting %s [%s] ...\n", op, arg);
+    }
     rc = PMIx_Allocation_request_nb(directive, info, ninfo, alloc_cb, &alloclock);
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         fprintf(stderr, "PMIx_Allocation_request_nb failed immediately: %s\n",
@@ -583,16 +630,16 @@ int main(int argc, char **argv) {
     }
 
     if (wait_phase2) {
-        fprintf(stderr, "waiting for phase-two completion event (60s) ...\n");
+        fprintf(stderr, "waiting for phase-two completion event (%lds) ...\n", wait_secs);
         /* crude bounded wait so the tool can't hang forever in a test */
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += 60;
+        ts.tv_sec += wait_secs;
         pthread_mutex_lock(&complete_lock.mtx);
         while (complete_lock.active) {
             if (ETIMEDOUT == pthread_cond_timedwait(&complete_lock.cond,
                                                     &complete_lock.mtx, &ts)) {
-                fprintf(stderr, ">>> TIMEOUT: no completion event within 60s\n");
+                fprintf(stderr, ">>> TIMEOUT: no completion event within %lds\n", wait_secs);
                 break;
             }
         }

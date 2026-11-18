@@ -554,7 +554,7 @@ static pmix_status_t assign_alloc_id(prte_pmix_server_req_t *req)
             hosts_alloc_counter = 1;
         }
         snprintf(id, sizeof(id), "%u", hosts_alloc_counter);
-    } while (NULL != prte_get_session_object_from_id(id));
+    } while (prte_session_alloc_id_in_use(id));
 
     return prte_ras_base_add_alloc_id(req, id);
 }

@@ -643,9 +643,25 @@ struct prte_proc_t {
 typedef struct prte_proc_t prte_proc_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_proc_t);
 
-/** Get session object */
+/** Get session object.
+ *
+ * None of the lookups below returns a session flagged
+ * PRTE_SESSION_FLAG_PENDING: that is an allocation the scheduler has queued
+ * and not granted, so there is nothing in it to spawn onto, extend, release
+ * or control, and naming it is "not found" as it was before the scheduler
+ * answered. Only the cancel path and the allocation queries want one, and
+ * they ask for it with prte_get_pending_session(). A check that an id is
+ * free asks prte_session_id_in_use() or prte_session_alloc_id_in_use(),
+ * which do count pending sessions - the id is taken. */
 PRTE_EXPORT prte_session_t *prte_get_session_object(const uint32_t session_id);
 PRTE_EXPORT prte_session_t *prte_get_session_object_from_id(const char *id);
+/* The pending session (PRTE_SESSION_FLAG_PENDING) whose PMIX_ALLOC_ID is id,
+ * or NULL */
+PRTE_EXPORT prte_session_t *prte_get_pending_session(const char *id);
+/* Whether a registered session, pending or not, has this session id or
+ * this PMIX_ALLOC_ID */
+PRTE_EXPORT bool prte_session_id_in_use(const uint32_t session_id);
+PRTE_EXPORT bool prte_session_alloc_id_in_use(const char *id);
 /* The allocation that the processes of namespace nspace requested under
  * PMIX_ALLOC_REQ_ID refid. A req_id need not be unique, so it names an
  * allocation only to the job that made the request: PRTE_ERR_NOT_FOUND when
@@ -679,6 +695,11 @@ PRTE_EXPORT int prte_set_session_object(prte_session_t *session);
  * from a list of "keys that need the master" is deliberate: the set of such
  * keys is not knowable in advance, but the set of *reads* that cannot be
  * satisfied locally is exactly this, and it is enforced at the point of use.
+ *
+ * prte_get_allocation_session() finds a pending session
+ * (PRTE_SESSION_FLAG_PENDING) as well as a granted one, since the allocation
+ * queries report both; prte_get_allocated_nodes() finds only a granted one,
+ * since a pending one holds no nodes.
  *
  * A NULL allocid means the DVM-wide allocation.  Do not reach past these to
  * prte_node_pool or prte_sessions for capacity or session state - a checker

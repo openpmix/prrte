@@ -361,6 +361,71 @@ static int test_session_registry(void)
     return failures;
 }
 
+/* A pending session - an allocation the scheduler has queued and not granted
+ * (PRTE_SESSION_FLAG_PENDING) - holds no nodes, so the ordinary lookups must
+ * not hand it to anyone who would spawn onto it, extend, release or control
+ * it: naming it is "not found", as it was before the scheduler answered.
+ * Only the lookups that say so find it, and the id checks count it as taken,
+ * or a second session could be registered under an id that is about to be
+ * granted. Once granted it is found like any other. */
+static int test_session_pending(void)
+{
+    int failures = 0;
+    prte_session_t *s, *found;
+    prte_proc_type_t saved;
+    int rc;
+
+    reset_globals();
+
+    s = PMIX_NEW(prte_session_t);
+    s->session_id = 300;
+    s->alloc_refid = strdup("300");
+    s->user_refid = strdup("req-300");
+    PMIX_LOAD_PROCID(&s->requested_by, "ns-300", 0);
+    PRTE_FLAG_SET(s, PRTE_SESSION_FLAG_PENDING);
+    CHECK("pending: insert succeeds", PRTE_SUCCESS == prte_set_session_object(s));
+
+    CHECK("pending: hidden from the session-id lookup", NULL == prte_get_session_object(300));
+    CHECK("pending: hidden from the alloc-id lookup", NULL == prte_get_session_object_from_id("300"));
+    CHECK("pending: hidden from the req-id lookup",
+          PRTE_ERR_NOT_FOUND == prte_get_session_object_from_refid("ns-300", "req-300", &found) &&
+              NULL == found);
+    CHECK("pending: found by the pending lookup", s == prte_get_pending_session("300"));
+    CHECK("pending: the pending lookup misses an unknown id", NULL == prte_get_pending_session("301"));
+    CHECK("pending: the pending lookup misses NULL", NULL == prte_get_pending_session(NULL));
+    CHECK("pending: its session id is in use", prte_session_id_in_use(300));
+    CHECK("pending: its alloc id is in use", prte_session_alloc_id_in_use("300"));
+    CHECK("pending: an unknown session id is not", !prte_session_id_in_use(301));
+    CHECK("pending: an unknown alloc id is not", !prte_session_alloc_id_in_use("301"));
+
+    /* the allocation queries report it; listing its nodes does not, since
+     * it has none */
+    saved = prte_process_info.proc_type;
+    prte_process_info.proc_type = PRTE_PROC_MASTER;
+    found = NULL;
+    rc = prte_get_allocation_session("300", &found);
+    CHECK("pending: the allocation-session accessor finds it",
+          PRTE_SUCCESS == rc && s == found);
+    {
+        pmix_pointer_array_t *nodes = NULL;
+        CHECK("pending: the allocated-nodes accessor does not",
+              PRTE_ERR_NOT_FOUND == prte_get_allocated_nodes("300", &nodes) && NULL == nodes);
+    }
+    prte_process_info.proc_type = saved;
+
+    /* granted: found as any other session */
+    PRTE_FLAG_UNSET(s, PRTE_SESSION_FLAG_PENDING);
+    CHECK("granted: found by session id", s == prte_get_session_object(300));
+    CHECK("granted: found by alloc id", s == prte_get_session_object_from_id("300"));
+    CHECK("granted: found by req id from its requester",
+          PRTE_SUCCESS == prte_get_session_object_from_refid("ns-300", "req-300", &found) &&
+              s == found);
+    CHECK("granted: no longer found by the pending lookup", NULL == prte_get_pending_session("300"));
+
+    reset_globals();
+    return failures;
+}
+
 /* A session's job array holds BORROWED pointers, so the one thing that must
  * never happen is a job being freed while the session still lists it: every
  * later walk of that array then reads freed memory.  ASAN caught exactly that
@@ -3475,6 +3540,7 @@ int main(void)
 
     failures += test_job_registry();
     failures += test_session_registry();
+    failures += test_session_pending();
     failures += test_session_ownership();
     failures += test_session_job_backref();
     failures += test_proc_lookups();

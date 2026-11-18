@@ -107,6 +107,16 @@ int prte_ras_slurm_validate_hostname(const char *hostname);
 int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
 int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid,
                                       pmix_list_t *node_list, bool dynamic);
+/* An extend Slurm has queued but not granted is a session of its own from
+ * the moment salloc names the job: flagged PRTE_SESSION_FLAG_PENDING, holding
+ * no nodes, under the Slurm job id that will be its PMIX_ALLOC_ID once
+ * granted. That is what lets PMIX_QUERY_ALLOC_IDS list it, and a cancel
+ * name it by that id. prte_ras_slurm_assign_new_session() takes it over at
+ * the grant; prte_ras_slurm_drop_pending_session() releases it when the
+ * request ends without one, and does nothing to one already granted. */
+int prte_ras_slurm_register_pending_session(const char *slurm_jobid, const char *user_refid,
+                                            const pmix_proc_t *requester);
+void prte_ras_slurm_drop_pending_session(const char *slurm_jobid);
 int prte_ras_slurm_tag_node_allocation(const char *slurm_jobid, pmix_list_t *node_list);
 
 typedef struct {

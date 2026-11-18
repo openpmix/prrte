@@ -37,7 +37,7 @@ differences are in §3, §9 and §10 and nowhere else.
 | `slurm-alloc.py` | Creates and holds a real allocation across many `docker exec` calls, and replays the environment SLURM put in it. See §11. |
 | `slurm-shim.py` | A recording, optionally misbehaving, **wrapper** around the real `salloc`/`scontrol`/`scancel`. Answers the two questions slurmctld cannot: what PRRTE *asked* for, and what PRRTE does when the scheduler misbehaves. See §14. |
 | `docker-compose.yml` | The ten nodes `prteslurm-node1..prteslurm-node10`. Every name derives from `$PRTE_SLURM_SWARM`, so two clones can each run a cluster. |
-| *(no file here)* | The `elastic` and `slotinfo` test clients are compiled from [`../dockerswarm/elastic.c`](../dockerswarm/elastic.c) and [`../dockerswarm/slotinfo.c`](../dockerswarm/slotinfo.c) rather than copied — they are the same programs, and two copies would drift. |
+| *(no file here)* | The `elastic`, `slotinfo` and `roletool` test clients are compiled from [`../dockerswarm/elastic.c`](../dockerswarm/elastic.c), [`../dockerswarm/slotinfo.c`](../dockerswarm/slotinfo.c) and [`../dockerswarm/roletool.c`](../dockerswarm/roletool.c) rather than copied — they are the same programs, and two copies would drift. `roletool` is here for its allocation queries (`allocids`, `allocprops`). |
 
 ## 2. How it works
 
@@ -268,7 +268,29 @@ Five cases are worth calling out:
 - **A pending extend, with no fault injection.** A fake scheduler has to be
   *told* to make a job pend. Here the case asks for more nodes than the
   cluster has free and SLURM queues it PENDING by itself, which is the state
-  `PMIX_ALLOC_REQ_CANCEL` exists for.
+  `PMIX_ALLOC_REQ_CANCEL` exists for. The extend is answered while the job
+  is queued, with the job id as its `PMIX_ALLOC_ID`, and the queued request
+  is an allocation of its own until it is granted: the case checks that
+  `PMIX_QUERY_ALLOC_IDS` lists it and that its properties say it is still in
+  progress, then cancels it **from a second run of the tool**. That is the
+  point of the id. A req_id names a request only to the job that made it,
+  and every run of `elastic` is a job of its own, so the case also checks
+  that the same cancel by req_id is refused as not found and leaves the job
+  queued. The cancel by id must scancel the job, tell the waiting extend it
+  failed (the phase-two `PMIX_ERR_DVM_MOD`), and take the allocation out of
+  the listing.
+
+  A consequence for every other case: phase one now arrives when SLURM
+  *queues* the job, so a `>>> ALLOC_ID` line no longer means the extend was
+  granted. Assert on `>>> SUCCESS` (or `>>> FAILURE`) for the outcome. The
+  client's wait for phase two now includes the time the job is queued, and
+  a released node's cores are freed on slurmctld's own schedule, so an
+  ordinary extend can queue for a minute: `run-tests.sh` therefore sets
+  `ELASTIC_WAIT_SECS` (default 170, just short of the `timeout` most cases
+  put around the client) in every command it runs, in place of the client's
+  own 60s, which suits the sibling harness where nothing queues. Left at
+  60s, the first extend that queued for longer reported a timeout, and every
+  case after it worked from an allocation that had no nodes yet.
 - **An extend that lands on a node an earlier release gave back.** Reported
   as a hang, and the half of it `ras/slurm` owns: a grow completes only
   through `DAEMONS_REPORTED` → `VM_READY`, and neither of the counters that

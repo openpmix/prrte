@@ -93,6 +93,13 @@ typedef struct {
      * (prte_ras_base_alloc_owner) - which decides whether that group's
      * members may use the reservation (PRTE_SESSION_FLAG_GROUP_ACCESS) */
     bool alloc_gid_named;
+    /* the request came from a PMIx client's PMIx_Allocation_request, which
+     * may be told the allocation's id as soon as its scheduler has queued
+     * the request, with the outcome to follow as the phase-two event (see
+     * ras/slurm's extend). A request the DVM makes for itself - the
+     * allocation a spawn carries - is answered only once it is granted,
+     * since its caller reads phase one as the grant. */
+    bool answer_when_queued;
     uid_t uid;
     gid_t gid;
     pid_t pid;

@@ -1671,7 +1671,7 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
     do {
         s->session_id = ++prte_ras_reservation_counter;
     } while (UINT32_MAX == s->session_id ||
-             NULL != prte_get_session_object(s->session_id));
+             prte_session_id_in_use(s->session_id));
     s->alloc_refid = strdup(alloc_id);
     if (NULL != req_id) {
         s->user_refid = strdup(req_id);
@@ -2280,7 +2280,7 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
                                 "ras-base:alloc-id-missing", true);
             return PMIX_ERR_BAD_PARAM;
         }
-        if (NULL != prte_get_session_object_from_id(alloc_id)) {
+        if (prte_session_alloc_id_in_use(alloc_id)) {
             prte_show_help_proc(&req->tproc, "help-ras-base.txt",
                                 "ras-base:alloc-id-in-use", true, alloc_id);
             return PMIX_ERR_EXISTS;

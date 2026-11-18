@@ -241,6 +241,10 @@ static pmix_status_t print_alloc_props(const char *id)
                 printf("ROLE ALLOCPROP %s %s\n", props[k].key,
                        props[k].value.data.flag ? "true" : "false");
                 break;
+            case PMIX_STATUS:
+                printf("ROLE ALLOCPROP %s %s\n", props[k].key,
+                       PMIx_Error_string(props[k].value.data.status));
+                break;
             default:
                 printf("ROLE ALLOCPROP %s (%s)\n", props[k].key,
                        PMIx_Data_type_string(props[k].value.type));
