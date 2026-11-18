@@ -9,7 +9,7 @@ is not always the node with the *best* memory for it. Example is
 Sapphire Rapids (SPR) with DDR+CPU nodes and HBM-only nodes. On SPR,
 the local DDR+CPU node is also the default and *closest* node for
 memory allocation. HBM nodes hold no cpu cores, so are silently ignored by
-automatic page allocation and migration. Exploiting HBM is usually done through
+automatic page allocation and migration. Using HBM is usually done through
 custom allocator libraries (e.g. ``memkind``), by explicit C API and system
 calls (``hwloc``, ``mbind()``, ``set_mempolicy()``) or with command-line
 binding tools like ``numactl``.

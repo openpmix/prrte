@@ -149,7 +149,7 @@ int prte_ras_base_select(void)
      * request the real allocator declined fell through to a lower-priority
      * module with no authority over the allocation, and ras/hosts would
      * cheerfully add nodes the scheduler had never granted, after which the
-     * daemon launch failed and took the DVM with it.
+     * daemon launch failed and the DVM terminated.
      *
      * Walk the candidates in priority order and take the first whose init()
      * succeeds.  A failed init is a component that cannot run here, so the

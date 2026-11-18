@@ -9,7 +9,7 @@ referenced throughout.
 
 ## Role and selection
 
-`ompi` makes PRRTE impersonate Open MPI's `mpirun`/`mpiexec`: it accepts
+`ompi` makes PRRTE emulate Open MPI's `mpirun`/`mpiexec`: it accepts
 the Open MPI option set and, crucially, **translates Open MPI's MCA
 conventions** (`OMPI_MCA_*` envars, `~/.openmpi/mca-params.conf`,
 `$OMPIHOME/etc/openmpi-mca-params.conf`, `--mca`/`-mca` with OMPI

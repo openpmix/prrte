@@ -303,7 +303,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
     fi
 
     # These flags are generally gcc-specific; even the
-    # gcc-impersonating compilers won't accept them.
+    # gcc-compatible compilers won't accept them.
     PRTE_CFLAGS_BEFORE_PICKY="$CFLAGS"
 
     # Note: Some versions of clang (at least >= 3.5 -- perhaps
