@@ -230,6 +230,24 @@ right to spawn onto the reservation, extended with each job spawned in; a
 namespace says nothing about who is asking that its job's uid does not, and
 the list never shrank.
 
+**A pending session is in the registry but not in the lookups.** A
+scheduler that has queued a request and not granted it - `ras/slurm`'s
+extend, from `salloc` naming the job until the grant - is recorded as a
+session flagged `PRTE_SESSION_FLAG_PENDING`, so that the allocation queries
+can list it and a cancel can name it by its `PMIX_ALLOC_ID`. It holds no
+nodes, so `prte_get_session_object()`, `prte_get_session_object_from_id()`
+and `prte_get_session_object_from_refid()` all skip it: a spawn, an extend, a
+release or a session directive naming it is "not found", as it was before
+the scheduler answered. Three ask for it by name:
+`prte_get_pending_session()` (the cancel path, and the grant that takes it
+over), `prte_get_allocation_session()` (the allocation queries), and the id
+checks `prte_session_id_in_use()`/`prte_session_alloc_id_in_use()`, which
+must count a pending session or a second one could be registered under an
+id that is about to be granted. A loop that walks `prte_sessions` itself
+meets pending sessions and has to decide for itself - `apply_to_all()` in
+`pmix_server_session.c` skips them. `test_session_pending` in
+`test/unit/runtime` pins all of it.
+
 Note the trap any comparison with the scheduler's name has stepped in:
 **`PMIX_CHECK_NSPACE` answers "true" when either side is an empty
 nspace** — that is its wildcard rule.

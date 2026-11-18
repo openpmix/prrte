@@ -425,6 +425,10 @@ typedef uint16_t prte_session_flags_t;
 #define PRTE_SESSION_FLAG_LIMIT_HELD    0x0080 // the session's time limit was set by the scheduler
                                                // or by a user who may change the DVM, so only they
                                                // may change it (prte_pmix_server_session_set_limit)
+#define PRTE_SESSION_FLAG_PENDING       0x0200 // the scheduler has queued the request for this
+                                               // allocation but not granted it: the session holds
+                                               // no nodes, and only the lookups that say so find
+                                               // it (see prte_get_pending_session)
 
 
 /*** FLAG OPS ***/

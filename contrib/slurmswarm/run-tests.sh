@@ -74,7 +74,16 @@ ON()  { docker exec "$NODE$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:2}";
 #
 # $ALLOC_TAG selects which allocation; the suite mostly uses the default.
 ALLOC_TAG=dvm
+# The elastic client's wait for the phase-two event.  An extend is answered
+# at phase one as soon as SLURM has QUEUED its job, so that wait covers the
+# time the job spends queued as well - and a released node's cores are freed
+# on slurmctld's own schedule (see grantable_nodes), so an ordinary extend
+# can sit queued for a minute.  Its default of 60s is for the sibling
+# harness, where nothing queues; here it runs to just short of the 180s
+# `timeout` most cases put around the client, as the wait at phase one did.
+ELASTIC_WAIT_SECS=${ELASTIC_WAIT_SECS:-170}
 SA() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+           -e ELASTIC_WAIT_SECS="$ELASTIC_WAIT_SECS" \
            "${NODE}1" bash -lc ". /opt/prte/env.sh;
                                 eval \"\$(slurm-alloc env --tag $ALLOC_TAG)\"; $*"; }
 # Detached, capturing output to a file -- for the DVM itself and for any tool
@@ -82,6 +91,7 @@ SA() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM
 SA_BG() {
     local outf=$1; shift
     docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        -e ELASTIC_WAIT_SECS="$ELASTIC_WAIT_SECS" \
         "${NODE}1" bash -lc ". /opt/prte/env.sh;
                              eval \"\$(slurm-alloc env --tag $ALLOC_TAG)\"; $* > $outf 2>&1"
 }
@@ -902,7 +912,7 @@ test_plm() {
 # <nodes>` names hosts with slot counts, which ras/slurm refuses -- Slurm
 # decides the slots.  Its modify() accepts (PMIX_ALLOC_EXTEND|PMIX_ALLOC_NEW)+
 # (NUM_NODES|NODE_LIST), PMIX_ALLOC_RELEASE+(NODE_LIST|NUM_NODES|ALLOC_ID) and
-# PMIX_ALLOC_REQ_CANCEL.  Hence `elastic extend|new|release|release-id|cancel`.
+# PMIX_ALLOC_REQ_CANCEL.  Hence `elastic extend|new|release|release-id|cancel|cancel-id`.
 job_nodes() {   # $1 = slurm job id -> comma-separated hostnames
     local nl; nl=$(SQ "squeue -h -j $1 -o '%N'" | tr -d ' \r')
     [ -n "$nl" ] || return 1
@@ -1536,7 +1546,7 @@ elastic_grant_group() {
 # needs no fault injection: park the free nodes so the extend queues, lower
 # the parent's limit while it waits, then hand the nodes back.
 elastic_trim_group() {
-    local jid=$1 ajid target elapsed start p_end a_end
+    local jid=$1 ajid aid target elapsed start p_end a_end
 
     banner "ras/slurm: a pending expander is trimmed to the parent's new end"
     # Pend on ONE named node, not on the whole free pool.  Parking everything
@@ -1549,13 +1559,16 @@ elastic_trim_group() {
         return
     fi
     ALLOC new --tag trimpark --nodelist "$target" >/dev/null 2>&1
-    SA "nohup timeout 240 elastic extend $target --req-id trim-req \
+    SA "nohup timeout 240 elastic extend $target --req-id trim-req --wait-secs 200 \
             >/tmp/trim.out 2>&1 & sleep 2" >/dev/null 2>&1
     sleep 8
     ajid=$(SQ "squeue -h -t PENDING -o '%i'" | tr -d ' \r' | head -1)
     if [ -z "$ajid" ]; then
         bad "the extend never queued a job: $(SA 'tr "\n" " " < /tmp/trim.out' | tail -c 200)"
-        SA 'timeout 60 elastic cancel trim-req' >/dev/null 2>&1
+        # by the id its phase one carried: a req_id names the request only
+        # to the job that made it, and this is another run of the tool
+        aid=$(SA "sed -n 's/^>>> ALLOC_ID //p' /tmp/trim.out" | tr -d ' \r' | head -1)
+        [ -n "$aid" ] && SA "timeout 60 elastic cancel-id $aid" >/dev/null 2>&1
         ALLOC free --tag trimpark >/dev/null 2>&1
         drop_extra_jobs "$jid"
         return
@@ -1574,7 +1587,7 @@ elastic_trim_group() {
     done
     if [ "$(SQ "squeue -h -j $ajid -o '%T'" | tr -d ' \r')" != RUNNING ]; then
         skp "SLURM did not start job $ajid on $target within 45s -- nothing to trim"
-        SA 'timeout 60 elastic cancel trim-req' >/dev/null 2>&1
+        SA "timeout 60 elastic cancel-id $ajid" >/dev/null 2>&1
         drop_extra_jobs "$jid"
         return
     fi
@@ -1877,36 +1890,81 @@ elastic_release_during_grow_group() {
 }
 
 elastic_pending_cancel_group() {
-    local jid=$1 ajid n
+    local jid=$1 ajid aid n out
 
     banner "ras/slurm: an extend SLURM cannot satisfy pends, and can be cancelled"
     # No fault injection needed: ask for more nodes than the cluster has free
     # and SLURM queues the job as PENDING, which is the state the cancel path
-    # exists for.  PMIX_ALLOC_REQ_CANCEL is served while the extend's poll
-    # loop is still waiting, and must scancel the queued job and turn the
-    # waiting request into a failure rather than leaving it to time out.
+    # exists for.  PMIX_ALLOC_REQ_CANCEL is served while the extend is still
+    # waiting on salloc, and must scancel the queued job and turn the waiting
+    # request into a failure rather than leaving it to time out.
+    #
+    # The extend is answered as soon as SLURM queues the job, with the job id
+    # as its PMIX_ALLOC_ID, and the queued request is an allocation of its
+    # own until it is granted: PMIX_QUERY_ALLOC_IDS lists it, its properties
+    # say it is still in progress, and a cancel may name it by that id.  The
+    # cancel comes from a second run of the tool, which is the case that id
+    # is for: a req_id names a request only to the job that made it.
     n=$(cluster_idle_count)
-    SA "nohup timeout 240 elastic extend $((n + 2)) --req-id slow-req \
+    SA "nohup timeout 240 elastic extend $((n + 2)) --req-id slow-req --wait-secs 200 \
             >/tmp/extend.out 2>&1 & sleep 2" >/dev/null 2>&1
     sleep 8
     ajid=$(SQ "squeue -h -t PENDING -o '%i'" | tr -d ' \r' | head -1)
     if [ -z "$ajid" ]; then
         bad "the oversized extend never queued a job: $(SA 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
         skp "the cancel cases need a pending job to cancel"
+        SA 'pkill -x elastic' >/dev/null 2>&1
         drop_extra_jobs "$jid"
         return
     fi
     ok "the oversized extend queued SLURM job $ajid as PENDING"
-    SA 'timeout 90 elastic cancel slow-req' >/dev/null 2>&1
+
+    aid=$(SA "sed -n 's/^>>> ALLOC_ID //p' /tmp/extend.out" | tr -d ' \r' | head -1)
+    if SA 'grep -q "PHASE 1.*PMIX_OPERATION_IN_PROGRESS" /tmp/extend.out' &&
+       [ "$aid" = "$ajid" ]; then
+        ok "phase one answered while the job was queued, with its job id as PMIX_ALLOC_ID"
+    else
+        bad "no phase-one answer naming job $ajid while it was queued (ALLOC_ID '$aid'): $(SA 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
+    fi
+
+    out=$(SA 'timeout 30 roletool - allocids' 2>&1)
+    echo "$out" | grep -qx "ROLE ALLOCID $ajid" \
+        && ok "PMIX_QUERY_ALLOC_IDS lists the queued allocation" \
+        || bad "the queued allocation is not listed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(SA "timeout 30 roletool - allocprops $ajid" 2>&1)
+    echo "$out" | grep -q "ROLE ALLOCPROP pmix.alloc.status PMIX_OPERATION_IN_PROGRESS" \
+        && ok "its properties say it is still in progress" \
+        || bad "its properties do not say it is pending: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    echo "$out" | grep -q "ROLE ALLOCPROP pmix.alloc.reqid slow-req" \
+        && ok "its properties carry the req_id it was requested under" \
+        || bad "its properties lack the req_id: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    out=$(SA 'timeout 60 elastic cancel slow-req' 2>&1)
+    echo "$out" | grep -q 'REJECTED: PMIX_ERR_NOT_FOUND' \
+        && ok "a cancel by req_id from another job is not found" \
+        || bad "a cancel by req_id from another job was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    [ "$(SQ "squeue -h -j $ajid -o '%T'" | tr -d ' \r')" = PENDING ] \
+        && ok "...and the job is still queued" \
+        || bad "the refused cancel changed job $ajid: $(SQ "squeue -h -j $ajid -o '%T'" | tr -d '\r')"
+
+    out=$(SA "timeout 60 elastic cancel-id $ajid" 2>&1)
+    echo "$out" | grep -q 'PHASE 1.*returned PMIX_SUCCESS' \
+        && ok "a cancel by PMIX_ALLOC_ID from another job was accepted" \
+        || bad "the cancel by id was not accepted: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
     sleep 8
     SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
         && bad "the cancelled request left its pending job queued" \
         || ok "the cancelled request scancelled its pending SLURM job"
-    SA 'grep -q "REJECTED\|FAILURE" /tmp/extend.out' \
-        && ok "the waiting extend reported failure to its requester" \
+    SA 'grep -q ">>> FAILURE" /tmp/extend.out' \
+        && ok "the waiting extend was told it failed, by the phase-two event" \
         || bad "the cancelled extend never answered: $(SA 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
+    out=$(SA 'timeout 30 roletool - allocids' 2>&1)
+    echo "$out" | grep -qx "ROLE ALLOCID $ajid" \
+        && bad "the cancelled allocation is still listed: $(echo "$out" | tr '\n' ' ')" \
+        || ok "the cancelled allocation is no longer listed"
     SA 'pgrep -x prte >/dev/null' && ok "HNP survived the cancellation" \
                                   || bad "HNP died during the cancellation"
+    SA 'pkill -x elastic' >/dev/null 2>&1
     drop_extra_jobs "$jid"
 }
 
@@ -2282,7 +2340,9 @@ elastic_oversize_group() {
     SHIM set fat_json 8388608 >/dev/null 2>&1
     out=$(SA 'timeout 180 elastic extend 1' 2>&1)
     SHIM set fat_json 0 >/dev/null 2>&1
-    echo "$out" | grep -q 'ALLOC_ID' \
+    # SUCCESS, not ALLOC_ID: the id is answered as soon as Slurm queues the
+    # job, before the record that matters here is read at the grant
+    echo "$out" | grep -q '>>> SUCCESS' \
         && ok "an extend succeeded on a record with an 8MB member in it" \
         || bad "a large but irrelevant member broke the extend: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
     drop_extra_jobs "$(ALLOC jobid --tag dvm | tr -d ' \r')"
@@ -2324,11 +2384,16 @@ elastic_oversize_group() {
     # the read.
     cleanup_cluster
     ALLOC new --tag dvm --nodes 2 --tasks-per-node 2 >/dev/null 2>&1
-    if dvm_start --prtemca prte_elastic_mode 1; then
+    if dvm_start --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5; then
         SHIM set fat_nodes 4000 >/dev/null 2>&1
-        out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+        # Nothing to wait for: the grant's daemons cannot launch, and phase
+        # one - the ALLOC_ID - comes when SLURM queues the job, before the
+        # record is read at the grant.  So the evidence is the HNP's own
+        # account of the record: it names every node it read, the shim
+        # numbers them, and the last one is -shim003999.
+        out=$(SA 'timeout 180 elastic extend 1 --wait-secs 30' 2>&1)
         SHIM set fat_nodes 0 >/dev/null 2>&1
-        echo "$out" | grep -q 'ALLOC_ID\|REJECTED' \
+        SA "grep -q 'discovered node [^ ]*-shim003999 ' /tmp/prte.out" \
             && ok "a 4000-node allocation array was read to the end" \
             || bad "a large allocation array broke the extend: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         dvm_stop
@@ -2402,7 +2467,9 @@ elastic_fault_group() {
     SHIM set bad_json 1 >/dev/null 2>&1
     out=$(SA 'timeout 120 elastic extend 1' 2>&1)
     SHIM set bad_json 0 >/dev/null 2>&1
-    echo "$out" | grep -q 'REJECTED' \
+    # refused at submit if the parent's record is what failed to parse, and
+    # as the phase-two failure if the grant's was
+    echo "$out" | grep -q 'REJECTED\|>>> FAILURE' \
         && ok "an extend on unparsable JSON was refused" \
         || bad "malformed scheduler JSON was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
     SA 'pgrep -x prte >/dev/null' && ok "HNP survived the malformed JSON" \

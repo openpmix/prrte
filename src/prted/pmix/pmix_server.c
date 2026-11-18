@@ -3116,6 +3116,8 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         req->copy = true;
         req->info = info;
         req->ninfo = ninfo;
+        /* a client's PMIx_Allocation_request, relayed by its daemon */
+        req->answer_when_queued = true;
         PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
         PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
         /* add this request to our local request tracker array. The
@@ -3323,6 +3325,7 @@ static void rqcon(prte_pmix_server_req_t *p)
     p->scheduler = false;
     p->copy = false;
     p->dvm_held = false;
+    p->answer_when_queued = false;
     p->moncopy = false;
     p->dircopy = false;
     p->alloc_gid_named = false;
