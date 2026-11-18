@@ -374,7 +374,8 @@ int prte_set_job_data_object(prte_job_t *jdata)
     return PRTE_SUCCESS;
 }
 
-prte_session_t *prte_get_session_object(const uint32_t session_id)
+/* The registered session whose session id is session_id, pending or not */
+static prte_session_t *session_from_session_id(const uint32_t session_id)
 {
     prte_session_t *session;
     int i;
@@ -395,7 +396,23 @@ prte_session_t *prte_get_session_object(const uint32_t session_id)
     return NULL;
 }
 
-prte_session_t *prte_get_session_object_from_id(const char *id)
+prte_session_t *prte_get_session_object(const uint32_t session_id)
+{
+    prte_session_t *session = session_from_session_id(session_id);
+
+    if (NULL != session && PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_PENDING)) {
+        return NULL;
+    }
+    return session;
+}
+
+bool prte_session_id_in_use(const uint32_t session_id)
+{
+    return NULL != session_from_session_id(session_id);
+}
+
+/* The registered session whose PMIX_ALLOC_ID is id, pending or not */
+static prte_session_t *session_from_alloc_id(const char *id)
 {
     prte_session_t *session;
     int i;
@@ -421,6 +438,31 @@ prte_session_t *prte_get_session_object_from_id(const char *id)
         }
     }
     return NULL;
+}
+
+prte_session_t *prte_get_session_object_from_id(const char *id)
+{
+    prte_session_t *session = session_from_alloc_id(id);
+
+    if (NULL != session && PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_PENDING)) {
+        return NULL;
+    }
+    return session;
+}
+
+prte_session_t *prte_get_pending_session(const char *id)
+{
+    prte_session_t *session = session_from_alloc_id(id);
+
+    if (NULL != session && !PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_PENDING)) {
+        return NULL;
+    }
+    return session;
+}
+
+bool prte_session_alloc_id_in_use(const char *id)
+{
+    return NULL != session_from_alloc_id(id);
 }
 
 /* See the block comment in prte_globals.h.  These three are the gate between
@@ -454,7 +496,9 @@ int prte_get_allocation_session(const char *allocid, prte_session_t **session)
     if (NULL == allocid) {
         return PRTE_ERR_BAD_PARAM;
     }
-    *session = prte_get_session_object_from_id(allocid);
+    /* a pending allocation too: it is what the allocation queries report,
+     * alongside the granted ones */
+    *session = session_from_alloc_id(allocid);
     if (NULL == *session) {
         return PRTE_ERR_NOT_FOUND;
     }
@@ -509,6 +553,7 @@ int prte_get_session_object_from_refid(const char *nspace, const char *refid,
     for (i = 0; i < prte_sessions->size; i++) {
         s = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
         if (NULL == s || NULL == s->user_refid ||
+            PRTE_FLAG_TEST(s, PRTE_SESSION_FLAG_PENDING) ||
             !PMIX_CHECK_NSPACE(s->requested_by.nspace, nspace) ||
             0 != strcasecmp(s->user_refid, refid)) {
             continue;

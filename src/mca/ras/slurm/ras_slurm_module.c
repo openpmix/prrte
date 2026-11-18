@@ -891,6 +891,14 @@ int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_
  * The session belongs to the DVM's own user and group: that is whose job
  * Slurm made it, since salloc runs as that user. See the note on
  * prte_ras_slurm_serve_extend_req for asking Slurm for another.
+ *
+ * An extend's session already exists by the time it is granted: it was
+ * registered pending when Slurm queued the job
+ * (prte_ras_slurm_register_pending_session). That one is taken over here -
+ * its nodes attached and PRTE_SESSION_FLAG_PENDING cleared - rather than a
+ * second one registered under the same id, which prte_set_session_object
+ * would refuse. On a failure it is left pending, for the extend's own
+ * cleanup to drop with the rest of the request.
  */
 int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid,
                                       pmix_list_t *node_list, bool dynamic)
@@ -932,37 +940,45 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     }
 
     char *slurm_jobid_dup = NULL;
+    bool adopted = false;
 
-    slurm_jobid_dup = strdup(slurm_jobid);
-    if(NULL == slurm_jobid_dup) {
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
+    session = prte_get_pending_session(slurm_jobid);
+    if (NULL != session) {
+        /* registered when Slurm queued it, with everything below already
+         * set - only the nodes are new */
+        adopted = true;
+    } else {
+        slurm_jobid_dup = strdup(slurm_jobid);
+        if(NULL == slurm_jobid_dup) {
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
 
-    session = PMIX_NEW(prte_session_t);
+        session = PMIX_NEW(prte_session_t);
 
-    if (NULL == session) {
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
+        if (NULL == session) {
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
 
-    session->session_id = slurm_id_uint;
-    session->owner_uid = prte_process_info.euid;
-    session->owner_gid = prte_process_info.egid;
+        session->session_id = slurm_id_uint;
+        session->owner_uid = prte_process_info.euid;
+        session->owner_gid = prte_process_info.egid;
 
-    if(NULL != user_refid_dup) {
-        session->user_refid = user_refid_dup;
-        /* Now owned by the session */
-        user_refid_dup = NULL;
-    }
+        if(NULL != user_refid_dup) {
+            session->user_refid = user_refid_dup;
+            /* Now owned by the session */
+            user_refid_dup = NULL;
+        }
 
-    session->alloc_refid = slurm_jobid_dup;
-    slurm_jobid_dup = NULL;
+        session->alloc_refid = slurm_jobid_dup;
+        slurm_jobid_dup = NULL;
 
-    if (dynamic) {
-        PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_DYNAMIC);
+        if (dynamic) {
+            PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_DYNAMIC);
+        }
     }
 
     prte_node_t *node = NULL;
@@ -992,10 +1008,12 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
         }
     }
 
-    err = prte_set_session_object(session);
-    if (PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
+    if (!adopted) {
+        err = prte_set_session_object(session);
+        if (PRTE_SUCCESS != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
     }
 
     prte_session_stack_item_t *item = PMIX_NEW(prte_session_stack_item_t);
@@ -1012,16 +1030,97 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
 
     pmix_list_append(prte_slurm_session_stack, &item->super);
 
+    /* granted: from here on it is found as any other session is */
+    PRTE_FLAG_UNSET(session, PRTE_SESSION_FLAG_PENDING);
+
     cleanup:
 
     free(user_refid_dup);
     free(slurm_jobid_dup);
 
-    if(NULL != session && err != PRTE_SUCCESS) {
+    /* an adopted session is the registry's, and stays pending for the
+     * extend's cleanup to drop (prte_ras_slurm_drop_pending_session) */
+    if(NULL != session && err != PRTE_SUCCESS && !adopted) {
         PMIX_RELEASE(session);
     }
 
     return err;
+}
+
+int prte_ras_slurm_register_pending_session(const char *slurm_jobid, const char *user_refid,
+                                            const pmix_proc_t *requester)
+{
+    prte_session_t *session;
+    uint32_t slurm_id_uint;
+    int err;
+
+    if (NULL == slurm_jobid || NULL == requester) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    err = prte_ras_slurm_validate_jobid(slurm_jobid);
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+    err = prte_ras_slurm_convert_jobid(slurm_jobid, &slurm_id_uint);
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+    /* recorded already - the pending request it belongs to is, too */
+    if (NULL != prte_get_pending_session(slurm_jobid)) {
+        return PRTE_SUCCESS;
+    }
+
+    session = PMIX_NEW(prte_session_t);
+    if (NULL == session) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    /* everything the granted session will have but its nodes, so taking it
+     * over at the grant changes nothing a query has already reported */
+    session->session_id = slurm_id_uint;
+    /* the DVM's own user and group, as the granted session will have - see
+     * prte_ras_slurm_assign_new_session */
+    session->owner_uid = prte_process_info.euid;
+    session->owner_gid = prte_process_info.egid;
+    session->alloc_refid = strdup(slurm_jobid);
+    if (NULL != user_refid) {
+        session->user_refid = strdup(user_refid);
+    }
+    if (NULL == session->alloc_refid || (NULL != user_refid && NULL == session->user_refid)) {
+        PMIX_RELEASE(session);
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_DYNAMIC);
+    PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_PENDING);
+    PMIX_XFER_PROCID(&session->requestor, requester);
+    prte_session_set_requested_by(session, requester);
+
+    err = prte_set_session_object(session);
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        PMIX_RELEASE(session);
+        return err;
+    }
+    return PRTE_SUCCESS;
+}
+
+void prte_ras_slurm_drop_pending_session(const char *slurm_jobid)
+{
+    prte_session_t *session;
+
+    /* NULL once it has been granted, and once prte_finalize has released
+     * the session table - which it does before this component's finalize */
+    session = prte_get_pending_session(slurm_jobid);
+    if (NULL == session) {
+        return;
+    }
+    /* the registry holds the only reference to a pending session, and
+     * session_des takes it out of the registry */
+    PMIX_RELEASE(session);
 }
 
 /*

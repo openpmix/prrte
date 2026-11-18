@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  *                         All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,6 +35,7 @@
 
 #include "ras_slurm.h"
 #include "src/mca/common/slurm/common_slurm.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/ras/base/base.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/proc_info.h"
@@ -77,6 +79,10 @@ typedef struct {
     time_t end_time;
     /* Answered; the answer is posted but not yet delivered */
     bool completing;
+    /* Phase one was answered when Slurm queued the job (answer_when_queued),
+     * so the outcome goes to the requester as the phase-two event and the
+     * request is not answered again */
+    bool answered;
 } prte_slurm_wait_tracker_t;
 
 /* Everything the reap callback needs, plus the index of the extend this child
@@ -108,6 +114,7 @@ static void swt_des(prte_slurm_wait_tracker_t *p);
 static void ssc_con(prte_slurm_salloc_child_t *p);
 static void ssc_des(prte_slurm_salloc_child_t *p);
 static void salloc_wait_cb(int fd, short args, void *cbdata);
+static void answer_when_queued(prte_slurm_wait_tracker_t *trk, const char *job_id);
 static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, char ***argv);
 static int prte_ras_slurm_make_count_envar_arg(const char *envar, const char *field_format, char ***argv);
 static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id);
@@ -242,6 +249,7 @@ static void swt_con(prte_slurm_wait_tracker_t *p)
     p->start_time = 0;
     p->end_time = 0;
     p->completing = false;
+    p->answered = false;
 }
 
 /*
@@ -1948,6 +1956,30 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     req->pstatus = prte_pmix_convert_rc(err);
 
+    /* Phase one was answered when Slurm queued the job, so the request is
+     * not answered again - and req->info is the answer it was given, which
+     * PMIx may still be reading. What is owed now is the outcome, as the
+     * phase-two event; the grow campaign sends it for a grant it can trace
+     * to its requester. The release callback of that answer gives back the
+     * request's slot in local_reqs and its reference; the tracker holds its
+     * own. */
+    if (trk->answered) {
+        const char *user_req_id = trk->user_request_id_provided ? request_id : NULL;
+
+        if (PMIX_SUCCESS == req->pstatus) {
+            prte_ras_base_activate_dvm_grow();
+            if (!requester_recorded) {
+                prte_plm_base_dvm_mod_notify(&req->tproc, job_id, user_req_id,
+                                             true, PMIX_SUCCESS);
+            }
+        } else {
+            prte_plm_base_dvm_mod_notify(&req->tproc, job_id, user_req_id,
+                                         false, req->pstatus);
+        }
+        PMIX_RELEASE(trk);
+        return;
+    }
+
     /* Report back: job ID and resource manager used */
     if (PMIX_SUCCESS == req->pstatus) {
         pmix_info_t *result_info = NULL;
@@ -2056,6 +2088,62 @@ static void slurm_grant_check_cb(int fd, short args, void *cbdata)
     trk->err = err;
 
     prte_ras_slurm_extend_wait_complete(-1, 0, trk);
+}
+
+/**
+ * @brief Answer phase one of a client's extend once Slurm has queued it.
+ *
+ * The id an extend is granted under is the Slurm job id, and salloc names
+ * the job as soon as slurmctld has it, pending or not - so the requester can
+ * be given it now, as PMIX_OPERATION_IN_PROGRESS, rather than when the job
+ * is granted. That is what lets the requester, or a process it passes the id
+ * to, cancel the request while Slurm has it queued; the pending session
+ * (prte_ras_slurm_register_pending_session) is what lets anyone else find
+ * it. The grant, or its failure, then arrives as the phase-two event,
+ * exactly as the daemons do after a grant today.
+ *
+ * Only for a request from a PMIx client (answer_when_queued): a spawn's
+ * allocation (PMIX_SPAWN_ALLOC) reads phase one as the grant and would
+ * launch onto nodes it does not have yet. And only where the phase-two
+ * events exist - without them phase one is the only answer there is, and
+ * stays at the grant. Where it cannot be built here, it is left to the
+ * grant too.
+ */
+static void answer_when_queued(prte_slurm_wait_tracker_t *trk, const char *job_id)
+{
+#if PRTE_HAVE_DVM_MOD_EVENTS
+    prte_pmix_server_req_t *req = trk->req;
+    pmix_info_t *result_info;
+    uint32_t owner_uid, owner_gid;
+
+    if (!req->answer_when_queued || NULL == req->infocbfunc) {
+        return;
+    }
+    PMIX_INFO_CREATE(result_info, 4);
+    if (NULL == result_info) {
+        return;
+    }
+    /* whom Slurm queued it for, as the grant would say - the user salloc ran
+     * as: see the note on prte_ras_slurm_serve_extend_req */
+    owner_uid = (uint32_t) prte_process_info.euid;
+    owner_gid = (uint32_t) prte_process_info.egid;
+    PMIX_INFO_LOAD(&result_info[0], PMIX_ALLOC_ID, job_id, PMIX_STRING);
+    PMIX_INFO_LOAD(&result_info[1], PMIX_RM_NAME, "slurm", PMIX_STRING);
+    PMIX_INFO_LOAD(&result_info[2], PMIX_ALLOC_UID, &owner_uid, PMIX_UINT32);
+    PMIX_INFO_LOAD(&result_info[3], PMIX_ALLOC_GID, &owner_gid, PMIX_UINT32);
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+    req->info = result_info;
+    req->ninfo = 4;
+    req->copy = true;
+
+    trk->answered = true;
+    req->infocbfunc(PMIX_OPERATION_IN_PROGRESS, req->info, req->ninfo,
+                    req->cbdata, prte_pmix_server_req_release, req);
+#else
+    PRTE_HIDE_UNUSED_PARAMS(trk, job_id);
+#endif
 }
 
 /**
@@ -2334,6 +2422,17 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     pending_req_added = true;
 
+    /* From here on the request is an allocation of its own, named by the
+     * Slurm job id it will keep when granted: PMIX_QUERY_ALLOC_IDS lists it
+     * and a cancel may name it by that id. On a failure below, the cleanup's
+     * cancel drops it with the pending record. */
+    err = prte_ras_slurm_register_pending_session(job_id,
+                                                  user_request_id_provided ? request_id : NULL,
+                                                  &req->tproc);
+    if (PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
     /* Nothing is asked of Slurm here. salloc holds the handshake until the job
      * leaves PENDING, so its exit is the notice that there is something to
      * ask about. */
@@ -2385,6 +2484,10 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     prte_event_set(prte_event_base, &trk->ev, -1, 0, slurm_grant_check_cb, trk);
 
     prte_ras_slurm_link_child_to_tracker(job_id, trk->tracker_index);
+
+    /* Tell a client the allocation's id while Slurm has it queued, so it -
+     * or anyone it passes the id to - can cancel it */
+    answer_when_queued(trk, job_id);
 
     /* Return control to application while we wait */
     err = PRTE_ERR_OP_IN_PROGRESS;

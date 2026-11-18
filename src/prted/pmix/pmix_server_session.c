@@ -1196,7 +1196,7 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
          * default (unreserved) pool - neither can be instantiated */
         return PMIX_ERR_BAD_PARAM;
     }
-    if (NULL != prte_get_session_object(req->sessionID)) {
+    if (prte_session_id_in_use(req->sessionID)) {
         return PMIX_ERR_EXISTS;
     }
     /* The scheduler names the allocation it is instantiating with its own
@@ -1211,7 +1211,7 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->sessionID);
         return PMIX_ERR_BAD_PARAM;
     }
-    if (NULL != prte_get_session_object_from_id(ctl->alloc_refid)) {
+    if (prte_session_alloc_id_in_use(ctl->alloc_refid)) {
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s session ctrl: instantiate of session %u names allocation "
                             "id %s, which another session already has",
@@ -1487,6 +1487,11 @@ static pmix_status_t apply_to_all(prte_pmix_server_req_t *req,
     for (i = 0; i < prte_sessions->size; i++) {
         session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
         if (NULL == session || session == prte_default_session) {
+            continue;
+        }
+        /* a pending allocation has nothing in it to operate on yet - the
+         * scheduler has not granted it (PRTE_SESSION_FLAG_PENDING) */
+        if (PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_PENDING)) {
             continue;
         }
         if (!AUTHORIZED(session, req)) {

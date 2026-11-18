@@ -1439,9 +1439,23 @@ static void _query(int sd, short args, void *cbdata)
                 rc = PMIX_SUCCESS;
                 /* a named property selects it; naming none returns all */
                 if (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_RELEASABLE)) {
-                    /* If we added the session dynamically to extend the DVM, we can release it fully */
-                    releasable = PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC);
+                    /* If we added the session dynamically to extend the DVM, we
+                     * can release it fully - once it is granted: a pending one
+                     * is cancelled (PMIX_ALLOC_REQ_CANCEL), not released */
+                    releasable = PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC) &&
+                                 !PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_PENDING);
                     PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_RELEASABLE, &releasable, PMIX_BOOL);
+                }
+                /* Whether the scheduler has granted it yet: in progress while
+                 * it is queued (PRTE_SESSION_FLAG_PENDING), success once it
+                 * is granted. A pending allocation holds no nodes, so this is
+                 * what tells one apart from an allocation that has been
+                 * granted and emptied. */
+                if (PMIX_SUCCESS == rc &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_STATUS))) {
+                    pmix_status_t astatus = PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_PENDING)
+                                                ? PMIX_OPERATION_IN_PROGRESS : PMIX_SUCCESS;
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_STATUS, &astatus, PMIX_STATUS);
                 }
                 if (PMIX_SUCCESS == rc &&
                     (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_SEQUENCE))) {

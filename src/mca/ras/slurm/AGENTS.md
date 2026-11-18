@@ -95,14 +95,19 @@ deviation* and the framework guide.
   with `scontrol update job`, removing nodes by count or by name while
   protecting the node the HNP is running on.
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
-  extend by request id, and answers it (see below). A pending request is
-  named by the namespace that made it together with its
+  extend, and answers it (see below). A pending request is named two ways.
+  By its `PMIX_ALLOC_ID` - the Slurm job id it was queued as, which the
+  requester is answered with at once and `PMIX_QUERY_ALLOC_IDS` lists - from
+  any process (`serve_cancel_by_alloc_id()`); that takes precedence when a
+  cancel carries both. And by the namespace that made it together with its
   `PMIX_ALLOC_REQ_ID` - a req_id need not be unique, so it names a request
   only to the job that made it, and two jobs may each have one pending
-  under the same req_id. It also records the user the PMIx server named
-  for the extend that made it, and only that user, root and the DVM's own
-  user may cancel it (`prte_ras_slurm_pending_req_permitted()`); the extend
-  path's own cleanup calls `prte_ras_slurm_cancel_pending_req()` directly.
+  under the same req_id. Either way the record's user decides who may: it
+  records the user the PMIx server named for the extend that made it, and
+  only that user, root and the DVM's own user may cancel it
+  (`prte_ras_slurm_pending_req_permitted()`). An id naming a granted
+  allocation is not found - that is a release. The extend path's own
+  cleanup calls `prte_ras_slurm_cancel_pending_req()` directly.
 
 ### Whom an extend is for: the DVM's own user, for now
 
@@ -233,6 +238,30 @@ No daemon runs on the new nodes until the grow campaign drains, so phase one
 reports `PMIX_OPERATION_IN_PROGRESS` with the allocation id and
 `PMIX_DVM_IS_READY` is the answer — the shape a release already has.
 
+**For a PMIx client, phase one comes as soon as Slurm has queued the job.**
+The allocation id is the Slurm job id, and `salloc` names the job the moment
+slurmctld has it, pending or not, so `answer_when_queued()` answers the
+request then, with the same four keys the grant would carry. The grant, or
+its failure - a cancel, a timeout, a node that could not be inserted - then
+arrives as the phase-two event, `PMIX_ERR_DVM_MOD` carrying the cause; the
+grow campaign sends `PMIX_DVM_IS_READY` as it always did. That is what lets
+a requester, or a process it passes the id to, cancel a request Slurm has
+queued, and it means a client's wait for phase two includes the time the job
+spends queued.
+
+- **Only for a request a PMIx client made** (`req->answer_when_queued`, set
+  by `pmix_server_alloc_fn()` and by the master's relay of one). The
+  allocation a spawn carries (`PMIX_SPAWN_ALLOC`) reads
+  `PMIX_OPERATION_IN_PROGRESS` as the grant and would launch onto nodes it
+  does not have yet, so it is answered at the grant, as before.
+- **Only with `PRTE_HAVE_DVM_MOD_EVENTS`.** Without the events phase one is
+  the only answer, and it stays at the grant.
+- **Once answered, the request is not answered again** (`trk->answered`).
+  `req->info` is then the array PMIx was handed, which it may still be
+  reading, so the completion leaves it alone; and the answer's release
+  callback has given back the request's `local_reqs` slot, so the completion
+  does not clear it either. The tracker's own reference keeps the request
+  alive until the completion is done.
 - **The campaign finds its requester through the nodes.** `extend_wait_complete`
   records `session->requestor` on the per-jobid tracking session, and
   `setup_virtual_machine` resolves it from the node's `PRTE_NODE_ALLOC_ID`
@@ -245,6 +274,35 @@ reports `PMIX_OPERATION_IN_PROGRESS` with the allocation id and
   it before any module sees it (`ras_base_allocate.c`).
 - **Both phase-one statuses are `#if PRTE_HAVE_DVM_MOD_EVENTS`.**
   `prte_plm_base_dvm_mod_notify` compiles away without the event codes.
+
+### A queued extend is a session of its own
+
+From the moment `salloc` names the job until it is granted or ends, the
+request is a `prte_session_t` flagged `PRTE_SESSION_FLAG_PENDING`
+(`prte_ras_slurm_register_pending_session()`): the Slurm job id as its
+`session_id` and `PMIX_ALLOC_ID`, the req_id where the user gave one, the
+requester as `requestor` and `requested_by`, the DVM's user as owner, and no
+nodes. `PMIX_QUERY_ALLOC_IDS` lists it and `PMIX_QUERY_ALLOC_PROPERTIES`
+reports it, with `PMIX_ALLOC_STATUS` = `PMIX_OPERATION_IN_PROGRESS` and
+`PMIX_ALLOC_RELEASABLE` false. Every other lookup skips it - see
+`src/runtime/AGENTS.md`.
+
+- **It lives exactly as long as the pending record.**
+  `prte_ras_slurm_pending_req_free()` is the one way out of a record - cancel,
+  remove, a failed submit, finalize - and it calls
+  `prte_ras_slurm_drop_pending_session()`, which releases the session only if
+  it is still pending. The registry holds the only reference.
+- **The grant takes it over.** `prte_ras_slurm_assign_new_session()` finds the
+  pending session, attaches the nodes and clears the flag, instead of
+  registering a second session under the same id (which
+  `prte_set_session_object()` would refuse). A failure there leaves it
+  pending, for the extend's cleanup to drop with the record. The record's
+  removal after a grant then finds nothing pending and leaves the session
+  alone.
+- **At finalize the table is gone first.** `prte_finalize` releases the
+  session table before it closes `ras`, so the drop that the finalize's
+  cancels make finds nothing - which is why it looks the session up rather
+  than holding a reference of its own.
 
 ### The salloc child outlives the call that forked it
 
@@ -469,10 +527,11 @@ adding a case. Two things that trip people up:
   `PMIX_ALLOC_RELEASE` with one of `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and
   `PMIX_ALLOC_REQ_CANCEL`.
 - **An extend answers in two phases, like a release.** Phase one reports
-  `PMIX_OPERATION_IN_PROGRESS` with the allocation id once Slurm grants;
-  `PMIX_DVM_IS_READY` (or `PMIX_ERR_DVM_MOD`) follows when the grow campaign
-  drains and the daemons are wired up. A case asserting on the phase-one
-  status has to expect that, not `PMIX_SUCCESS`.
+  `PMIX_OPERATION_IN_PROGRESS` with the allocation id once Slurm has
+  *queued* the job; `PMIX_DVM_IS_READY` (or `PMIX_ERR_DVM_MOD`) follows when
+  the grow campaign drains and the daemons are wired up, or when the request
+  fails. A case asserting on the phase-one status has to expect that, not
+  `PMIX_SUCCESS` - and must not read the `ALLOC_ID` in phase one as a grant.
 
 Some slot counts are asserted from `ras_base_verbose` output rather than
 from the node pool: the verbose line is what *this component* computed,

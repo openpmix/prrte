@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
  *                         All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +38,9 @@ typedef struct {
 static void prte_ras_slurm_pending_req_free(prte_ras_slurm_pending_req_t *pending_req);
 static int prte_ras_slurm_find_pending_req(const char *nspace, const char *request_id,
                                           int *idx);
+static int prte_ras_slurm_find_pending_job(const char *slurm_job_id, int *idx);
 static void prte_ras_slurm_cancel_req_at(int idx);
+static int serve_cancel_by_alloc_id(const char *alloc_id, uid_t uid);
 
 /**
  * @brief Process a PMIx pending resource cancellation request.
@@ -55,25 +58,37 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 
     int err = PRTE_SUCCESS;
     const char *request_id = NULL;
+    const char *alloc_id = NULL;
+    bool have_alloc_id = false;
     uid_t uid;
 
     for (size_t i = 0; i < req->ninfo; i++) {
-        if (0 != strcmp(req->info[i].key, PMIX_ALLOC_REQ_ID)) {
-            continue;
+        if (0 == strcmp(req->info[i].key, PMIX_ALLOC_REQ_ID)) {
+            if (PMIX_STRING != req->info[i].value.type) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+            request_id = req->info[i].value.data.string;
+        } else if (0 == strcmp(req->info[i].key, PMIX_ALLOC_ID)) {
+            if (PMIX_STRING != req->info[i].value.type) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+            alloc_id = req->info[i].value.data.string;
+            have_alloc_id = true;
         }
-
-        if (PMIX_STRING != req->info[i].value.type) {
-            err = PRTE_ERR_BAD_PARAM;
-            goto cleanup;
-        }
-
-        request_id = req->info[i].value.data.string;
-        break;
     }
 
-    if (NULL == request_id || '\0' == request_id[0]) {
+    /* an id that names nothing is not "no id": refuse it rather than fall
+     * back to the req_id */
+    if (have_alloc_id && (NULL == alloc_id || '\0' == alloc_id[0])) {
+        err = PRTE_ERR_BAD_PARAM;
+        goto cleanup;
+    }
+
+    if (!have_alloc_id && (NULL == request_id || '\0' == request_id[0])) {
         pmix_output(0, "ras:slurm:modify: cancel request invalid or unsupported.\n"
-                       "Supported options: PMIX_ALLOC_REQ_ID");
+                       "Supported options: PMIX_ALLOC_ID, PMIX_ALLOC_REQ_ID");
         err = PRTE_ERR_REQUEST;
         goto cleanup;
     }
@@ -83,6 +98,16 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
      * request, so one naming none is refused. */
     if (!prte_pmix_server_requester_uid(req->info, req->ninfo, &uid)) {
         err = PRTE_ERR_PERM;
+        goto cleanup;
+    }
+
+    /* By PMIX_ALLOC_ID - the Slurm job id the extend was answered with
+     * while Slurm had it queued, and the id PMIX_QUERY_ALLOC_IDS lists it
+     * under. Unlike a req_id that names one request DVM-wide, so any
+     * process the rule admits may use it, not only the requester's own
+     * job; it takes precedence over a req_id given with it. */
+    if (have_alloc_id) {
+        err = serve_cancel_by_alloc_id(alloc_id, uid);
         goto cleanup;
     }
     err = prte_ras_slurm_pending_req_permitted(req->tproc.nspace, request_id, uid);
@@ -102,6 +127,39 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 cleanup:
 
     return err;
+}
+
+static int serve_cancel_by_alloc_id(const char *alloc_id, uid_t uid)
+{
+    prte_ras_slurm_pending_req_t *pending_req;
+    pmix_nspace_t nspace;
+    char *request_id;
+    int idx, err;
+
+    /* a granted allocation is no longer pending, so has no request left to
+     * cancel - it is given back with PMIX_ALLOC_RELEASE */
+    err = prte_ras_slurm_find_pending_job(alloc_id, &idx);
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+    pending_req = (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, idx);
+    if (NULL == pending_req ||
+        !prte_pmix_server_user_permitted(uid, pending_req->owner, PRTE_INVALID_GID)) {
+        return PRTE_ERR_PERM;
+    }
+    /* the extend half finds its request by the name its maker gave it, and
+     * cancelling frees the record that holds that name */
+    PMIX_LOAD_NSPACE(nspace, pending_req->nspace);
+    request_id = strdup(pending_req->request_id);
+    if (NULL == request_id) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    prte_ras_slurm_cancel_req_at(idx);
+    /* in that order, as for a cancel by req_id: see serve_cancel_req */
+    prte_ras_slurm_extend_abort_request(nspace, request_id);
+    free(request_id);
+    return PRTE_SUCCESS;
 }
 
 /**
@@ -286,9 +344,34 @@ static void prte_ras_slurm_pending_req_free(prte_ras_slurm_pending_req_t *pendin
         return;
     }
 
+    /* the request's session goes with it, unless it was granted - then it
+     * is a session like any other, and no longer pending */
+    prte_ras_slurm_drop_pending_session(pending_req->slurm_job_id);
+
     free(pending_req->request_id);
     free(pending_req->slurm_job_id);
     free(pending_req);
+}
+
+/* The pending request queued as Slurm job slurm_job_id - which is the
+ * PMIX_ALLOC_ID the request was answered with - whoever made it */
+static int prte_ras_slurm_find_pending_job(const char *slurm_job_id, int *idx)
+{
+    if (!initialized) {
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
+
+    for (int i = 0; i < pending_reqs.size; i++) {
+        prte_ras_slurm_pending_req_t *pending_req =
+            (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, i);
+
+        if (NULL != pending_req && 0 == strcmp(pending_req->slurm_job_id, slurm_job_id)) {
+            *idx = i;
+            return PRTE_SUCCESS;
+        }
+    }
+
+    return PRTE_ERR_NOT_FOUND;
 }
 
 /**

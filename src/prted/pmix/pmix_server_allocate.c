@@ -378,6 +378,7 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
     req->ninfo = ndata;
     req->infocbfunc = cbfunc;
     req->cbdata = cbdata;
+    req->answer_when_queued = true;
 
     prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, _alloc_request, req);
     PMIX_POST_OBJECT(req);
