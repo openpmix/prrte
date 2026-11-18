@@ -712,7 +712,9 @@ is queued, so a queued extend is answered with it at once and is registered
 as a session flagged `PRTE_SESSION_FLAG_PENDING` - no nodes, but listed by
 `PMIX_QUERY_ALLOC_IDS`, reported by `PMIX_QUERY_ALLOC_PROPERTIES` with a
 `PMIX_ALLOC_STATUS` of `PMIX_OPERATION_IN_PROGRESS`, and named by a
-`PMIX_ALLOC_REQ_CANCEL` that carries the id. Every other lookup skips it
+`PMIX_ALLOC_REQ_CANCEL` that carries the id; once granted, such a cancel gets
+`PMIX_ERR_EXISTS` with the id, if the requester may release it. Every other
+lookup skips it
 (`src/runtime/AGENTS.md`), so a spawn, extend, release or session directive
 naming it is "not found" until it is granted; the checks that an id is free
 count it (`prte_session_id_in_use()`, `prte_session_alloc_id_in_use()`).
