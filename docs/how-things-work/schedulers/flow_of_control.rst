@@ -69,6 +69,13 @@ option takes, and the request is answered when it is granted - the
 daemons themselves are reported by the ``PMIX_DVM_IS_READY`` event that
 completes any DVM size change.
 
+Under Slurm, a client's ``PMIX_ALLOC_EXTEND`` is answered once queued,
+with ``PMIX_OPERATION_IN_PROGRESS`` and the ``PMIX_ALLOC_ID``.
+``PMIX_DVM_IS_READY`` or ``PMIX_ERR_DVM_MOD`` reports the grant. Until
+then ``PMIX_ALLOC_REQ_CANCEL`` cancels it; after it, the cancel is
+answered ``PMIX_ERR_EXISTS`` with the ``PMIX_ALLOC_ID``, and the
+allocation must be released.
+
 An allocation request can also arrive **on a spawn**, as
 ``PMIX_SPAWN_ALLOC``: the value is an array of ``pmix_info_t`` holding the
 request's directive (``PMIX_ALLOC_REQ_DIRECTIVE``) and the info a standalone
