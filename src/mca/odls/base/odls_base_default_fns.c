@@ -407,6 +407,35 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_INFO_LIST_RELEASE(mlist);
 
+    /* and the process that spawned the job, if an application process did.
+     * A fabric key that processes must share to reach each other - OPX's,
+     * for one - is given to a job and the jobs it spawns, so the spawned
+     * job's key is found from its parent's.  The test is the one
+     * pmix_server_register_fns.c applies before it reports PMIX_PARENT_ID
+     * to the job's processes: the DVM itself, a tool, and a tool holding an
+     * application process's name are no parent. */
+    {
+        pmix_proc_t *pproc = NULL;
+        prte_job_t *pjob = NULL;
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &pproc,
+                               PMIX_PROC)) {
+            if (!PMIX_CHECK_NSPACE_STRICT(PRTE_PROC_MY_NAME->nspace, pproc->nspace)) {
+                pjob = prte_get_job_data_object(pproc->nspace);
+            }
+            if (NULL != pjob && PRTE_FLAG_TEST(pjob, PRTE_JOB_FLAG_TOOL)) {
+                pjob = NULL;
+            }
+            if (PRTE_ATTR_IS_TRUE(&jdata->attributes, PRTE_JOB_NO_PARENT_PROC)) {
+                pjob = NULL;
+            }
+            if (NULL != pjob) {
+                PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PARENT_ID, pproc, PMIX_PROC);
+            }
+            PMIX_PROC_RELEASE(pproc);
+        }
+    }
+
     /* add in the uid and gid the job's processes run as */
     {
         uid_t ruid;

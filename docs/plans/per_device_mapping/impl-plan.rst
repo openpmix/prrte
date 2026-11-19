@@ -996,15 +996,18 @@ somebody else's NIC in your variable is worse than naming none.
        a glob, so this is "this card, whatever ports it has".  The ``:``
        is load-bearing: ``mlx5_1*`` would also match ``mlx5_10``.
    * - Cornelis Omni-Path
-     - ``PSM3_NIC``
-     - The device name; PSM3 selects by NIC name.
+     - ``FI_OPX_HFI_SELECT``
+     - The unit number in the device's name (``0`` for ``hfi1_0``), for
+       libfabric's OPX provider.  That is not an ordinal: OPX opens unit
+       *N* as the device named ``hfi1_N`` on every path, so the number is
+       the unit by construction.  Set for a single HFI only, and not
+       where another device's name begins with this one's (``hfi1_1`` and
+       ``hfi1_10``), since OPX finds the device by name prefix.
    * - Cornelis Omni-Path
-     - ``HFI_UNIT``, ``FI_OPX_HFI_SELECT``
-     - **Deliberately not set.**  Both take a unit *ordinal*, which is
-       meaningful only against the driver's enumeration rather than one
-       PMIx performed.  ``hfi1_0``'s trailing digit looks like it and
-       usually is, but a wrong value here does not fail — it quietly puts
-       the process on another adapter.
+     - ``HFI_UNIT``
+     - **Deliberately not set.**  PSM2 numbers units by its own
+       enumeration, which nothing in PMIx can see, and a wrong value here
+       does not fail — it quietly puts the process on another adapter.
 
 The ``nvd`` and ``opa`` components also lost their ``configure.m4``
 files, for the reason ``pgpu``'s vendor components did: ``nvd`` was
