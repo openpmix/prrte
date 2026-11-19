@@ -408,7 +408,7 @@ Verified against libfabric and hwloc master (November 2026):
      - An OpenFabrics OS device on a class ``0x200`` function of vendor
        ``0x14e4``.  ``bnxt_re`` is RoCE only.
    * - RoCE or iWARP (Intel E810, X722)
-     - ``NCCL_IB_HCA``, ``UCX_NET_DEVICES``; ``PSM3_NIC`` to confirm
+     - ``NCCL_IB_HCA``, ``UCX_NET_DEVICES``
      - The verbs device name (``irdma0``) — but only in RoCE mode; see
        below
      - An OpenFabrics OS device on a class ``0x200`` function of vendor
@@ -534,11 +534,6 @@ Still to confirm before landing
   components are called done.
 * **Slingshot's PCI vendor id.**  The Cassini parts are expected to report
   Cray's ``0x17db``.  Confirm it from a real topology.
-* **PSM3 on E810.**  PSM3 is Intel's provider for E810 RoCE as well as for
-  Omni-Path, and ``opa`` already writes ``PSM3_NIC`` for class ``0x208``.
-  Whether ``PSM3_NIC`` takes the ``irdma`` device name on an E810, and
-  what PSM3 does with one in iWARP mode, needs confirming from PSM3's
-  source before an ``{0x8086, 0x200}`` entry joins ``opa``'s table.
 * **Topologies for Broadcom and Intel adapters.**  Same need as EFA and
   Slingshot.  An Intel one should say which mode its ``irdma`` was in.
 * **Scrubbing.**  A topology XML carries the host name, MAC addresses,
@@ -597,10 +592,11 @@ elsewhere.
   This is a separate PMIx change, and PRRTE's offline harness mirrors it in a
   PRRTE change that lands after it.  Class ``0x0380`` is left alone; those
   parts get render nodes from their drivers.
-* **opa's ``PSM3_NIC`` named several HFIs with commas**, which PSM3 matches
-  as one ``fnmatch`` pattern and so matched nothing.  It now writes a single
-  plain name or nothing.  An E810 entry was not added to ``opa``: whether
-  PSM3's verbs layer drives an iWARP ``irdma`` is unresolved.
+* **opa named HFIs to PSM3**, which is Intel's library for its ethernet
+  adapters rather than an Omni-Path one.  PMIx no longer sets ``PSM3_NIC``
+  at all; ``opa`` names an HFI to libfabric's OPX provider in
+  ``FI_OPX_HFI_SELECT`` instead, and opens for CN5000's Cornelis vendor id
+  (``0x434e``) as well as OPA100's ``0x8086``.
 
 Separately, and not part of this work: hwloc master (3.0, unreleased) turns
 the OS device ``type`` attribute into a ``types`` bitmask.  PMIx's

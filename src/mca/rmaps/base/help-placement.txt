@@ -673,19 +673,26 @@ the environment variables the fabric libraries read:
                          verbs provider matches it as a prefix
    FI_EFA_IFACE          AWS EFA devices
    FI_CXI_DEVICE_NAME    HPE Slingshot NICs, by their "cxi" device
-   PSM3_NIC              A single Cornelis Omni-Path adapter (PSM3 matches
-                         the variable as one pattern, so several cannot be
-                         named)
+   FI_OPX_HFI_SELECT     A single Cornelis Omni-Path adapter (OPA100,
+                         CN5000 and later), for libfabric's OPX provider,
+                         by its unit number
 
 named as those libraries name the device - "mlx5_0" - which is the name
-hwloc gave it. Unlike a GPU's vendor identity that name is always there,
-so the identity check above does not apply to this class.
+hwloc gave it, even when the process was mapped against another name for
+the same adapter, such as its network interface. Unlike a GPU's vendor
+identity that name is always there, so the identity check above does not
+apply to this class.
 
-No variable that names an adapter by its unit *number* is set - HFI_UNIT
-and FI_OPX_HFI_SELECT among them. A unit number is meaningful only
-against the enumeration it came from, which is the driver's rather than
-one PRRTE performed, and a wrong number in these variables does not
-fail - it quietly puts the process on a different adapter. Nothing is set at
+FI_OPX_HFI_SELECT is the one variable set by unit number, because OPX
+opens unit N as the device named "hfi1_N": the number is the one in the
+adapter's name, not a position in some enumeration. It is not set where
+another adapter's name begins with this one's ("hfi1_1" and "hfi1_10"),
+since OPX matches the name as a prefix. No other variable that names an
+adapter by its unit number is set - HFI_UNIT among them. A unit number is
+meaningful only against the enumeration it came from, which is the
+driver's rather than one PRRTE performed, and a wrong number in these
+variables does not fail - it quietly puts the process on a different
+adapter. Nothing is set at
 all for an adapter whose fabric has no support behind it, rather than
 guessing at a variable it might read.
 
