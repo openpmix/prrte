@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -77,6 +78,8 @@ typedef struct {
     /* What the grant check read from the expander's record, for the trim */
     time_t start_time;
     time_t end_time;
+    /* when salloc exited, which it does as the job leaves PENDING: the grant */
+    struct timeval reaped;
     /* Answered; the answer is posted but not yet delivered */
     bool completing;
     /* Phase one was answered when Slurm queued the job (answer_when_queued),
@@ -248,6 +251,7 @@ static void swt_con(prte_slurm_wait_tracker_t *p)
     p->tracker_index = -1;
     p->start_time = 0;
     p->end_time = 0;
+    memset(&p->reaped, 0, sizeof(p->reaped));
     p->completing = false;
     p->answered = false;
 }
@@ -758,9 +762,13 @@ static void salloc_wait_cb(int fd, short args, void *cbdata)
     prte_slurm_salloc_child_t *child;
     prte_slurm_wait_tracker_t *trk;
     char tail[PRTE_SLURM_ALLOC_TAIL_MAX + 1];
+    struct timeval reaped;
     size_t n = 0;
     int status;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    /* first, so nothing below delays the grant time */
+    gettimeofday(&reaped, NULL);
 
     /* Past finalize, cbdata names a child this component has already killed,
      * reaped and freed. Reaching here would mean the event base was dispatched
@@ -827,6 +835,7 @@ static void salloc_wait_cb(int fd, short args, void *cbdata)
 
     /* No tracker: the extend was already answered, or never got one */
     if (NULL != trk) {
+        trk->reaped = reaped;
         slurm_grant_check_cb(-1, 0, trk);
     }
 }
@@ -1898,6 +1907,8 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         if (NULL != session) {
             PMIX_XFER_PROCID(&session->requestor, &req->tproc);
             prte_session_set_requested_by(session, &req->tproc);
+            /* the grant time, taken at the reap: Slurm has been queried since */
+            session->granted = trk->reaped;
             requester_recorded = true;
         }
     }

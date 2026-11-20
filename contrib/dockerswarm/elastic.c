@@ -150,6 +150,15 @@ static pmix_proc_t myproc;
  * spawn needs in order to target those nodes */
 static char alloc_id[PMIX_MAX_KEYLEN + 1];
 
+/* this host's clock at a step; comparable to PMIX_ALLOC_GRANT_TIME where
+ * the nodes share a clock */
+static void print_clock(const char *what) {
+    struct timespec ts;
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    fprintf(stderr, ">>> %s AT %ld.%06ld\n", what, (long) ts.tv_sec, ts.tv_nsec / 1000);
+}
+
 /* handler registration callback */
 static void reg_cb(pmix_status_t status, size_t evref, void *cbdata) {
     lock_t *l = (lock_t *) cbdata;
@@ -164,6 +173,7 @@ static void alloc_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo,
     size_t n;
     fprintf(stderr, ">>> PHASE 1 (acceptance): allocation request returned %s\n",
             PMIx_Error_string(status));
+    print_clock("PHASE 1");
     for (n = 0; n < ninfo; n++) {
         if (PMIX_STRING == info[n].value.type) {
             fprintf(stderr, "      info[%zu] %s = %s\n", n, info[n].key,
@@ -198,8 +208,14 @@ static void completion_evh(size_t evhdlr_id, pmix_status_t status,
 
     fprintf(stderr, "\n>>> PHASE 2 (completion): received event %s (%d)\n",
             PMIx_Error_string(status), status);
+    print_clock("PHASE 2");
     for (n = 0; n < ninfo; n++) {
         fprintf(stderr, "      payload[%zu] key=%s\n", n, info[n].key);
+        if (PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_GRANT_TIME) &&
+            PMIX_TIMEVAL == info[n].value.type) {
+            fprintf(stderr, ">>> GRANT_TIME %ld.%06ld\n", (long) info[n].value.data.tv.tv_sec,
+                    (long) info[n].value.data.tv.tv_usec);
+        }
     }
     if (PMIX_DVM_IS_READY == status) {
         fprintf(stderr, ">>> SUCCESS: the DVM now reflects the requested size\n");
@@ -618,6 +634,7 @@ int main(int argc, char **argv) {
     } else {
         fprintf(stderr, "requesting %s [%s] ...\n", op, arg);
     }
+    print_clock("REQUEST");
     rc = PMIx_Allocation_request_nb(directive, info, ninfo, alloc_cb, &alloclock);
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         fprintf(stderr, "PMIx_Allocation_request_nb failed immediately: %s\n",

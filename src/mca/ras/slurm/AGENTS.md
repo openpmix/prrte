@@ -253,7 +253,11 @@ arrives as the phase-two event, `PMIX_ERR_DVM_MOD` carrying the cause; the
 grow campaign sends `PMIX_DVM_IS_READY` as it always did. That is what lets
 a requester, or a process it passes the id to, cancel a request Slurm has
 queued, and it means a client's wait for phase two includes the time the job
-spends queued.
+spends queued. So the session records the grant (`session->granted`), and
+the grow's `PMIX_DVM_IS_READY` and the allocation properties carry it as
+`PMIX_ALLOC_GRANT_TIME`. It is when `salloc_wait_cb` reaped salloc, which
+exits as the job leaves `PENDING`; `extend_wait_complete` copies it to the
+session, which only exists after several more Slurm queries.
 
 - **Only for a request a PMIx client made** (`req->answer_when_queued`, set
   by `pmix_server_alloc_fn()` and by the master's relay of one). The

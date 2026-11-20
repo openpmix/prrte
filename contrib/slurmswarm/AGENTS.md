@@ -283,7 +283,10 @@ Five cases are worth calling out:
   The next group covers a cancel after the grant. By id, or by req_id from
   the requesting job (`elastic --cancel-after-grant`), it gets
   `PMIX_ERR_EXISTS` with the id; by req_id from another run, still not
-  found. The allocation stays and is released as usual.
+  found. The allocation stays and is released as usual. The group also
+  checks the extend's `PMIX_DVM_IS_READY` carries a `PMIX_ALLOC_GRANT_TIME`
+  between the client's request and phase-two clock readings. The
+  comparison is exact here because the containers share one clock.
 
   A consequence for every other case: phase one now arrives when SLURM
   *queues* the job, so a `>>> ALLOC_ID` line no longer means the extend was
