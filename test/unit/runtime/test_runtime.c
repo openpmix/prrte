@@ -361,6 +361,25 @@ static int test_session_registry(void)
     return failures;
 }
 
+/* A session's grant time is served whenever it is not zero, so a new
+ * session must have none. Released and allocated again so the second may
+ * reuse the first's memory. */
+static int test_session_granted_unset(void)
+{
+    int failures = 0;
+    prte_session_t *s;
+
+    s = PMIX_NEW(prte_session_t);
+    s->granted.tv_sec = 12345;
+    s->granted.tv_usec = 678;
+    PMIX_RELEASE(s);
+    s = PMIX_NEW(prte_session_t);
+    CHECK("session: a new session has no grant time",
+          0 == s->granted.tv_sec && 0 == s->granted.tv_usec);
+    PMIX_RELEASE(s);
+    return failures;
+}
+
 /* A pending session - an allocation the scheduler has queued and not granted
  * (PRTE_SESSION_FLAG_PENDING) - holds no nodes, so the ordinary lookups must
  * not hand it to anyone who would spawn onto it, extend, release or control
@@ -3541,6 +3560,7 @@ int main(void)
     failures += test_job_registry();
     failures += test_session_registry();
     failures += test_session_pending();
+    failures += test_session_granted_unset();
     failures += test_session_ownership();
     failures += test_session_job_backref();
     failures += test_proc_lookups();
