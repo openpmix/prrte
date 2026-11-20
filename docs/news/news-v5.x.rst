@@ -41,9 +41,11 @@ Highlights
   reservation, required features, and excluded nodes
   (``ras_slurm_propagate_extra`` names further job record members), and
   a queued extend is named by its allocation id, so it can be cancelled
-  from another tool. ``srun`` reads its node list from a file, so a
-  launch is no longer bounded by the 128 KiB argument limit, and grows
-  work under Slurm step management.
+  from another tool. The requester is told when Slurm granted its extend
+  (``PMIX_ALLOC_GRANT_TIME``), and a cancel that arrives after the grant
+  is answered with the allocation id to release. ``srun`` reads its
+  node list from a file, so a launch is no longer bounded by the 128 KiB
+  argument limit, and grows work under Slurm step management.
 
 * **Node reservation and session targeting.** A job may name the
   allocation it is to be mapped onto. Each allocation has one owner,
@@ -103,7 +105,9 @@ Highlights
   announced as sets rather than with one broadcast per process. A
   spawned job inherits its parent's error handling, inheritance passes on
   to the spawned job's own children, and a recoverable job is no longer
-  terminated because a job connected to it failed.
+  terminated because a job connected to it failed. PMIx is told which
+  process spawned a job, so a parent and its children can reach each
+  other through Omni-Path (OPX) shared memory.
 
 * **Messaging reworked.** Per-peer progress threads and shared payloads
   in the RML/OOB. ``prte_if_include`` and ``prte_if_exclude`` now decide
