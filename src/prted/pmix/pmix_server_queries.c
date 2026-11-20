@@ -1462,6 +1462,12 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_SEQUENCE,
                                        &session->acquisition, PMIX_UINT32);
                 }
+                /* when the scheduler granted it, where we know */
+                if (PMIX_SUCCESS == rc && 0 != session->granted.tv_sec &&
+                    (NULL == allocprop || PMIx_Check_key(allocprop, PMIX_ALLOC_GRANT_TIME))) {
+                    PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_GRANT_TIME,
+                                       &session->granted, PMIX_TIMEVAL);
+                }
                 /* What lets a user tell its allocations apart: the
                  * PMIX_ALLOC_REQ_ID it was requested under, the process that
                  * requested it and that process's command line, and whose

@@ -917,7 +917,9 @@ tell its allocations apart and clean them up: besides
 `PMIX_ALLOC_RELEASABLE`, `PMIX_ALLOC_SEQUENCE` and `PMIX_ALLOC_STATUS` -
 `PMIX_OPERATION_IN_PROGRESS` for an allocation a scheduler has queued and
 not granted (`PRTE_SESSION_FLAG_PENDING`, which `PMIX_QUERY_ALLOC_IDS`
-lists too and which is not releasable), `PMIX_SUCCESS` once granted - the
+lists too and which is not releasable), `PMIX_SUCCESS` once granted -
+`PMIX_ALLOC_GRANT_TIME` where known (`session->granted`, set by `ras/slurm`
+for an extend), the
 `PMIX_ALLOC_REQ_ID` it was requested under, the process that requested it
 (`PMIX_REQUESTOR`, from `session->requested_by`) and that process's
 `PMIX_CMD_LINE` (`session->requested_cmd`, recorded at the request since

@@ -2675,6 +2675,10 @@ static int campaign_add_requester(prte_grow_campaign_t *camp, prte_session_t *se
 static prte_grow_requester_t *pending_requesters = NULL;
 static int npending_requesters = 0;
 
+static void dvm_mod_notify(const pmix_proc_t *requester, const char *alloc_id,
+                           const char *req_id, bool success, pmix_status_t cause,
+                           bool grew);
+
 int prte_plm_base_add_grow_requester(const pmix_proc_t *requester,
                                      const char *alloc_id,
                                      const char *req_id)
@@ -3361,8 +3365,8 @@ process:
                              "%s plm:base:setup_vm grow required no new daemons",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         if (have_grow_requester) {
-            prte_plm_base_dvm_mod_notify(&grow_requester, grow_alloc_id,
-                                         grow_req_id, true, PMIX_SUCCESS);
+            dvm_mod_notify(&grow_requester, grow_alloc_id, grow_req_id, true,
+                           PMIX_SUCCESS, true);
         }
         free(new_vpids);
         return PRTE_SUCCESS;
@@ -3484,6 +3488,15 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
                                   bool success,
                                   pmix_status_t cause)
 {
+    dvm_mod_notify(requester, alloc_id, req_id, success, cause, false);
+}
+
+/* grew: only the grow that brought the allocation in carries its grant
+ * time, not a release naming it */
+static void dvm_mod_notify(const pmix_proc_t *requester, const char *alloc_id,
+                           const char *req_id, bool success, pmix_status_t cause,
+                           bool grew)
+{
 #if PRTE_HAVE_DVM_MOD_EVENTS
     pmix_status_t code = success ? PMIX_DVM_IS_READY : PMIX_ERR_DVM_MOD;
     pmix_info_t *rinfo;
@@ -3491,6 +3504,7 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
     pmix_proc_t ptarg;
     size_t nrinfo, idx;
     pmix_status_t rc;
+    struct timeval *granted = NULL;
 
     /* Assemble a directed (custom-range) notification to the requester only,
      * mirroring the PMIX_ALLOC_TIMEOUT_WARNING delivery: custom range plus the
@@ -3513,6 +3527,16 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
     }
     if (!success) {
         nrinfo++;
+    }
+    /* the grant time, where known: a requester answered while queued learns
+     * of the grant only here */
+    if (grew && success && NULL != alloc_id) {
+        prte_session_t *session = prte_get_session_object_from_id(alloc_id);
+
+        if (NULL != session && 0 != session->granted.tv_sec) {
+            granted = &session->granted;
+            nrinfo++;
+        }
     }
     PMIX_INFO_CREATE(rinfo, nrinfo);
     idx = 0;
@@ -3539,6 +3563,9 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
          * key) */
         PMIX_INFO_LOAD(&rinfo[idx++], PMIX_JOB_TERM_STATUS, &cause, PMIX_STATUS);
     }
+    if (NULL != granted) {
+        PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_GRANT_TIME, granted, PMIX_TIMEVAL);
+    }
     rc = PMIx_Notify_event(code, PRTE_PROC_MY_NAME, PMIX_RANGE_CUSTOM,
                            rinfo, nrinfo, NULL, NULL);
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
@@ -3550,7 +3577,7 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
      * completion notification is compiled out per the spec's backward-
      * compatibility clause.  The DVM still grows/shrinks; only the event is
      * omitted. */
-    PRTE_HIDE_UNUSED_PARAMS(requester, alloc_id, req_id, success, cause);
+    PRTE_HIDE_UNUSED_PARAMS(requester, alloc_id, req_id, success, cause, grew);
 #endif
 }
 
@@ -3645,10 +3672,10 @@ void prte_plm_base_grow_drain(bool success)
             /* the specific daemon-failure status is not threaded down to this
              * layer yet, so report a generic cause on failure (reconcile by
              * passing the dying daemon's status as a follow-up) */
-            prte_plm_base_dvm_mod_notify(&camp->requesters[r].requester,
-                                         camp->requesters[r].alloc_id,
-                                         camp->requesters[r].req_id, success,
-                                         success ? PMIX_SUCCESS : PMIX_ERROR);
+            dvm_mod_notify(&camp->requesters[r].requester,
+                           camp->requesters[r].alloc_id,
+                           camp->requesters[r].req_id, success,
+                           success ? PMIX_SUCCESS : PMIX_ERROR, true);
         }
         PMIX_RELEASE(camp);
     }
