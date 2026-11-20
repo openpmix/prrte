@@ -1970,7 +1970,7 @@ elastic_pending_cancel_group() {
 }
 
 elastic_cancel_after_grant_group() {
-    local jid=$1 ajid out
+    local jid=$1 ajid out p1 gt p2
 
     banner "ras/slurm: a cancel the grant has overtaken says so"
     # Once Slurm grants an extend its pending record is gone, so there is no
@@ -1991,6 +1991,16 @@ elastic_cancel_after_grant_group() {
         [ "$(echo "$out" | sed -n 's/^>>> ALLOC_ID //p' | sort -u)" = "$ajid" ] \
         && ok "a cancel by req_id after the grant says it exists, naming job $ajid" \
         || bad "the requester's late cancel was not answered EXISTS with the id: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # An immediate grant can precede phase one, so PMIX_ALLOC_GRANT_TIME is
+    # bounded by the request and phase two, by this cluster's one clock.
+    rq=$(echo "$out" | sed -n 's/^>>> REQUEST AT //p' | head -1)
+    gt=$(echo "$out" | sed -n 's/^>>> GRANT_TIME //p' | head -1)
+    p2=$(echo "$out" | sed -n 's/^>>> PHASE 2 AT //p' | head -1)
+    [ -n "$rq" ] && [ -n "$gt" ] && [ -n "$p2" ] &&
+        awk -v a="$rq" -v g="$gt" -v b="$p2" 'BEGIN { exit !(a <= g && g <= b) }' \
+        && ok "PMIX_DVM_IS_READY carries the grant time, between the request and phase two" \
+        || bad "no grant time between the request ($rq) and phase two ($p2): '$gt'"
 
     out=$(SA "timeout 60 elastic cancel-id $ajid" 2>&1)
     echo "$out" | grep -q 'REJECTED: PMIX_ERR_EXISTS' &&

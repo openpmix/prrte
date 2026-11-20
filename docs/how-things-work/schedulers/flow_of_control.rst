@@ -74,7 +74,9 @@ with ``PMIX_OPERATION_IN_PROGRESS`` and the ``PMIX_ALLOC_ID``.
 ``PMIX_DVM_IS_READY`` or ``PMIX_ERR_DVM_MOD`` reports the grant. Until
 then ``PMIX_ALLOC_REQ_CANCEL`` cancels it; after it, the cancel is
 answered ``PMIX_ERR_EXISTS`` with the ``PMIX_ALLOC_ID``, and the
-allocation must be released.
+allocation must be released. That ``PMIX_DVM_IS_READY``, and
+``PMIX_QUERY_ALLOC_PROPERTIES``, carry ``PMIX_ALLOC_GRANT_TIME``: when
+the scheduler granted it.
 
 An allocation request can also arrive **on a spawn**, as
 ``PMIX_SPAWN_ALLOC``: the value is an array of ``pmix_info_t`` holding the

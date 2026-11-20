@@ -356,6 +356,9 @@ typedef struct{
     /* Order in which this DVM acquired its allocations, from 1; 0 until the
      * session is registered. Served as PMIX_ALLOC_SEQUENCE. */
     uint32_t acquisition;
+    /* when the scheduler granted the allocation, zero if unknown; served as
+     * PMIX_ALLOC_GRANT_TIME */
+    struct timeval granted;
 } prte_session_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_session_t);
 
