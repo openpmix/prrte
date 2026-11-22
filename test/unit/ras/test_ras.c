@@ -1204,6 +1204,71 @@ static int test_pmix_gate(void)
             PMIX_RELEASE(req);
             prte_pmix_server_globals.scheduler_lookup_done = saved;
         }
+
+        /* With a scheduler, modify() sends it a relay copy of the request -
+         * the requester's PMIX_USERID and PMIX_GRPID renamed to their
+         * PMIX_ORIGIN_ forms, and PMIX_REQUESTOR added - and the request
+         * itself must keep its own info. The request is completed here once
+         * the scheduler answers, and a release by allocation id checks the
+         * requester's PMIX_USERID there: when modify() pointed the request
+         * at the copy, that check found none, and the release was refused
+         * PMIX_ERR_NO_PERMISSIONS after the scheduler had made it.
+         *
+         * A scheduler that is connected and already the primary server lets
+         * prte_pmix_set_scheduler() succeed without going near PMIx; the
+         * send itself then fails, since this process is connected to
+         * nothing, and that is the point at which the old code had already
+         * repointed the request. */
+        if (NULL != mod->modify) {
+            prte_pmix_server_req_t *req;
+            bool saved_connected = prte_pmix_server_globals.scheduler_connected;
+            bool saved_primary_set = prte_pmix_server_globals.primary_server_set;
+            pmix_proc_t saved_sched, saved_primary;
+            pmix_info_t *info;
+            uint32_t uid = 4242, gid = 4343, got = 0;
+            bool sawuid = false, sawreq = false;
+            size_t n;
+
+            PMIX_XFER_PROCID(&saved_sched, &prte_pmix_server_globals.scheduler);
+            PMIX_XFER_PROCID(&saved_primary, &prte_pmix_server_globals.primary_server);
+            PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler, "test-scheduler", 0);
+            PMIX_XFER_PROCID(&prte_pmix_server_globals.primary_server,
+                             &prte_pmix_server_globals.scheduler);
+            prte_pmix_server_globals.scheduler_connected = true;
+            prte_pmix_server_globals.primary_server_set = true;
+
+            PMIX_INFO_CREATE(info, 3);
+            PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, "test-alloc", PMIX_STRING);
+            PMIX_INFO_LOAD(&info[1], PMIX_USERID, &uid, PMIX_UINT32);
+            PMIX_INFO_LOAD(&info[2], PMIX_GRPID, &gid, PMIX_UINT32);
+            req = PMIX_NEW(prte_pmix_server_req_t);
+            req->allocdir = PMIX_ALLOC_RELEASE;
+            req->info = info;
+            req->ninfo = 3;
+            req->copy = true;
+
+            CHECK("pmix: modify does not report a send that failed",
+                  PMIX_SUCCESS != mod->modify(req));
+            CHECK("pmix: modify leaves the request its own info",
+                  info == req->info && 3 == req->ninfo);
+            for (n = 0; NULL != req->info && n < req->ninfo; n++) {
+                if (PMIx_Check_key(req->info[n].key, PMIX_USERID) &&
+                    PMIX_SUCCESS == PMIx_Value_get_number(&req->info[n].value, &got,
+                                                          PMIX_UINT32)) {
+                    sawuid = (uid == got);
+                } else if (PMIx_Check_key(req->info[n].key, PMIX_REQUESTOR)) {
+                    sawreq = true;
+                }
+            }
+            CHECK("pmix: the request keeps the requester's PMIX_USERID", sawuid);
+            CHECK("pmix: the request is not given the scheduler's PMIX_REQUESTOR", !sawreq);
+            PMIX_RELEASE(req);
+
+            prte_pmix_server_globals.scheduler_connected = saved_connected;
+            prte_pmix_server_globals.primary_server_set = saved_primary_set;
+            PMIX_XFER_PROCID(&prte_pmix_server_globals.scheduler, &saved_sched);
+            PMIX_XFER_PROCID(&prte_pmix_server_globals.primary_server, &saved_primary);
+        }
     }
 
     if (0 == failures) {

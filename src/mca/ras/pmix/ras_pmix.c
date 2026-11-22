@@ -172,6 +172,9 @@ typedef struct {
     size_t ninfo;
     pmix_release_cbfunc_t rel;
     void *relcbdata;
+    /* the copy of the request that went to the scheduler - see modify() */
+    pmix_info_t *sent;
+    size_t nsent;
 } prte_ras_pmix_caddy_t;
 
 static void rpcon(prte_ras_pmix_caddy_t *p)
@@ -182,11 +185,16 @@ static void rpcon(prte_ras_pmix_caddy_t *p)
     p->ninfo = 0;
     p->rel = NULL;
     p->relcbdata = NULL;
+    p->sent = NULL;
+    p->nsent = 0;
 }
 static void rpdes(prte_ras_pmix_caddy_t *p)
 {
     if (NULL != p->req) {
         PMIX_RELEASE(p->req);
+    }
+    if (NULL != p->sent) {
+        PMIX_INFO_FREE(p->sent, p->nsent);
     }
 }
 static PMIX_CLASS_INSTANCE(prte_ras_pmix_caddy_t, pmix_object_t, rpcon, rpdes);
@@ -209,8 +217,8 @@ static PMIX_CLASS_INSTANCE(prte_ras_pmix_caddy_t, pmix_object_t, rpcon, rpdes);
  *
  * So merge.  Every key the answer carries wins - the granted node list
  * supersedes the requested one - and every key of the request's that the
- * answer does not mention is kept.  PMIX_REQUESTOR is dropped: modify() added
- * it for the scheduler's benefit and it is nobody's answer.
+ * answer does not mention is kept.  PMIX_REQUESTOR is dropped: it is what
+ * modify() tells the scheduler, and nobody's answer.
  *
  * The copy is deliberate.  The answer belongs to PMIx until cd->rel() is
  * invoked, and there is no good moment to invoke it if we point at it
@@ -567,17 +575,17 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     /* the request is the requester's, not ours - say whom we act for */
     n = prte_pmix_server_relay_copy(xfer, req->info, req->ninfo);
     PMIX_INFO_LOAD(&xfer[n], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
-    /* Repoint the request at our augmented copy. If it merely borrowed the
-     * caller's array we leave that alone, but if it already OWNED one we have
-     * to release it here or repointing strands it - which is exactly what
-     * happens to an allocation request relayed from a remote peer, since
-     * pmix_server.c builds those with copy = true. */
-    if (req->copy && NULL != req->info) {
-        PMIX_INFO_FREE(req->info, req->ninfo);
-    }
-    req->copy = true;
-    req->info = xfer;
-    req->ninfo = n + 1;
+
+    /* The copy is what the scheduler is sent, and nothing else. The request
+     * keeps its own info: once the scheduler answers, the request is
+     * completed here (prte_ras_base_complete_request), and that is decided
+     * on the request as PMIx handed it to us. The copy renames the
+     * requester's PMIX_USERID and PMIX_GRPID to their PMIX_ORIGIN_ forms,
+     * since to the scheduler we are the requester - so a request pointed
+     * at it carries no PMIX_USERID, and a release by allocation id, which
+     * checks that the requester may operate on the reservation, was
+     * refused PMIX_ERR_NO_PERMISSIONS after the scheduler had already
+     * released it. The caddy owns the copy, and frees it with itself. */
 
     /* Build the capture buffer for the answer BEFORE the request goes out.
      * The completion callback runs on the PMIx progress thread, where it may
@@ -585,15 +593,18 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
      * cannot.  Allocated here, a failure is still one we can answer. */
     cd = PMIX_NEW(prte_ras_pmix_caddy_t);
     if (NULL == cd) {
+        PMIX_INFO_FREE(xfer, n + 1);
         return PMIX_ERR_NOMEM;
     }
     /* the caddy holds a reference on the request so the request cannot be
      * reclaimed out from under the shift */
     PMIX_RETAIN(req);
     cd->req = req;
+    cd->sent = xfer;
+    cd->nsent = n + 1;
 
     /* pass the request to the scheduler */
-    rc = PMIx_Allocation_request_nb(req->allocdir, req->info, req->ninfo,
+    rc = PMIx_Allocation_request_nb(req->allocdir, cd->sent, cd->nsent,
                                     infocbfunc, cd);
     if (PMIX_SUCCESS != rc) {
         /* PMIx answers anything other than PMIX_SUCCESS without ever calling
