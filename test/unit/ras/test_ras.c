@@ -843,6 +843,90 @@ static int test_hnp_dedup(void)
 }
 
 /*
+ * The same, when the allocation names this node with its domain and
+ * gethostname() does not: a PBS node file lists "n01.cluster.org" on a
+ * node that calls itself "n01".  Names are compared without their domain
+ * unless prte_keep_fqdn_hostnames is set, so that entry is this node too -
+ * no name resolution needed (prte_do_not_resolve is on by default) - and
+ * a second pool entry for it would have the DVM start a daemon beside the
+ * HNP that no process is ever launched through.
+ */
+static int test_hnp_dedup_fqdn(void)
+{
+    int failures = 0;
+    pmix_list_t nodes;
+    prte_node_t *hnp;
+    char *save, *fqdn, *other;
+    char **save_aliases;
+    bool save_resolve, save_keep;
+    int before, rc;
+
+    hnp = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+    CHECK("hnp fqdn: node at index 0", NULL != hnp);
+    if (NULL == hnp) {
+        return failures;
+    }
+
+    /* a short local name with no qualified alias, as gethostname() gives
+     * on such a node, and no resolving */
+    save = prte_process_info.nodename;
+    save_aliases = prte_process_info.aliases;
+    save_resolve = prte_do_not_resolve;
+    save_keep = prte_keep_fqdn_hostnames;
+    prte_process_info.nodename = strdup("prte-unit-test-hnp");
+    prte_process_info.aliases = NULL;
+    prte_do_not_resolve = true;
+    prte_keep_fqdn_hostnames = false;
+    fqdn = "prte-unit-test-hnp.unit.test";
+    other = "prte-unit-test-hnp2.unit.test";
+
+    CHECK("hnp fqdn: qualified name is local",
+          prte_check_host_is_local(fqdn));
+    CHECK("hnp fqdn: longer short name is not local",
+          !prte_check_host_is_local(other));
+    CHECK("hnp fqdn: a leading dot is not local",
+          !prte_check_host_is_local(".unit.test"));
+
+    before = pool_count();
+    prte_ras_base.total_slots_alloc = 0;
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    mknode(&nodes, fqdn, 12);
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("hnp fqdn: rc", PRTE_SUCCESS == rc);
+    CHECK("hnp fqdn: no duplicate local node", pool_count() == before);
+    CHECK("hnp fqdn: slots adopted", 12 == hnp->slots);
+    CHECK("hnp fqdn: counted once", 12 == prte_ras_base.total_slots_alloc);
+
+    /* (the pool's node 0 keeps the 12 slots and the qualified alias, as
+     * it keeps test_hnp_dedup's slots; nothing later reads either) */
+
+    /* an address is not a qualified name, even when the node's name is
+     * its first part (prte_strip_prefix makes "10" of "node10") */
+    free(prte_process_info.nodename);
+    prte_process_info.nodename = strdup("10");
+    CHECK("hnp fqdn: an address is not this node's qualified name",
+          !prte_check_host_is_local("10.1.2.3"));
+    free(prte_process_info.nodename);
+    prte_process_info.nodename = strdup("prte-unit-test-hnp");
+
+    /* with qualified names kept, the two are different names */
+    PMIx_Argv_free(prte_process_info.aliases);
+    prte_process_info.aliases = NULL;
+    prte_keep_fqdn_hostnames = true;
+    CHECK("hnp fqdn: kept qualified names are compared whole",
+          !prte_check_host_is_local(fqdn));
+
+    PMIx_Argv_free(prte_process_info.aliases);
+    free(prte_process_info.nodename);
+    prte_process_info.nodename = save;
+    prte_process_info.aliases = save_aliases;
+    prte_do_not_resolve = save_resolve;
+    prte_keep_fqdn_hostnames = save_keep;
+    return failures;
+}
+
+/*
  * Every component fills in the same vtable and the driver dereferences the
  * slots it uses without further checks beyond a NULL test on allocate.
  */
@@ -3389,6 +3473,7 @@ int main(void)
     failures += test_bootstrap_file_refused();
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
+    failures += test_hnp_dedup_fqdn();
     failures += test_flag_string();
     failures += test_dvm_growing();
     failures += test_resize_requires_elastic();

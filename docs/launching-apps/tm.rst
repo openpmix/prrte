@@ -53,6 +53,14 @@ PBS/Torque.  Or, if submitting a script:
    prterun mpi-hello-world
    shell$ qsub -l nodes=4 my_script.sh
 
+Node names
+----------
+
+The node names PBS writes to ``$PBS_NODEFILE`` may carry a domain that
+``hostname`` on the nodes does not (``n01.cluster.org`` and ``n01``).
+PRRTE compares node names without their domain unless
+``prte_keep_fqdn_hostnames`` is set, so the two name the same node.
+
 .. warning:: Do not modify ``$PBS_NODEFILE``!
 
    We've had reports from some sites that system administrators modify

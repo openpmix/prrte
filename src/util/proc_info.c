@@ -179,6 +179,27 @@ bool prte_check_host_is_local(const char *name)
             return true;
         }
     }
+    /* Unless we were told to keep them, names are compared without their
+     * domain: prte_setup_hostname() takes it off this node's own name and
+     * ras:base:node_insert takes it off every allocated node's.  So a name
+     * that is ours once its domain is removed is ours - and nothing above
+     * can see that when gethostname() returned the short name, because only
+     * a qualified gethostname() leaves the qualified name among our aliases.
+     * A resource manager that lists its nodes with their domain (PBS does)
+     * on such a host would otherwise have us take our own node for a remote
+     * one and start a second daemon on it. */
+    if (!prte_keep_fqdn_hostnames) {
+        const char *dot = strchr(name, '.');
+        /* the address test goes last: it is the one that costs, and this
+         * is asked about every name in a hostfile */
+        if (NULL != dot && name != dot &&
+            strlen(prte_process_info.nodename) == (size_t) (dot - name) &&
+            0 == strncmp(name, prte_process_info.nodename, dot - name) &&
+            !pmix_net_isaddr(name)) {
+            PMIx_Argv_append_unique_nosize(&prte_process_info.aliases, name);
+            return true;
+        }
+    }
     /* if it wasn't one of those and we are allowed
      * to resolve addresses, then try that too */
     if (!prte_do_not_resolve) {

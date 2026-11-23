@@ -332,10 +332,15 @@ delete these. Compare a received proof with `prte_secure_equal`, never
 A single global, filled in by `prte_setup_hostname()` and `prte_proc_info()`.
 The part that matters to everything else is the **hostname and its aliases**:
 `nodename` is the canonical short name, and `aliases` carries the FQDN, any
-prefix-stripped form, `localhost` and `127.0.0.1`. `prte_check_host_is_local()`
-is the only correct way to ask "is this name me?", and both node parsers call
-it on every name they read so that a node the user named by an alias resolves
-to the same `prte_node_t` the daemon reports itself as.
+prefix-stripped form, `localhost` and `127.0.0.1` - the FQDN only when
+`gethostname()` itself returned it. `prte_check_host_is_local()` therefore
+also takes a name for local when it is `nodename` once its domain is removed
+(unless `prte_keep_fqdn_hostnames`), which is how a resource manager's
+"n01.cluster.org" is known on a node that calls itself "n01" without
+resolving anything. It is the only correct way to ask "is this name me?", and
+both node parsers call it on every name they read so that a node the user
+named by an alias resolves to the same `prte_node_t` the daemon reports itself
+as.
 
 `prte_keep_fqdn_hostnames` and `prte_strip_prefix` are MCA parameters read
 here, and the stripping has to happen *here* so the names exchanged through
