@@ -33,6 +33,15 @@
  *    launcher they start, which the resource manager hands to every prted it
  *    spawns (prte_dvm_key_from_env).  A process's environment is visible
  *    only to its own user and root;
+ *  - plm/ssh launching through pbs_tmrsh has none of these: PBS gives the
+ *    command it starts no stdin and its own job's environment.  The key
+ *    is written to a file only its owner can read, under a name that
+ *    cannot be guessed, in a directory the job's nodes share, and the
+ *    remote shell pipes it into the prted's stdin if it is the user's
+ *    own file and not a link; the file is removed
+ *    when the last pbs_tmrsh has returned.  While it exists the key is at
+ *    rest on that file system and crosses its transport, which the other
+ *    channels never allow - see src/mca/plm/ssh/AGENTS.md;
  *  - a bootstrapped DVM has no launcher, so each daemon reads it from the
  *    file prte.conf names in DVMKeyFile, which must be owned by the daemon's
  *    user and accessible to nobody else (prte_dvm_key_from_file).
@@ -71,7 +80,8 @@ PRTE_EXPORT extern bool prte_dvm_key_ready;
  * collide (filem's temporaries). */
 PRTE_EXPORT int prte_dvm_key_random(uint8_t *buf, size_t len);
 
-/* The HNP's key: freshly generated, never stored anywhere but memory. */
+/* The HNP's key: freshly generated, and held only in memory - but for the
+ * file plm/ssh writes while it launches through pbs_tmrsh (above). */
 PRTE_EXPORT int prte_dvm_key_generate(void);
 
 /* A daemon's key, as its launcher delivered it.  Each fails - with a

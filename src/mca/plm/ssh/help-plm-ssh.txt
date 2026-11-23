@@ -89,3 +89,22 @@ These are passed to the launch agent (typically ssh) on its command
 line, where a leading '-' would be read as an option. No valid host
 name begins with one. Please check the hostfile, the --host option, or
 the add-host request that gave this name.
+#
+[tmrsh-keydir]
+The ssh launcher could not create the file that hands the DVM key to
+the daemons it starts through pbs_tmrsh:
+
+  Directory: %s
+  Problem:   %s
+
+pbs_tmrsh gives the command it starts neither standard input nor this
+process's environment, so each daemon reads its key from a file that
+only you can read, in a directory every node of the PBS job sees under
+the same name. That is your home directory unless you name another one
+with the "plm_ssh_tmrsh_keydir" MCA parameter. The directory must be
+yours, with nobody else able to write to it, or have the sticky bit set
+and belong to you or to root. The file is removed when the launch is
+over.
+
+If no such directory exists, "--prtemca plm_ssh_disable_tmrsh 1" starts
+the daemons with ssh instead.

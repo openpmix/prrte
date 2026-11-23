@@ -147,6 +147,14 @@ static int ssh_component_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_plm_ssh_component.disable_tmrsh);
 
+    prte_mca_plm_ssh_component.tmrsh_keydir = NULL;
+    (void) pmix_mca_base_component_var_register(c, "tmrsh_keydir",
+                                                "Directory, seen under this name by every node of the PBS job, "
+                                                "where the file that hands the DVM key to daemons launched "
+                                                "by pbs_tmrsh is kept while they start [default: home directory]",
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                                &prte_mca_plm_ssh_component.tmrsh_keydir);
+
     prte_mca_plm_ssh_component.priority = 10;
     (void) pmix_mca_base_component_var_register(c, "priority", "Priority of the ssh plm component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
@@ -282,7 +290,12 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
     }
 
     /* otherwise, check for PBS */
+    /* PRTE_PBSTRMSH_PATH is the absolute path configure found pbs_tmrsh at,
+     * and is empty (or never substituted) when it found none - no
+     * --with-pbs, or a PBS that does not ship one: there is then nothing to
+     * launch with here, and the agent list below is used as elsewhere */
     if (!prte_mca_plm_ssh_component.disable_tmrsh &&
+        '/' == PRTE_PBSTRMSH_PATH[0] &&
         NULL != getenv("PBS_ENVIRONMENT") &&
         NULL != getenv("PBS_JOBID")) {
         /* we already found the absolute path to pbs_tmrsh */

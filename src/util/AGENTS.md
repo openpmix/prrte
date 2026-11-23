@@ -311,6 +311,14 @@ stdin), `plm/slurm`/`lsf`/`pals` the launcher's environment
 `prte_dvm_key_scrub_array` before it is freed), and a bootstrapped DVM the
 `DVMKeyFile` named in `prte.conf`. A new launcher must pick a channel of the
 same kind, or its daemons are no longer the only processes that can join.
+The one exception is `plm/ssh` under PBS: `pbs_tmrsh` offers neither stdin
+nor an environment, so the HNP writes the key to a file of its own (mode
+0600, random name, removed when the last `pbs_tmrsh` has returned and at
+finalize) in a directory the job's nodes share, and the remote shell pipes
+it to the prted's stdin if the file there is the user's and not a link. That puts the key at
+rest on a shared file system for the length of the launch - a weaker
+channel than the others, accepted because the alternative is no launch; see
+`src/mca/plm/ssh/AGENTS.md` before copying it.
 
 `prte_poly1305.[ch]` - Poly1305 (RFC 8439), checked against that RFC's
 vectors in `test/unit/util` - is the authenticator for the OOB's per-message

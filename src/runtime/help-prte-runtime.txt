@@ -315,6 +315,13 @@ launchers (Slurm, LSF, PALS) pass it in the daemon's environment.
 If the remote-launch agent in use does not forward standard input to the
 command it runs, it cannot deliver the key. Use an agent that does, over
 an encrypted channel (ssh does), or launch through the resource manager.
+
+Inside a PBS job the ssh launcher starts daemons with pbs_tmrsh, which
+forwards no standard input; each daemon's shell reads the key instead
+from a file of yours in your home directory, or in the directory named
+by the plm_ssh_tmrsh_keydir MCA parameter. If that directory is not
+visible under the same name on this node, name one that is, or set
+plm_ssh_disable_tmrsh to 1 to launch with ssh.
 #
 [dvm-key-malformed]
 A PRRTE daemon received a DVM key it cannot use:

@@ -179,6 +179,13 @@ static char **ssh_agent_argv = NULL;
 /* the agent carries what it forwards unencrypted (rsh and its relatives), so
  * it cannot be given the DVM key - see setup_launch() */
 static bool agent_unencrypted = false;
+/* where the daemons launched through pbs_tmrsh read the DVM key from - see
+ * tmrsh_keyfile_create() */
+static char *tmrsh_keyfile = NULL;
+
+static int tmrsh_keyfile_create(void);
+static void tmrsh_keyfile_remove(void);
+static int tmrsh_wrap(int *argcptr, char ***argvptr, int node_name_index);
 
 /**
  * Init the module
@@ -233,7 +240,11 @@ static int ssh_init(void)
         pmix_output_verbose(1, prte_plm_base_framework.framework_output,
                             "%s plm:ssh: using \"%s\" for launching\n",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ssh_agent_path);
-
+        /* Every daemon is started from here.  A daemon that started its own
+         * children would have to hand them the key as we do, from a file
+         * (tmrsh_keyfile_create), and it would need a second one or the
+         * name of ours. */
+        prte_mca_plm_ssh_component.no_tree_spawn = true;
 
     } else {
         /* not using qrsh or llspawn - use MCA-specified agent */
@@ -376,6 +387,15 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
 
     /* one fewer ssh in flight - admit the next from the launch list */
     --num_in_progress;
+    /* A pbs_tmrsh returns once the daemon it started has daemonized - and
+     * PBS has told it so, which can be seconds later - and the daemon
+     * daemonizes only after reading its key; so once none is running and
+     * none is waiting to be started, nothing is left to read the key file.
+     * Daemons that stay attached keep their agents, and the file, until
+     * finalize. */
+    if (NULL != tmrsh_keyfile && 0 == num_in_progress && pmix_list_is_empty(&launch_list)) {
+        tmrsh_keyfile_remove();
+    }
     if (num_in_progress < prte_mca_plm_ssh_component.num_concurrent) {
         /* trigger continuation of the launch */
         prte_event_active(&launch_event, EV_WRITE, 1);
@@ -450,8 +470,10 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
      */
     argv = PMIx_Argv_copy(ssh_agent_argv);
     argc = PMIx_Argv_count(argv);
-    /* if any ssh args were provided, now is the time to add them */
-    if (NULL != prte_mca_plm_ssh_component.ssh_args) {
+    /* if any ssh args were provided, now is the time to add them - but not
+     * to pbs_tmrsh, which takes only -n and -l and stops at anything else */
+    if (NULL != prte_mca_plm_ssh_component.ssh_args &&
+        !prte_mca_plm_ssh_component.using_tmrsh) {
         char **ssh_argv;
         ssh_argv = PMIx_Argv_split(prte_mca_plm_ssh_component.ssh_args, ' ');
         for (i = 0; NULL != ssh_argv[i]; i++) {
@@ -946,6 +968,15 @@ static int remote_spawn(void)
     // the PMIx prefix will have been put in our environment
     pmix_prefix = getenv("PMIX_PREFIX");
 
+    /* Daemons launched through pbs_tmrsh are all started by the HNP, which
+     * alone has the key file they read (ssh_init turned tree spawn off, but
+     * a daemon can still be sent here) */
+    if (prte_mca_plm_ssh_component.using_tmrsh) {
+        failed_launch = false;
+        rc = PRTE_SUCCESS;
+        goto cleanup;
+    }
+
     /* if I have no children, just return */
     if (0 == prte_rml_base.n_children) {
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -1095,15 +1126,19 @@ static void process_launch_list(int fd, short args, void *cbdata)
          * before the fork, and the key written once the child has it. */
         /* close-on-exec, so no other child this process starts meanwhile
          * can hold either end - dup2() onto the ssh's stdin clears it */
+        /* pbs_tmrsh forwards no stdin; its daemons are piped the key from
+         * a file by their own command line - see tmrsh_keyfile_create() */
         keypipe[0] = keypipe[1] = -1;
-        if (0 != pipe(keypipe)) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-            prte_wait_cb_cancel(caddy->daemon);
-            PMIX_RELEASE(caddy);
-            continue;
+        if (!prte_mca_plm_ssh_component.using_tmrsh) {
+            if (0 != pipe(keypipe)) {
+                PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+                prte_wait_cb_cancel(caddy->daemon);
+                PMIX_RELEASE(caddy);
+                continue;
+            }
+            (void) pmix_fd_set_cloexec(keypipe[0]);
+            (void) pmix_fd_set_cloexec(keypipe[1]);
         }
-        (void) pmix_fd_set_cloexec(keypipe[0]);
-        (void) pmix_fd_set_cloexec(keypipe[1]);
 
         /* fork a child to exec the ssh/ssh session */
         pid = fork();
@@ -1356,6 +1391,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
+    if (prte_mca_plm_ssh_component.using_tmrsh) {
+        rc = tmrsh_keyfile_create();
+        if (PRTE_SUCCESS != rc) {
+            goto cleanup;
+        }
+    }
 
     /*
      * Iterate through each of the nodes
@@ -1429,9 +1470,20 @@ static void launch_daemons(int fd, short args, void *cbdata)
         caddy = PMIX_NEW(prte_plm_ssh_caddy_t);
         caddy->argc = argc;
         caddy->argv = PMIx_Argv_copy(argv);
+        if (prte_mca_plm_ssh_component.using_tmrsh) {
+            rc = tmrsh_wrap(&caddy->argc, &caddy->argv, node_name_index1);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_RELEASE(caddy);
+                goto cleanup;
+            }
+        }
         /* insert the alternate port if any */
         portptr = &port;
-        if (prte_get_attribute(&node->attributes, PRTE_NODE_PORT, (void **) &portptr, PMIX_INT)) {
+        /* a port is ssh's to take; pbs_tmrsh has no such option and would
+         * be handed "-p" as the command to run */
+        if (!prte_mca_plm_ssh_component.using_tmrsh &&
+            prte_get_attribute(&node->attributes, PRTE_NODE_PORT, (void **) &portptr, PMIX_INT)) {
             char portname[16];
             /* for the sake of simplicity, insert "-p" <port> in the duplicated argv */
             pmix_argv_insert_element(&caddy->argv, node_name_index1 + 1, "-p");
@@ -1498,6 +1550,7 @@ static int ssh_finalize(void)
     /* remove launch event */
     prte_event_del(&launch_event);
     PMIX_LIST_DESTRUCT(&launch_list);
+    tmrsh_keyfile_remove();
 
     /* cleanup any pending recvs */
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_stop())) {
@@ -1765,6 +1818,183 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
     return rc;
 }
 
+/*
+ * Launching through pbs_tmrsh.
+ *
+ * pbs_tmrsh is not a remote shell.  It asks PBS to start a task
+ * (tm_spawn), and PBS starts it the way exec does: the first argument is
+ * the program and the rest are its arguments, with no shell to read them,
+ * /dev/null for standard input, and the job's environment rather than the
+ * caller's.  Two things the ssh launcher relies on are therefore missing.
+ *
+ * The remote command.  setup_launch() builds a line for a shell - "NAME=
+ * value; export NAME; ...; /path/prted" as one argument, the daemon's
+ * options after it, quoted where they hold several words - and ssh hands
+ * exactly that, joined with spaces, to the user's shell on the other
+ * side.  tmrsh_wrap() makes the same join here and names the shell to
+ * read it: "pbs_tmrsh <host> /bin/sh -c '<the line>'".
+ *
+ * The DVM key.  It cannot come down the agent's stdin, nor in an
+ * environment, and it must not go on a command line.  What the nodes of
+ * a PBS job do have in common is a file system, so the key is written to
+ * a file only its owner can read, and the remote /bin/sh pipes it into
+ * the daemon's stdin, provided it is the user's own file and not a link;
+ * the daemon then reads its key from stdin as every ssh-launched daemon
+ * does.  The file has to be in a directory all
+ * the job's nodes see under one name: the home directory unless
+ * plm_ssh_tmrsh_keydir says otherwise.  Its name is on the command line,
+ * which is why it is not guessable in advance, is created exclusively and
+ * is removed when the last pbs_tmrsh has returned.
+ *
+ * This is weaker than ssh's channel and is the best pbs_tmrsh allows: for
+ * as long as the file exists the key is at rest on a file system the
+ * nodes share, and travels over that file system's own transport.
+ */
+static int tmrsh_keyfile_create(void)
+{
+    const char *dir;
+    uint8_t rnd[8];
+    char rhex[2 * sizeof(rnd) + 1];
+    char keyhex[PRTE_DVM_KEY_HEXLEN + 2];
+    char *path = NULL;
+    struct stat st;
+    bool mine, sticky;
+    ssize_t n, w, len;
+    size_t i;
+    int fd, err;
+
+    if (NULL != tmrsh_keyfile) {
+        return PRTE_SUCCESS;
+    }
+
+    dir = prte_mca_plm_ssh_component.tmrsh_keydir;
+    if (NULL == dir) {
+        dir = pmix_home_directory(geteuid());
+    }
+    /* the name is put between single quotes on the remote command line */
+    if (NULL == dir || '/' != dir[0] || NULL != strchr(dir, '\'')) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "tmrsh-keydir", true,
+                       (NULL == dir) ? "(none)" : dir,
+                       "it must be an absolute path with no single quote in it");
+        return PRTE_ERR_SILENT;
+    }
+    /* nobody else may be able to put a file of that name there, or to
+     * remove or replace ours: the directory is ours and only ours to write,
+     * or is sticky as /tmp is and belongs to us or to root (the owner of a
+     * sticky directory can still remove anything in it) */
+    if (0 != stat(dir, &st)) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "tmrsh-keydir", true,
+                       dir, strerror(errno));
+        return PRTE_ERR_SILENT;
+    }
+    mine = (geteuid() == st.st_uid);
+    sticky = (0 != (st.st_mode & S_ISVTX));
+    if (!S_ISDIR(st.st_mode) ||
+        (sticky && !mine && 0 != st.st_uid) ||
+        (!sticky && (!mine || 0 != (st.st_mode & (S_IWGRP | S_IWOTH))))) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "tmrsh-keydir", true,
+                       dir, "it must be a directory that you own and that nobody else can "
+                       "write to, or one with the sticky bit set that you or root own");
+        return PRTE_ERR_SILENT;
+    }
+    if (PRTE_SUCCESS != prte_dvm_key_random(rnd, sizeof(rnd))) {
+        return PRTE_ERR_SILENT;
+    }
+    for (i = 0; i < sizeof(rnd); i++) {
+        snprintf(&rhex[2 * i], 3, "%02x", rnd[i]);
+    }
+    pmix_asprintf(&path, "%s/.prte-dvm-key.%s", dir, rhex);
+
+    fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    if (0 > fd) {
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "tmrsh-keydir", true,
+                       dir, strerror(errno));
+        free(path);
+        return PRTE_ERR_SILENT;
+    }
+    prte_dvm_key_to_hex(prte_dvm_key, keyhex);
+    keyhex[PRTE_DVM_KEY_HEXLEN] = '\n';
+    len = PRTE_DVM_KEY_HEXLEN + 1;
+    n = 0;
+    err = 0;
+    while (n < len) {
+        w = write(fd, keyhex + n, len - n);
+        if (0 > w) {
+            if (EINTR == errno) {
+                continue;
+            }
+            err = errno;
+            break;
+        }
+        n += w;
+    }
+    prte_secure_zero(keyhex, sizeof(keyhex));
+    if (0 != close(fd) && 0 == err) {
+        err = errno;
+    }
+    if (0 != err) {
+        unlink(path);
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "tmrsh-keydir", true,
+                       dir, strerror(err));
+        free(path);
+        return PRTE_ERR_SILENT;
+    }
+    tmrsh_keyfile = path;
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                         "%s plm:ssh: pbs_tmrsh daemons read their key from %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmrsh_keyfile));
+    return PRTE_SUCCESS;
+}
+
+static void tmrsh_keyfile_remove(void)
+{
+    if (NULL != tmrsh_keyfile) {
+        unlink(tmrsh_keyfile);
+        free(tmrsh_keyfile);
+        tmrsh_keyfile = NULL;
+    }
+}
+
+/* Turn "<agent> <host> <shell line> <daemon options...>" into
+ * "<agent> <host> /bin/sh -c '<key file, if ours> | { <all of it as one line>; }'".
+ * The key comes to the daemon down a pipe, as it does from ssh, rather than
+ * by redirecting its stdin from the file: a descriptor on the file could be
+ * read again by whatever inherited it, and a pipe is empty once read. */
+static int tmrsh_wrap(int *argcptr, char ***argvptr, int node_name_index)
+{
+    char **argv = *argvptr;
+    char **wrapped = NULL;
+    char *line, *tmp;
+    int i;
+
+    if (NULL == tmrsh_keyfile || PMIx_Argv_count(argv) <= node_name_index + 1) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    tmp = pmix_argv_join_range(argv, node_name_index + 1, PMIx_Argv_count(argv), ' ');
+    /* On the other node the file is read only if it is ours and not a
+     * link: where the directory is not in fact shared, someone else could
+     * have made a file of that name there, with a key they know. */
+    pmix_asprintf(&line,
+                  "{ if [ -O '%s' ] && [ ! -h '%s' ]; then cat '%s'; "
+                  "else echo 'prted: the DVM key file %s is not there or is not yours' >&2; "
+                  "fi; } | { %s; }",
+                  tmrsh_keyfile, tmrsh_keyfile, tmrsh_keyfile, tmrsh_keyfile, tmp);
+    free(tmp);
+
+    for (i = 0; i <= node_name_index; i++) {
+        PMIx_Argv_append_nosize(&wrapped, argv[i]);
+    }
+    PMIx_Argv_append_nosize(&wrapped, "/bin/sh");
+    PMIx_Argv_append_nosize(&wrapped, "-c");
+    PMIx_Argv_append_nosize(&wrapped, line);
+    free(line);
+
+    PMIx_Argv_free(argv);
+    *argvptr = wrapped;
+    *argcptr = PMIx_Argv_count(wrapped);
+    return PRTE_SUCCESS;
+}
+
 static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshell, char *nodename,
                        int *argc, char ***argv)
 {
@@ -1805,7 +2035,17 @@ static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshel
                          local_shell, prte_plm_ssh_shell_name[local_shell]));
 
     /* What is our remote shell? */
-    if (prte_mca_plm_ssh_component.assume_same_shell) {
+    if (prte_mca_plm_ssh_component.using_tmrsh) {
+        /* pbs_tmrsh starts a program, not the user's shell, so the remote
+         * command goes to the /bin/sh that tmrsh_wrap() names: Bourne
+         * syntax whatever the local shell is, nothing to probe for, and -
+         * not being a login - no profile for it to source, which is the
+         * difference between "bash" and "sh" below. */
+        remote_shell = PRTE_PLM_SSH_SHELL_BASH;
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                             "%s plm:ssh: pbs_tmrsh runs the remote command with /bin/sh",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    } else if (prte_mca_plm_ssh_component.assume_same_shell) {
         remote_shell = local_shell;
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: assuming same remote shell as local shell",

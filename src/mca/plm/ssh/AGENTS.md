@@ -150,7 +150,8 @@ prted reads before it daemonizes (`setup_launch` adds
 the remote daemon that stays private to the DVM's user - the remote
 command is the ssh process's argv here and the shell's there, both
 visible to `ps` - so do not move the key onto the command line, and an
-agent that cannot forward stdin cannot launch a DVM.
+agent that cannot forward stdin cannot launch a DVM (`pbs_tmrsh`, which
+cannot, is given the key another way - see "Launching through `pbs_tmrsh`").
 Nor can one whose channel is unencrypted: the key would cross the network
 as plain text. `launch_agent_setup` marks `rsh` and `remsh`
 (`agent_unencrypted`), and `setup_launch` always refuses them with
@@ -172,6 +173,85 @@ fork's pid and marks the daemon `RUNNING`.
 Launch metering is via `launch_event` + `num_in_progress`:
 `ssh_wait_daemon` decrements `num_in_progress` as each ssh exits and
 re-fires the event to admit more — this is the concurrency throttle.
+
+---
+
+## Launching through `pbs_tmrsh`
+
+`pbs_tmrsh` has ssh's command line and nothing else of ssh. It asks PBS
+to start a task (`tm_spawn`), and PBS starts it the way `exec` does: the
+first argument is the program, the rest are its arguments, **no shell**
+reads them, standard input is `/dev/null`, and the environment is the
+job's, not the caller's (OpenPBS `src/cmds/pbs_tmrsh.c`,
+`src/resmom/start_exec.c`; a command that cannot be executed exits 254).
+So when `using_tmrsh` is set, these things differ, all in
+`plm_ssh_module.c`:
+
+- **`setup_shell` does not consult the user's shell.** The remote command
+  will be read by the `/bin/sh` we name, so it is always in Bourne syntax
+  and there is nothing to probe. It reports `bash` rather than `sh` only
+  because `sh` means "a login shell that needs its profile sourced".
+- **`tmrsh_wrap` rewrites each caddy's argv** from
+  `pbs_tmrsh <host> <shell line> <daemon options...>` to
+  `pbs_tmrsh <host> /bin/sh -c "<keyfile, if ours> | { <all of it, joined with spaces>; }"`,
+  where the first part is `cat 'keyfile'` behind a test that the file is
+  the user's (`-O`) and not a link (`-h`).
+  The join is the one ssh makes before handing the line to the remote
+  shell, so `prte_plm_base_wrap_args`' quoting means the same thing in
+  both. It runs per caddy, after the host and vpid have been substituted,
+  because the two template slots stop being separate arguments.
+- **The key travels in a file** (`tmrsh_keyfile_create`), since neither
+  stdin nor an environment reaches the daemon and a command line must not
+  carry it. The file is created `O_EXCL`, mode 0600, under a random name
+  in `plm_ssh_tmrsh_keydir` (default: the home directory), which every
+  node of the job must see under that name, and which must be the
+  user's own and closed to others, or sticky and the user's or root's.
+  The remote shell pipes the file into the daemon's stdin only if it is
+  the user's own and not a link - where the directory is not really
+  shared, someone else could have made a file of that name on the other
+  node - and through a pipe, not a redirect, so that no descriptor on
+  the file outlives the read. The daemon side is
+  unchanged: `--prtemca prte_dvm_key_stdin 1` and `prte_dvm_key_from_fd`.
+  **This is a weaker channel than every other one**
+  (`src/util/prte_dvm_key.h`): the key is at rest on a shared file system
+  while the daemons start, and crosses that file system's transport, which
+  for most is not encrypted - the very thing `rsh` is refused for. It is
+  here because `pbs_tmrsh` leaves nothing else, and `plm_ssh_disable_tmrsh`
+  is the way out for a site that will not accept it.
+  `ssh_wait_daemon` unlinks it when no agent is running or queued - a
+  `pbs_tmrsh` returns when its daemon has daemonized, which is after the
+  key was read - and `ssh_finalize` unlinks whatever is left (daemons
+  kept attached keep their agents). `process_launch_list` makes no key
+  pipe under `using_tmrsh`.
+
+`ssh_init` also forces `no_tree_spawn`, and `remote_spawn` returns at
+once under `using_tmrsh` (a daemon can be sent there whatever the flag
+says): a daemon launching its own children would need the file's name or
+a second file. All daemons are started from the HNP. Neither a node's
+ssh port (`PRTE_NODE_PORT`) nor `plm_ssh_args` is put on a `pbs_tmrsh`
+command line: it takes `-n` and `-l` only. `PRTE_PBSTRMSH_PATH` must be an
+absolute path for `pbs_tmrsh` to be selected at all.
+
+The daemons are still told to `--daemonize`, as under ssh, so each leaves
+the PBS task that started it; whether PBS then still accounts for it and
+its processes depends on how the site tracks jobs (a cgroup hook does,
+session tracking does not). Withholding the flag would keep one
+`pbs_tmrsh` per node alive for the life of the DVM and make
+`num_concurrent` a limit on its size, and the key file could then be
+removed only when the daemons have reported; that trade has not been
+made here.
+
+There is no PBS to test against in CI. The properties above are the whole
+contract; a script that keeps them (exec without a shell, `/dev/null`
+stdin, the job's environment, exit 254), named `pbs_tmrsh` and found by
+`--with-pbs`, reproduces every failure this section exists to prevent.
+Test in a real allocation before believing a change here.
+
+Measured on PBS Pro 2022.1.7: one `pbs_tmrsh <node> /bin/true` takes about
+2 s, and seven started together take 14 s - the server takes them one at a
+time. Forking them all at once, as `process_launch_list` does, therefore
+buys nothing there; a launch costs seconds per node and the key file lives
+that long. Nothing in this component can change that.
 
 ---
 
@@ -244,6 +324,7 @@ their MCA vars (`plm_ssh_*`):
 | `pass_libpath` | Prepend a path to the remote `LD_LIBRARY_PATH`. |
 | `chdir` | `cd` on the remote node before exec'ing prted. |
 | `force_ssh`, `disable_qrsh`/`disable_llspawn`/`disable_tmrsh`, `daemonize_qrsh`/`daemonize_llspawn` | RM-detection and daemonize toggles. |
+| `tmrsh_keydir` (home directory) | Where the key file for `pbs_tmrsh`-launched daemons is kept; must be shared by the job's nodes. |
 | `using_qrsh`/`using_llspawn`/`using_tmrsh` | Set by `query` when the batch env is detected. |
 
 `prte_plm_ssh_caddy_t` — the per-daemon launch item on `launch_list`:
