@@ -178,7 +178,7 @@ utility stubs) and one or more component subdirectories.
 | Framework | Location | Responsibility |
 |-----------|----------|----------------|
 | `ess` | `src/mca/ess/` | Environment-Specific Services — init/finalize for each process role (HNP, daemon, tool). |
-| `plm` | `src/mca/plm/` | Process Launch Manager — spawns prted daemons across the system. Components: `ssh`, `slurm`, `lsf`, `pals`. |
+| `plm` | `src/mca/plm/` | Process Launch Manager — spawns prted daemons across the system. Components: `ssh`, `slurm`, `tm`, `lsf`, `pals`. |
 | `ras` | `src/mca/ras/` | Resource Allocation Subsystem — discovers nodes and slots. Components: `slurm`, `pbs`, `lsf`, `flux`, `gridengine`, `hosts`. |
 | `rmaps` | `src/mca/rmaps/` | Resource Mapping — assigns processes to nodes/slots. Components: `round_robin`, `ppr`, `rank_file`, `seq`. |
 | `odls` | `src/mca/odls/` | PRRTE Daemon Local Launch Subsystem — the per-node daemon (prted) forks/execs application processes. |
@@ -556,6 +556,7 @@ Common configure options:
 | `--with-slurm` | Enable SLURM support |
 | `--with-lsf=<path>` | Enable LSF support |
 | `--with-pbs` | Enable PBS/Torque support |
+| `--with-tm=<path>` | Location of PBS's TM library, for `plm/tm` (default: under the `--with-pbs` path, else `pbs-config` and the default paths). Only the libexec helper `prte_tm_spawn` links it - see [`src/mca/plm/tm/AGENTS.md`](src/mca/plm/tm/AGENTS.md). |
 | `--with-flux=<dir>` | Enable Flux support |
 | `--enable-slurm-extensions` | Force `ras/slurm`'s elastic allocation extensions — the PMIx allocation extend/release/cancel surface and the `scontrol show job --json` parser — on or off. They need jansson and **SLURM 24.05 or later** (the release whose JSON schema the parser reads), and configure decides by asking the SLURM it can find. Where there is no SLURM to ask — a build node, a container — the default is *on*, so a build that has always had them keeps them; use `--disable-slurm-extensions` to gate them off when you know the target's SLURM is older. See [`src/mca/ras/slurm/AGENTS.md`](src/mca/ras/slurm/AGENTS.md). |
 | `--enable-debug` | Build with debug symbols and extra assertions |

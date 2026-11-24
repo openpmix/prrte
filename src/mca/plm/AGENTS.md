@@ -74,6 +74,7 @@ plm/
     help-plm-base.txt         # user-facing error text
   ssh/                        # DEFAULT/fallback (pri 10): rsh/ssh tree-spawn — the reference impl
   slurm/                      # SLURM (pri 75): one srun launches all prteds
+  tm/                         # PBS (pri 75): daemons as PBS tasks via a libexec TM helper
   lsf/                        # LSF (pri 75): lsb_launch() API call
   pals/                       # Cray PALS (pri 100, only built where PALS exists): aprun
 ```
@@ -151,6 +152,7 @@ environment and either offers itself or bows out:
 | `pals` | 100 (MCA `plm_pals_priority`) | Always offers itself — **but only built where Cray PALS is detected** (`PRTE_CHECK_PALS`), so it is simply absent elsewhere. |
 | `slurm` | 75 | a Slurm job id is in the environment and Slurm answers `--version` — both via [`common/slurm`](../common/slurm/AGENTS.md), which probes once for every Slurm component. |
 | `lsf` | 75 | `LSB_JOBID` set, IBM CSM **not** enabled (`CSM_ALLOCATION_ID` unset), and `lsb_init()` succeeds. Only built when LSF headers/libs are found. |
+| `tm` | 75 | `PBS_ENVIRONMENT` and `PBS_JOBID` set, and the TM helper `prte_tm_spawn` is installed in `<libexecdir>/prte` (without it: a `no-helper` warning, and `ssh` launches). Built when configure finds the TM library (`--with-tm`, or under `--with-pbs`); only the helper links it. |
 | `ssh` | 10 (MCA `plm_ssh_priority`) | Always available once a launch agent (`ssh`/`rsh`, or `qrsh`/`llspawn`) is found in PATH. The **default/fallback**. |
 
 Because it is pick-one, in a SLURM allocation `slurm` (75) beats `ssh`
@@ -548,6 +550,8 @@ captures the single biggest behavioral difference between the launchers:
 - **`ssh` → `true`.** We `ssh` to a *specific* host, so we know exactly
   which node each daemon vpid lands on at launch time; the node↔daemon
   binding is verified immediately (`PRTE_NODE_FLAG_LOC_VERIFIED`).
+- **`tm` → `true`.** Its helper `tm_spawn()`s each vpid on the node named
+  for it.
 - **`slurm` → `true`.** `srun` starts the daemons in the order the
   nodelist gives (`--distribution=arbitrary`), and the list is in vpid
   order.
@@ -672,5 +676,7 @@ The base and each component directory have their own `AGENTS.md`:
 - [`ssh/AGENTS.md`](ssh/AGENTS.md) — the default/fallback; **read this
   second** — rsh/ssh tree-spawn is the reference implementation.
 - [`slurm/AGENTS.md`](slurm/AGENTS.md) — one `srun` launches all prteds.
+- [`tm/AGENTS.md`](tm/AGENTS.md) — PBS: the TM helper in libexec, and why
+  PRRTE never loads the TM library itself.
 - [`lsf/AGENTS.md`](lsf/AGENTS.md) — the `lsb_launch()` LSF API.
 - [`pals/AGENTS.md`](pals/AGENTS.md) — Cray PALS `aprun`.
