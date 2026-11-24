@@ -193,6 +193,8 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
         } else {
             cptr = NULL;
         }
+        /* the same name the node list was selected by, in the same form */
+        prte_hostname_strip_domain(specs[n]);
         if (dash_host_match(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
@@ -246,7 +248,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, const pmix_in
     bool needcheck;
     int slots;
     bool slots_given;
-    char *cptr, *entry, *given;
+    char *cptr, *entry, *given, *shortname = NULL;
     bool add_slots;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -383,6 +385,20 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, const pmix_in
         free(entry);
         given = ndname;
 
+        /* a --host list is where these names enter the system, so this is
+         * where they take the form every later comparison expects: without
+         * their domain, unless we keep them.  The name as given is kept
+         * below as an alias, and as the name to launch to. */
+        shortname = strdup(ndname);
+        if (NULL == shortname) {
+            PMIx_Argv_free(mini_map);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
+        if (prte_hostname_strip_domain(shortname)) {
+            ndname = shortname;
+        }
+
         /* check for local name */
         if (prte_check_host_is_local(ndname)) {
             ndname = prte_process_info.nodename;
@@ -411,10 +427,16 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, const pmix_in
             /* if we didn't find it, add it to the list */
             node = PMIX_NEW(prte_node_t);
             if (NULL == node) {
-                PMIx_Argv_free(mapped_nodes);
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                free(shortname);
+                PMIx_Argv_free(mini_map);
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto cleanup;
             }
             node->name = strdup(ndname);
+            if (ndname == shortname) {
+                /* the launcher reaches the node by the name it was given */
+                node->rawname = strdup(given);
+            }
             PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, slots));
@@ -440,6 +462,8 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, const pmix_in
             // add the name as given as an alias if it differs from the resolved name
             PMIx_Argv_append_unique_nosize(&node->aliases, given);
         }
+        free(shortname);
+        shortname = NULL;
     }
     PMIx_Argv_free(mini_map);
 
@@ -625,6 +649,10 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts, const pmix_info_t 
                 if (NULL != (cptr = strchr(mini_map[k], ':'))) {
                     *cptr = '\0';
                 }
+                /* the name enters here, and takes the form the node list
+                 * it is matched against already has: no domain, unless we
+                 * keep them (our own copy, so it is truncated in place) */
+                prte_hostname_strip_domain(mini_map[k]);
                 /* check for local alias */
                 if (prte_check_host_is_local(mini_map[k])) {
                     PMIx_Argv_append_nosize(mapped_nodes, prte_process_info.nodename);

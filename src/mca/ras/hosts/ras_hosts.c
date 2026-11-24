@@ -326,7 +326,7 @@ static pmix_status_t read_hostfile(const pmix_info_t *rq, size_t nrq, char *host
     uid_t uid;
     gid_t gid;
     prte_textfile_t tf;
-    char *line, *cptr, *ptr, *ndname;
+    char *line, *cptr, *ptr, *ndname, *lookup;
     bool addslots, failed = false;
     int slots, rc;
     prte_node_t *nptr, *node;
@@ -450,8 +450,21 @@ process:
          * an entry that carries no name at all.  This used to spell that walk
          * out for itself and had already drifted from it - it compared
          * nptr->name with no NULL check, which is the same drift the framework
-         * guide records for --display-cpus. */
-        nptr = prte_node_index_match_name(pidx, ndname);
+         * guide records for --display-cpus.
+         *
+         * The name enters here, so it is looked up in the form the pool's
+         * names have - without its domain, unless we keep them.  A new node
+         * keeps the name as written: prte_ras_base_node_insert() shortens it
+         * and keeps the full form as the name to launch to. */
+        lookup = strdup(ndname);
+        if (NULL == lookup) {
+            prte_textfile_close(&tf);
+            free(line);
+            return PMIX_ERR_NOMEM;
+        }
+        prte_hostname_strip_domain(lookup);
+        nptr = prte_node_index_match_name(pidx, lookup);
+        free(lookup);
         if (NULL != nptr) {
             if (addslots) {
                 adjust_slots(nptr, slots);
