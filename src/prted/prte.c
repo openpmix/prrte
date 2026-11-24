@@ -334,6 +334,32 @@ int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace, pmix_rank_t 
     return PRTE_SUCCESS;
 }
 
+/* Put each value of the prefix option `key` on our command line onto
+ * `jobdata` under `infokey`, as the app parser would have - unless the app
+ * parser already put that prefix there */
+static void prefix_from_cli(pmix_cli_result_t *results, pmix_list_t *jobdata, const char *key,
+                            const char *infokey)
+{
+    prte_info_item_t *item;
+    pmix_cli_item_t *opt;
+    int n;
+
+    PMIX_LIST_FOREACH(item, jobdata, prte_info_item_t) {
+        if (PMIx_Check_key(item->info.key, infokey)) {
+            return;
+        }
+    }
+    opt = pmix_cmd_line_get_param(results, key);
+    if (NULL == opt || NULL == opt->values) {
+        return;
+    }
+    for (n = 0; NULL != opt->values[n]; n++) {
+        item = PMIX_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&item->info, infokey, opt->values[n], PMIX_STRING);
+        pmix_list_append(jobdata, &item->super);
+    }
+}
+
 PRTE_EXPORT int prte(int argc, char *argv[])
 {
     int rc = 1, i;
@@ -912,6 +938,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
+
+    /* The app parser puts every prefix it finds onto the jobdata list -
+     * but it runs only when there may be an app: never under --daemonize,
+     * and with no app given it returns before it reads any option. A
+     * persistent DVM's --prefix and --pmix-prefix are then on our own
+     * command line alone, and the daemons were started without them */
+    prefix_from_cli(&results, &jobdata, PRTE_CLI_PREFIX, "PRTE_PREFIX");
+    prefix_from_cli(&results, &jobdata, PRTE_CLI_PMIX_PREFIX, PMIX_PREFIX);
 
     /* check if we were given multiple prefixes on the cmd line,
      * and if so, are any of them different from each other. The
