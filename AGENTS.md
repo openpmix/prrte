@@ -768,8 +768,18 @@ that image builds SLURM from source rather than taking the distribution
 package.  Everything that is not about the scheduler belongs in
 `contrib/dockerswarm`, which is faster and needs no SLURM.
 
-For PBS and LSF integration, test within an actual allocation on the
-relevant system.
+**Testing under a real PBS.**  [`contrib/pbsswarm/`](contrib/pbsswarm/) is
+the same harness again with OpenPBS, built from source, in the ten
+containers - a real `pbs_server`, ten `pbs_mom`s, real `qsub`/`qdel`,
+`pbs_tmrsh` and the TM API - so `ras/pbs` and PBS daemon launch can be
+exercised against PBS itself, including what PBS charges a job for
+(`resources_used.cput`) and whether `qdel` takes the daemons down. See its
+[`AGENTS.md`](contrib/pbsswarm/AGENTS.md). It is OpenPBS, not Altair's
+commercial PBS Pro, so what is specific to that build still needs a PBS Pro
+site.
+
+For LSF integration, test within an actual allocation on the relevant
+system.
 
 **Never bend a test to accommodate a bug.** Do not weaken, skip, or
 rewrite an existing test — and do not craft a new one — merely to make
