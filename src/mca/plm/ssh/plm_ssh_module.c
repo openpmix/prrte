@@ -798,8 +798,9 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 
     value = PMIx_Argv_join(argv, ' ');
     if (sysconf(_SC_ARG_MAX) < (int) strlen(value)) {
-        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "cmd-line-too-long", true, strlen(value),
-                       sysconf(_SC_ARG_MAX));
+        /* the topic prints both with %d */
+        prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "cmd-line-too-long", true,
+                       (int) strlen(value), (int) sysconf(_SC_ARG_MAX));
         free(value);
         PMIx_Argv_free(argv);
         return PRTE_ERR_SILENT;
