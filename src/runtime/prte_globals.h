@@ -928,7 +928,6 @@ PRTE_EXPORT extern char *prte_oob_static_ports;
 
 /* nodename flags */
 PRTE_EXPORT extern bool prte_keep_fqdn_hostnames;
-PRTE_EXPORT extern bool prte_have_fqdn_allocation;
 PRTE_EXPORT extern bool prte_show_resolved_nodenames;
 PRTE_EXPORT extern int prte_hostname_cutoff;
 PRTE_EXPORT extern bool prte_do_not_resolve;
