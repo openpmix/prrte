@@ -1,0 +1,4 @@
+# Out-of-tree build directories: this harness builds only into its docker
+# volume, but the sibling harnesses build the same source tree.
+vpath-linux/
+vpath-macos/
