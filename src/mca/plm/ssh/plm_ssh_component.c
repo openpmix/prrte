@@ -141,12 +141,6 @@ static int ssh_component_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_plm_ssh_component.daemonize_llspawn);
 
-    prte_mca_plm_ssh_component.disable_tmrsh = false;
-    (void) pmix_mca_base_component_var_register(c, "disable_tmrsh",
-                                                "Disable the use of pbs_tmrsh when under the PBS environment",
-                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_mca_plm_ssh_component.disable_tmrsh);
-
     prte_mca_plm_ssh_component.priority = 10;
     (void) pmix_mca_base_component_var_register(c, "priority", "Priority of the ssh plm component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
@@ -205,7 +199,6 @@ static int ssh_component_open(void)
     /* initialize globals */
     prte_mca_plm_ssh_component.using_qrsh = false;
     prte_mca_plm_ssh_component.using_llspawn = false;
-    prte_mca_plm_ssh_component.using_tmrsh = false;
     prte_mca_plm_ssh_component.agent_argv = NULL;
 
     /* lookup parameters */
@@ -281,17 +274,11 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
         goto success;
     }
 
-    /* otherwise, check for PBS */
-    if (!prte_mca_plm_ssh_component.disable_tmrsh &&
-        NULL != getenv("PBS_ENVIRONMENT") &&
-        NULL != getenv("PBS_JOBID")) {
-        /* we already found the absolute path to pbs_tmrsh */
-        PMIx_Argv_append_nosize(&prte_mca_plm_ssh_component.agent_argv , PRTE_PBSTRMSH_PATH);
-        free(prte_mca_plm_ssh_component.agent);
-        prte_mca_plm_ssh_component.agent = strdup("pbs_tmrsh");
-        prte_mca_plm_ssh_component.using_tmrsh = true;
-        goto success;
-    }
+    /* There is no PBS case here. pbs_tmrsh is not a remote shell - the
+     * mom runs its arguments with no shell, the job's environment and no
+     * stdin, so a daemon started through it never gets its DVM key.
+     * plm/tm launches inside a PBS job; with it excluded, the agent
+     * below - ssh - is used as anywhere else */
 
     /* if this isn't an Grid Engine or LoadLeveler environment, or
      * if the user specified a launch agent, look for it */

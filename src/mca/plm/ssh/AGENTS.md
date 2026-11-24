@@ -12,8 +12,13 @@ referenced throughout.
 `ssh` is the **default, always-available fallback launcher**, priority
 **10** (MCA `plm_ssh_priority`, the lowest of all `plm` components). It
 starts `prted` daemons by forking a remote-shell agent — `ssh` by
-default, or `qrsh`/`llspawn`/`pbs_tmrsh` when it detects the
-corresponding batch environment. It is the reference implementation: the
+default, or `qrsh`/`llspawn` when it detects the corresponding batch
+environment. It does **not** use `pbs_tmrsh`: that is not a remote shell -
+the mom runs its arguments with no shell, the job's environment and no
+stdin - so a daemon started through it never gets its DVM key. Inside a PBS
+job [`plm/tm`](../tm/AGENTS.md) launches; with `--prtemca plm ssh` this
+component launches with plain `ssh`, and PBS then does not account for the
+remote daemons. It is the reference implementation: the
 only component that does a **tree-based fan-out** (`remote_spawn`), and
 the one to read to understand the whole framework. It targets any
 environment without a native launcher (bare clusters, workstations), and
@@ -46,9 +51,6 @@ The query decides *which agent* to use and offers the module at priority
      `using_qrsh`.
    - **LoadLeveler** (`LOADL_STEP_ID`, unless `disable_llspawn`) → agent
      `llspawn`, sets `using_llspawn`.
-   - **PBS** (`PBS_ENVIRONMENT` + `PBS_JOBID`, unless `disable_tmrsh`) →
-     agent `pbs_tmrsh` (absolute path `PRTE_PBSTRMSH_PATH`), sets
-     `using_tmrsh`.
 3. Fall back to looking up the `plm_ssh_agent` list (default
    `"ssh"`; it may be a colon-delimited preference list) in PATH via
    `ssh_launch_agent_lookup` → `prte_plm_ssh_search`. Each agent is
@@ -243,8 +245,8 @@ their MCA vars (`plm_ssh_*`):
 | `assume_same_shell` (true) | Skip the remote `echo $SHELL` probe. |
 | `pass_libpath` | Prepend a path to the remote `LD_LIBRARY_PATH`. |
 | `chdir` | `cd` on the remote node before exec'ing prted. |
-| `force_ssh`, `disable_qrsh`/`disable_llspawn`/`disable_tmrsh`, `daemonize_qrsh`/`daemonize_llspawn` | RM-detection and daemonize toggles. |
-| `using_qrsh`/`using_llspawn`/`using_tmrsh` | Set by `query` when the batch env is detected. |
+| `force_ssh`, `disable_qrsh`/`disable_llspawn`, `daemonize_qrsh`/`daemonize_llspawn` | RM-detection and daemonize toggles. (`disable_tmrsh` went with the `pbs_tmrsh` support it disabled; `--prtemca plm ssh` is how to keep `plm/tm` out of a PBS job.) |
+| `using_qrsh`/`using_llspawn` | Set by `query` when the batch env is detected. |
 
 `prte_plm_ssh_caddy_t` — the per-daemon launch item on `launch_list`:
 carries `argc`/`argv` (the fully-substituted command) and the `daemon`
