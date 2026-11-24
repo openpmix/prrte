@@ -132,6 +132,19 @@ PRTE_EXPORT void prte_setup_hostname(void);
 
 PRTE_EXPORT bool prte_check_host_is_local(const char *name);
 
+/*
+ * Put a host name into the form PRRTE knows hosts by: without its domain,
+ * unless prte_keep_fqdn_hostnames is set or the name is an address.  The
+ * name is truncated in place; the return says whether a domain came off,
+ * so a caller can keep the name as it was given as an alias.
+ *
+ * This is applied where a name enters the system - our own hostname, a
+ * hostfile, a --host list, an allocation, a query - so that every
+ * comparison after that point is between names of the same form and none
+ * of them has to know about domains.
+ */
+PRTE_EXPORT bool prte_hostname_strip_domain(char *name);
+
 END_C_DECLS
 
 #endif

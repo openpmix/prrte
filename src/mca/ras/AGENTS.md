@@ -529,10 +529,18 @@ input list.** Walk it carefully before touching allocation code:
   job its nodes' core counts instead of its allocation.
   `prte_set_slots_override` is the deliberate escape hatch: it re-sizes
   even the given ones.
-- **FQDN normalization.** `normalize_node()` truncates an FQDN to the
-  short name, keeping the full name as `rawname` and an alias (unless
-  `prte_keep_fqdn_hostnames` or the name is an IP). Sets
-  `prte_have_fqdn_allocation`.
+- **FQDN normalization, first.** `normalize_node()` truncates an FQDN to
+  the short name with `prte_hostname_strip_domain()`, keeping the full
+  name as `rawname` (which `plm/ssh` launches to) and an alias, unless
+  `prte_keep_fqdn_hostnames` is set or the name is an IP. It runs over
+  the whole list **before anything compares a name** - the
+  `launch_orted_on_hn` check, the HNP dedup, the pool lookup. An
+  allocation is where a resource manager's names enter the system, and
+  the rule is that a name takes its final form where it enters, so that
+  nothing downstream deals with domains. Normalizing after the lookup
+  instead is how a PBS node file naming the HNP's node
+  `n01.cluster.org`, on a host that calls itself `n01`, got that node
+  into the pool twice and a second daemon started beside the HNP.
 - **`DO_NOT_LAUNCH` daemons.** When the daemon job carries
   `PRTE_JOB_DO_NOT_LAUNCH` (offline mapper tests), a synthetic
   `prte_proc_t` daemon is attached to each node so the mapper sees a

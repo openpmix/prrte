@@ -111,6 +111,25 @@ char *prte_ras_base_flag_string(prte_node_t *node)
 }
 
 /* function to display allocation */
+/* Find the pool entry for a host a request or a command line names.  Such
+ * a name enters the system here, so it is looked up in the form the pool's
+ * names already have - without its domain, unless we keep them - rather
+ * than as written ("n01.cluster.org" is the node the pool knows as "n01").
+ * The caller's string is left as it is, so a refusal can quote it. */
+static prte_node_t *ras_base_match_given(const char *name)
+{
+    prte_node_t *node;
+    char *nm;
+
+    if (NULL == name || NULL == (nm = strdup(name))) {
+        return NULL;
+    }
+    prte_hostname_strip_domain(nm);
+    node = prte_node_match(NULL, nm);
+    free(nm);
+    return node;
+}
+
 void prte_ras_base_display_alloc(prte_job_t *jdata)
 {
     char *tmp = NULL, *tmp2, *tmp3;
@@ -293,7 +312,7 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
          * to be spelled out here and had already drifted from it: it compared
          * nptr->name without a NULL check, which faults on any pool entry that
          * has not been named yet. */
-        nptr = prte_node_match(NULL, nodes[j]);
+        nptr = ras_base_match_given(nodes[j]);
         if (NULL == nptr) {
             continue;
         }
@@ -493,7 +512,7 @@ DISPLAY:
                 goto topodone;
             }
             for (j=0; NULL != hostlist[j]; j++) {
-                node = prte_node_match(NULL, hostlist[j]);
+                node = ras_base_match_given(hostlist[j]);
                 /* a node only acquires a topology once its daemon has
                  * reported in - a node that is allocated but not yet
                  * launched upon (e.g. one just added by a grow) has none */
@@ -992,7 +1011,7 @@ static bool ras_base_release_permitted(prte_pmix_server_req_t *req, const char *
             ndstring = NULL;
             *what = "nodes";
             for (k = 0; ok && NULL != nodes && NULL != nodes[k]; k++) {
-                node = prte_node_match(NULL, nodes[k]);
+                node = ras_base_match_given(nodes[k]);
                 session = (NULL == node) ? NULL : node->session;
                 ok = (NULL == session || prte_default_session == session)
                          ? prte_pmix_server_dvm_permitted(&req->tproc, req->info, req->ninfo)
@@ -2585,7 +2604,7 @@ static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
         return PRTE_ERR_NOT_FOUND;
     }
     for (int32_t n = 0; NULL != nodes[n]; n++) {
-        if (NULL == prte_node_match(NULL, nodes[n])) {
+        if (NULL == ras_base_match_given(nodes[n])) {
             return PRTE_ERR_NOT_FOUND;
         }
     }
@@ -2598,7 +2617,7 @@ static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
     m = 0;
     for (int32_t n = 0; NULL != nodes[n]; n++) {
         /* find this node in our global resource pool */
-        node = prte_node_match(NULL, nodes[n]);
+        node = ras_base_match_given(nodes[n]);
         if (!prte_ras_base.scheduler_owned && NULL != node->session &&
             prte_default_session != node->session) {
             ras_base_unreserve_node(node);
@@ -3570,7 +3589,7 @@ static int ras_base_activate_spec(const char *spec, pmix_pointer_array_t *sel,
                 rc = PRTE_ERR_SILENT;
                 goto done;
             }
-            node = prte_node_match(NULL, tokens[k]);
+            node = ras_base_match_given(tokens[k]);
             if (NULL == node) {
                 prte_show_help_info(req, nreq, "help-ras-base.txt", "ras-base:activate-unknown",
                                     true, tokens[k]);

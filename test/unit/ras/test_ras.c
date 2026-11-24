@@ -843,6 +843,98 @@ static int test_hnp_dedup(void)
 }
 
 /*
+ * An allocation is where a resource manager's names enter the system, so
+ * node_insert puts them in the form every comparison expects - without
+ * their domain, unless prte_keep_fqdn_hostnames - BEFORE it compares any.
+ * It used to shorten a name only once it had decided the node was new:
+ *
+ *  - a PBS node file naming the HNP's node "n01.cluster.org", on a host
+ *    whose gethostname() says "n01", was not taken for the HNP's node, went
+ *    into the pool a second time, and had a daemon started beside the HNP
+ *    that nothing was ever launched through;
+ *  - "--add-host n02.cluster.org" on a DVM that already held "n02" missed
+ *    the pool entry the same way and added a second "n02".
+ *
+ * Neither needs a name resolved: prte_do_not_resolve is on here.
+ */
+static int test_insert_fqdn_at_entry(void)
+{
+    int failures = 0;
+    pmix_list_t nodes;
+    prte_node_t *hnp, *nd;
+    char *save;
+    char **save_aliases;
+    bool save_resolve, save_keep;
+    int before, rc;
+
+    hnp = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+    CHECK("entry: node at index 0", NULL != hnp);
+    if (NULL == hnp) {
+        return failures;
+    }
+
+    /* this node goes by its short name and has no qualified alias - as on
+     * a host whose gethostname() returns the short one - and the pool's
+     * entry for it is named that way */
+    save = prte_process_info.nodename;
+    save_aliases = prte_process_info.aliases;
+    save_resolve = prte_do_not_resolve;
+    save_keep = prte_keep_fqdn_hostnames;
+    prte_process_info.nodename = strdup(hnp->name);
+    prte_process_info.aliases = NULL;
+    prte_do_not_resolve = true;
+    prte_keep_fqdn_hostnames = false;
+
+    /* the allocation names this node with its domain */
+    before = pool_count();
+    prte_ras_base.total_slots_alloc = 0;
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    nd = mknode(&nodes, "x", 7);
+    free(nd->name);
+    pmix_asprintf(&nd->name, "%s.cluster.test", hnp->name);
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("entry: hnp rc", PRTE_SUCCESS == rc);
+    CHECK("entry: the qualified hnp entry is the hnp's node", pool_count() == before);
+    CHECK("entry: the hnp's node takes its slots", 7 == hnp->slots);
+    CHECK("entry: and counts them once", 7 == prte_ras_base.total_slots_alloc);
+
+    /* a node the pool holds by its short name, named again with a domain */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    mknode(&nodes, "unittest-entry-n02", 2);
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("entry: short node rc", PRTE_SUCCESS == rc);
+    before = pool_count();
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    mknode(&nodes, "unittest-entry-n02.cluster.test", 2);
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("entry: qualified duplicate rc", PRTE_SUCCESS == rc);
+    CHECK("entry: the qualified name is the node the pool holds", pool_count() == before);
+
+    /* kept whole, the two are different names - and different nodes */
+    prte_keep_fqdn_hostnames = true;
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    mknode(&nodes, "unittest-entry-n02.other.test", 2);
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("entry: kept rc", PRTE_SUCCESS == rc);
+    CHECK("entry: a kept qualified name is a node of its own", pool_count() == before + 1);
+    nd = prte_node_match(NULL, "unittest-entry-n02.other.test");
+    CHECK("entry: and keeps its name whole",
+          NULL != nd && 0 == strcmp(nd->name, "unittest-entry-n02.other.test"));
+
+    PMIx_Argv_free(prte_process_info.aliases);
+    free(prte_process_info.nodename);
+    prte_process_info.nodename = save;
+    prte_process_info.aliases = save_aliases;
+    prte_do_not_resolve = save_resolve;
+    prte_keep_fqdn_hostnames = save_keep;
+    return failures;
+}
+
+/*
  * Every component fills in the same vtable and the driver dereferences the
  * slots it uses without further checks beyond a NULL test on allocate.
  */
@@ -3389,6 +3481,7 @@ int main(void)
     failures += test_bootstrap_file_refused();
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
+    failures += test_insert_fqdn_at_entry();
     failures += test_flag_string();
     failures += test_dvm_growing();
     failures += test_resize_requires_elastic();

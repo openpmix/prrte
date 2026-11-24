@@ -94,6 +94,7 @@
 #include "src/util/prte_json_scan.h"
 #include "src/util/prte_json_window.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/proc_info.h"
 #include "src/util/sys_limits.h"
 
@@ -872,8 +873,11 @@ static int test_dash_host_names(void)
     free(spec);
     nd = find_node(&nodes, "nodeU");
     CHECK("names: the node is named for the host", NULL != nd && 2 == nd->slots);
-    nd = find_node(&nodes, "node_1.a-b");
-    CHECK("names: dots, dashes and underscores are taken", NULL != nd);
+    /* taken - and, its domain being removed where it enters, named
+     * "node_1" with the name as given kept to launch to */
+    nd = find_node(&nodes, "node_1");
+    CHECK("names: dots, dashes and underscores are taken",
+          NULL != nd && NULL != nd->rawname && 0 == strcmp(nd->rawname, "node_1.a-b"));
     PMIX_LIST_DESTRUCT(&nodes);
 
     fprintf(stdout, "-- the next cases are refused; the messages they print are expected --\n");
@@ -1530,6 +1534,119 @@ static int test_filter_empty(void)
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_filter_empty\n");
+    }
+    return failures;
+}
+
+/*
+ * A host's name takes its final form where it enters the system: without
+ * its domain, unless prte_keep_fqdn_hostnames - so that every comparison
+ * after that point is between names of one form, and none of them has to
+ * know about domains.  The hostfile and --host parsers stopped doing this
+ * when the shortening moved into prte_ras_base_node_insert(), which neither
+ * filter goes through, so a hostfile or --host naming "n02.cluster.org"
+ * no longer found the "n02" an allocation held.  Each entry point is
+ * checked here, with the name as given kept as the name to launch to.
+ */
+static int test_hostname_domain(void)
+{
+    int failures = 0;
+    pmix_list_t nodes, *list;
+    prte_node_t *nd;
+    char path[256], buf[64], *spec;
+    bool save_keep = prte_keep_fqdn_hostnames;
+    int rc;
+
+    prte_keep_fqdn_hostnames = false;
+
+    /* the rule itself */
+    pmix_string_copy(buf, "n02.cluster.test", sizeof(buf));
+    CHECK("domain: a qualified name loses its domain",
+          prte_hostname_strip_domain(buf) && 0 == strcmp(buf, "n02"));
+    pmix_string_copy(buf, "n02", sizeof(buf));
+    CHECK("domain: a short name is left alone",
+          !prte_hostname_strip_domain(buf) && 0 == strcmp(buf, "n02"));
+    pmix_string_copy(buf, "10.1.2.3", sizeof(buf));
+    CHECK("domain: an address keeps its dots",
+          !prte_hostname_strip_domain(buf) && 0 == strcmp(buf, "10.1.2.3"));
+    pmix_string_copy(buf, ".cluster.test", sizeof(buf));
+    CHECK("domain: a leading dot is no name to shorten",
+          !prte_hostname_strip_domain(buf) && 0 == strcmp(buf, ".cluster.test"));
+    prte_keep_fqdn_hostnames = true;
+    pmix_string_copy(buf, "n02.cluster.test", sizeof(buf));
+    CHECK("domain: kept names are kept whole",
+          !prte_hostname_strip_domain(buf) && 0 == strcmp(buf, "n02.cluster.test"));
+    prte_keep_fqdn_hostnames = false;
+
+    /* a hostfile */
+    if (NULL == write_hostfile("unittest-fq-n02.cluster.test slots=2\n"
+                               "unittest-fq-n02\n"
+                               "^unittest-fq-n03.cluster.test\n",
+                               path, sizeof(path))) {
+        fprintf(stderr, "FAIL [domain]: could not write a temp hostfile\n");
+        prte_keep_fqdn_hostnames = save_keep;
+        return 1;
+    }
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = prte_util_add_hostfile_nodes(&nodes, path, NULL, 0);
+    unlink(path);
+    CHECK("domain: hostfile parses", PRTE_SUCCESS == rc);
+    CHECK("domain: hostfile - both spellings are one node", 1 == pmix_list_get_size(&nodes));
+    nd = find_node(&nodes, "unittest-fq-n02");
+    CHECK("domain: hostfile - named without the domain", NULL != nd);
+    CHECK("domain: hostfile - launched to by the name given",
+          NULL != nd && NULL != nd->rawname &&
+              0 == strcmp(nd->rawname, "unittest-fq-n02.cluster.test"));
+    CHECK("domain: hostfile - a later short entry adds its slot",
+          NULL != nd && 3 == nd->slots);
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* a --host list */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    spec = strdup("unittest-fq-n02.cluster.test:2,unittest-fq-n02");
+    rc = prte_util_add_dash_host_nodes(&nodes, spec, NULL, 0);
+    free(spec);
+    CHECK("domain: --host parses", PRTE_SUCCESS == rc);
+    CHECK("domain: --host - both spellings are one node", 1 == pmix_list_get_size(&nodes));
+    nd = find_node(&nodes, "unittest-fq-n02");
+    CHECK("domain: --host - named without the domain", NULL != nd && 3 == nd->slots);
+    CHECK("domain: --host - launched to by the name given",
+          NULL != nd && NULL != nd->rawname &&
+              0 == strcmp(nd->rawname, "unittest-fq-n02.cluster.test"));
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* selecting from an allocation that names the node without a domain,
+     * by a hostfile and by a --host list that name it with one */
+    list = PMIX_NEW(pmix_list_t);
+    nd = PMIX_NEW(prte_node_t);
+    nd->name = strdup("unittest-fq-n02");
+    nd->slots = 4;
+    pmix_list_append(list, &nd->super);
+    if (NULL == write_hostfile("unittest-fq-n02.cluster.test\n", path, sizeof(path))) {
+        fprintf(stderr, "FAIL [domain]: could not write a temp hostfile\n");
+        PMIX_LIST_RELEASE(list);
+        prte_keep_fqdn_hostnames = save_keep;
+        return failures + 1;
+    }
+    rc = prte_util_filter_hostfile_nodes(list, path, false, NULL, 0);
+    unlink(path);
+    CHECK("domain: a hostfile selects the node by its qualified name",
+          PRTE_SUCCESS == rc && PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_MAPPED));
+    PRTE_FLAG_UNSET(nd, PRTE_NODE_FLAG_MAPPED);
+    spec = strdup("unittest-fq-n02.cluster.test:3");
+    rc = prte_util_filter_dash_host_nodes(list, spec, false, NULL, 0);
+    CHECK("domain: --host selects the node by its qualified name",
+          PRTE_SUCCESS == rc && PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_MAPPED));
+    free(spec);
+    spec = strdup("unittest-fq-n02.cluster.test:3");
+    CHECK("domain: and gives it the slots it names",
+          3 == prte_util_dash_host_compute_slots(nd, spec));
+    free(spec);
+    PMIX_LIST_RELEASE(list);
+
+    prte_keep_fqdn_hostnames = save_keep;
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_hostname_domain\n");
     }
     return failures;
 }
@@ -2282,6 +2399,7 @@ int main(void)
     failures += test_dash_host_names();
     failures += test_hostfile();
     failures += test_filter_empty();
+    failures += test_hostname_domain();
     failures += test_hostfile_scale();
     failures += test_textfile();
     failures += test_hostfile_corpus();

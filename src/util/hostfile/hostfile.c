@@ -226,20 +226,42 @@ static bool valid_relative(const char *s)
  * our own user, which is not what the file asked for.
  */
 static int hostfile_parse_host(const pmix_info_t *req, size_t nreq, const char *value,
-                               char **node_name)
+                               char **node_name, char **given)
 {
     if (NULL != strchr(value, '@')) {
         prte_show_help_info(req, nreq, "help-hostfile.txt", "user-host", true,
                             cur_hostfile_name, cur_hostfile_line, value);
         return PRTE_ERR_SILENT;
     }
+    /* a hostfile is where these names enter the system, so this is where
+     * they take the form every later comparison expects: without their
+     * domain, unless we keep them.  The name as written comes back too,
+     * when it differs, to be kept as an alias and as the name to launch to. */
     *node_name = strdup(value);
+    *given = NULL;
+    if (NULL == *node_name) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (prte_hostname_strip_domain(*node_name)) {
+        *given = strdup(value);
+    }
     return PRTE_SUCCESS;
+}
+
+/* Keep the name an entry was written with, where it is not the name the
+ * node goes by, on the node and in the index that finds it. */
+static void hostfile_keep_given(prte_node_t *node, const char *given, prte_node_index_t *idx)
+{
+    if (NULL == given || 0 == strcmp(given, node->name)) {
+        return;
+    }
+    PMIx_Argv_append_unique_nosize(&node->aliases, (char *) given);
+    prte_node_index_add_alias(idx, node, given);
 }
 
 /* Put a node on the exclude list, or note another name for one already
  * there.  The leading "^" has been stripped by the caller. */
-static void hostfile_exclude(const char *node_name, pmix_list_t *exclude,
+static void hostfile_exclude(const char *node_name, const char *given, pmix_list_t *exclude,
                              prte_node_index_t *eidx)
 {
     prte_node_t *node;
@@ -259,6 +281,7 @@ static void hostfile_exclude(const char *node_name, pmix_list_t *exclude,
         PMIx_Argv_append_unique_nosize(&node->aliases, (char *) node_name);
         prte_node_index_add_alias(eidx, node, node_name);
     }
+    hostfile_keep_given(node, given, eidx);
 }
 
 /*
@@ -275,6 +298,7 @@ static int hostfile_parse_line(const pmix_info_t *req, size_t nreq, char **field
     bool rank_form = false;
     bool excluded;
     char *node_name = NULL;
+    char *written = NULL;
     const char *entry;
     hostfile_key_t key;
     int i, rc, count;
@@ -327,7 +351,7 @@ static int hostfile_parse_line(const pmix_info_t *req, size_t nreq, char **field
      * there was no user, and otherwise gave the user a name starting with
      * "^" and counted the host as one more slot of a node to use. */
     excluded = ('^' == entry[0]);
-    rc = hostfile_parse_host(req, nreq, excluded ? entry + 1 : entry, &node_name);
+    rc = hostfile_parse_host(req, nreq, excluded ? entry + 1 : entry, &node_name, &written);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
@@ -337,8 +361,9 @@ static int hostfile_parse_line(const pmix_info_t *req, size_t nreq, char **field
             free(node_name);
             node_name = strdup(prte_process_info.nodename);
         }
-        hostfile_exclude(node_name, exclude, eidx);
+        hostfile_exclude(node_name, written, exclude, eidx);
         free(node_name);
+        free(written);
         return PRTE_SUCCESS;
     }
 
@@ -356,6 +381,10 @@ static int hostfile_parse_line(const pmix_info_t *req, size_t nreq, char **field
         node = PMIX_NEW(prte_node_t);
         node->name = strdup(node_name);
         node->slots = 1;
+        if (NULL != written && 0 != strcmp(written, node->name)) {
+            /* the launcher reaches the node by the name it was given */
+            node->rawname = strdup(written);
+        }
         pmix_list_append(updates, &node->super);
         prte_node_index_append(uidx, node);
     } else {
@@ -370,7 +399,9 @@ static int hostfile_parse_line(const pmix_info_t *req, size_t nreq, char **field
             prte_node_index_add_alias(uidx, node, node_name);
         }
     }
+    hostfile_keep_given(node, written, uidx);
     free(node_name);
+    free(written);
 
     if (rank_form) {
         /* the slot count is the one the rankfile implied, so say it was
