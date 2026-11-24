@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+#
+# Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+"""Hold a real PBS allocation across many `docker exec` calls.
+
+A person testing PRRTE under PBS runs `qsub -I` and works in that shell. A
+suite driving containers from outside has no such shell: every case is its
+own `docker exec`, and an allocation made in one is gone by the next. So:
+
+    pbs-alloc new [--tag T] [--nodes N] [--ncpus K] [--mpiprocs P]
+                                                      submit a holder job, wait for it to run
+    pbs-alloc env [--tag T]                           export lines to eval, on the job's node
+    pbs-alloc ms [--tag T]                            the node the job's script runs on
+    pbs-alloc jobid | nodes [--tag T]
+    pbs-alloc free [--tag T | --all]
+
+`new` submits a job whose script records the environment PBS gave it and
+the node it runs on, in the job user's (shared) home, and then sleeps,
+holding the allocation. `env` prints that environment back. It is CAPTURED,
+never reconstructed: what the cases replay is what PBS itself put in a
+job's environment. It only means anything on the job's own node - the
+mother superior, `ms` - because $PBS_NODEFILE and $TMPDIR live there, and
+the TM calls go to that node's mom.
+
+Run it as the job user (prte); as root, it re-runs itself as prte.
+"""
+
+import argparse
+import os
+import pwd
+import shlex
+import subprocess
+import sys
+import time
+
+USER = "prte"
+STATE = os.path.join(pwd.getpwnam(USER).pw_dir, ".pbs-alloc")
+QSUB = "/opt/pbs/bin/qsub"
+QDEL = "/opt/pbs/bin/qdel"
+QSTAT = "/opt/pbs/bin/qstat"
+
+# what is replayed: everything PBS sets for a job, and nothing of the
+# login environment the holder happened to run in
+REPLAY_PREFIXES = ("PBS_",)
+REPLAY_NAMES = ("NCPUS", "OMP_NUM_THREADS", "TMPDIR", "ENVIRONMENT")
+
+HOLDER = """#!/bin/bash
+mkdir -p {state}
+env -0 > {state}/{tag}.env.tmp && mv {state}/{tag}.env.tmp {state}/{tag}.env
+hostname > {state}/{tag}.ms
+exec sleep infinity
+"""
+
+
+def as_user():
+    if os.geteuid() == 0:
+        os.execvp("runuser", ["runuser", "-u", USER, "--", sys.executable] + sys.argv)
+
+
+def path(tag, what):
+    return os.path.join(STATE, "%s.%s" % (tag, what))
+
+
+def read(tag, what):
+    try:
+        with open(path(tag, what)) as f:
+            return f.read().strip()
+    except OSError:
+        sys.exit("pbs-alloc: no allocation tagged '%s' (pbs-alloc new --tag %s)" % (tag, tag))
+
+
+def cmd_new(a):
+    os.makedirs(STATE, exist_ok=True)
+    for what in ("env", "ms", "jobid", "sh"):
+        try:
+            os.unlink(path(a.tag, what))
+        except OSError:
+            pass
+    script = path(a.tag, "sh")
+    with open(script, "w") as f:
+        f.write(HOLDER.format(state=STATE, tag=a.tag))
+    os.chmod(script, 0o755)
+    # mpiprocs is what $PBS_NODEFILE lists a node for - once per proc -
+    # and so the slots a DVM gets; ncpus alone gives every node one
+    mpiprocs = a.ncpus if a.mpiprocs is None else a.mpiprocs
+    select = "select=%d:ncpus=%d:mpiprocs=%d" % (a.nodes, a.ncpus, mpiprocs)
+    out = subprocess.run([QSUB, "-N", "hold-" + a.tag, "-l", select, "-l",
+                          "place=" + a.place, "-o", "/dev/null", "-e", "/dev/null",
+                          script], capture_output=True, text=True)
+    if out.returncode != 0:
+        sys.exit("pbs-alloc: qsub failed: " + out.stderr.strip())
+    jobid = out.stdout.strip()
+    with open(path(a.tag, "jobid"), "w") as f:
+        f.write(jobid + "\n")
+    deadline = time.time() + a.timeout
+    while time.time() < deadline:
+        if os.path.exists(path(a.tag, "env")) and os.path.exists(path(a.tag, "ms")):
+            print(jobid)
+            return
+        time.sleep(0.5)
+    subprocess.run([QDEL, jobid], capture_output=True)
+    sys.exit("pbs-alloc: job %s did not start within %ds" % (jobid, a.timeout))
+
+
+def cmd_env(a):
+    with open(path(a.tag, "env"), "rb") as f:
+        raw = f.read().split(b"\0")
+    for item in raw:
+        if not item:
+            continue
+        k, _, v = item.decode(errors="replace").partition("=")
+        if k.startswith(REPLAY_PREFIXES) or k in REPLAY_NAMES:
+            print("export %s=%s" % (k, shlex.quote(v)))
+
+
+def cmd_nodes(a):
+    nf = None
+    for line in cmd_env_lines(a.tag):
+        if line[0] == "PBS_NODEFILE":
+            nf = line[1]
+    if nf is None:
+        sys.exit("pbs-alloc: the job has no PBS_NODEFILE")
+    # the node file is on the job's node; read it there
+    ms = read(a.tag, "ms")
+    out = subprocess.run(["ssh", ms, "cat", nf], capture_output=True, text=True)
+    seen = []
+    for n in out.stdout.split():
+        if n not in seen:
+            seen.append(n)
+    print(",".join(seen))
+
+
+def cmd_env_lines(tag):
+    with open(path(tag, "env"), "rb") as f:
+        for item in f.read().split(b"\0"):
+            if item:
+                k, _, v = item.decode(errors="replace").partition("=")
+                yield (k, v)
+
+
+def cmd_free(a):
+    if a.all:
+        out = subprocess.run([QSTAT, "-u", USER], capture_output=True, text=True)
+        ids = [l.split()[0] for l in out.stdout.splitlines()
+               if l[:1].isdigit()]
+        if ids:
+            subprocess.run([QDEL, "-W", "force"] + ids, capture_output=True)
+        for f in os.listdir(STATE) if os.path.isdir(STATE) else []:
+            os.unlink(os.path.join(STATE, f))
+        return
+    jobid = read(a.tag, "jobid")
+    subprocess.run([QDEL, "-W", "force", jobid], capture_output=True)
+    for what in ("env", "ms", "jobid", "sh"):
+        try:
+            os.unlink(path(a.tag, what))
+        except OSError:
+            pass
+
+
+def main():
+    as_user()
+    p = argparse.ArgumentParser(prog="pbs-alloc")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    n = sub.add_parser("new")
+    n.add_argument("--tag", default="dvm")
+    n.add_argument("--nodes", type=int, default=3)
+    n.add_argument("--ncpus", type=int, default=2)
+    n.add_argument("--mpiprocs", type=int, default=None)
+    n.add_argument("--place", default="scatter")
+    n.add_argument("--timeout", type=int, default=60)
+    for c in ("env", "ms", "jobid", "nodes"):
+        s = sub.add_parser(c)
+        s.add_argument("--tag", default="dvm")
+    f = sub.add_parser("free")
+    f.add_argument("--tag", default="dvm")
+    f.add_argument("--all", action="store_true")
+    a = p.parse_args()
+    if a.cmd == "new":
+        cmd_new(a)
+    elif a.cmd == "env":
+        cmd_env(a)
+    elif a.cmd == "ms":
+        print(read(a.tag, "ms"))
+    elif a.cmd == "jobid":
+        print(read(a.tag, "jobid"))
+    elif a.cmd == "nodes":
+        cmd_nodes(a)
+    elif a.cmd == "free":
+        cmd_free(a)
+
+
+if __name__ == "__main__":
+    main()
