@@ -304,7 +304,10 @@ lookup:
             prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "agent-not-found", true,
                            prte_mca_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
-            return PRTE_ERR_FATAL;
+            /* PMIx's selection is what reads this, and it stops only on its
+             * own code: PRTE_ERR_FATAL would just skip us and go on to
+             * select some other launcher */
+            return PMIX_ERR_FATAL;
         }
         /* this isn't an error - we just cannot be selected */
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
