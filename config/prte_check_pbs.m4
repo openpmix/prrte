@@ -24,17 +24,36 @@
 # $HEADER$
 #
 
-# PRTE_CHECK_PBS(prefix, [action-if-found], [action-if-not-found])
+# PRTE_SETUP_PBS
 # --------------------------------------------------------
-AC_DEFUN([PRTE_CHECK_PBS],[
+# Decide, once, whether PBS support is being built: --with-pbs, or
+# --with-tm, which asks for PBS daemon launch and so for PBS support as
+# well. Sets prte_check_pbs_happy. Everything that needs the answer gets it
+# through PRTE_CHECK_PBS, which requires this, so the components that ask
+# - ras/pbs and plm/tm - may be configured in either order.
+AC_DEFUN([PRTE_SETUP_PBS],[
     AC_ARG_WITH([pbs],
            [AS_HELP_STRING([--with-pbs],
-                           [Build PBS scheduler support (default: no). Launching daemons as PBS tasks also needs the TM library: see --with-tm])])
+                           [Build PBS support (default: no). Launching the daemons as PBS tasks also needs PBS's TM library, which is then required: see --with-tm and --without-tm])])
 
-    if test -z "$with_pbs" || test "$with_pbs" = "no" ; then
+    prte_check_pbs_why=
+    if test "$with_pbs" = "no" ; then
         prte_check_pbs_happy="no"
-    else
+        AS_IF([test -n "$with_tm" && test "$with_tm" != "no"],
+              [AC_MSG_WARN([--with-tm asks for daemon launch through PBS's TM])
+               AC_MSG_WARN([library, which needs PBS support, but --without-pbs])
+               AC_MSG_WARN([was also given. Drop one of the two.])
+               AC_MSG_ERROR([Cannot continue])])
+    elif test -n "$with_pbs" ; then
         prte_check_pbs_happy="yes"
+    elif test -n "$with_tm" && test "$with_tm" != "no" ; then
+        # a PBS launcher without the PBS allocator would take its nodes
+        # from somewhere other than the job, and could start daemons on
+        # none of them that are not in it
+        prte_check_pbs_happy="yes"
+        prte_check_pbs_why=" (implied by --with-tm)"
+    else
+        prte_check_pbs_happy="no"
     fi
 
     AS_IF([test "$prte_check_pbs_happy" = "yes"],
@@ -53,7 +72,13 @@ AC_DEFUN([PRTE_CHECK_PBS],[
             esac
         ])
 
-    PRTE_SUMMARY_ADD([Resource Managers], [PBS], [], [$prte_check_pbs_happy])
+    PRTE_SUMMARY_ADD([Resource Managers], [PBS], [], [${prte_check_pbs_happy}${prte_check_pbs_why}])
+])
+
+# PRTE_CHECK_PBS(prefix, [action-if-found], [action-if-not-found])
+# --------------------------------------------------------
+AC_DEFUN([PRTE_CHECK_PBS],[
+    AC_REQUIRE([PRTE_SETUP_PBS])
 
     AS_IF([test "$prte_check_pbs_happy" = "yes"],
           [$2],

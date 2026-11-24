@@ -126,11 +126,23 @@ the node named for it.
 
 ## Configure
 
-`--with-pbs` builds PBS support (`ras/pbs`). This component needs TM too,
-found by `PRTE_CHECK_TM` (`config/prte_check_tm.m4`): `--with-tm=DIR`,
+`--with-pbs` builds PBS support (`ras/pbs`), and so does `--with-tm`,
+which implies it: this component is built only together with `ras/pbs`,
+since it can start daemons only on the nodes of the PBS job and only
+`ras/pbs` reads those. `--with-tm` with `--without-pbs` is an error. The
+decision is `PRTE_SETUP_PBS` (`config/prte_check_pbs.m4`), made once
+however many components ask through `PRTE_CHECK_PBS`, which
+`AC_REQUIRE`s it - so `plm` and `ras` may be configured in either order.
+
+The component needs TM too, found by `PRTE_CHECK_TM`
+(`config/prte_check_tm.m4`), which runs only when PBS support is on:
+`--with-tm=DIR`,
 else the directory given to `--with-pbs`, else `pbs-config` and the default
-paths. Not finding TM under `--with-pbs` is not an error - asking for PBS
-is not asking for TM - but an explicit `--with-tm` that finds nothing is.
+paths. Not finding it is a configure **error** in two cases: an explicit
+`--with-tm`, and `--with-pbs` with nothing said about TM - that user asked
+for a PRRTE that works in a PBS job, and without this component it would
+launch with ssh, which PBS does not account for, and nothing would say so.
+`--without-tm` is how to build PBS support that way on purpose.
 
 `--enable-testbuild-launchers` builds the component without TM: it links
 nothing of TM's anyway, and the helper is compiled against
