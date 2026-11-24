@@ -1028,7 +1028,7 @@ references. Where they land decides whether the tree even builds:
 
 So **every component with a testbuild stub must be in the default
 `--enable-mca-dso` list** in [`config/prte_mca.m4`](../../../config/prte_mca.m4)
-— today `plm-lsf`, `plm-tm`, `ras-lsf`, `ras-flux` and `ras-slurm`
+— today `plm-lsf`, `ras-lsf`, `ras-flux` and `ras-slurm`
 (`ras/slurm` is on the list because it compiles the jansson parser). That
 is also the right layout regardless of the stubs: it keeps a third-party
 dependency out of `libprrte` and therefore out of every PRRTE tool.

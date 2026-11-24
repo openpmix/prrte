@@ -33,6 +33,9 @@
  *    launcher they start, which the resource manager hands to every prted it
  *    spawns (prte_dvm_key_from_env).  A process's environment is visible
  *    only to its own user and root;
+ *  - plm/tm writes it down a pipe to its TM helper, which adds it to the
+ *    environment tm_spawn() hands each prted - and to nothing else, not its
+ *    own environment - and the prted reads it from there as under srun;
  *  - a bootstrapped DVM has no launcher, so each daemon reads it from the
  *    file prte.conf names in DVMKeyFile, which must be owned by the daemon's
  *    user and accessible to nobody else (prte_dvm_key_from_file).

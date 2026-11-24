@@ -7,21 +7,26 @@ managers.
 Verify PBS/Torque support
 -------------------------
 
+PBS support is built when PRRTE is configured ``--with-pbs``. Starting
+the daemons as tasks of the PBS job also needs PBS's TM library, which
+configure looks for under the directory given to ``--with-pbs``, with
+``pbs-config``, and in the default search paths; ``--with-tm=DIR``
+names its location explicitly.
+
 The ``prte_info`` command can be used to determine whether or not an
-installed PRRTE includes Torque/PBS Pro support:
+installed PRRTE includes PBS support:
 
 .. code-block::
 
-   shell$ prte_info | grep ras
+   shell$ prte_info | grep -E "plm: tm|ras: pbs"
 
-If the PRRTE installation includes support for PBS/Torque, you
-should see a line similar to that below. Note the MCA version
-information varies depending on which version of PRRTE is
-installed.
+If it does, you should see lines similar to those below (the version
+information varies with the version of PRRTE installed):
 
 .. code-block::
 
-       MCA ras: tm (MCA v2.1.0, API v2.0.0, Component v3.0.0)
+       MCA plm: tm (MCA v2.1.0, API v2.0.0, Component v4.0.0)
+       MCA ras: pbs (MCA v2.1.0, API v2.0.0, Component v4.0.0)
 
 Launching
 ---------
@@ -52,6 +57,43 @@ PBS/Torque.  Or, if submitting a script:
    #!/bin/sh
    prterun mpi-hello-world
    shell$ qsub -l nodes=4 my_script.sh
+
+How the daemons are started
+---------------------------
+
+PRRTE starts one daemon on each node of the job other than its own, and
+starts each one through PBS's TM interface, so that PBS runs the daemon
+as a task of the job: PBS charges the job for the daemon and for every
+process it starts, and takes them all down when the job ends or is
+deleted. The daemons remain those tasks for the life of the job.
+
+PRRTE itself does not load the TM library, since some builds of it carry
+private copies of libraries PMIx is also linked against. The TM calls
+are made by a small helper program, ``prte_tm_spawn``, installed with
+PRRTE in ``$libexecdir/prte`` and linked against the TM library alone.
+It is not meant to be run by hand.
+
+Each daemon must receive a secret key from PRRTE before any other daemon
+will talk to it. PBS hands each daemon the environment PRRTE gives it,
+and the key travels there, as it does under Slurm: it never appears on
+a command line, and the daemon removes it from its environment as soon
+as it has read it.
+
+The daemons are started with PRRTE's own ``PATH`` and
+``LD_LIBRARY_PATH``, and PBS looks for ``prted`` along that ``PATH`` on
+each node. Where PRRTE is installed somewhere else on the other nodes,
+use ``--prefix`` to say where.
+
+If a daemon cannot be started - ``prted`` is not found, or PBS refuses -
+PRRTE reports which node and why, and the launch fails.
+
+If the helper program is missing, PRRTE says so and starts the daemons
+with ``ssh`` instead, as it would outside PBS. Daemons started that way
+are not PBS tasks, so PBS does not charge the job for the remote nodes'
+CPU time, and ``ssh`` must work between the job's nodes without a
+password. To launch with ``ssh`` inside a PBS job anyway, use
+``--prtemca plm ssh``. To see which launcher was used, run with
+``--prtemca plm_base_verbose 1``.
 
 .. warning:: Do not modify ``$PBS_NODEFILE``!
 
