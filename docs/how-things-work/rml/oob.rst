@@ -142,7 +142,9 @@ on a command line, where the namespace and the HNP's contact address already
 are.
 ``prte`` generates it; ``plm/ssh`` writes it down the stdin of each ``ssh`` it
 starts; ``plm/slurm``, ``plm/lsf`` and ``plm/pals`` put it in the launcher's
-environment, which the resource manager hands to every daemon; and a
+environment, which the resource manager hands to every daemon; ``plm/tm``
+gives it to its TM helper down a pipe, and the helper puts it in the
+environment each daemon is started with, and nowhere else; and a
 bootstrapped DVM reads it from the file ``DVMKeyFile`` names in ``prte.conf``.
 A daemon removes it from its environment as soon as it has it, so nothing the
 daemon starts inherits it.  The check is always made; nothing turns it off.
