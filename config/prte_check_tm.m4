@@ -125,23 +125,21 @@ AC_DEFUN([PRTE_CHECK_TM_PBS_CONFIG], [
 # PRTE_CHECK_TM(prefix, [action-if-found], [action-if-not-found])
 # --------------------------------------------------------
 AC_DEFUN([PRTE_CHECK_TM],[
-    PRTE_VAR_SCOPE_PUSH([prte_check_tm_happy prte_check_tm_found prte_check_tm_implied])
+    PRTE_VAR_SCOPE_PUSH([prte_check_tm_happy prte_check_tm_found prte_check_tm_given])
 
     AC_ARG_WITH([tm],
                 [AS_HELP_STRING([--with-tm(=DIR)],
-                                [Build TM (PBS, Torque, and compatible) daemon launch support, optionally adding DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries. Only PRRTE's TM helper program links the TM library])])
+                                [Build TM (PBS, Torque, and compatible) daemon launch support, optionally adding DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries. Only PRRTE's TM helper program links the TM library. --with-pbs requires it unless --without-tm is given])])
     AC_ARG_WITH([tm-libdir],
                 [AS_HELP_STRING([--with-tm-libdir=DIR],
                                 [Search for Torque libraries in DIR])])
 
     # --with-pbs=DIR names a PBS installation, and the TM library is part
-    # of it: look there too unless --with-tm says otherwise. Asking for PBS
-    # is not asking for TM, so not finding it there is not an error.
-    prte_check_tm_implied=0
+    # of it: look there too unless --with-tm says otherwise.
+    prte_check_tm_given="${with_tm}"
     AS_IF([test -z "${with_tm}" && test -n "${with_pbs}" &&
            test "${with_pbs}" != "yes" && test "${with_pbs}" != "no"],
-          [with_tm="${with_pbs}"
-           prte_check_tm_implied=1])
+          [with_tm="${with_pbs}"])
 
     AS_IF([test "${with_tm}" = "no"],
           [prte_check_tm_happy="no"],
@@ -199,10 +197,29 @@ AC_DEFUN([PRTE_CHECK_TM],[
 
 
     # Did we find the right stuff?
+    #
+    # Asking for PBS (--with-pbs) without saying anything about TM is asking
+    # for a PRRTE that works in a PBS job, and without TM it does not do
+    # what that user expects: plm/tm cannot be built, so the daemons are
+    # launched with ssh and PBS neither accounts for them nor cleans them up.
+    # So that is an error too, unless --without-tm says it is what they
+    # want. --enable-testbuild-launchers builds without TM by design.
     AS_IF([test "${prte_check_tm_happy}" = "yes"],
           [$2],
-          [AS_IF([test ${prte_check_tm_implied} -eq 0 && test ! -z "${with_tm}" && test "${with_tm}" != "no"],
+          [AS_IF([test -n "${prte_check_tm_given}" && test "${prte_check_tm_given}" != "no"],
                  [AC_MSG_ERROR([TM support requested but not found.  Aborting])])
+           AS_IF([test -z "${prte_check_tm_given}" && test -n "${with_pbs}" &&
+                  test "${with_pbs}" != "no" && test "${prte_testbuild_launchers}" != "1"],
+                 [AC_MSG_WARN([PBS support was requested (--with-pbs), but the PBS TM])
+                  AC_MSG_WARN([library was not found. Without it PRRTE cannot start its])
+                  AC_MSG_WARN([daemons as tasks of a PBS job: it would launch them with])
+                  AC_MSG_WARN([ssh, and PBS would neither charge the job for the remote])
+                  AC_MSG_WARN([nodes nor take the daemons down with it. Either name])
+                  AC_MSG_WARN([the TM installation with --with-tm=DIR, or build without])
+                  AC_MSG_WARN([it, launching with ssh, with --without-tm.])
+                  AC_MSG_ERROR([Cannot continue])])
+           AS_IF([test "${prte_check_tm_given}" = "no"],
+                 [$1_SUMMARY="no (--without-tm: daemons in a PBS job launch with ssh)"])
            $3])
 
     PRTE_SUMMARY_ADD([Resource Managers], [TM (PBS daemon launch)], [], [${$1_SUMMARY}])

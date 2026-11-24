@@ -7,11 +7,20 @@ managers.
 Verify PBS/Torque support
 -------------------------
 
-PBS support is built when PRRTE is configured ``--with-pbs``. Starting
-the daemons as tasks of the PBS job also needs PBS's TM library, which
-configure looks for under the directory given to ``--with-pbs``, with
-``pbs-config``, and in the default search paths; ``--with-tm=DIR``
-names its location explicitly.
+PBS support is built when PRRTE is configured ``--with-pbs`` or
+``--with-tm``. Starting the daemons as tasks of the PBS job also needs
+PBS's TM library, which configure looks for under the directory given
+to ``--with-pbs``, with ``pbs-config``, and in the default search paths;
+``--with-tm=DIR`` names its location explicitly, and implies
+``--with-pbs`` (``--with-tm`` together with ``--without-pbs`` is an
+error).
+
+If ``--with-pbs`` is given and the TM library cannot be found, configure
+stops with an error rather than build a PRRTE that would quietly launch
+its daemons with ``ssh`` inside a PBS job. Either say where TM is with
+``--with-tm=DIR``, or configure ``--without-tm`` to build PBS support
+without it - PRRTE then reads the allocation from PBS but launches the
+daemons with ``ssh``, and PBS does not account for them (see below).
 
 The ``prte_info`` command can be used to determine whether or not an
 installed PRRTE includes PBS support:
