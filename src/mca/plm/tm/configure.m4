@@ -33,7 +33,16 @@
 AC_DEFUN([MCA_prte_plm_tm_CONFIG],[
     AC_CONFIG_FILES([src/mca/plm/tm/Makefile])
 
-    PRTE_CHECK_TM([plm_tm_helper], [plm_tm_good=1], [plm_tm_good=0])
+    # Only with PBS support: this launcher starts daemons only on the nodes
+    # of the PBS job, which only ras/pbs reads, so building it without
+    # ras/pbs would be a launcher with no allocation it can serve.
+    # (--with-tm implies PBS support, and contradicting it is an error -
+    # see PRTE_SETUP_PBS - so the TM check is skipped only where nobody
+    # asked for PBS.)
+    PRTE_CHECK_PBS([plm_tm_pbs], [plm_tm_pbs_good=1], [plm_tm_pbs_good=0])
+    AS_IF([test "$plm_tm_pbs_good" = "1"],
+          [PRTE_CHECK_TM([plm_tm_helper], [plm_tm_good=1], [plm_tm_good=0])],
+          [plm_tm_good=0])
 
     AS_IF([test "$plm_tm_good" = "1" || test "$prte_testbuild_launchers" = "1"],
           [$1],

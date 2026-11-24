@@ -556,7 +556,7 @@ Common configure options:
 | `--with-slurm` | Enable SLURM support |
 | `--with-lsf=<path>` | Enable LSF support |
 | `--with-pbs` | Enable PBS/Torque support |
-| `--with-tm=<path>` | Location of PBS's TM library, for `plm/tm` (default: under the `--with-pbs` path, else `pbs-config` and the default paths). Only the libexec helper `prte_tm_spawn` links it - see [`src/mca/plm/tm/AGENTS.md`](src/mca/plm/tm/AGENTS.md). |
+| `--with-tm=<path>` | Location of PBS's TM library, for `plm/tm` (default: under the `--with-pbs` path, else `pbs-config` and the default paths). Only the libexec helper `prte_tm_spawn` links it - see [`src/mca/plm/tm/AGENTS.md`](src/mca/plm/tm/AGENTS.md). `--with-tm` implies `--with-pbs`, and contradicting it with `--without-pbs` is an error; `--with-pbs` with no TM found is a configure **error** too, and `--without-tm` is the explicit choice to launch with ssh inside PBS. |
 | `--with-flux=<dir>` | Enable Flux support |
 | `--enable-slurm-extensions` | Force `ras/slurm`'s elastic allocation extensions — the PMIx allocation extend/release/cancel surface and the `scontrol show job --json` parser — on or off. They need jansson and **SLURM 24.05 or later** (the release whose JSON schema the parser reads), and configure decides by asking the SLURM it can find. Where there is no SLURM to ask — a build node, a container — the default is *on*, so a build that has always had them keeps them; use `--disable-slurm-extensions` to gate them off when you know the target's SLURM is older. See [`src/mca/ras/slurm/AGENTS.md`](src/mca/ras/slurm/AGENTS.md). |
 | `--enable-debug` | Build with debug symbols and extra assertions |
