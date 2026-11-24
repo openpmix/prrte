@@ -25,6 +25,7 @@
 #include "src/util/pmix_show_help.h"
 #include "src/util/proc_info.h"
 
+#include "src/util/prte_dvm_key.h"
 #include "src/util/prte_show_help.h"
 
 /* Emit a message we have decided we are the one to deliver.
@@ -476,8 +477,11 @@ static int vdeliver(const pmix_nspace_t nspace, sh_about_t about, const prte_job
     /* We are a prted. If we do not have an HNP to send to yet - very early
      * in startup, or while coming down - emit locally rather than lose the
      * message: our stderr may well still be connected, and a message that
-     * might be seen beats one that certainly will not. */
-    if (prte_finalizing || PMIX_RANK_INVALID == PRTE_PROC_MY_HNP->rank ||
+     * might be seen beats one that certainly will not. Knowing the HNP's
+     * name is not enough: until we hold the DVM key no daemon will take a
+     * connection from us, so a message about failing to get the key - or
+     * anything else that fails before we have it - can go nowhere else */
+    if (prte_finalizing || !prte_dvm_key_ready || PMIX_RANK_INVALID == PRTE_PROC_MY_HNP->rank ||
         PMIX_NSPACE_INVALID(PRTE_PROC_MY_HNP->nspace)) {
         /* unconditionally direct: a prted always carries
          * PMIX_IOF_LOCAL_OUTPUT=false, so handing this to PMIx is handing it
