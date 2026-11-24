@@ -20,9 +20,6 @@
 # $HEADER$
 #
 
-AM_CFLAGS = \
-        -DPRTE_PBSTRMSH_PATH="\"@PRTE_PBSTRMSH_PATH@\""
-
 EXTRA_DIST = \
         help-plm-ssh.txt
 

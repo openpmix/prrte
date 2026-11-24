@@ -58,8 +58,6 @@ struct prte_mca_plm_ssh_component_t {
     bool disable_llspawn;
     bool using_llspawn;
     bool daemonize_llspawn;
-    bool disable_tmrsh;
-    bool using_tmrsh;
     int priority;
     bool no_tree_spawn;
     int num_concurrent;
