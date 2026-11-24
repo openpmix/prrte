@@ -215,7 +215,15 @@ static const corpus_case_t corpus[] = {
     {"count-max", "hostA slots=2 count-max=8\n", "rc=ok | hostA slots=2 max=8 given=1"},
 
     /* --- name forms ------------------------------------------------ */
-    {"fqdn", "node01.example.com slots=2\n", "rc=ok | node01.example.com slots=2 max=0 given=1"},
+    /* A hostfile is where its names enter the system, and a name takes its
+     * final form there: without its domain, unless prte_keep_fqdn_hostnames,
+     * keeping the name as written as an alias (and as the name to launch
+     * to). This golden was recorded while the parser left the domain on for
+     * prte_ras_base_node_insert() to remove - which the filters, that never
+     * reach node_insert, did not get, so "node01.example.com" selected
+     * nothing from an allocation that held "node01". */
+    {"fqdn", "node01.example.com slots=2\n",
+     "rc=ok | node01 slots=2 max=0 given=1 alias=node01.example.com"},
     {"ipv4", "10.0.0.1 slots=2\n", "rc=ok | 10.0.0.1 slots=2 max=0 given=1"},
     {"ipv6", "fe80::1 slots=2\n", "rc=ok | fe80::1 slots=2 max=0 given=1"},
     {"excluded fqdn", "node01.example.com\nhostB\n^node01.example.com\n", "rc=ok | hostB slots=1 max=0 given=0"},

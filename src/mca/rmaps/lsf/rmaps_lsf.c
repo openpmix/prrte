@@ -526,7 +526,7 @@ static int file_parse(const pmix_nspace_t nspace, const char *affinity_file)
     struct stat buf;
     FILE *fp;
     char *hstname, *membind_opt;
-    char *sep = NULL, *eptr, **cpus, *ptr;
+    char *sep = NULL, *eptr, **cpus;
     char *logical_cpus = NULL, *lcpu;
     prte_node_t *nptr, *node;
     hwloc_obj_t obj;
@@ -603,13 +603,8 @@ static int file_parse(const pmix_nspace_t nspace, const char *affinity_file)
                             "mca:rmaps:lsf: (lsf) Convert Physical CPUSET from <%s>",
                             (NULL == sep) ? "" : sep);
 
-        // if we are not keeping fqdn, remove the domain name here
-        if (!prte_keep_fqdn_hostnames) {
-            if (!pmix_net_isaddr(hstname) &&
-                NULL != (ptr = strchr(hstname, '.'))) {
-                *ptr = '\0';
-            }
-        }
+        // the name enters here: take the form the node pool has
+        prte_hostname_strip_domain(hstname);
 
         // find the named host
         nptr = NULL;

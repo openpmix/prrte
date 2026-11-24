@@ -145,20 +145,35 @@ void prte_setup_hostname(void)
         prte_process_info.nodename = strdup(hostname);
     }
 
-    // if we are not keeping FQDN, then strip it off if not an IP address
-    if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(prte_process_info.nodename)) {
-        ptr = strchr(prte_process_info.nodename, '.');
-        if (NULL != ptr) {
-            /* add the fqdn name as an alias */
-            PMIx_Argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
-            /* retain the non-fqdn name as the node's name */
-            *ptr = '\0';
-        }
+    /* our own name enters here: keep the qualified name as an alias and
+     * go by the short one (or keep the name whole, if there is nowhere to
+     * keep the qualified form) */
+    ptr = strdup(prte_process_info.nodename);
+    if (NULL != ptr && prte_hostname_strip_domain(prte_process_info.nodename)) {
+        PMIx_Argv_append_unique_nosize(&prte_process_info.aliases, ptr);
     }
+    free(ptr);
 
     // add the localhost names
     PMIx_Argv_append_unique_nosize(&prte_process_info.aliases, "localhost");
     PMIx_Argv_append_unique_nosize(&prte_process_info.aliases, "127.0.0.1");
+}
+
+bool prte_hostname_strip_domain(char *name)
+{
+    char *dot;
+
+    if (NULL == name || prte_keep_fqdn_hostnames) {
+        return false;
+    }
+    dot = strchr(name, '.');
+    /* a leading dot is no name with a domain, and an address keeps its
+     * dots - this asks only about names that have any */
+    if (NULL == dot || dot == name || pmix_net_isaddr(name)) {
+        return false;
+    }
+    *dot = '\0';
+    return true;
 }
 
 bool prte_check_host_is_local(const char *name)

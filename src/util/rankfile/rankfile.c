@@ -147,7 +147,6 @@ int prte_util_parse_rankfile(const char *rankfile, const pmix_info_t *req, size_
     prte_rankfile_map_t *rfmap;
     char **fields;
     char *node_name = NULL;
-    char *ptr;
     int rc, rank, i;
 
     cur_rankfile_name = rankfile;
@@ -227,11 +226,7 @@ int prte_util_parse_rankfile(const char *rankfile, const pmix_info_t *req, size_
 
         /* strip the FQDN if we are not keeping them, but never off an
          * address, whose dots are not domain separators */
-        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
-            if (NULL != (ptr = strchr(node_name, '.'))) {
-                *ptr = '\0';
-            }
-        }
+        prte_hostname_strip_domain(node_name);
 
         rfmap = PMIX_NEW(prte_rankfile_map_t);
         if (prte_check_host_is_local(node_name)) {
