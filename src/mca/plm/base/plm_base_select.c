@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,6 +55,11 @@ int prte_plm_base_select(void)
     if (PMIX_SUCCESS == rc) {
         /* Save the winner */
         prte_plm = *best_module;
+    } else if (PMIX_ERR_FATAL == rc) {
+        /* a component found something the user asked for to be missing
+         * (plm/ssh: the agent they named) and has said why. Selecting
+         * another launcher would do what they did not ask for */
+        rc = PRTE_ERR_FATAL;
     } else {
         // leave the default in case they don't need a launcher - i.e.,
         // for the use-case of purely local operations. We will generate
