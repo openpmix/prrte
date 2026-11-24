@@ -62,13 +62,9 @@ static int adjust_slots(int slots, int delta)
  * No-op when keep_fqdn_hostnames is set or the name is an IP address. */
 static void normalize_node(prte_node_t *node)
 {
-    char *ptr, *fqdn;
+    char *fqdn;
 
-    if (prte_keep_fqdn_hostnames || pmix_net_isaddr(node->name)) {
-        return;
-    }
-    ptr = strchr(node->name, '.');
-    if (NULL == ptr) {
+    if (NULL == node->name || NULL == strchr(node->name, '.')) {
         return;
     }
     /* copy the full FQDN, then truncate node->name in place to the short name */
@@ -79,7 +75,10 @@ static void normalize_node(prte_node_t *node)
          * the allocation's own spelling can no longer reach */
         return;
     }
-    *ptr = '\0';
+    if (!prte_hostname_strip_domain(node->name)) {
+        free(fqdn);
+        return;
+    }
     if (NULL == node->rawname) {
         node->rawname = fqdn;
     } else {
@@ -235,11 +234,6 @@ static int insert_list(pmix_list_t *nodes, prte_job_t *djob, prte_node_t *hnp_no
             }
             /* PRTE_NODE_FLAG_SLOTS_GIVEN arrives already set by whoever
              * supplied the node and is carried into the pool untouched */
-            /* detect FQDN before normalizing, then normalize to short name */
-            if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
-                prte_have_fqdn_allocation = true;
-            }
-            normalize_node(node);
             /* Insert it into the array.
              *
              * A component may pre-assign the pool slot by setting node->index
@@ -329,6 +323,17 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
     num_nodes = (int32_t) pmix_list_get_size(nodes);
     if (0 == num_nodes) {
         return PRTE_SUCCESS; /* nothing to do */
+    }
+
+    /* An allocation is where a resource manager's names enter the system,
+     * so this is where they take the form every comparison expects: without
+     * their domain, unless we keep them.  It has to come before anything
+     * below compares a name - the HNP's own node is recognized, and every
+     * other node looked up in the pool, by name - or a node the allocation
+     * qualifies ("n01.cluster.org") is taken for a different node from the
+     * one the pool or this host already knows as "n01". */
+    PMIX_LIST_FOREACH(node, nodes, prte_node_t) {
+        normalize_node(node);
     }
 
     PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,

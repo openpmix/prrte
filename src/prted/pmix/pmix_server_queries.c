@@ -401,6 +401,7 @@ static void _query(int sd, short args, void *cbdata)
     size_t ndq = 0, nq_alloc = 0;
     uint32_t key, nodeid, sessionid = UINT32_MAX, nslots;
     char **nspaces, *hostname, *uri;
+    char *hostbuf = NULL; /* our copy of a PMIX_HOSTNAME qualifier, in our form */
     char *cmdline;
     const char *allocid;
 #ifdef PMIX_ALLOC_PROPERTY
@@ -464,6 +465,8 @@ static void _query(int sd, short args, void *cbdata)
         q = &cd->queries[m];
         defer_query = false;
         hostname = NULL;
+        free(hostbuf);
+        hostbuf = NULL;
         nodeid = UINT32_MAX;
         /* every qualifier is scoped to the query that carried it, and this
          * one was the exception: initialized once at its declaration, a
@@ -587,6 +590,19 @@ static void _query(int sd, short args, void *cbdata)
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
+                    /* a client's name for a host enters here, and is
+                     * compared with node names that have already lost
+                     * their domain - so it loses it too.  The qualifier is
+                     * the client's, and a deferred key relays it as given,
+                     * so work on a copy. */
+                    free(hostbuf);
+                    hostbuf = strdup(hostname);
+                    if (NULL == hostbuf) {
+                        ret = PMIX_ERR_NOMEM;
+                        goto done;
+                    }
+                    prte_hostname_strip_domain(hostbuf);
+                    hostname = hostbuf;
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NODEID)) {
                     rc = PMIx_Value_get_number(&q->qualifiers[n].value, &nodeid, PMIX_UINT32);
@@ -1840,6 +1856,7 @@ static void _query(int sd, short args, void *cbdata)
 
 done:
     visible_free(&visible);
+    free(hostbuf);
     if (0 < ndq) {
         if (PMIX_SUCCESS == ret) {
             rc = relay_query(cd, results, nkeys, dq, ndq);
