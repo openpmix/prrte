@@ -147,11 +147,19 @@ static int ssh_component_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_plm_ssh_component.disable_tmrsh);
 
+    prte_mca_plm_ssh_component.daemonize_tmrsh = false;
+    (void) pmix_mca_base_component_var_register(c, "daemonize_tmrsh",
+                                                "Daemonize the prted when pbs_tmrsh launches it under the PBS environment, "
+                                                "so that it leaves the PBS task that started it",
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                                &prte_mca_plm_ssh_component.daemonize_tmrsh);
+
     prte_mca_plm_ssh_component.tmrsh_keydir = NULL;
     (void) pmix_mca_base_component_var_register(c, "tmrsh_keydir",
                                                 "Directory, seen under this name by every node of the PBS job, "
                                                 "where the file that hands the DVM key to daemons launched "
-                                                "by pbs_tmrsh is kept while they start [default: home directory]",
+                                                "by pbs_tmrsh is kept while they start, or while they run when "
+                                                "they stay attached [default: home directory]",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_mca_plm_ssh_component.tmrsh_keydir);
 

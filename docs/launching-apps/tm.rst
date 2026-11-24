@@ -81,10 +81,11 @@ instead of the caller's.  PRRTE therefore names the shell itself
 (``/bin/sh -c``), and hands each daemon the DVM's key through a file:
 
 * The file is created in your home directory, readable by you alone,
-  under a name that cannot be guessed, and is removed when the last
-  ``pbs_tmrsh`` has returned (when ``prterun`` ends, if the daemons
-  were kept attached with ``--debug-daemons``, ``--debug-daemons-file``
-  or ``--leave-session-attached``).
+  under a name that cannot be guessed, and is removed when the daemons
+  exit, which is when ``prterun`` or the DVM ends, since they stay
+  attached (below).  If they are detached with
+  ``plm_ssh_daemonize_tmrsh``, it is removed as soon as the last
+  ``pbs_tmrsh`` has returned.
   A ``prterun`` that is killed outright can leave a
   ``.prte-dvm-key.*`` file behind; it is of no use once that
   ``prterun`` is gone and can be deleted.
@@ -113,16 +114,28 @@ instead of the caller's.  PRRTE therefore names the shell itself
   ``LD_LIBRARY_PATH``.
 * Daemons are all started from the node ``prterun`` runs on; the tree
   launch the ``ssh`` launcher otherwise uses is turned off.
-* Unless kept attached (above), each daemon detaches from the PBS task
-  that started it.  Whether PBS
-  still accounts for it and for the processes it starts depends on how
-  the site tracks jobs.
+* Each daemon stays in the PBS task that started it, as under Grid
+  Engine's ``qrsh``, so a PBS that tracks a job by the sessions of its
+  tasks charges the CPU time of the daemon and of the processes it
+  starts to the job (measured on PBS Professional 2022.1 without the
+  cgroup hook).  One ``pbs_tmrsh`` for each other node keeps running on
+  the node ``prterun`` runs on until the daemons exit, and the
+  ``plm_ssh_num_concurrent`` limit is lifted as needed to let all of
+  them run at once.  To detach the daemons instead, as under ``ssh``:
+
+  .. code-block:: sh
+
+     shell$ prterun --prtemca plm_ssh_daemonize_tmrsh 1 ...
+
+  Whether PBS still accounts for detached daemons and for the processes
+  they start depends on how the site tracks jobs.
 
 PBS may take the ``pbs_tmrsh`` calls of a job one at a time.  Where it
 does, a launch takes time in proportion to the number of nodes: on one
-PBS Professional 2022.1 system each call took about two seconds, and
-starting daemons on seven other nodes took fourteen.  Starting them
-with ``ssh`` does not have that cost, if the nodes allow it.
+PBS Professional 2022.1 system a lone ``pbs_tmrsh`` took about two
+seconds and seven at once took fourteen, and the daemons on seven other
+nodes were all up after about seven.  Starting them with ``ssh`` does not
+have that cost, if the nodes allow it.
 
 If no directory is shared between the nodes, or to start the daemons
 with ``ssh`` for any other reason, turn ``pbs_tmrsh`` off:

@@ -60,6 +60,7 @@ struct prte_mca_plm_ssh_component_t {
     bool daemonize_llspawn;
     bool disable_tmrsh;
     bool using_tmrsh;
+    bool daemonize_tmrsh;
     char *tmrsh_keydir;
     int priority;
     bool no_tree_spawn;

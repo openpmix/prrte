@@ -145,8 +145,9 @@ starts; ``plm/slurm``, ``plm/lsf`` and ``plm/pals`` put it in the launcher's
 environment, which the resource manager hands to every daemon; and a
 bootstrapped DVM reads it from the file ``DVMKeyFile`` names in ``prte.conf``.
 Inside a PBS job, where ``plm/ssh`` starts daemons with ``pbs_tmrsh`` and has
-neither a stdin nor an environment to give them, the key is written for the
-length of the launch to a file that only its owner can read, in a directory
+neither a stdin nor an environment to give them, the key is written, for as
+long as the daemons run (or, if they are detached, while they start), to a
+file that only its owner can read, in a directory
 the job's nodes share (:ref:`launching with pbs_tmrsh
 <launching-pbs-tmrsh-label>`) - which puts it at rest on that file system and
 on its transport, the one channel that does.

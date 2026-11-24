@@ -38,9 +38,11 @@
  *    is written to a file only its owner can read, under a name that
  *    cannot be guessed, in a directory the job's nodes share, and the
  *    remote shell pipes it into the prted's stdin if it is the user's
- *    own file and not a link; the file is removed
- *    when the last pbs_tmrsh has returned.  While it exists the key is at
- *    rest on that file system and crosses its transport, which the other
+ *    own file and not a link; the file is removed once the last
+ *    pbs_tmrsh has returned or, at the latest, at finalize - with the
+ *    daemons attached, as they are unless plm_ssh_daemonize_tmrsh is set,
+ *    that is when they exit.  While it exists the key is
+ *    at rest on that file system and crosses its transport, which the other
  *    channels never allow - see src/mca/plm/ssh/AGENTS.md;
  *  - a bootstrapped DVM has no launcher, so each daemon reads it from the
  *    file prte.conf names in DVMKeyFile, which must be owned by the daemon's
@@ -81,7 +83,7 @@ PRTE_EXPORT extern bool prte_dvm_key_ready;
 PRTE_EXPORT int prte_dvm_key_random(uint8_t *buf, size_t len);
 
 /* The HNP's key: freshly generated, and held only in memory - but for the
- * file plm/ssh writes while it launches through pbs_tmrsh (above). */
+ * file plm/ssh writes for the daemons it starts through pbs_tmrsh (above). */
 PRTE_EXPORT int prte_dvm_key_generate(void);
 
 /* A daemon's key, as its launcher delivered it.  Each fails - with a

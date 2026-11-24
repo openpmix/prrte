@@ -172,6 +172,9 @@ static void process_launch_list(int fd, short args, void *cbdata);
 
 /* local global storage */
 static int num_in_progress = 0;
+/* how many agents may be in flight at once: num_concurrent, unless the
+ * daemons stay attached under pbs_tmrsh - see launch_daemons() */
+static int launch_slots = 0;
 static pmix_list_t launch_list;
 static prte_event_t launch_event;
 static char *ssh_agent_path = NULL;
@@ -186,6 +189,7 @@ static char *tmrsh_keyfile = NULL;
 static int tmrsh_keyfile_create(void);
 static void tmrsh_keyfile_remove(void);
 static int tmrsh_wrap(int *argcptr, char ***argvptr, int node_name_index);
+static bool daemons_detach(void);
 
 /**
  * Init the module
@@ -194,6 +198,8 @@ static int ssh_init(void)
 {
     char *tmp;
     int rc;
+
+    launch_slots = prte_mca_plm_ssh_component.num_concurrent;
 
     /* we were selected, so setup the launch agent */
     if (prte_mca_plm_ssh_component.using_qrsh) {
@@ -304,8 +310,14 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
         return;
     }
 
-    if (!WIFEXITED(daemon->exit_code)
-        || WEXITSTATUS(daemon->exit_code) != 0) { /* if abnormal exit */
+    /* A daemon that has reported in (it has a contact URI) and exits
+     * later did not fail to start: the errmgr hears of its loss from its
+     * connection, and a report here would count it gone twice.  Only an
+     * attached daemon's agent outlives the report - under pbs_tmrsh by
+     * default, under qrsh, or when debugging. */
+    if (NULL == daemon->rml_uri &&
+        (!WIFEXITED(daemon->exit_code)
+         || WEXITSTATUS(daemon->exit_code) != 0)) { /* if abnormal exit */
         /* if we are not the HNP, send a message to the HNP alerting it
          * to the failure
          */
@@ -387,16 +399,18 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
 
     /* one fewer ssh in flight - admit the next from the launch list */
     --num_in_progress;
-    /* A pbs_tmrsh returns once the daemon it started has daemonized - and
-     * PBS has told it so, which can be seconds later - and the daemon
-     * daemonizes only after reading its key; so once none is running and
-     * none is waiting to be started, nothing is left to read the key file.
-     * Daemons that stay attached keep their agents, and the file, until
-     * finalize. */
+    /* A pbs_tmrsh returns when the daemon it started has daemonized or
+     * exited - and PBS has told it so, which can be seconds later - and a
+     * daemon reads its key, if at all, before either; so once none is
+     * running and none is waiting to be started, nothing is left to read
+     * the key file.
+     * Daemons that stay attached, as they do under pbs_tmrsh unless
+     * plm_ssh_daemonize_tmrsh is set, keep their agents, and so the file,
+     * until they exit; finalize removes it in any case. */
     if (NULL != tmrsh_keyfile && 0 == num_in_progress && pmix_list_is_empty(&launch_list)) {
         tmrsh_keyfile_remove();
     }
-    if (num_in_progress < prte_mca_plm_ssh_component.num_concurrent) {
+    if (num_in_progress < launch_slots) {
         /* trigger continuation of the launch */
         prte_event_active(&launch_event, EV_WRITE, 1);
     }
@@ -776,16 +790,11 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
      * which is exactly why the RM launchers, whose tracked task the daemon
      * must remain, do not pass it.  Tree spawn wants the release just as much
      * as a flat launch does; it simply had no concurrency reason to ask, and
-     * used to get the fork regardless.
+     * used to get the fork regardless.  pbs_tmrsh asks PBS to start a task
+     * it then tracks, so its daemons stay as the RM launchers' do - see
+     * daemons_detach().
      */
-    if (!prte_debug_daemons_flag &&
-        !prte_debug_daemons_file_flag && !prte_leave_session_attached &&
-        /* Daemonize when not using qrsh.  Or, if using qrsh, only
-         * daemonize if told to by user with daemonize_qrsh flag. */
-        ((!prte_mca_plm_ssh_component.using_qrsh) ||
-         (prte_mca_plm_ssh_component.using_qrsh && prte_mca_plm_ssh_component.daemonize_qrsh)) &&
-         ((!prte_mca_plm_ssh_component.using_llspawn) ||
-          (prte_mca_plm_ssh_component.using_llspawn && prte_mca_plm_ssh_component.daemonize_llspawn))) {
+    if (daemons_detach()) {
         pmix_argv_append(&argc, &argv, "--daemonize");
     }
 
@@ -1110,7 +1119,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
     char keyhex[PRTE_DVM_KEY_HEXLEN + 2];
     PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
 
-    while (num_in_progress < prte_mca_plm_ssh_component.num_concurrent) {
+    while (num_in_progress < launch_slots) {
         item = pmix_list_remove_first(&launch_list);
         if (NULL == item) {
             /* we are done */
@@ -1308,9 +1317,26 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:ssh: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
+    /* A daemon that stays attached under pbs_tmrsh keeps its pbs_tmrsh, and
+     * so its launch slot, for as long as it runs, and with tree spawn off
+     * every daemon is started from here: unless the slots cover all of
+     * them - those running, those still queued and these - the launch
+     * stops at num_concurrent and never completes. */
+    if (prte_mca_plm_ssh_component.using_tmrsh && !daemons_detach()) {
+        int needed = num_in_progress + (int) pmix_list_get_size(&launch_list)
+                     + map->num_new_daemons;
+        if (launch_slots < needed) {
+            launch_slots = needed;
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                                 "%s plm:ssh: up to %d pbs_tmrsh at once, "
+                                 "one for each attached daemon",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), launch_slots));
+        }
+    }
+
     if ((0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)
          || prte_leave_session_attached)
-        && prte_mca_plm_ssh_component.num_concurrent < map->num_new_daemons) {
+        && launch_slots < map->num_new_daemons) {
         /**
          * If we are in '--debug-daemons' we keep the ssh connection
          * alive for the span of the run. If we use this option
@@ -1818,6 +1844,23 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
     return rc;
 }
 
+/* Whether the daemons we start are told to --daemonize (setup_launch).
+ * Not when debugging or asked to stay attached, and not under the launchers
+ * that hand the daemon a task the resource manager tracks - qrsh, llspawn
+ * and pbs_tmrsh - unless their daemonize_* parameter says so.  Under
+ * pbs_tmrsh that keeps the daemon, and what it starts, inside the PBS task,
+ * which is how PBS without a cgroup hook knows them as the job's.
+ */
+static bool daemons_detach(void)
+{
+    return !prte_debug_daemons_flag && !prte_debug_daemons_file_flag &&
+           !prte_leave_session_attached &&
+           (!prte_mca_plm_ssh_component.using_qrsh || prte_mca_plm_ssh_component.daemonize_qrsh) &&
+           (!prte_mca_plm_ssh_component.using_llspawn ||
+            prte_mca_plm_ssh_component.daemonize_llspawn) &&
+           (!prte_mca_plm_ssh_component.using_tmrsh || prte_mca_plm_ssh_component.daemonize_tmrsh);
+}
+
 /*
  * Launching through pbs_tmrsh.
  *
@@ -1844,7 +1887,8 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
  * the job's nodes see under one name: the home directory unless
  * plm_ssh_tmrsh_keydir says otherwise.  Its name is on the command line,
  * which is why it is not guessable in advance, is created exclusively and
- * is removed when the last pbs_tmrsh has returned.
+ * is removed once the last pbs_tmrsh has returned, or at finalize - which,
+ * with the daemons attached, is when they exit.
  *
  * This is weaker than ssh's channel and is the best pbs_tmrsh allows: for
  * as long as the file exists the key is at rest on a file system the

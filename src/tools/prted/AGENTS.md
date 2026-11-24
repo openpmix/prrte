@@ -48,7 +48,9 @@ event loop
   tracking:
   - `plm/ssh` **wants** it, and passes `--daemonize`. The ssh session
     closes, and without tree spawn the concurrency slot frees so the next
-    group of daemons can go out.
+    group of daemons can go out. Under `qrsh`, `llspawn` and `pbs_tmrsh`,
+    which hand the daemon a task the RM tracks, it does not, unless
+    their `plm_ssh_daemonize_*` parameter is set.
   - A resource manager does **not**. `srun`, `lsb_launch` and `palsd`
     each hand the daemon a task slot and watch the process they started;
     detaching from it tells the RM the task finished. Under Slurm that

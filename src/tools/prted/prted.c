@@ -378,7 +378,9 @@ int main(int argc, char *argv[])
      * whether that is a favor or a fatal mistake depends entirely on who
      * launched us.  plm/ssh wants it (the ssh session closes and its
      * concurrency slot frees for the next group), and says so with
-     * --daemonize.  A resource manager does NOT: srun, lsb_launch and palsd
+     * --daemonize - but not when it starts us through qrsh, llspawn or
+     * pbs_tmrsh, which give us a task the RM tracks, as these do.  A
+     * resource manager does NOT: srun, lsb_launch and palsd
      * each hand us a task slot and watch the process they started, so the
      * detach tells the RM the task finished.  Under Slurm that ends the step,
      * and slurmstepd then SIGKILLs everything still in the step's cgroup -

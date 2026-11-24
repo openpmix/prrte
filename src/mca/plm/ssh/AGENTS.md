@@ -84,9 +84,12 @@ on `PRTE_JOB_STATE_LAUNCH_DAEMONS`:
    map. If `DO_NOT_LAUNCH` or `num_new_daemons == 0`, fast-forward to
    `DAEMONS_LAUNCHED`→`DAEMONS_REPORTED` and return.
 2. Guard against the `--debug-daemons` **deadlock**: if sessions are
-   left attached AND `num_concurrent < num_new_daemons`, the ssh tunnels
+   left attached AND `launch_slots < num_new_daemons`, the ssh tunnels
    never close and the launch would deadlock — bail with
-   `deadlock-params`.
+   `deadlock-params`. Daemons that stay attached under `pbs_tmrsh` are
+   the same case, met the other way: `launch_slots` (`num_concurrent`
+   until then) is first raised to cover every daemon, so the guard does
+   not fire for them.
 3. Pull the prefix(es) from the daemon job object (`PRTE_JOB_PREFIX` /
    `PRTE_JOB_PMIX_PREFIX`).
 4. Pick a sample non-local node and call **`setup_launch`** to build the
@@ -121,14 +124,15 @@ This is the intricate part. It assembles the argv passed to the agent:
 - Splits the daemon command via `prte_plm_base_setup_prted_cmd` (default
   `prted`), prepends the prefix `bindir` when it's the stock `prted`, and
   handles a wrapper (`valgrind ... prted`).
-- Joins the whole shell script with `;`, appends `--daemonize` (unless
-  debugging or `--leave-session-attached`; the qrsh/llspawn toggles still
-  apply). This flag is load-bearing rather than advisory: a `prted` forks
-  only when told to, so without it the daemon stays in the foreground and
-  holds the ssh session open for its whole life. It is withheld by the RM
-  launchers on purpose — see
-  [`src/tools/prted/AGENTS.md`](../../../tools/prted/AGENTS.md). Then the
-  standard daemon options via
+- Joins the whole shell script with `;`, appends `--daemonize` when
+  `daemons_detach()` says so: not when debugging or
+  `--leave-session-attached`, and under `qrsh`, `llspawn` and `pbs_tmrsh`
+  only when their `daemonize_*` parameter is set. This flag is
+  load-bearing rather than advisory: a `prted` forks only when told to, so
+  without it the daemon stays in the foreground and holds the ssh session
+  open for its whole life. It is withheld by the RM launchers on purpose —
+  see [`src/tools/prted/AGENTS.md`](../../../tools/prted/AGENTS.md). Then
+  the standard daemon options via
   `prte_plm_base_prted_append_basic_args(..., "env", &proc_vpid_index)`.
 - Forces `--prtemca plm ssh` on the remote daemon, and — **when
   tree-spawning** — adds `--tree-spawn --prtemca prte_parent_uri
@@ -138,7 +142,9 @@ This is the intricate part. It assembles the argv passed to the agent:
 
 ### `process_launch_list` — throttled fork/exec
 
-Drains `launch_list` up to `num_concurrent` (default **128**) at a time.
+Drains `launch_list` up to `launch_slots` at a time: `num_concurrent`
+(default **128**), raised in `launch_daemons` to cover every daemon when
+they stay attached under `pbs_tmrsh`.
 For each caddy it registers a `prte_wait_cb` (SIGCHLD → `ssh_wait_daemon`)
 on the daemon proc, then `fork()`s. The child calls **`ssh_child`**:
 make stdin the read end of a pipe, close inherited fds, reset signal
@@ -214,15 +220,16 @@ So when `using_tmrsh` is set, these things differ, all in
   unchanged: `--prtemca prte_dvm_key_stdin 1` and `prte_dvm_key_from_fd`.
   **This is a weaker channel than every other one**
   (`src/util/prte_dvm_key.h`): the key is at rest on a shared file system
-  while the daemons start, and crosses that file system's transport, which
-  for most is not encrypted - the very thing `rsh` is refused for. It is
+  while the daemons run (while they start, if detached), and crosses that
+  file system's transport, which for most is not encrypted - the very
+  thing `rsh` is refused for. It is
   here because `pbs_tmrsh` leaves nothing else, and `plm_ssh_disable_tmrsh`
   is the way out for a site that will not accept it.
   `ssh_wait_daemon` unlinks it when no agent is running or queued - a
-  `pbs_tmrsh` returns when its daemon has daemonized, which is after the
-  key was read - and `ssh_finalize` unlinks whatever is left (daemons
-  kept attached keep their agents). `process_launch_list` makes no key
-  pipe under `using_tmrsh`.
+  `pbs_tmrsh` returns when its daemon has daemonized or exited, both after
+  the key was read - and `ssh_finalize` unlinks whatever is left. The
+  daemons stay attached (below), so the file normally stays until they
+  exit. `process_launch_list` makes no key pipe under `using_tmrsh`.
 
 `ssh_init` also forces `no_tree_spawn`, and `remote_spawn` returns at
 once under `using_tmrsh` (a daemon can be sent there whatever the flag
@@ -232,14 +239,18 @@ ssh port (`PRTE_NODE_PORT`) nor `plm_ssh_args` is put on a `pbs_tmrsh`
 command line: it takes `-n` and `-l` only. `PRTE_PBSTRMSH_PATH` must be an
 absolute path for `pbs_tmrsh` to be selected at all.
 
-The daemons are still told to `--daemonize`, as under ssh, so each leaves
-the PBS task that started it; whether PBS then still accounts for it and
-its processes depends on how the site tracks jobs (a cgroup hook does,
-session tracking does not). Withholding the flag would keep one
-`pbs_tmrsh` per node alive for the life of the DVM and make
-`num_concurrent` a limit on its size, and the key file could then be
-removed only when the daemons have reported; that trade has not been
-made here.
+The daemons are not told to `--daemonize` under `pbs_tmrsh` unless
+`plm_ssh_daemonize_tmrsh` is set, as under `qrsh`: each stays in the PBS
+task that started it, so a PBS that knows a job's processes by the
+sessions of its tasks counts the daemon and what it starts as the job's.
+On PBS Pro 2022.1.7 without the cgroup hook, two nodes' CPU time was
+charged with the daemons attached and the first node's alone with them
+detached (open-mpi/ompi#14869). The cost: one `pbs_tmrsh` per other node
+stays running on the HNP's node for the life of the DVM and holds its
+launch slot, so `launch_daemons` raises `launch_slots` to cover them all -
+a smaller limit would stop the launch at `num_concurrent`, waiting on
+agents that do not return - and the key file stays until the daemons
+exit, since no `plm` hook says when they have all reported.
 
 There is no PBS to test against in CI. The properties above are the whole
 contract; a script that keeps them (exec without a shell, `/dev/null`
@@ -250,8 +261,10 @@ Test in a real allocation before believing a change here.
 Measured on PBS Pro 2022.1.7: one `pbs_tmrsh <node> /bin/true` takes about
 2 s, and seven started together take 14 s - the server takes them one at a
 time. Forking them all at once, as `process_launch_list` does, therefore
-buys nothing there; a launch costs seconds per node and the key file lives
-that long. Nothing in this component can change that.
+buys nothing there; a launch costs about a second per node (the daemons
+on seven other nodes were up after about 7 s). Nothing in this
+component can change that. The key file lives as long as the daemons
+(attached) or the launch (detached).
 
 ---
 
@@ -323,7 +336,7 @@ their MCA vars (`plm_ssh_*`):
 | `assume_same_shell` (true) | Skip the remote `echo $SHELL` probe. |
 | `pass_libpath` | Prepend a path to the remote `LD_LIBRARY_PATH`. |
 | `chdir` | `cd` on the remote node before exec'ing prted. |
-| `force_ssh`, `disable_qrsh`/`disable_llspawn`/`disable_tmrsh`, `daemonize_qrsh`/`daemonize_llspawn` | RM-detection and daemonize toggles. |
+| `force_ssh`, `disable_qrsh`/`disable_llspawn`/`disable_tmrsh`, `daemonize_qrsh`/`daemonize_llspawn`/`daemonize_tmrsh` | RM-detection and daemonize toggles (all three `daemonize_*` default to false: the daemons stay in the task the RM tracks). |
 | `tmrsh_keydir` (home directory) | Where the key file for `pbs_tmrsh`-launched daemons is kept; must be shared by the job's nodes. |
 | `using_qrsh`/`using_llspawn`/`using_tmrsh` | Set by `query` when the batch env is detected. |
 
@@ -346,7 +359,8 @@ process exits — see the ownership note below.
 
 - **`num_concurrent` vs. `--debug-daemons` is a real deadlock**, guarded
   explicitly in `launch_daemons`. Any change to session-attach behavior
-  must keep that check.
+  must keep that check. Attached `pbs_tmrsh` daemons are the same case,
+  handled by raising `launch_slots` rather than refusing.
 - **Tree-spawn only launches routing children.** The `children` loop in
   `launch_daemons` and `remote_spawn` depends on the RML routing tree
   being current — `setup_vm` recomputes it for the primary launch, so don't
@@ -381,7 +395,8 @@ process exits — see the ownership note below.
   error paths and keep reaping the probe child — PRRTE's SIGCHLD handler
   knows nothing about it. The child keeps only its stdio: everything else,
   the read end of its own pipe included, is closed before the exec.
-- **Launch pacing is `num_concurrent`, nothing else.** There used to be a
+- **Launch pacing is `launch_slots` (`num_concurrent`, or more for
+  attached `pbs_tmrsh` daemons), nothing else.** There used to be a
   `plm_ssh_delay` parameter that was parsed into `component.delay` and
   never read by anything; it was retired rather than left advertising a
   throttle that did not exist. If inter-launch pacing is ever wanted, it

@@ -103,8 +103,9 @@ only you can read, in a directory every node of the PBS job sees under
 the same name. That is your home directory unless you name another one
 with the "plm_ssh_tmrsh_keydir" MCA parameter. The directory must be
 yours, with nobody else able to write to it, or have the sticky bit set
-and belong to you or to root. The file is removed when the launch is
-over.
+and belong to you or to root. The file is removed when the daemons
+exit, or once they have started if "plm_ssh_daemonize_tmrsh" detaches
+them.
 
 If no such directory exists, "--prtemca plm_ssh_disable_tmrsh 1" starts
 the daemons with ssh instead.
