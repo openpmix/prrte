@@ -202,6 +202,7 @@ src/sys/powerpc/atomic-64.s
 src/sys/powerpc/atomic-32-64.s
 
 
+src/mca/plm/tm/prte_tm_spawn
 src/mca/prteinstalldirs/config/install_dirs.h
 
 src/include/prte_config.h

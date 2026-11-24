@@ -308,7 +308,9 @@ Each launcher has its own channel: `plm/ssh` the ssh's stdin (read by
 `prte_dvm_key_from_fd` before the prted daemonizes, since daemonizing replaces
 stdin), `plm/slurm`/`lsf`/`pals` the launcher's environment
 (`prte_dvm_key_setenv`, scrubbed from an `env` array with
-`prte_dvm_key_scrub_array` before it is freed), and a bootstrapped DVM the
+`prte_dvm_key_scrub_array` before it is freed), `plm/tm` a pipe to its TM
+helper, which adds it to the environment `tm_spawn()` hands each prted and
+puts it nowhere else, and a bootstrapped DVM the
 `DVMKeyFile` named in `prte.conf`. A new launcher must pick a channel of the
 same kind, or its daemons are no longer the only processes that can join.
 
