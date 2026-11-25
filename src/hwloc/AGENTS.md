@@ -585,6 +585,16 @@ as a mapping failure — the harness passes `--rtos donotlaunch`, and
 (it reads the real machine), and `prte_hwloc_print()` against a machine wide
 enough to fill its cpuset buffer — a few thousand PUs.
 
+The sensing path does one thing the file path deliberately does not: it
+calls PMIx's `pmix_hwloc_add_driver_identities()`, which records each NVIDIA
+GPU's identity from the driver's `/proc/driver/nvidia/gpus/<busid>/information`
+where hwloc had no NVML to record it. That is what lets `--map-by
+device=gpu` name GPUs on a distribution's hwloc, and it has to happen here -
+on the topology this node sensed, before the daemon sends it to the HNP - and
+never on a topology file, which may describe another machine. The function
+itself is tested in PMIx (`test/unit/hwloc_devices.c`) and its effect on the
+mapper in `test/unit/rmaps/test_devices.c`, both through a fake procfs root.
+
 ---
 
 ## Known gaps and things deliberately absent

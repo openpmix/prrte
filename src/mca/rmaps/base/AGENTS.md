@@ -390,7 +390,11 @@ itself would not load.
 `test/topologies/` (`turin-4gpu-nvml.xml`, read with the vendor backends;
 `turin-4gpu.xml`, the same machine without them) onto hand-built nodes and
 drives this API directly — uuid naming, the refusals by class and by name,
-the network synonyms, and `interleave=numa`. It needs the PMIx server the
+the network synonyms, and `interleave=numa`. `check_driver_identity()`
+gives `turin-4gpu.xml` the identities the NVIDIA driver would supply,
+through a fake procfs root: named for three GPUs of four the node is still
+refused, named for all four it maps, and NVML's identities on
+`turin-4gpu-nvml.xml` are left alone. It needs the PMIx server the
 test main brings up, because `record()` copies through `PMIx_Data_copy`.
 
 Placement against those topologies — plain, interleaved, shared, `ndev`,
