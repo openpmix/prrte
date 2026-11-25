@@ -560,11 +560,19 @@ the two are indistinguishable while the job runs: the placement looks
 correct, and the only symptom is that every process on the node uses the
 same device.
 
-To use this option, rebuild hwloc with the vendor backend enabled and
-rebuild PRRTE against it - it is the hwloc PRRTE itself was built with
-that matters, since each daemon discovers its own node. Otherwise, map by
-a cpu object (numa or package are usually closest in effect) and let the
-application select its device.
+For an NVIDIA GPU, the identity is also read from the driver's
+/proc/driver/nvidia/gpus/<bus id>/information when the node is
+discovered, so it is missing only when the driver does not list the GPU
+there (it is not loaded, or the GPU is hidden from this container) or
+lists it before the GPU is initialized - running nvidia-persistenced
+keeps the GPUs initialized. A node described by a topology file is never
+given an identity this way.
+
+Otherwise, rebuild hwloc with the vendor backend enabled and rebuild PRRTE
+against it - it is the hwloc PRRTE itself was built with that matters,
+since each daemon discovers its own node. Or map by a cpu object (numa or
+package are usually closest in effect) and let the application select its
+device.
 #
 [rmaps:degenerate-device-locality]
 All of the requested devices on a node are equally close to every cpu on
