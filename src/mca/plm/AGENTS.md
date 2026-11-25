@@ -571,11 +571,24 @@ placed daemons) or wireup stalls.
   progress thread waiting for `ssh`/`srun`/`aprun`. Components that fork
   a launcher process register a `prte_wait_cb` (SIGCHLD) to notice its
   exit rather than waiting on it.
-- **State activation, not inline error handling.** On any launch error,
-  `PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START)` (or
-  `FAILED_TO_LAUNCH`) and let the errmgr/state machine unwind — every
+- **State activation, not inline error handling.** On a launch error,
+  activate a failure state and let the errmgr/state machine unwind — every
   component's `launch_daemons` funnels errors to a `cleanup:` label that
   does exactly this. Don't try to tear down inline.
+- **Which failure state says whether a launch was tried.** A failure
+  before any daemon has been started — `setup_virtual_machine` refusing a
+  `--host` outside the allocation, a launcher refusing its own
+  configuration — is `PRTE_JOB_STATE_NEVER_LAUNCHED`. Only a failure of the
+  launch itself (the `srun`/`aprun` fork, `lsb_launch()`, a daemon that
+  never reported) is `FAILED_TO_START` or `FAILED_TO_LAUNCH`. The
+  difference is what the user sees: `errmgr/dvm` follows those two with the
+  `failed-daemon-launch` checklist (firewalls, missing libraries, ...),
+  which after a pre-launch refusal only buries the reason already given.
+  The requester is told `PMIX_ERR_JOB_FAILED_TO_LAUNCH` either way.
+  `plm/ssh` forks nothing in `launch_daemons` (that is
+  `process_launch_list`), so its whole `cleanup:` is pre-launch; `slurm`,
+  `lsf` and `pals` switch their `failed_state` just before the launch
+  call.
 - **`map->num_new_daemons == 0` fast-path.** Every component's
   `launch_daemons` must handle "no new daemons" by jumping straight to
   `DAEMONS_LAUNCHED`→`DAEMONS_REPORTED`. This is what makes application
