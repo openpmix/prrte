@@ -1462,7 +1462,15 @@ cleanup:
     PMIx_Argv_free(argv);
     free(prefix_dir);
     free(pmix_prefix);
-    PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+    /* Every path here is taken before a single daemon has been started -
+     * the forks happen later, in process_launch_list(), and a daemon that
+     * fails there is reported by ssh_wait_daemon().  So this is a job that
+     * never launched, not one whose daemons failed to start: errmgr/dvm
+     * answers FAILED_TO_START with the "failed-daemon-launch" checklist,
+     * which here would follow - and bury - the reason already given, such
+     * as a --host outside the allocation that setup_virtual_machine()
+     * refused. */
+    PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     PMIX_RELEASE(state);
 }
 

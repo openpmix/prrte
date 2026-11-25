@@ -281,8 +281,9 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
         caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
         rc = prte_plm_base_setup_virtual_machine(caddy->jdata);
         if (PRTE_SUCCESS != rc) {
+            /* nothing has been launched (see the launchers' cleanup paths) */
             PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
             PMIX_RELEASE(caddy);
             return;
         }
@@ -299,7 +300,7 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
         if (NULL == node) {
             // should never happen
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
             PMIX_RELEASE(caddy);
             return;
         }

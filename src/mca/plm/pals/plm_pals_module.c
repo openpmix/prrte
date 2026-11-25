@@ -188,6 +188,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int num_args, i;
     char *cur_prefix = NULL, *pmix_prefix = NULL;
     int proc_vpid_index;
+    prte_job_state_t failed_state = PRTE_JOB_STATE_NEVER_LAUNCHED;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -392,6 +393,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
             free(param);
     }
 
+    /* Which state a failure reports.  Until the aprun below, nothing
+     * has been started and whatever stopped us has already said why, so the
+     * job NEVER_LAUNCHED; errmgr/dvm adds its "failed-daemon-launch"
+     * checklist only to the states that say a launch was tried, where it
+     * would otherwise follow - and bury - that reason (a --host outside the
+     * allocation, refused by setup_virtual_machine(), for one). */
+    failed_state = PRTE_JOB_STATE_FAILED_TO_START;
+
     /* exec the daemon(s) */
     if (PRTE_SUCCESS != (rc = plm_pals_start_proc(argc, argv, env, cur_prefix, pmix_prefix))) {
         PRTE_ERROR_LOG(rc);
@@ -417,7 +426,7 @@ cleanup:
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
-        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, failed_state);
     }
 
     /* cleanup the caddy */
