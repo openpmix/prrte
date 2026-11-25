@@ -224,17 +224,22 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_node_t *node = NULL;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
+    /* This module launches nothing, so every failure below is one before any
+     * daemon was started: NEVER_LAUNCHED, never FAILED_TO_START, to which
+     * errmgr/dvm adds a checklist of reasons daemons fail to start - here
+     * printed after, and burying, the reason already given. */
+
     /* setup the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (NULL == daemons) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(state);
         return;
     }
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(state);
         return;
     }
@@ -257,7 +262,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(state);
         return;
     }
@@ -268,7 +273,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         if (NULL == node || NULL == node->topology || NULL == node->topology->topo) {
             // should never happen
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+            PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
             PMIX_RELEASE(state);
             return;
         }
@@ -298,6 +303,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     // otherwise, this is an error
     prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-base.txt", "no-available-pls", true);
-    PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+    PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     PMIX_RELEASE(state);
 }

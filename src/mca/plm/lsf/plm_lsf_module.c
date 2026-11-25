@@ -186,6 +186,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *cur_prefix;
     int proc_vpid_index = 0;
     bool failed_launch = true;
+    prte_job_state_t failed_state = PRTE_JOB_STATE_NEVER_LAUNCHED;
     prte_node_t *node;
     int32_t nnode;
     prte_job_t *daemons;
@@ -412,6 +413,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * prun can do the rest of its stuff. Instead, we'll catch any
      * failures and deal with them elsewhere
      */
+    /* Which state a failure reports.  Until the lsb_launch() below, nothing
+     * has been started and whatever stopped us has already said why, so the
+     * job NEVER_LAUNCHED; errmgr/dvm adds its "failed-daemon-launch"
+     * checklist only to the states that say a launch was tried, where it
+     * would otherwise follow - and bury - that reason (a --host outside the
+     * allocation, refused by setup_virtual_machine(), for one). */
+    failed_state = PRTE_JOB_STATE_FAILED_TO_START;
     if ((rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
         PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
@@ -446,7 +454,7 @@ cleanup:
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
-        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, failed_state);
     }
 
     /* cleanup the caddy */
