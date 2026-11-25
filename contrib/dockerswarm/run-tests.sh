@@ -11211,6 +11211,41 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$c" = 0 ] && ok "no daemons linger after flat/throttled launches" || bad "$c stray prted"
 
     fi   # have_nodes 5
+    banner "plm/ssh: the deadlock guard refuses exactly what holds sessions open"
+    # --debug-daemons, --debug-daemons-file and --leave-session-attached keep
+    # each daemon's ssh session open for the life of the job (setup_launch()
+    # withholds --daemonize), so with fewer launch slots than daemons the
+    # launch can never finish: the slots are never given back.  launch_daemons
+    # refuses that up front with "deadlock-params".  The guard used to test
+    # only --leave-session-attached, so --debug-daemons and
+    # --debug-daemons-file hung instead - and it also tested plm verbosity,
+    # which holds nothing open, so a merely verbose launch was refused.
+    cleanup_swarm
+    for opt in --debug-daemons --debug-daemons-file --leave-session-attached; do
+        bounded 60 RUN "prterun $opt --prtemca plm_ssh_num_concurrent 1 \
+                          --host node2:1,node3:1 -np 2 --map-by node hostname"
+        rc=$?
+        out=$(cat "$BOUT"); rm -f "$BOUT"
+        if [ "$rc" = 124 ]; then
+            bad "$opt with fewer launch slots than daemons hung instead of being refused"
+        elif [ "$rc" != 0 ] && echo "$out" | grep -q 'will cause the system to deadlock'; then
+            ok "$opt with fewer launch slots than daemons is refused (rc=$rc)"
+        else
+            bad "$opt with fewer launch slots than daemons was not refused (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        echo "$out" | grep -q 'unable to reliably start one or more daemons' \
+            && bad "...and the refusal was followed by the daemon-launch checklist" \
+            || ok "...and nothing claims a daemon failed to start"
+        cleanup_swarm
+    done
+    bounded 90 RUN 'prterun --prtemca plm_base_verbose 1 --prtemca plm_ssh_num_concurrent 1 \
+                      --host node2:1,node3:1 -np 2 --map-by node hostname'
+    rc=$?
+    n=$(grep -cE '^node[23]$' "$BOUT"); rm -f "$BOUT"
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "a verbose launch with one launch slot runs (verbosity holds no session open)" \
+        || bad "a verbose launch with one launch slot did not run (rc=$rc, procs=$n)"
+    cleanup_swarm
     banner "plm/ssh: prted cmd line survives an mca value containing '='"
     # prte_plm_base_prted_append_basic_args replicates PRTE_MCA_*/PMIX_MCA_*
     # env vars onto the prted command line. Splitting those on every '='
