@@ -645,6 +645,32 @@ topology rather than a diff (see below).  "Has vendor identity" is
 therefore a property of each ``prte_topology_t``, and the mapper can test
 it on the HNP without any of the plumbing in H2.
 
+Later: the NVIDIA driver supplies the identity NVML would have
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The refusal turned out to bite the common case: a distribution's hwloc
+has no NVML backend, so every ``device=gpu`` request on such a node was
+refused (open-mpi/ompi#14827, on an 8-GPU, 16-EFA node whose placement
+was otherwise exactly right). The identity was never really missing. The
+NVIDIA kernel driver publishes it per GPU, in
+``/proc/driver/nvidia/gpus/<busid>/information`` (the ``GPU UUID`` line),
+keyed by the bus id hwloc always records. It is the same ``GPU-<uuid>``
+NVML reports.
+
+PMIx's ``pmix_hwloc_add_driver_identities()`` reads it and records it on
+the PCI function as ``NVIDIAUUID``. PRRTE calls it in
+``prte_hwloc_base_get_topology()`` right after discovery, so the topology
+the daemon sends the HNP carries it, and the refusal above, the uuid
+grammar and ``CUDA_VISIBLE_DEVICES`` all work unchanged. The decision
+stands for every GPU the driver cannot name: one it does not list, and
+one it lists before initialization, when it prints the identity as
+``?`` characters. A ``hwloc_use_topo_file`` topology is never annotated,
+since it may describe another machine, so the offline harness still sees
+``turin-4gpu`` as unnameable. The index alternative,
+``CUDA_DEVICE_ORDER=PCI_BUS_ID`` plus an ordinal, was rejected for the
+reason given for H3: it overrides an ordering the user may have chosen,
+and a wrong ordinal silently narrows what the process sees.
+
 H1 — the UUID is stamped with the wrong hostname
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1238,6 +1264,9 @@ Task checklist
       at all — it never did, so the whole pgpu envar path was dead
 - [x] H3: ``nvd`` sets ``CUDA_VISIBLE_DEVICES`` from ``NVIDIAUUID``;
       ``amd`` from ``AMDUUID``; ``intel`` left deliberately unimplemented
+- [x] ``NVIDIAUUID`` read from the NVIDIA driver when hwloc has no NVML
+      (``pmix_hwloc_add_driver_identities()``), called on PRRTE's
+      discovered topology before it is sent to the HNP
 - [x] H3: the vendor components build unconditionally instead of only
       under ``--enable-test-build``; detection moves to ``component_open``
 - [x] H3: end-to-end launch confirms the value, and the three negatives

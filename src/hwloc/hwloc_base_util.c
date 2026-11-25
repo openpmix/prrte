@@ -63,6 +63,7 @@
 #include "src/util/prte_show_help.h"
 
 #include "src/hwloc/hwloc-internal.h"
+#include "src/hwloc/pmix_hwloc.h"
 
 bool prte_hwloc_base_core_cpus(hwloc_topology_t topo)
 {
@@ -501,6 +502,14 @@ int prte_hwloc_base_get_topology(void)
             PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
             return PRTE_ERR_NOT_SUPPORTED;
         }
+        /* An hwloc built without NVML finds NVIDIA GPUs but cannot name
+         * them, and mapping by GPU refuses a GPU it cannot name.  The driver
+         * publishes each GPU's identity anyway, so record it now - on the
+         * topology this node just sensed, and before it is sent to the HNP,
+         * which is where the refusal is decided.  Never on the file branch
+         * below: an identity read here would be stamped onto a machine
+         * described by somebody else's file. */
+        (void) pmix_hwloc_add_driver_identities(prte_hwloc_topology, NULL);
     } else {
         pmix_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base loading topology from file %s",

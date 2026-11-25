@@ -128,6 +128,28 @@ applied at the job level:
   a network or fabric device is named by its own GUIDs or MAC address,
   which hwloc always has.
 
+  **NVIDIA GPUs do not need NVML.** The NVIDIA kernel driver publishes
+  each GPU's ``GPU-<uuid>`` itself, in
+  ``/proc/driver/nvidia/gpus/<PCI bus id>/information``. When a daemon
+  discovers its node and hwloc has recorded no identity for an NVIDIA
+  GPU, the identity is read from that file instead -- it is the same
+  value NVML reports -- so mapping by GPU works with a distribution's
+  hwloc. A GPU the driver does not list (the driver is not loaded, or a
+  container hides it) or lists before the GPU has been initialized (the
+  driver then prints the identity as ``?`` characters) is still unnamed,
+  and the request is still refused. Starting ``nvidia-persistenced`` keeps
+  the GPUs initialized. A node described by ``hwloc_use_topo_file`` is
+  never given an identity this way, since the file may describe some
+  other machine.
+
+  Because a GPU's identity can now depend on the driver's state when the
+  daemon starts, ``--uniform-nodes`` deserves care with GPU mapping. That
+  option makes every node take the topology of the first daemon to report,
+  so the check is made against that node alone. A different node whose
+  driver cannot name one of its GPUs is mapped anyway, and its processes
+  are told nothing, so each sees every GPU on its node. Without
+  ``--uniform-nodes`` that node is refused.
+
   Given that identity, each process is also handed its GPUs in the
   variable its vendor's runtime reads -- ``CUDA_VISIBLE_DEVICES`` for
   NVIDIA, ``ROCR_VISIBLE_DEVICES`` for AMD -- naming them by the vendor's

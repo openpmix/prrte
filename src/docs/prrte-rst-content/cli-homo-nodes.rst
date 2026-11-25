@@ -20,3 +20,13 @@ same number of devices and topological layers, etc.
 
 .. note:: The runtime does not currently support mixes of chips with
           different endianness.
+
+.. warning:: Only the first daemon to report is asked for its topology,
+             so anything that differs between nodes goes unseen. In
+             particular, ``--map-by device=gpu`` checks only that node's
+             GPUs for an identity the vendor's runtime accepts. An NVIDIA
+             GPU's identity can come from the driver at daemon startup,
+             and so can be present on one node and absent on another. A
+             node that cannot name one of its GPUs is then mapped anyway,
+             and its processes see every GPU on the node. Without this
+             option such a node is refused.

@@ -30,9 +30,12 @@
  */
 
 #include "prte_config.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -42,6 +45,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
+#include "src/util/pmix_argv.h"
 
 int test_devices(bool pmix_up);
 
@@ -194,6 +198,175 @@ static void check_unnameable_refused(void)
 
     PMIX_RELEASE(node);
     PMIX_RELEASE(t);
+}
+
+/* Write the file the NVIDIA driver publishes for one GPU, under a fake
+ * procfs root, recording what was created so it can be removed. */
+static bool write_driver_file(const char *root, const char *busid,
+                              const char *uuid, char ***made)
+{
+    const char *parts[] = {"driver", "nvidia", "gpus", busid, NULL};
+    char path[1024];
+    size_t n, len;
+    FILE *fp;
+
+    len = (size_t) snprintf(path, sizeof(path), "%s", root);
+    for (n = 0; NULL != parts[n]; n++) {
+        len += (size_t) snprintf(path + len, sizeof(path) - len, "/%s", parts[n]);
+        if (0 == mkdir(path, 0700)) {
+            PMIx_Argv_append_nosize(made, path);
+        } else if (EEXIST != errno) {
+            return false;
+        }
+    }
+    snprintf(path + len, sizeof(path) - len, "/information");
+    fp = fopen(path, "w");
+    if (NULL == fp) {
+        return false;
+    }
+    fprintf(fp, "Model: \t\t NVIDIA H100\nGPU UUID: \t %s\nBus Location: \t %s\n",
+            uuid, busid);
+    fclose(fp);
+    PMIx_Argv_append_nosize(made, path);
+    return true;
+}
+
+static void remove_driver_tree(const char *root, char **made)
+{
+    int n;
+
+    for (n = PMIx_Argv_count(made) - 1; 0 <= n; n--) {
+        if (0 != unlink(made[n])) {
+            (void) rmdir(made[n]);
+        }
+    }
+    PMIx_Argv_free(made);
+    (void) rmdir(root);
+}
+
+/* The fallback for an hwloc without NVML: the identity the NVIDIA driver
+ * publishes, recorded on the topology when the daemon discovers it.
+ *
+ * TOPO_FILE_NOID is refused by check_unnameable_refused() above.  Here the
+ * same topology is given what pmix_hwloc_add_driver_identities() records on
+ * a node where the driver is loaded - which is what a daemon now sends the
+ * HNP - and must map, with each process told the driver's identity.  Named
+ * for only some of its GPUs, it must still be refused: one GPU nothing can
+ * name is enough for every process on the node to end up sharing it.
+ *
+ * TOPO_FILE, read with NVML, is the other half: its identities come from
+ * NVML, and the driver's must not displace them. */
+static void check_driver_identity(void)
+{
+    prte_rmaps_options_t opts;
+    pmix_topology_t ptopo = PMIX_TOPOLOGY_STATIC_INIT;
+    pmix_hwloc_device_t *devs = NULL;
+    pmix_data_array_t *darray = NULL;
+    pmix_device_t *dev;
+    prte_topology_t *t;
+    prte_proc_t *proc;
+    prte_node_t *node;
+    char root[1024], uuid[64], busids[4][32];
+    char **made = NULL;
+    const char *tmp;
+    size_t ndevs = 0, n;
+    void *ctx = NULL;
+    int rc;
+
+    tmp = getenv("TMPDIR");
+    snprintf(root, sizeof(root), "%s/prte-nvproc-XXXXXX", (NULL == tmp) ? "/tmp" : tmp);
+    if (NULL == mkdtemp(root)) {
+        fprintf(stdout, "  SKIP test_devices driver identity (no scratch dir)\n");
+        return;
+    }
+
+    t = load_topo(TOPO_FILE_NOID);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices driver identity (no %s)\n", TOPO_FILE_NOID);
+        remove_driver_tree(root, made);
+        return;
+    }
+    ptopo.topology = t->topo;
+    rc = pmix_hwloc_get_devices(&ptopo, "node-delta", PMIX_DEVTYPE_GPU, NULL, &devs, &ndevs);
+    CHECK("driver: four GPUs", PMIX_SUCCESS == rc && 4 == ndevs);
+    for (n = 0; n < ndevs && n < 4; n++) {
+        snprintf(busids[n], sizeof(busids[n]), "%s", devs[n].busid);
+    }
+    if (NULL != devs) {
+        pmix_hwloc_release_devices(devs, ndevs);
+    }
+    if (4 != ndevs) {
+        PMIX_RELEASE(t);
+        remove_driver_tree(root, made);
+        return;
+    }
+
+    /* the driver knows three of the four: still refused */
+    for (n = 0; n < 3; n++) {
+        snprintf(uuid, sizeof(uuid), "GPU-5eed0000-0000-0000-0000-00000000000%d", (int) n);
+        CHECK("driver: tree written", write_driver_file(root, busids[n], uuid, &made));
+    }
+    CHECK("driver: three recorded", 3 == pmix_hwloc_add_driver_identities(t->topo, root));
+    node = build_node("node-delta", t);
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.bind = PRTE_BIND_TO_NONE;
+    rc = prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx);
+    CHECK("driver: one unnamed GPU still refuses the node", PRTE_ERR_SILENT == rc);
+    prte_rmaps_base_devices_end(ctx);
+    ctx = NULL;
+
+    /* ...and all four: mapped, each process told its GPU's identity */
+    snprintf(uuid, sizeof(uuid), "GPU-5eed0000-0000-0000-0000-000000000003");
+    CHECK("driver: tree written", write_driver_file(root, busids[3], uuid, &made));
+    CHECK("driver: the fourth recorded", 1 == pmix_hwloc_add_driver_identities(t->topo, root));
+    rc = prte_rmaps_base_devices_begin(NULL, node, &opts, &ctx);
+    CHECK("driver: mapped once every GPU is named", PRTE_SUCCESS == rc);
+    CHECK("driver: four groups", 4 == prte_rmaps_base_devices_count(node, &opts, ctx));
+    for (n = 0; PRTE_SUCCESS == rc && n < 4; n++) {
+        proc = PMIX_NEW(prte_proc_t);
+        CHECK("driver: recorded",
+              PRTE_SUCCESS == prte_rmaps_base_devices_record(proc, &opts, ctx, (unsigned) n));
+        darray = NULL;
+        if (prte_get_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
+                               (void **) &darray, PMIX_DATA_ARRAY)
+            && NULL != darray && 1 == darray->size) {
+            dev = (pmix_device_t *) darray->array;
+            /* the process resolves its osname against its own node's
+             * topology, where the identity now sits on the same function */
+            CHECK("driver: assignment names a device", NULL != dev[0].osname);
+        } else {
+            CHECK("driver: one device per process", false);
+        }
+        if (NULL != darray) {
+            PMIX_DATA_ARRAY_FREE(darray);
+        }
+        PMIX_RELEASE(proc);
+    }
+    prte_rmaps_base_devices_end(ctx);
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+
+    /* NVML's identities stand, whatever the driver files say */
+    t = load_topo(TOPO_FILE);
+    if (NULL != t) {
+        CHECK("driver: NVML-named GPUs are left alone",
+              0 == pmix_hwloc_add_driver_identities(t->topo, root));
+        ptopo.topology = t->topo;
+        devs = NULL;
+        rc = pmix_hwloc_get_devices(&ptopo, "node-delta", PMIX_DEVTYPE_GPU, NULL,
+                                    &devs, &ndevs);
+        CHECK("driver: NVML topology still names its GPUs",
+              PMIX_SUCCESS == rc && 4 == ndevs && NULL != devs[0].vendor_id
+                  && 0 != strncmp(devs[0].vendor_id, "GPU-5eed", 8));
+        if (NULL != devs) {
+            pmix_hwloc_release_devices(devs, ndevs);
+        }
+        PMIX_RELEASE(t);
+    }
+
+    remove_driver_tree(root, made);
 }
 
 /* Every spelling of the network class names the same set.
@@ -977,6 +1150,7 @@ int test_devices(bool pmix_up)
 
     check_unnameable_refused();
     check_named_unnameable_refused();
+    check_driver_identity();
     check_network_synonyms();
     check_interleave_numa();
     check_ndev_root_complex();
