@@ -99,6 +99,14 @@ look like:
     necessary to set ``ign_sreq_on_mhost`` (ignoring slave resource requests
     on the master node) to ``FALSE``.
 
+.. note:: Open Cluster Scheduler / Gridware Cluster Scheduler also require
+    ``master_forks_slaves`` and ``daemon_forks_slaves`` in every PE, and
+    refuse a PE definition without them. ``FALSE`` for both gives the
+    behavior shown above. Setting both to ``TRUE`` - as the PE that Open
+    Cluster Scheduler ships for Open MPI does - also works with PRRTE:
+    PRRTE starts exactly one daemon on each host of the job except the
+    one ``prterun`` runs on, which is what those settings allow.
+
 You may want to alter other parameters, but the important one is
 ``control_slaves``, specifying that the environment has "tight
 integration".  Note also the lack of a start or stop procedure.  The
@@ -140,6 +148,45 @@ It maintains backward compatibility with SGE and provides many new features.
 An MPI parallel environment setup for OpenMPI is available in
 `the Open Cluster Scheduler GitHub repository
 <https://github.com/hpc-gridware/clusterscheduler/tree/master/source/dist/mpi/openmpi>`_.
+
+Deleting a job (``qdel``)
+-------------------------
+
+By default, Grid Engine deletes a job by sending ``SIGKILL`` to the
+job's process groups: the job script's on the master host, and on every
+other host the process group of the command ``qrsh -inherit`` started
+there, which is a PRRTE daemon. PRRTE starts every application process
+in a process group of its own, so a ``SIGKILL`` delivered this way kills
+the daemons before they can act, and leaves the application processes of
+the deleted job running on every host.
+
+To have ``qdel`` take a PRRTE job down completely, do both of the
+following:
+
+* Set the queue's ``terminate_method`` to ``SIGTERM``. ``prterun`` and
+  the PRRTE daemons terminate the job's application processes when they
+  receive ``SIGTERM``:
+
+  .. code-block::
+
+     shell$ qconf -rattr queue terminate_method SIGTERM all.q
+
+* Start ``prterun`` with ``exec`` in a batch script (``exec prterun
+  ...``). Otherwise the shell running the script exits on the
+  ``SIGTERM`` first, and Grid Engine then sends ``SIGKILL`` to the
+  script's process group, which includes ``prterun``, before ``prterun``
+  has terminated the application processes on the master host.
+
+.. note:: The ``ENABLE_ADDGRP_KILL`` execution daemon parameter (see
+   ``sge_conf(5)``) makes Grid Engine also kill every process that
+   carries the job's additional group id. It does not replace the two
+   settings above: for a task started by ``qrsh -inherit``, Grid Engine
+   does not kill by additional group id on the first ``SIGKILL``, so it
+   finds the application processes on the master host only. It also
+   delivers every signal - including the ``qsub -notify`` warning signal
+   described below - to every process of the job on that host, so the
+   application processes there receive the warning twice: once from Grid
+   Engine, and once forwarded by ``prterun``.
 
 Grid Engine tight integration support of the ``qsub -notify`` flag
 ------------------------------------------------------------------
