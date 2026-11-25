@@ -8518,6 +8518,35 @@ test_errmgr() {
         EXEC_SH "$n" 'rm -f /tmp/partial-app' >/dev/null 2>&1
     done
     cleanup_swarm
+
+    banner "errmgr: a launch refused before any daemon starts is not called a daemon failure"
+    # setup_virtual_machine() refuses a host the allocation does not hold,
+    # and says so, before a single daemon is started.  The launchers used to
+    # report every failure of theirs as FAILED_TO_START, which errmgr/dvm
+    # answers with the "failed-daemon-launch" checklist - firewalls, missing
+    # libraries, /tmp - printed after, and burying, the real reason.  They
+    # now report NEVER_LAUNCHED for a failure before the launch.  The
+    # allocation here is the --host list, and the hostfile names nodes
+    # outside it.
+    cleanup_swarm
+    RUN "printf 'node2 slots=1\nnode3 slots=1\n' > /tmp/errmgr_outside.txt"
+    out=$(RUN 'timeout -k 5 60 prterun --hostfile /tmp/errmgr_outside.txt --host node5 -n 1 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && [ "$rc" != 124 ] && echo "$out" | grep -q 'not present in\|not included in' \
+        && ok "a host outside the allocation is refused, saying so (rc=$rc)" \
+        || bad "no refusal of a host outside the allocation (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -q 'unable to reliably start one or more daemons' \
+        && bad "...and the refusal was followed by the daemon-launch checklist" \
+        || ok "...and nothing claims a daemon failed to start"
+    RUN 'rm -f /tmp/errmgr_outside.txt' >/dev/null 2>&1
+    # the checklist still belongs to a launch that really failed
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca prte_launch_agent /nonexistent/prted \
+                  --host node2:1,node3:1 -np 2 --map-by node hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && [ "$rc" != 124 ] && echo "$out" | grep -q 'failed to report back' \
+        && ok "a daemon that cannot start is still reported as one (rc=$rc)" \
+        || bad "a daemon that could not start was not reported (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
 }
 
 ########################################################################
