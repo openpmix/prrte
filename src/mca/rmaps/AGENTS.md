@@ -570,8 +570,28 @@ it govern everything in `rmaps_base_devices.c`:
   `device=renderD129` names one GPU, is not a class request, and used to
   slip past the refusal to hand the process exactly the assignment it
   exists to prevent.
+- **An NVIDIA GPU's identity need not come from NVML.** The driver
+  publishes it in `/proc/driver/nvidia/gpus/<busid>/information`, and
+  `prte_hwloc_base_get_topology()` records it on the PCI function as
+  `NVIDIAUUID` (via PMIx's `pmix_hwloc_add_driver_identities()`) right
+  after discovery, before the topology is sent to the HNP. The refusal
+  above therefore reads it like any other identity - nothing in this
+  directory knows where it came from. It is done on the *discovery*
+  branch only: a `hwloc_use_topo_file` topology describes somebody else's
+  machine, and is why the offline harness still sees `turin-4gpu.xml` as
+  unnameable.
 
-That second check runs on the HNP against a **shared** topology, and is
+  **`--uniform-nodes` defeats the refusal.** Under `prte_homo_nodes` only
+  daemon 1 sends a topology and every node inherits it, so the HNP decides
+  nameability from daemon 1 alone. Driver-supplied identity depends on
+  runtime state (a GPU the driver has not initialized has none), so it can
+  differ between nodes that NVML would have named alike. A node that cannot
+  name a GPU is then mapped, and pgpu on that daemon sets no
+  `CUDA_VISIBLE_DEVICES`. This is documented as a caveat rather than closed
+  on the daemon side: `--uniform-nodes` is an option best avoided, and a
+  candidate for removal.
+
+The GPU refusal runs on the HNP against a **shared** topology, and is
 sound anyway: an absent info attribute changes an object's info count,
 hwloc reports that as a "too complex" difference rather than an expressible
 one, and `prte_plm_base_daemon_callback()` records such a node under its
