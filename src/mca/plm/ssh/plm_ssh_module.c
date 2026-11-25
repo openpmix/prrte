@@ -1265,9 +1265,17 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:ssh: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    if ((0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)
-         || prte_leave_session_attached)
-        && prte_mca_plm_ssh_component.num_concurrent < map->num_new_daemons) {
+    /* The sessions are held open by exactly the options that make
+     * setup_launch() withhold --daemonize from the daemon - --debug-daemons,
+     * --debug-daemons-file and --leave-session-attached - so those are what
+     * this tests.  Testing only the last let --debug-daemons walk into the
+     * deadlock described below; and plm verbosity, which this also used to
+     * test, holds nothing open: a daemonized prted puts its stdio on
+     * /dev/null and its ssh session closes, so a verbose launch was refused
+     * for no reason. */
+    if ((prte_debug_daemons_flag || prte_debug_daemons_file_flag ||
+         prte_leave_session_attached) &&
+        prte_mca_plm_ssh_component.num_concurrent < map->num_new_daemons) {
         /**
          * If we are in '--debug-daemons' we keep the ssh connection
          * alive for the span of the run. If we use this option
@@ -1281,9 +1289,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * As we cannot run in this situation, pretty print the error
          * and return an error code.
          */
+        /* the help says everything: no error log after it */
         prte_show_help(PRTE_PROC_MY_NAME->nspace, "help-plm-ssh.txt", "deadlock-params", true,
                        prte_mca_plm_ssh_component.num_concurrent, map->num_new_daemons);
-        PRTE_ERROR_LOG(PRTE_ERR_FATAL);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
     }
