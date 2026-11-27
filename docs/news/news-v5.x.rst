@@ -83,12 +83,20 @@ Highlights
   vendor's visibility environment variable is set. An ``ndev`` group
   stays under one PCI root complex, and ``--map-by device=gpu:nic``
   gives each process the RDMA NICs under its GPU's root complex, ranked
-  by PCIe link speed.
+  by PCIe link speed. NVIDIA GPUs are identified from the driver when
+  hwloc was built without NVML.
 
 * **Memory binding.** ``--membind`` binds each process's memory to the
   local NUMA node(s) that are best by ``CAPACITY``, ``LOCALITY``,
   ``BANDWIDTH``, or ``LATENCY`` -- for example, to on-package HBM -- and
   is carried on PMIx's ``PMIX_MEMBIND``.
+
+* **PBS launch through TM.** ``plm/tm`` starts the daemons as tasks of
+  the PBS job, so PBS charges the job for every node's CPU time and
+  ``qdel`` takes the daemons down with it. Every TM call is made by a
+  helper, ``prte_tm_spawn``, so no TM library is loaded into a PRRTE
+  process, and the DVM key is passed in the task's environment rather
+  than on a command line. See :doc:`/launching-apps/tm`.
 
 * **Per-app placement for MPMD jobs.** Each app context carries its own
   ``--map-by``, ``--rank-by``, ``--bind-to``, ``--membind``, and
@@ -133,13 +141,19 @@ Highlights
 * **Hostfile and rankfile parsing.** Both are now read by one line
   reader, with numerous fixes and error messages that name the line at
   fault. Node lookups are indexed, so reading a large hostfile no longer
-  takes time quadratic in its length. See :doc:`/hosts/hostfiles` and
-  :doc:`/placement/rankfiles`.
+  takes time quadratic in its length. Unless
+  ``prte_keep_fqdn_hostnames`` is set, a host's domain is removed
+  wherever its name enters PRRTE, so a fully qualified name in a
+  resource manager's node list, a hostfile, ``--host``, ``--add-host``,
+  or a rankfile matches the same host known by its short name. See
+  :doc:`/hosts/hostfiles` and :doc:`/placement/rankfiles`.
 
 * **Fewer hangs.** Races between kill and launch, late launch reports,
   daemons failing during DVM formation, ``MPI_Abort``, the elastic
-  launch fence, DVM shutdown while a spawned child was still dying, and
-  a ``pterm`` whose halt was refused have all been closed.
+  launch fence, DVM shutdown while a spawned child was still dying, a
+  ``pterm`` whose halt was refused, and an ssh launch under
+  ``--debug-daemons`` or ``--debug-daemons-file`` of more daemons than
+  ``plm_ssh_num_concurrent`` have all been closed.
 
 * **Hardening.** Several hundred leaks, use-after-free errors, unchecked
   unpacks, and crashes on malformed input were fixed; command lines that
@@ -169,16 +183,19 @@ Highlights
   parameters reach PMIx (as ``pif_*``) and Open MPI.
 
 * **Options that were ignored now work.** ``--tune`` under the native
-  personality, ``--xterm``, ``prte_info --param``, and comments in
-  ``prun`` appfiles. Diagnostics are printed once, and every
-  ``show_help`` message names its job so a later job's is not
-  suppressed. A message about a tool's request goes only to that tool,
+  personality, ``--xterm``, ``prte_info --param``, comments in ``prun``
+  appfiles, and ``--prefix`` and ``--pmix-prefix`` for a ``prte`` started
+  with ``--daemonize`` or with no application. Diagnostics are printed
+  once, and every ``show_help`` message names its job so a later job's
+  is not suppressed. A launch refused before any daemon is started
+  gives its reason without the checklist for daemons that fail to
+  start, and a daemon's message from before it holds the DVM key is
+  printed on its own stderr rather than lost. A message about a tool's request goes only to that tool,
   and the build checks every ``show_help`` call against its topic and
   argument count.
 
 * **Also new:** resource usage monitoring, ``ras/flux``, ``rmaps/lsf``,
-  PBS launch via ``pbs_tmrsh``, and ``--activate`` to start a daemon on
-  an allocated node.
+  and ``--activate`` to start a daemon on an allocated node.
 
 * **Documentation.** Full man pages for ``prte``, ``prterun``, ``prun``,
   ``pterm``, and ``prted``, built from the same source as ``--help``; a
@@ -186,12 +203,13 @@ Highlights
   "how things work" section; design records under ``docs/plans``; a Code
   of Conduct; and a security policy in ``SECURITY.md``.
 
-* **Testing.** Five harnesses, where v4.0.0 had none: ``make check``
+* **Testing.** Six harnesses, where v4.0.0 had none: ``make check``
   unit tests; ``make -C test/offline check-offline`` for over a thousand
   mapping, ranking, and binding cases; ``contrib/dockerswarm``, a
   ten-node multi-node suite that also runs on a real cluster over ssh;
-  ``contrib/slurmswarm``, the same suite under a real Slurm; and
-  ``contrib/scaling`` for collective performance.
+  ``contrib/slurmswarm`` and ``contrib/pbsswarm``, the same suite under
+  a real Slurm and a real OpenPBS; and ``contrib/scaling`` for
+  collective performance.
 
 Compatibility notes
 ^^^^^^^^^^^^^^^^^^^
@@ -222,6 +240,19 @@ Compatibility notes
   gone. The DVM key is handed to each daemon through the launch agent,
   so ``rsh`` and ``remsh`` agents are refused and the default agent list
   is ``ssh``; under Grid Engine, ``qrsh`` now forwards the key.
+
+* **PBS support requires TM.** ``--with-pbs`` now stops ``configure``
+  if PBS's TM library is not found; name it with ``--with-tm=DIR``, or
+  give ``--without-tm`` to build PBS support that launches with ssh.
+  ``--with-tm`` implies ``--with-pbs``. ``plm/ssh`` no longer launches
+  through ``pbs_tmrsh``, and ``plm_ssh_disable_tmrsh`` is gone.
+
+* A launch agent named in ``plm_ssh_agent`` that cannot be found now
+  stops the DVM, rather than letting another launcher be selected.
+
+* Under Grid Engine, ``qdel`` takes a PRRTE job down only if the
+  queue's ``terminate_method`` is ``SIGTERM`` and a batch script starts
+  ``prterun`` with ``exec``; see :doc:`/launching-apps/gridengine`.
 
 * **A host may not name an account to reach it as.** ``user@host``, in
   any host list, hostfile, rankfile, or allocation request, and the
